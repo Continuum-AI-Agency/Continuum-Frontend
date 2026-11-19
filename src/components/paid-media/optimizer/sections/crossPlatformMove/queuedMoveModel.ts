@@ -1,3 +1,9 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // A cross-platform budget move as the Actions queue shows it (decision 17): platform against
 // platform, every leg of the platform that gives goes down by the same percentage and every leg
 // of the one that receives goes up by the same percentage, decreases first.
@@ -109,13 +115,16 @@ export function readQueuedMove(rec: RecommendationRow): QueuedMove | null {
 export function moveWritesOffNote(
   portfolio: Pick<PortfolioListItem, 'platform_writes'>,
   move: Pick<QueuedMove, 'legs'>,
+  uiTranslate?: ScaleCopy,
 ): string | null {
   const held = distinct(move.legs.map((leg) => leg.platform)).filter(
     (platform) => !platformWritable(portfolio, platform),
   );
   if (held.length === 0) return null;
   const names = held.map((platform) => platformName({ platform, level: null })).join(' and ');
-  return `This move is a proposal only — writes to ${names} are switched off for this portfolio.`;
+  return uiTranslate
+    ? uiTranslate('helper_daae3b287bf3', { v0: names })
+    : `This move is a proposal only — writes to ${names} are switched off for this portfolio.`;
 }
 
 function minorDigits(currency: string | null): number {
@@ -129,13 +138,22 @@ function minorDigits(currency: string | null): number {
 
 /** Every minor digit the currency has: a move is exact to the minor unit (decision 17), so
  *  957.68 never prints as 958. A null currency prints the bare figure, never "$". */
-export function formatMinorExact(minor: number, currency: string | null): string {
-  return formatCurrencyExact(minorToMajor(minor, currency), currency, minorDigits(currency));
+export function formatMinorExact(
+  minor: number,
+  currency: string | null,
+  uiLocale: UiLocale = 'en',
+): string {
+  return formatCurrencyExact(
+    minorToMajor(minor, currency),
+    currency,
+    minorDigits(currency),
+    uiLocale,
+  );
 }
 
 /** "−4.23%" / "+25.00%": two decimals, because the side's percentage is the whole promise. */
-export function formatSidePct(pct: number): string {
+export function formatSidePct(pct: number, uiLocale: UiLocale = 'en'): string {
   const rounded = Math.round(pct * 100) / 100;
   const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : '';
-  return `${sign}${Math.abs(rounded).toFixed(2)}%`;
+  return `${sign}${formatDecimal(Math.abs(rounded), 2, uiLocale)}%`;
 }

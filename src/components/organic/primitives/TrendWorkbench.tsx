@@ -13,6 +13,7 @@ import {
   Sparkles,
   Zap,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -113,11 +114,14 @@ function formatSignalWindow(start?: string, end?: string): string | null {
   return s ?? e;
 }
 
-function formatRelativeDate(value?: string): string | null {
+function formatRelativeDate(
+  value: string | undefined,
+  locale: ReturnType<typeof useLocale>,
+): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return formatRelativeTime(date);
+  return formatRelativeTime(date, undefined, locale);
 }
 
 function shortHost(url?: string): string | null {
@@ -166,6 +170,8 @@ type CitationsPanelProps = {
 };
 
 function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsPanelProps) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const query = useQuery({
     queryKey: ['insight-citations', brandProfileId, kind, insightId],
     queryFn: () => fetchInsightCitations({ brandId: brandProfileId, insightType: kind, insightId }),
@@ -176,14 +182,16 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
   if (query.isLoading) {
     return (
       <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" /> Loading source signals\u2026
+        <Loader2 className="h-3 w-3 animate-spin" /> {uiText('loading_source_signals_1307d09')}
       </div>
     );
   }
 
   if (query.isError) {
     return (
-      <p className="px-1 py-2 text-xs text-muted-foreground">Could not load source signals.</p>
+      <p className="px-1 py-2 text-xs text-muted-foreground">
+        {uiText('could_not_load_source_signals_110ed35')}
+      </p>
     );
   }
 
@@ -191,7 +199,7 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
   if (citations.length === 0) {
     return (
       <p className="px-1 py-2 text-xs text-muted-foreground">
-        No source signals — likely a synthesis-only insight.
+        {uiText('no_source_signals_likely_a_synthesis_only_ins_735c862')}
       </p>
     );
   }
@@ -200,12 +208,15 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
     <ul className="flex flex-col divide-y divide-border/40">
       {citations.map((citation) => {
         const host = shortHost(citation.sourceUrl);
-        const relative = formatRelativeDate(citation.publishedAt);
+        const relative = formatRelativeDate(citation.publishedAt, uiLocale);
         return (
           <li key={citation.id} className="flex flex-col gap-1 px-1 py-1.5">
             <div className="flex items-start justify-between gap-2">
               <p className="line-clamp-2 text-xs text-foreground">
-                {citation.signalTitle ?? citation.rationale ?? host ?? 'Untitled signal'}
+                {citation.signalTitle ??
+                  citation.rationale ??
+                  host ??
+                  uiText('untitled_signal_6dfa2f2')}
               </p>
               {citation.sourceUrl ? (
                 <a
@@ -253,6 +264,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
   onGenerateFromTrend,
   brandProfileId,
 }: TrendTableRowProps) {
+  const uiText = useTranslations('organic');
   const [expanded, setExpanded] = React.useState(false);
   const handleDragStart = React.useCallback(
     (event: React.DragEvent<HTMLTableRowElement>) => {
@@ -327,11 +339,14 @@ const TrendTableRow = React.memo(function TrendTableRow({
         <TableCell className="align-top">
           <div className="flex flex-col gap-0.5">
             <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-              {trendType}
+              {uiText('trendType', { type: trendType })}
             </span>
             {confidenceLabel ? (
               <span className="text-2xs tabular-nums text-muted-foreground">
-                conf <span className="font-medium text-foreground">{confidenceLabel}</span>
+                {uiText.rich('confidenceValue', {
+                  confidence: confidenceLabel,
+                  value: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+                })}
               </span>
             ) : null}
           </div>
@@ -389,7 +404,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
         <TableCell className="align-top">
           <span className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground">
             <span className={cn('h-1.5 w-1.5 rounded-full', MOMENTUM_DOT_TONE[trend.momentum])} />
-            {trend.momentum}
+            {uiText('trendMomentum', { state: trend.momentum })}
           </span>
         </TableCell>
         <TableCell className="align-top whitespace-normal">
@@ -412,7 +427,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
             <span>
               {tagsDisplay.map((tag, index) => (
                 <React.Fragment key={`${trend.id}-tag-${tag}`}>
-                  {index > 0 ? <span className="mx-1 text-muted-foreground/50">\u00b7</span> : null}
+                  {index > 0 ? <span className="mx-1 text-muted-foreground/50">·</span> : null}
                   <span>#{tag}</span>
                 </React.Fragment>
               ))}
@@ -431,8 +446,8 @@ const TrendTableRow = React.memo(function TrendTableRow({
             <button
               type="button"
               data-row-control
-              aria-label="Generate content from this trend"
-              title="Generate content from this trend"
+              aria-label={uiText('generate_content_from_this_trend_ebcebff')}
+              title={uiText('generate_content_from_this_trend_ebcebff')}
               onClick={handleGenerateClick}
               className="rounded p-1 text-muted-foreground/70 outline-none transition-colors hover:bg-muted hover:text-primary focus-visible:ring-1 focus-visible:ring-ring"
             >
@@ -442,7 +457,11 @@ const TrendTableRow = React.memo(function TrendTableRow({
           <button
             type="button"
             data-row-control
-            aria-label={expanded ? 'Collapse trend detail' : 'Expand trend detail'}
+            aria-label={
+              expanded
+                ? uiText('collapse_trend_detail_5b97b94')
+                : uiText('expand_trend_detail_dac5e90')
+            }
             aria-expanded={expanded}
             onClick={handleExpandClick}
             className="rounded p-1 text-muted-foreground/70 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
@@ -462,13 +481,13 @@ const TrendTableRow = React.memo(function TrendTableRow({
             <Tabs defaultValue="why" className="w-full">
               <TabsList className="h-7 gap-1 bg-transparent p-0">
                 <TabsTrigger value="why" className="h-7 px-2 text-2xs">
-                  Why
+                  {uiText('why_d3ae14a')}
                 </TabsTrigger>
                 <TabsTrigger value="signals" className="h-7 px-2 text-2xs">
-                  Signals
+                  {uiText('signals_88b01c8')}
                 </TabsTrigger>
                 <TabsTrigger value="distribution" className="h-7 px-2 text-2xs">
-                  Distribution
+                  {uiText('distribution_72a23e5')}
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="why" className="mt-2 space-y-1.5 text-xs leading-relaxed">
@@ -486,19 +505,21 @@ const TrendTableRow = React.memo(function TrendTableRow({
                 {meta?.opportunity ? <p className="text-foreground">{meta.opportunity}</p> : null}
                 {meta?.contentTypeSuggestion ? (
                   <p className="italic text-muted-foreground">
-                    Suggested format: {meta.contentTypeSuggestion}
+                    {uiText.rich('sentence_0ab106497313', { v0: () => meta.contentTypeSuggestion })}
                   </p>
                 ) : null}
                 {signalWindow ? (
                   <p className="text-2xs uppercase tracking-wide text-muted-foreground">
-                    Signal window: {signalWindow}
+                    {uiText.rich('sentence_d1da120b575a', { v0: () => signalWindow })}
                   </p>
                 ) : null}
                 {!meta?.relevanceToBrand &&
                 !meta?.whyRelevant &&
                 !meta?.opportunity &&
                 !meta?.contentTypeSuggestion ? (
-                  <p className="text-muted-foreground">No additional rationale was captured.</p>
+                  <p className="text-muted-foreground">
+                    {uiText('no_additional_rationale_was_captured_1462ac7')}
+                  </p>
                 ) : null}
               </TabsContent>
               <TabsContent value="signals" className="mt-2">
@@ -511,7 +532,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
                   />
                 ) : (
                   <p className="px-1 py-2 text-xs text-muted-foreground">
-                    Source signals are unavailable without an active brand.
+                    {uiText('source_signals_are_unavailable_without_an_act_3308283')}
                   </p>
                 )}
               </TabsContent>
@@ -529,11 +550,13 @@ const TrendTableRow = React.memo(function TrendTableRow({
                   </dl>
                 ) : meta?.recommendedPlatforms && meta.recommendedPlatforms.length > 0 ? (
                   <p className="text-xs text-foreground">
-                    Recommended: {meta.recommendedPlatforms.join(', ')}
+                    {uiText('sentence_82a64026b5a7', {
+                      platforms: meta.recommendedPlatforms.join(', '),
+                    })}
                   </p>
                 ) : (
                   <p className="px-1 py-2 text-xs text-muted-foreground">
-                    No platform recommendations were captured.
+                    {uiText('no_platform_recommendations_were_captured_ec10b35')}
                   </p>
                 )}
               </TabsContent>
@@ -562,13 +585,16 @@ function TrendWorkbenchEmptyState({
   isFetching: boolean;
   onFetch?: () => void;
 }) {
+  const uiText = useTranslations('organic');
   if (insightsError) {
     return (
       <div
         data-testid="trend-workbench-error"
         className="flex flex-col items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-center text-xs"
       >
-        <p className="font-medium text-destructive">We could not load your trends.</p>
+        <p className="font-medium text-destructive">
+          {uiText('we_could_not_load_your_trends_ae873bd')}
+        </p>
         <p className="text-muted-foreground">{insightsError}</p>
         {onFetch ? (
           <Button
@@ -584,7 +610,7 @@ function TrendWorkbenchEmptyState({
             ) : (
               <RefreshCw className="mr-1 h-3 w-3" />
             )}
-            {isFetching ? 'Retrying…' : 'Retry'}
+            {isFetching ? uiText('retrying_a16c8b1') : uiText('retry_942087c')}
           </Button>
         ) : null}
       </div>
@@ -599,9 +625,11 @@ function TrendWorkbenchEmptyState({
         className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-4 text-center text-xs"
       >
         <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-        <p className="font-medium text-foreground">Generating your first trend report</p>
+        <p className="font-medium text-foreground">
+          {uiText('generating_your_first_trend_report_2c75781')}
+        </p>
         <p className="text-muted-foreground">
-          Continuum is scanning your market. This usually takes a minute or two.
+          {uiText('continuum_is_scanning_your_market_this_usuall_f327a78')}
         </p>
       </div>
     );
@@ -613,9 +641,11 @@ function TrendWorkbenchEmptyState({
         data-testid="trend-workbench-waiting"
         className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-4 text-center text-xs"
       >
-        <p className="font-medium text-foreground">Your first trend report is on its way</p>
+        <p className="font-medium text-foreground">
+          {uiText('your_first_trend_report_is_on_its_way_cf4ae73')}
+        </p>
         <p className="text-muted-foreground">
-          It starts as soon as your brand report is ready. Nothing to do on your side.
+          {uiText('it_starts_as_soon_as_your_brand_report_is_rea_277d7c5')}
         </p>
       </div>
     );
@@ -627,10 +657,11 @@ function TrendWorkbenchEmptyState({
         data-testid="trend-workbench-empty"
         className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-4 text-center text-xs"
       >
-        <p className="font-medium text-foreground">We have not analysed your sector yet.</p>
+        <p className="font-medium text-foreground">
+          {uiText('we_have_not_analysed_your_sector_yet_f538761')}
+        </p>
         <p className="text-muted-foreground">
-          Continuum scans your market for topics worth posting about. Run the first analysis to fill
-          this list.
+          {uiText('continuum_scans_your_market_for_topics_worth__4b793fb')}
         </p>
         {onFetch ? (
           <Button
@@ -645,7 +676,7 @@ function TrendWorkbenchEmptyState({
             ) : (
               <Zap className="mr-1 h-3 w-3" />
             )}
-            {isFetching ? 'Generating…' : 'Generate Trends'}
+            {isFetching ? uiText('generating_d20a447') : uiText('generate_trends_4b8bdd7')}
           </Button>
         ) : null}
       </div>
@@ -657,7 +688,7 @@ function TrendWorkbenchEmptyState({
       data-testid="trend-workbench-no-match"
       className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground"
     >
-      No trends match this search.
+      {uiText('no_trends_match_this_search_0bf00ab')}
     </div>
   );
 }
@@ -675,6 +706,7 @@ export function TrendWorkbench({
   insightsError,
   waitingForBrandReport,
 }: TrendWorkbenchProps) {
+  const uiText = useTranslations('organic');
   const [query, setQuery] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState<TrendTypeFilter>('all');
   const [momentumFilter, setMomentumFilter] = React.useState<TrendMomentumFilter>('all');
@@ -794,7 +826,7 @@ export function TrendWorkbench({
       [
         {
           key: 'all',
-          label: 'Preset: show all',
+          label: uiText('preset_show_all_16be9f2'),
           shortcut: '/all',
           apply: () => {
             setTypeFilter('all');
@@ -805,7 +837,7 @@ export function TrendWorkbench({
         },
         {
           key: 'selected',
-          label: 'Preset: selected only',
+          label: uiText('preset_selected_only_2d03129'),
           shortcut: '/selected',
           apply: () => {
             setScopeFilter('selected');
@@ -814,7 +846,7 @@ export function TrendWorkbench({
         },
         {
           key: 'fit',
-          label: 'Preset: active platform fit',
+          label: uiText('preset_active_platform_fit_246d77c'),
           shortcut: '/fit',
           apply: () => {
             setScopeFilter('active-platform');
@@ -823,7 +855,7 @@ export function TrendWorkbench({
         },
         {
           key: 'events',
-          label: 'Preset: events',
+          label: uiText('preset_events_aecd622'),
           shortcut: '/events',
           apply: () => {
             setTypeFilter('event');
@@ -832,7 +864,7 @@ export function TrendWorkbench({
         },
         {
           key: 'questions',
-          label: 'Preset: questions',
+          label: uiText('preset_questions_0202e78'),
           shortcut: '/questions',
           apply: () => {
             setTypeFilter('question');
@@ -841,7 +873,7 @@ export function TrendWorkbench({
         },
         {
           key: 'rising',
-          label: 'Preset: rising momentum',
+          label: uiText('preset_rising_momentum_654afbc'),
           shortcut: '/rising',
           apply: () => {
             setMomentumFilter('rising');
@@ -849,7 +881,7 @@ export function TrendWorkbench({
           },
         },
       ] as const,
-    [],
+    [uiText],
   );
 
   const filteredPresetCommands = React.useMemo(() => {
@@ -867,20 +899,23 @@ export function TrendWorkbench({
     typeof maxSelections === 'number' ? `${selectedCount}/${maxSelections}` : `${selectedCount}`;
 
   const activePlatformLabel = React.useMemo(() => {
-    if (activePlatforms.length === 0) return 'none';
-    return activePlatforms.join(', ');
-  }, [activePlatforms]);
+    if (activePlatforms.length === 0) return uiText('trendNoPlatform');
+    return activePlatforms.map((platform) => PLATFORM_DISPLAY_NAME[platform]).join(', ');
+  }, [activePlatforms, uiText]);
 
   return (
     <section className="flex h-full min-h-0 flex-col rounded-lg bg-card/70 p-2.5 ring-1 ring-border/40">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Trends Workbench
+            {uiText('trends_workbench_2827237')}
           </p>
           <p className="text-xs text-muted-foreground">
-            Context: {activePlatformLabel} • type `{typeFilter}` • signal `{momentumFilter}` • type
-            `/` for presets
+            {uiText('trendContext', {
+              platform: activePlatformLabel,
+              type: uiText('trendType', { type: typeFilter }),
+              signal: uiText('trendMomentum', { state: momentumFilter }),
+            })}
           </p>
         </div>
 
@@ -901,7 +936,11 @@ export function TrendWorkbench({
               ) : (
                 <RefreshCw className="mr-1 h-3 w-3" />
               )}
-              {isFetching ? 'Generating…' : trends.length === 0 ? 'Generate Trends' : 'Refresh'}
+              {isFetching
+                ? uiText('generating_d20a447')
+                : trends.length === 0
+                  ? uiText('generate_trends_4b8bdd7')
+                  : uiText('refresh_0e91610')}
             </Button>
           ) : null}
           <Badge variant="outline" className="shrink-0 text-2xs uppercase tracking-wide">
@@ -916,14 +955,14 @@ export function TrendWorkbench({
             <CommandInput
               value={query}
               onValueChange={setQuery}
-              placeholder="Search trends • type / for presets"
+              placeholder={uiText('search_trends_type_for_presets_68b0b32')}
               className="text-xs"
             />
             {shouldShowCommandList ? (
               <CommandList className="max-h-[clamp(120px,40dvh,280px)]">
-                <CommandEmpty>No matching commands or trends.</CommandEmpty>
+                <CommandEmpty>{uiText('no_matching_commands_or_trends_0847fed')}</CommandEmpty>
                 {isCommandMode ? (
-                  <CommandGroup heading="Presets">
+                  <CommandGroup heading={uiText('presets_954f93f')}>
                     {filteredPresetCommands.map((command) => (
                       <CommandItem key={command.key} onSelect={command.apply}>
                         <span>{command.label}</span>
@@ -933,7 +972,7 @@ export function TrendWorkbench({
                   </CommandGroup>
                 ) : (
                   <>
-                    <CommandGroup heading="Contextual picks">
+                    <CommandGroup heading={uiText('contextual_picks_1f0d2c8')}>
                       {commandSuggestions.map((trend) => {
                         const isSelected = selectedTrendIdSet.has(trend.id);
                         return (
@@ -951,9 +990,9 @@ export function TrendWorkbench({
                       })}
                     </CommandGroup>
                     <CommandSeparator />
-                    <CommandGroup heading="Tip">
+                    <CommandGroup heading={uiText('tip_a4245a3')}>
                       <CommandItem onSelect={() => setQuery('/')}>
-                        Type `/` to apply preset filters
+                        {uiText('type_to_apply_preset_filters_3c13a4c')}
                       </CommandItem>
                     </CommandGroup>
                   </>
@@ -978,15 +1017,15 @@ export function TrendWorkbench({
                 <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
                   <TableRow>
                     <TableHead className="w-8">
-                      <span className="sr-only">Selected</span>
+                      <span className="sr-only">{uiText('selected_57fd7a0')}</span>
                     </TableHead>
-                    <TableHead className="w-24">Type</TableHead>
-                    <TableHead>Trend</TableHead>
-                    <TableHead className="w-28">Momentum</TableHead>
-                    <TableHead className="w-44">Platforms</TableHead>
-                    <TableHead className="w-32">Tags</TableHead>
+                    <TableHead className="w-24">{uiText('type_baaddf7')}</TableHead>
+                    <TableHead>{uiText('trend_9e21771')}</TableHead>
+                    <TableHead className="w-28">{uiText('momentum_438280e')}</TableHead>
+                    <TableHead className="w-44">{uiText('platforms_ab9bd75')}</TableHead>
+                    <TableHead className="w-32">{uiText('tags_1331275')}</TableHead>
                     <TableHead className="w-12 text-right">
-                      <span className="sr-only">Drag</span>
+                      <span className="sr-only">{uiText('drag_442e96e')}</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>

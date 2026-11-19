@@ -2,6 +2,7 @@
 
 import { type EditorClip, sampleNumericTrack } from '@continuum/contracts';
 import { AudioLines, Copy, Scissors, Trash2, VolumeX, Waves } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -15,6 +16,7 @@ import {
   ClipMotionMenus,
   type MotionMenuActions,
 } from '@/components/video-studio/motion/ClipMotionMenus';
+import { formatDecimal } from '@/lib/format/decimal';
 import { cn } from '@/lib/utils';
 import { volumeKeyframesOf } from '../../../utils/splice/timelineAudioEnvelope';
 import { ClipWaveform } from '../ClipWaveform';
@@ -52,7 +54,12 @@ export const formatSec = (sec: number): string => {
 };
 
 function ClipPreview({ clip, url }: { clip: EditorClip; url?: string }) {
-  if (!url) return <p className="text-xs text-muted-foreground">No preview yet.</p>;
+  const translateUi = useUiTranslations('studio');
+
+  if (!url)
+    return (
+      <p className="text-xs text-muted-foreground">{translateUi('no_preview_yet_94e70fb3')}</p>
+    );
   if (clip.kind === 'overlay' && clip.mediaKind === 'image') {
     // biome-ignore lint/performance/noImgElement: signed Library rendition in a hover preview
     return <img src={url} alt="" className="max-h-40 w-full rounded object-contain" />;
@@ -149,6 +156,10 @@ export function TimelineClipView({
   onPointerDown: (event: React.PointerEvent, mode: 'move' | 'trim-start' | 'trim-end') => void;
   onContextMenu: () => void;
 }) {
+  const decimalLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const isAudio = clip.kind === 'audio';
   const isVideo = clip.kind === 'video';
   const media = useClipMediaPreview({
@@ -174,7 +185,7 @@ export function TimelineClipView({
           <div
             data-clip-id={clip.id}
             data-clip-kind={clip.kind}
-            aria-label={`Clip ${label}`}
+            aria-label={translateUi('clip_value0_fa19c6a6', { value0: String(label) })}
             aria-selected={selected}
             role="option"
             tabIndex={-1}
@@ -235,9 +246,13 @@ export function TimelineClipView({
               <p>
                 {formatSec(clip.timelineStartSec)} →{' '}
                 {formatSec(clip.timelineStartSec + clip.durationSec)} ·{' '}
-                {clip.durationSec.toFixed(2)}s
+                {formatDecimal(clip.durationSec, 2, decimalLocale)}s
               </p>
-              {sourceIn !== undefined ? <p>Source in {sourceIn.toFixed(2)}s</p> : null}
+              {sourceIn !== undefined ? (
+                <p>
+                  {translateUi('source_in_086b6b38')} {formatDecimal(sourceIn, 2, decimalLocale)}s
+                </p>
+              ) : null}
             </div>
           </HoverCardContent>
         </HoverCard>
@@ -246,7 +261,7 @@ export function TimelineClipView({
             <button
               type="button"
               tabIndex={-1}
-              aria-label={`Trim start of ${label}`}
+              aria-label={translateUi('trim_start_of_value0_9dbfb526', { value0: String(label) })}
               data-trim-handle="start"
               className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize bg-white/0 hover:bg-white/40"
               onPointerDown={(event) => {
@@ -257,7 +272,7 @@ export function TimelineClipView({
             <button
               type="button"
               tabIndex={-1}
-              aria-label={`Trim end of ${label}`}
+              aria-label={translateUi('trim_end_of_value0_277f433b', { value0: String(label) })}
               data-trim-handle="end"
               className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize bg-white/0 hover:bg-white/40"
               onPointerDown={(event) => {
@@ -270,43 +285,46 @@ export function TimelineClipView({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         <ContextMenuItem onClick={() => actions.split(clip.id)}>
-          <Scissors /> Split at playhead
+          <Scissors /> {translateUi('split_at_playhead_c4a4b9c3')}{' '}
           <ContextMenuShortcut>{KEYS.split}</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={() => actions.duplicate(clip.id)}>
-          <Copy /> Duplicate
+          <Copy /> {translateUi('duplicate_02cdaabf')}{' '}
           <ContextMenuShortcut>{KEYS.duplicate}</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={() => actions.copy(clip.id)}>
-          Copy
-          <ContextMenuShortcut>{KEYS.copy}</ContextMenuShortcut>
+          {' '}
+          {translateUi('copy_e21f935f')} <ContextMenuShortcut>{KEYS.copy}</ContextMenuShortcut>
         </ContextMenuItem>
         {isVideo ? (
           <ContextMenuItem onClick={() => actions.toggleClipAudio(clip.id)}>
             <VolumeX />{' '}
-            {clip.kind === 'video' && clip.audioEnabled ? 'Mute clip audio' : 'Unmute clip audio'}
+            {clip.kind === 'video' && clip.audioEnabled
+              ? translateUi('mute_clip_audio_9fd36760')
+              : translateUi('unmute_clip_audio_e5771f89')}
           </ContextMenuItem>
         ) : null}
         {isVideo || isAudio ? (
           <>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => actions.cutPauses(clip.id)}>
-              <AudioLines /> Cut pauses in this clip
+              <AudioLines /> {translateUi('cut_pauses_in_this_clip_309eb87f')}{' '}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => actions.detectBeats(clip.id)}>
-              <Waves /> Detect beats from this clip
+              <Waves /> {translateUi('detect_beats_from_this_clip_9d534871')}{' '}
             </ContextMenuItem>
           </>
         ) : null}
         <ClipMotionMenus clip={clip} transitionsToNext={transitionsToNext} actions={actions} />
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onClick={() => actions.rippleDelete(clip.id)}>
-          <Trash2 /> Ripple delete
+          <Trash2 /> {translateUi('ripple_delete_c897c443')}{' '}
           <ContextMenuShortcut>{KEYS.rippleDelete}</ContextMenuShortcut>
         </ContextMenuItem>
         {isMain ? null : (
           <ContextMenuItem variant="destructive" onClick={() => actions.deleteLeaveGap(clip.id)}>
-            Delete, leave gap
+            {' '}
+            {translateUi('delete_leave_gap_51283952')}{' '}
           </ContextMenuItem>
         )}
       </ContextMenuContent>

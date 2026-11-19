@@ -1,5 +1,7 @@
 'use client';
+
 import { ScrollText, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,7 @@ export function EventStreamPanel({
   onPlacementSelect,
   className,
 }: EventStreamPanelProps) {
+  const uiText = useTranslations('organic');
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = React.useState(true);
 
@@ -52,7 +55,7 @@ export function EventStreamPanel({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <ScrollText className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-base font-semibold">Generation Stream</h3>
+            <h3 className="text-base font-semibold">{uiText('generation_stream_7dc4740')}</h3>
             {hasEvents && (
               <span className="text-xs text-muted-foreground tabular-nums">({events.length})</span>
             )}
@@ -66,7 +69,7 @@ export function EventStreamPanel({
               className="text-muted-foreground hover:text-foreground"
             >
               <X className="w-3 h-3 mr-1" />
-              Clear
+              {uiText('clear_83b12c2')}
             </Button>
           )}
         </div>
@@ -87,9 +90,11 @@ export function EventStreamPanel({
           ) : (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
               <ScrollText className="w-8 h-8 text-muted-foreground/50 mb-3" />
-              <span className="text-sm text-muted-foreground">Start generation to see events</span>
+              <span className="text-sm text-muted-foreground">
+                {uiText('start_generation_to_see_events_cbe3832')}
+              </span>
               <span className="mt-1 text-xs text-muted-foreground">
-                Progress updates and placements will appear here
+                {uiText('progress_updates_and_placements_will_appear_h_e248df4')}
               </span>
             </div>
           )}

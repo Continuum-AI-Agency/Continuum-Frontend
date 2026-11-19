@@ -1,5 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // The full-width explorer a suggestion opens into, in place of the old in-cell
 // "Ad sets today" table (which stretched its grid row and left the sibling columns
 // blank). A bounded-height split pane: the suggestion's ad sets scroll and search
@@ -58,11 +62,17 @@ export function SuggestionExplorer({
   onCreate,
   onClose,
 }: SuggestionExplorerProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const [objective, setObjective] = useState<OptimizationObjective>(suggestion.objective);
   const [selectedAdsetId, setSelectedAdsetId] = useState<string | null>(null);
 
   const mode = DEFAULT_MODE_BY_OBJECTIVE[objective];
-  const metric = getOptimizationMetricDefinition(objective);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(objective),
+    optimizerText,
+  );
   const cpa = deriveEfficiency(
     suggestion.summary.spend14,
     suggestion.summary.conv14,
@@ -89,24 +99,28 @@ export function SuggestionExplorer({
           <p className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             {suggestion.name}
             <Badge className="text-xs" variant="teal">
-              {humanize(mode)}
+              {humanize(mode, uiText)}
             </Badge>
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {suggestion.summary.adsets} ad sets · {formatCurrency(suggestion.daily_total, currency)}
-            /d
-            {cpa != null ? ` · ${metric.costLabel} ${formatCpa(cpa, currency)}` : ''}
+            {uiText.rich('sentence_9f567a94b7fb', {
+              count: suggestion.summary.adsets,
+              budget: formatCurrency(suggestion.daily_total, currency, uiLocale),
+              hasCpa: cpa != null ? 'yes' : 'no',
+              metric: metric.costLabel,
+              cpa: cpa != null ? formatCpa(cpa, currency, uiLocale) : '',
+            })}
           </p>
           {noConversions ? (
             <p className="mt-1 text-xs text-warning">
-              No conversions tracked in the last 14 days — a conversion objective will score as Low
-              confidence. Consider <b>Traffic</b> for a decisive first cycle.
+              {uiText.rich('sentence_95ce7caf5c30', {
+                v0: () => <b>{uiText('traffic_4876efb')}</b>,
+              })}
             </p>
           ) : null}
           {enrollFailed ? (
             <p className="mt-1 text-xs text-warning" role="status">
-              Portfolio created, but its ad sets didn&rsquo;t enroll. Press Create again to retry —
-              nothing has been changed on Meta.
+              {uiText('portfolio_created_but_its_ad_sets_didn_t_enro_ed75d6a')}
             </p>
           ) : null}
         </div>
@@ -115,20 +129,24 @@ export function SuggestionExplorer({
             value={objective}
             onValueChange={(value) => setObjective(value as OptimizationObjective)}
           >
-            <SelectTrigger className="h-7 w-36 text-xs" aria-label="Optimization objective">
+            <SelectTrigger
+              className="h-7 w-36 text-xs"
+              aria-label={uiText('optimization_objective_d916490')}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {OBJECTIVES.map((value) => (
                 <SelectItem key={value} value={value}>
-                  {humanize(value)}
+                  {humanize(value, uiText)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           {created ? (
             <Badge className="gap-1 text-xs" variant="success">
-              <CheckCircle2Icon className="size-3" /> created
+              <CheckCircle2Icon className="size-3" />
+              {uiText('created_406effb')}
             </Badge>
           ) : (
             <Button
@@ -139,11 +157,11 @@ export function SuggestionExplorer({
               type="button"
             >
               <PlusIcon className="size-3.5" />
-              {busy ? 'Creating…' : 'Create'}
+              {busy ? uiText('creating_c79ed94') : uiText('create_4759498')}
             </Button>
           )}
           <Button
-            aria-label="Close explorer"
+            aria-label={uiText('close_explorer_a753a96')}
             className="size-7"
             onClick={onClose}
             size="icon"

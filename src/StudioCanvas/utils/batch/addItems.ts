@@ -1,3 +1,5 @@
+import type { useTranslations } from 'next-intl';
+import { type WorkflowUiFailure, workflowFailure } from '../workflowUiFailure';
 // The ONE writer into `BatchNodeData.items`.
 //
 // Five affordances feed a batch — connected upstream nodes, a multi-file upload, a CSV
@@ -33,6 +35,7 @@ export interface AddItemsResult {
   readonly added: number;
   /** One human sentence per reason something was left out. Empty when everything landed. */
   readonly refused: string[];
+  readonly uiRefusals: WorkflowUiFailure[];
 }
 
 /**
@@ -46,6 +49,7 @@ export function addBatchItems(data: BatchItemsSource, incoming: BatchItem[]): Ad
   const existing = data.items ?? [];
   const locked = batchItemType({ items: existing, itemType: data.itemType ?? undefined });
   const refused: string[] = [];
+  const uiRefusals: WorkflowUiFailure[] = [];
 
   // The first item decides, exactly as the contracts helper documents.
   const kind: BatchItemKind | null = locked ?? incoming[0]?.kind ?? null;
@@ -61,6 +65,9 @@ export function addBatchItems(data: BatchItemsSource, incoming: BatchItem[]): Ad
   }
 
   for (const [otherKind, count] of mismatched) {
+    uiRefusals.push(
+      workflowFailure('batchRefusalKind', { kind: kind ?? 'other', other: otherKind, count }),
+    );
     refused.push(
       `This batch holds ${BATCH_KIND_LABEL[kind as BatchItemKind]}. ` +
         `${count} ${BATCH_KIND_LABEL[otherKind]} item${count === 1 ? '' : 's'} can't join it — ` +
@@ -72,6 +79,7 @@ export function addBatchItems(data: BatchItemsSource, incoming: BatchItem[]): Ad
   const accepted = matching.slice(0, room);
   const overflow = matching.length - accepted.length;
   if (overflow > 0) {
+    uiRefusals.push(workflowFailure('batchRefusalCap', { max: MAX_BATCH_ITEMS, count: overflow }));
     refused.push(
       `A batch holds at most ${MAX_BATCH_ITEMS} items — ${overflow} more ` +
         `${overflow === 1 ? 'was' : 'were'} not added.`,
@@ -83,15 +91,20 @@ export function addBatchItems(data: BatchItemsSource, incoming: BatchItem[]): Ad
     itemType: kind,
     added: accepted.length,
     refused,
+    uiRefusals,
   };
 }
 
 /** A short, human label for an item — what the matrix headers and the item list show. */
-export function batchItemLabel(item: BatchItem, index: number): string {
+export function batchItemLabel(
+  item: BatchItem,
+  index: number,
+  translate?: ReturnType<typeof useTranslations<'studio'>>,
+): string {
   if (item.label?.trim()) return item.label.trim();
   if (item.kind === 'text') {
     const value = (item.value ?? '').trim().replace(/\s+/g, ' ');
     if (value) return value.length > 40 ? `${value.slice(0, 39)}…` : value;
   }
-  return `Item ${index + 1}`;
+  return translate ? translate('batchItemNumber', { index: index + 1 }) : `Item ${index + 1}`;
 }

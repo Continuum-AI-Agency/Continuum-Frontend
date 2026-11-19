@@ -2,6 +2,7 @@
 
 import { AlertCircle, Check, Loader2, Scissors } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
 import { cn } from '@/lib/utils';
 import type { ClipGenerationProgress } from './hooks/useGenerateClips';

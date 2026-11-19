@@ -16,8 +16,9 @@ import {
   type Node as ReactFlowNode,
 } from '@xyflow/react';
 import { CalendarRange, Copy, ExternalLink, Save, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useMemo as useUiConfigMemo } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import {
   type OrganicPublishTarget,
@@ -31,17 +32,24 @@ import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { PlannerDraftNodeData, StudioNode } from '../types';
+import { workflowNodeError } from '../utils/workflowUiFailure';
 import { NodeBadge, NodeTitleBar } from './NodeChrome';
 import { describeDraftWriteError } from './publish/draftWriteErrors';
 import { PlannerDraftBrowser } from './publish/PlannerDraftBrowser';
 import { publishingApi } from './publish/publishingApi';
 import { resolvePublishingAssets } from './publish/resolvePublishingAssets';
 
-const FORMAT_OPTIONS: Array<{ value: CanvasPublishingFormat; label: string }> = [
-  { value: 'image', label: 'Post / Image' },
-  { value: 'carousel', label: 'Carousel' },
-  { value: 'video', label: 'Reel / Video' },
-];
+function useLocalFormatOptionsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: Array<{ value: CanvasPublishingFormat; label: string }> = [
+      { value: 'image', label: translateConfig('post_image_3e6849df') },
+      { value: 'carousel', label: translateConfig('carousel_37219fbc') },
+      { value: 'video', label: translateConfig('reel_video_8e93551f') },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 const randomSlot = (order: number) => ({
   id: crypto.randomUUID?.() ?? `asset-${Date.now()}-${order}`,
@@ -99,6 +107,10 @@ export function PlannerDraftBlock({
   data,
   selected,
 }: NodeProps<ReactFlowNode<PlannerDraftNodeData>>) {
+  const FORMAT_OPTIONS = useLocalFormatOptionsMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   const updateNode = useStudioStore((state) => state.updateNode);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -221,18 +233,24 @@ export function PlannerDraftBlock({
         error: undefined,
       });
       show({
-        title: result.created ? 'Draft created' : 'Draft updated',
-        description: 'It is on the organic Planner now.',
+        title: result.created
+          ? translateUi('draft_created_01004857')
+          : translateUi('draft_updated_a37868a3'),
+        description: translateUi('it_is_on_the_organic_planner_now_3f6acef9'),
         variant: 'success',
       });
     } catch (cause) {
       const message = describeDraftWriteError(cause);
       patchData({ error: message });
-      show({ title: 'Could not save the draft', description: message, variant: 'warning' });
+      show({
+        title: translateUi('could_not_save_the_draft_a710bce6'),
+        description: message,
+        variant: 'warning',
+      });
     } finally {
       setSaving(false);
     }
-  }, [assets, brandId, caption, data, format, id, patchData, show]);
+  }, [assets, brandId, caption, data, format, id, patchData, show, translateUi]);
 
   const readyToSave =
     !saving &&
@@ -264,8 +282,8 @@ export function PlannerDraftBlock({
         handles={{ target: false, source: false }}
         className="h-full w-full overflow-hidden p-0"
       >
-        <NodeTitleBar icon={CalendarRange} label="Planner Draft">
-          <NodeBadge>Organic</NodeBadge>
+        <NodeTitleBar icon={CalendarRange} label={translateUi('planner_draft_cee1a3a5')}>
+          <NodeBadge>{translateUi('organic_89b8cb68')}</NodeBadge>
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5 text-xs">
           <div className="nodrag flex rounded-sm border border-border/60 p-0.5 text-2xs">
@@ -280,7 +298,9 @@ export function PlannerDraftBlock({
                 )}
                 onClick={() => patchData({ mode: value })}
               >
-                {value === 'find' ? 'Find draft' : 'New draft'}
+                {value === 'find'
+                  ? translateUi('find_draft_fabcabcc')
+                  : translateUi('new_draft_1f2c1733')}
               </button>
             ))}
           </div>
@@ -289,7 +309,7 @@ export function PlannerDraftBlock({
             className="nodrag h-8 rounded-md border border-border bg-background px-2"
             value={format}
             onChange={(event) => changeFormat(event.target.value as CanvasPublishingFormat)}
-            aria-label="Post format"
+            aria-label={translateUi('post_format_d6bc2f4e')}
           >
             {FORMAT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -300,7 +320,9 @@ export function PlannerDraftBlock({
 
           {format === 'carousel' ? (
             <div className="flex items-center justify-between text-2xs text-muted-foreground">
-              <span>{handles.length} ordered cards</span>
+              <span>
+                {handles.length} {translateUi('ordered_cards_8c1c24e7')}
+              </span>
               <span className="flex gap-1">
                 <button
                   type="button"
@@ -322,11 +344,13 @@ export function PlannerDraftBlock({
 
           {data.targetDraftId ? (
             <div className="-mx-1.5 border-y border-border/60 bg-muted/40 px-2 py-1.5">
-              <p className="truncate text-xs font-medium">{data.targetTitle ?? 'Planner draft'}</p>
+              <p className="truncate text-xs font-medium">
+                {data.targetTitle ?? translateUi('planner_draft_32cbb428')}
+              </p>
               <p className="text-2xs text-muted-foreground">
                 {data.platform ?? 'instagram'}
                 {data.targetStatus ? ` · ${data.targetStatus}` : ''}
-                {data.savedAt ? ' · saved' : ''}
+                {data.savedAt ? translateUi('saved_0b21d795') : ''}
               </p>
               <div className="mt-1 flex items-center gap-2">
                 <a
@@ -335,8 +359,8 @@ export function PlannerDraftBlock({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  <ExternalLink className="size-3" aria-hidden />
-                  Open in planner
+                  <ExternalLink className="size-3" aria-hidden />{' '}
+                  {translateUi('open_in_planner_28ad31bc')}{' '}
                 </a>
                 <button
                   type="button"
@@ -352,7 +376,8 @@ export function PlannerDraftBlock({
                     })
                   }
                 >
-                  Unbind
+                  {' '}
+                  {translateUi('unbind_dca68375')}{' '}
                 </button>
               </div>
             </div>
@@ -374,14 +399,14 @@ export function PlannerDraftBlock({
                   className="nodrag h-8 text-xs"
                   value={data.dayId ?? todayDayId()}
                   onChange={(event) => patchData({ dayId: event.target.value })}
-                  aria-label="Scheduled day"
+                  aria-label={translateUi('scheduled_day_39bd64a6')}
                 />
                 <Input
                   type="time"
                   className="nodrag h-8 w-24 text-xs"
                   value={data.timeOfDay ?? '09:00'}
                   onChange={(event) => patchData({ timeOfDay: event.target.value })}
-                  aria-label="Scheduled time"
+                  aria-label={translateUi('scheduled_time_e062896c')}
                 />
               </div>
             </div>
@@ -399,10 +424,10 @@ export function PlannerDraftBlock({
 
           <Textarea
             className="nodrag min-h-16 text-xs"
-            placeholder="Caption — or wire one in on the left"
+            placeholder={translateUi('caption_or_wire_one_in_on_the_left_23fc38c7')}
             value={caption}
             onChange={(event) => patchData({ caption: event.target.value })}
-            aria-label="Caption"
+            aria-label={translateUi('caption_87d296ec')}
           />
 
           <p
@@ -411,15 +436,23 @@ export function PlannerDraftBlock({
               assets.length === expectedAssetCount ? 'text-muted-foreground' : 'text-amber-600',
             )}
           >
-            {assets.length}/{expectedAssetCount} Library assets connected
+            {assets.length}/{expectedAssetCount} {translateUi(
+              'library_assets_connected_f3532389',
+            )}{' '}
           </p>
           {data.error ? (
-            <p className="rounded bg-destructive/10 p-2 text-2xs text-destructive">{data.error}</p>
+            <p className="rounded bg-destructive/10 p-2 text-2xs text-destructive">
+              {workflowNodeError(data, translateUi)}
+            </p>
           ) : null}
 
           <Button className="nodrag h-8 w-full text-xs" disabled={!readyToSave} onClick={save}>
             <Save className="mr-1.5" />
-            {saving ? 'Saving…' : data.targetDraftId ? 'Save to planner' : 'Create draft'}
+            {saving
+              ? translateUi('saving_23e39291')
+              : data.targetDraftId
+                ? translateUi('save_to_planner_a0978055')
+                : translateUi('create_draft_07d07af2')}
           </Button>
           <div className="flex justify-end gap-1">
             <Button
@@ -442,7 +475,7 @@ export function PlannerDraftBlock({
         </NodeContent>
       </CanvasNode>
 
-      <div className="absolute -left-2 top-3" title="Caption">
+      <div className="absolute -left-2 top-3" title={translateUi('caption_87d296ec')}>
         <Handle
           type="target"
           position={Position.Left}
@@ -465,7 +498,7 @@ export function PlannerDraftBlock({
           />
         </div>
       ))}
-      <div className="absolute -right-2 top-1/2" title="Planner draft">
+      <div className="absolute -right-2 top-1/2" title={translateUi('planner_draft_32cbb428')}>
         <Handle
           type="source"
           position={Position.Right}

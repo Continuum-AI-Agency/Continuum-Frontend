@@ -9,6 +9,7 @@
 
 import type { MediaAssetVersion } from '@continuum/contracts';
 import { Download, FileIcon } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/button';
 import { withForcedDownload } from '@/lib/media/downloadUrl';
 import { fileExtension, formatBytes } from './assetFileMeta';
@@ -18,6 +19,8 @@ export type OlderFileStageProps = {
 };
 
 export function OlderFileStage({ version }: OlderFileStageProps) {
+  const translateUi = useUiTranslations('library');
+
   const ext = fileExtension(version.fileName);
   return (
     <div className="flex size-full flex-col items-center justify-center gap-4 p-8">
@@ -36,7 +39,8 @@ export function OlderFileStage({ version }: OlderFileStageProps) {
           v{version.versionNumber} · {version.mimeType} · {formatBytes(version.sizeBytes ?? 0)}
         </p>
         <p className="text-xs text-muted-foreground/60">
-          Source file — no preview. Download to open this version in its native app.
+          {' '}
+          {translateUi('source_file_no_preview_download_to__80791377')}{' '}
         </p>
       </div>
 
@@ -47,11 +51,13 @@ export function OlderFileStage({ version }: OlderFileStageProps) {
           rel="noopener"
           className={buttonVariants({ size: 'sm' })}
         >
-          <Download className="size-4" />
-          Download v{version.versionNumber}
+          <Download className="size-4" /> {translateUi('download_v_4a1ecd49')}
+          {version.versionNumber}
         </a>
       ) : (
-        <p className="text-xs text-destructive">This version has no downloadable file.</p>
+        <p className="text-xs text-destructive">
+          {translateUi('this_version_has_no_downloadable_fi_19ed9e20')}
+        </p>
       )}
     </div>
   );

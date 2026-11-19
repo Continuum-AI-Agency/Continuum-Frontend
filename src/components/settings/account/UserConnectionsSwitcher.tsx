@@ -1,6 +1,7 @@
 'use client';
 
 import { Plug, Plus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
@@ -34,6 +35,8 @@ export function UserConnectionsSwitcher({
   reconnectPrompts,
   figmaAccounts,
 }: UserConnectionsSwitcherProps) {
+  const tUi = useTranslations('settings');
+
   const { tabs, data, hasAny } = useMemo(() => {
     const tabs: IntegrationSwitcherTab[] = [];
     const data: IntegrationSwitcherData = {};
@@ -64,7 +67,7 @@ export function UserConnectionsSwitcher({
               ? formatGoogleCustomerId(externalId)
               : externalId
             : account.id.slice(0, 6),
-          title: isFallbackName ? 'Unnamed account' : account.name,
+          title: isFallbackName ? tUi('m_5c0de372dc') : account.name,
           icon: PLATFORM_ICONS[platformKey] ?? Plug,
           status: statusFor(account.status),
         };
@@ -72,16 +75,14 @@ export function UserConnectionsSwitcher({
     });
 
     return { tabs, data, hasAny: tabs.length > 0 };
-  }, [integrations]);
+  }, [integrations, tUi]);
 
   if (!hasAny) {
     return (
       <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-5 py-10 text-center">
         <Plug className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden />
-        <p className="text-sm font-medium text-foreground">No connections yet</p>
-        <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
-          Connect Meta, Google, TikTok, or X to surface accounts you can later assign to brands.
-        </p>
+        <p className="text-sm font-medium text-foreground">{tUi('m_5bb01e9014')}</p>
+        <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">{tUi('m_d3a7a37e33')}</p>
         <div className="mt-4 inline-block">
           <ConnectProviderPopover
             integrations={integrations}
@@ -90,7 +91,7 @@ export function UserConnectionsSwitcher({
           >
             <Button variant="outline" size="sm" className="gap-2">
               <Plus className="h-3.5 w-3.5" />
-              Connect a provider
+              {tUi('m_6967f288ad')}
             </Button>
           </ConnectProviderPopover>
         </div>

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Enlarge-and-act surface for post-preview creatives. Clicking a blueprint frame
 // or a realized slide opens this dialog with the creative shown large plus
@@ -42,6 +43,7 @@ export function MediaLightbox({
   onIndexChange: (index: number) => void;
   actions?: React.ReactNode;
 }) {
+  const uiText = useTranslations('common');
   const current = items[index];
   const hasMultiple = items.length > 1;
   const canPrev = index > 0;
@@ -82,7 +84,7 @@ export function MediaLightbox({
                 type="button"
                 onClick={() => onIndexChange(index - 1)}
                 disabled={!canPrev}
-                aria-label="Previous creative"
+                aria-label={uiText('previous_creative_2d9bd6b')}
                 className={cn(
                   'absolute left-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-opacity hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   !canPrev && 'pointer-events-none opacity-30',
@@ -94,7 +96,7 @@ export function MediaLightbox({
                 type="button"
                 onClick={() => onIndexChange(index + 1)}
                 disabled={!canNext}
-                aria-label="Next creative"
+                aria-label={uiText('next_creative_3678f74')}
                 className={cn(
                   'absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-opacity hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   !canNext && 'pointer-events-none opacity-30',

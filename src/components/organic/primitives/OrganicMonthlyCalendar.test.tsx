@@ -1,7 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as renderInDom, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
 import type { ReactElement, ReactNode } from 'react';
+import { englishMessages, render as renderInDom } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // The cards name their posting account through React Query; no brand is set, so it stays idle.
@@ -10,6 +12,13 @@ function QueryWrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 const render = (ui: ReactElement) => renderInDom(ui, { wrapper: QueryWrapper });
+// Calendar labels follow the UI language; the catalogs stay English so only Intl output changes.
+const renderInUiLocale = (locale: string, ui: ReactElement) =>
+  render(
+    <NextIntlClientProvider locale={locale} timeZone="UTC" messages={englishMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
 
 import type {
   OrganicCalendarDay,
@@ -149,9 +158,11 @@ function renderMonth(
     postedContent?: OrganicCalendarPostedContent[];
     brandName?: string;
     selectedPostId?: string | null;
+    uiLocale?: string;
   } = {},
 ) {
-  render(
+  renderInUiLocale(
+    overrides.uiLocale ?? 'en',
     <OrganicMonthlyCalendar
       days={days(overrides.slots ?? [draft()])}
       monthAnchorDate={ANCHOR}
@@ -300,33 +311,24 @@ describe('OrganicMonthlyCalendar ghost drafts', () => {
 });
 
 describe('OrganicMonthlyCalendar labels', () => {
-  const realLanguage = Object.getOwnPropertyDescriptor(window.navigator, 'language');
   beforeEach(() => cleanup());
-  afterAll(() => {
-    if (realLanguage) Object.defineProperty(window.navigator, 'language', realLanguage);
-    else delete (window.navigator as { language?: string }).language;
-  });
 
-  it("formats weekday and month names in the reader's locale, not hard-coded English", () => {
-    Object.defineProperty(window.navigator, 'language', { value: 'es-ES', configurable: true });
-    renderMonth();
+  it('formats weekday and month names in the UI locale, not hard-coded English', () => {
+    renderMonth({ uiLocale: 'es' });
     const expected = Array.from({ length: 7 }, (_, index) =>
-      new Intl.DateTimeFormat('es-ES', { weekday: 'short' }).format(
-        new Date(2026, 0, 4 + index, 12),
-      ),
+      new Intl.DateTimeFormat('es', { weekday: 'short' }).format(new Date(2026, 0, 4 + index, 12)),
     );
     const header = screen.getByText(expected[3] as string).parentElement as HTMLElement;
     expect(Array.from(header.children).map((cell) => cell.textContent)).toEqual(expected);
     expect(screen.queryByText('Wed')).toBeNull();
     expect(
       screen.getByText(
-        new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(ANCHOR),
+        new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' }).format(ANCHOR),
       ),
     ).toBeTruthy();
   });
 
   it('marks the weekday row and the month title translate="no" so page translation leaves them alone', () => {
-    Object.defineProperty(window.navigator, 'language', { value: 'en-US', configurable: true });
     renderMonth();
     expect(screen.getByText('Wed').parentElement?.getAttribute('translate')).toBe('no');
     expect(screen.getByText('August 2026').getAttribute('translate')).toBe('no');

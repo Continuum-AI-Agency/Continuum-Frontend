@@ -7,7 +7,7 @@ import {
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import { ArrowLeft, Check, ImageIcon, Loader2, Scissors, Sparkles, Waves } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { Video } from '@/components/ui/video';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { Link } from '@/i18n/navigation';
 import {
   enqueueVideoProjectRender,
   generateVideoCandidates,
@@ -53,6 +55,8 @@ const stageFor = (project: LoadedController['project']): WorkspaceStage => {
 };
 
 function TakePreview({ take, brandId }: { take: EditorTake; brandId: string }) {
+  const translateUi = useUiTranslations('studio');
+
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!take.asset) return;
@@ -70,17 +74,24 @@ function TakePreview({ take, brandId }: { take: EditorTake; brandId: string }) {
   if (!url) {
     return (
       <div className="flex aspect-video items-center justify-center bg-muted text-xs text-muted-foreground">
-        Preview loading…
+        {' '}
+        {translateUi('preview_loading_13bd19bd')}{' '}
       </div>
     );
   }
   if (take.kind === 'frame') {
     // biome-ignore lint/performance/noImgElement: signed Library candidates are dynamic media.
     return (
-      <img src={url} alt="Generated frame candidate" className="aspect-video w-full object-cover" />
+      <img
+        src={url}
+        alt={translateUi('generated_frame_candidate_4b6329a6')}
+        className="aspect-video w-full object-cover"
+      />
     );
   }
-  return <Video src={url} ariaLabel="Generated clip candidate" className="bg-black" />;
+  return (
+    <Video src={url} ariaLabel={translateUi('generatedClipCandidateLabel')} className="bg-black" />
+  );
 }
 
 /** Assets the edit can draw on (graph wiring, project sources) as the stages' pool. */
@@ -109,6 +120,8 @@ export function VideoStudioWorkspace({
   origin: 'canvas' | 'library';
   view?: 'assembly' | 'motion';
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const controller = useEditorProject(projectId);
   const [mode, setMode] = useState<'edit' | 'production'>(
     view === 'motion' ? 'production' : 'edit',
@@ -117,7 +130,8 @@ export function VideoStudioWorkspace({
   if (!project) {
     return (
       <div className="flex h-[var(--app-content-h)] items-center justify-center text-xs text-muted-foreground">
-        <Loader2 className="mr-2 size-4 animate-spin" /> Opening the editor…
+        <Loader2 className="mr-2 size-4 animate-spin" />{' '}
+        {translateUi('opening_the_editor_cc472a43')}{' '}
       </div>
     );
   }
@@ -155,6 +169,10 @@ function ProductionStages({
   view?: 'assembly' | 'motion';
   onOpenEdit: () => void;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const { show } = useToast();
   const { project, refresh, commit: commitCommands, runOp } = controller;
   const projectId = project.projectId;
@@ -222,16 +240,16 @@ function ProductionStages({
     void enqueueVideoProjectRender(projectId)
       .then(() => {
         show({
-          title: 'Master queued',
-          description: 'Open the render inbox to run it on this device.',
+          title: translateUi('master_queued_a95a1b67'),
+          description: translateUi('open_the_render_inbox_to_run_it_on__44af2b9a'),
         });
         return getVideoProjectSummary(projectId);
       })
       .then(() => refresh())
       .catch((error) =>
         show({
-          title: 'Render could not be queued',
-          description: error instanceof Error ? error.message : 'The render request failed.',
+          title: translateUi('render_could_not_be_queued_3d383858'),
+          description: uiErrorText(error),
           variant: 'error',
         }),
       )
@@ -243,14 +261,14 @@ function ProductionStages({
     try {
       await generateVideoCandidates({ projectId, kind, shotId });
       show({
-        title: 'Generation queued',
-        description: 'Candidates will appear here automatically.',
+        title: translateUi('generation_queued_188c968a'),
+        description: translateUi('candidates_will_appear_here_automat_84b70a03'),
       });
       await refresh();
     } catch (error) {
       show({
-        title: 'Generation blocked',
-        description: error instanceof Error ? error.message : 'The request could not start.',
+        title: translateUi('generation_blocked_750d7a11'),
+        description: uiErrorText(error),
         variant: 'warning',
       });
     } finally {
@@ -292,7 +310,7 @@ function ProductionStages({
       shot: {
         id: crypto.randomUUID(),
         order,
-        title: `Shot ${order + 1}`,
+        title: translateUi('shot_value0_2f799916', { value0: String(order + 1) }),
         brief: 'A single clear story beat grounded in the approved visual language.',
         subjectAction: 'The subject performs one deliberate action.',
         cameraMove: 'Slow controlled dolly in.',
@@ -359,15 +377,16 @@ function ProductionStages({
                   <Sparkles />
                 )}
                 {generationKind === 'frame'
-                  ? 'Generate 4'
+                  ? translateUi('generate_4_6504b7d1')
                   : generationKind === 'motion_draft'
-                    ? 'Generate 3'
-                    : 'Generate 1080p master'}
+                    ? translateUi('generate_3_30a88c48')
+                    : translateUi('generate_1080p_master_9e4f4966')}
               </Button>
             </div>
             {takes.length === 0 ? (
               <div className="rounded-lg border border-dashed p-8 text-center text-xs text-muted-foreground">
-                No candidates yet.
+                {' '}
+                {translateUi('no_candidates_yet_c78e71b2')}{' '}
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -383,7 +402,7 @@ function ProductionStages({
                           {take.model}
                         </span>
                         <Badge variant={take.id === selectedId ? 'default' : 'secondary'}>
-                          {take.id === selectedId ? 'Keeper' : take.status}
+                          {take.id === selectedId ? translateUi('keeper_7cc943b2') : take.status}
                         </Badge>
                       </div>
                       {take.status === 'ready' && take.id !== selectedId ? (
@@ -399,7 +418,7 @@ function ProductionStages({
                           }
                           disabled={Boolean(busy)}
                         >
-                          <Check /> Choose keeper
+                          <Check /> {translateUi('choose_keeper_c1c59aea')}{' '}
                         </Button>
                       ) : null}
                     </div>
@@ -419,13 +438,14 @@ function ProductionStages({
         <div>
           <h1 className="text-sm font-semibold tracking-tight">{project.title}</h1>
           <p className="text-xs text-muted-foreground">
-            Human-directed production · revision {project.revision}
+            {' '}
+            {translateUi('human_directed_production_revision_654d5f40')} {project.revision}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline">{project.production.workflowStage.replaceAll('_', ' ')}</Badge>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={onOpenEdit}>
-            <Scissors className="size-3.5" /> Edit
+            <Scissors className="size-3.5" /> {translateUi('edit_464c4ffd')}{' '}
           </Button>
           <Button
             size="sm"
@@ -434,13 +454,16 @@ function ProductionStages({
             aria-expanded={agentOpen}
             aria-controls="video-editor-agent"
           >
-            <Sparkles className="size-3.5" /> Agent
+            <Sparkles className="size-3.5" /> {translateUi('agent_11b39c93')}{' '}
           </Button>
           <Link
             href={origin === 'library' ? '/library' : '/ai-studio'}
             className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
           >
-            <ArrowLeft className="size-3.5" /> Back to {origin === 'library' ? 'Library' : 'Canvas'}
+            <ArrowLeft className="size-3.5" /> {translateUi('back_to_cd9182ce')}{' '}
+            {origin === 'library'
+              ? translateUi('library_dc20b3d5')
+              : translateUi('canvas_3824a9f4')}
           </Link>
         </div>
       </header>
@@ -482,13 +505,13 @@ function ProductionStages({
           {activeStage === 'style' ? (
             <div className="mx-auto max-w-4xl space-y-4">
               <div className="rounded-xl border border-border/60 bg-card p-5">
-                <h2 className="font-medium">Script</h2>
+                <h2 className="font-medium">{translateUi('script_102acc10')}</h2>
                 <Textarea
                   className="mt-4"
                   value={scriptText}
                   onChange={(event) => setScriptText(event.target.value)}
                   rows={8}
-                  placeholder="Paste or write the source script"
+                  placeholder={translateUi('paste_or_write_the_source_script_62ffa4a4')}
                 />
                 <div className="mt-3 flex justify-end">
                   <Button
@@ -501,20 +524,21 @@ function ProductionStages({
                       })
                     }
                   >
-                    Save script
+                    {' '}
+                    {translateUi('save_script_c656be3f')}{' '}
                   </Button>
                 </div>
               </div>
               <div className="rounded-xl border border-border/60 bg-card p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="font-medium">Style contract</h2>
+                    <h2 className="font-medium">{translateUi('style_contract_a6dc8d4f')}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Lock the lens, light, palette, texture, blocking, and atmosphere before
-                      spending on motion.
+                      {' '}
+                      {translateUi('lock_the_lens_light_palette_texture_c4582c5f')}{' '}
                     </p>
                   </div>
-                  <Badge>{style?.status ?? 'not extracted'}</Badge>
+                  <Badge>{style?.status ?? translateUi('not_extracted_d701490b')}</Badge>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {pinnedPool.map((source) => (
@@ -524,7 +548,8 @@ function ProductionStages({
                   ))}
                   {pinnedPool.length === 0 ? (
                     <span className="text-xs text-muted-foreground">
-                      Connect pinned Library images to the node first.
+                      {' '}
+                      {translateUi('connect_pinned_library_images_to_th_d90aca1b')}{' '}
                     </span>
                   ) : null}
                 </div>
@@ -535,7 +560,9 @@ function ProductionStages({
                   >
                     <span>{reference.label ?? reference.id}</span>
                     <select
-                      aria-label={`Role for ${reference.label ?? reference.id}`}
+                      aria-label={translateUi('role_for_value0_4abcf3e1', {
+                        value0: String(reference.label ?? reference.id),
+                      })}
                       className="h-8 rounded-md border bg-background px-2"
                       value={reference.role}
                       onChange={(event) =>
@@ -583,7 +610,8 @@ function ProductionStages({
                       })
                     }
                   >
-                    Pin connected references
+                    {' '}
+                    {translateUi('pin_connected_references_fb8e0f5a')}{' '}
                   </Button>
                   <Button
                     disabled={
@@ -597,8 +625,8 @@ function ProductionStages({
                       <Loader2 className="animate-spin" />
                     ) : (
                       <Sparkles />
-                    )}
-                    Extract style
+                    )}{' '}
+                    {translateUi('extract_style_d4ba66a2')}{' '}
                   </Button>
                 </div>
               </div>
@@ -623,18 +651,19 @@ function ProductionStages({
                             })
                           }
                         >
-                          Save edits
+                          {' '}
+                          {translateUi('save_edits_54dfca80')}{' '}
                         </Button>
                         <Button
                           disabled={Boolean(busy)}
                           onClick={() => void commit({ commandType: 'approve_style_contract' })}
                         >
-                          <Check /> Approve style
+                          <Check /> {translateUi('approve_style_ccbace13')}{' '}
                         </Button>
                       </>
                     ) : (
                       <Badge>
-                        <Check /> Human approved
+                        <Check /> {translateUi('human_approved_e3bee027')}{' '}
                       </Badge>
                     )}
                   </div>
@@ -647,13 +676,14 @@ function ProductionStages({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="font-medium">Frames first</h2>
+                  <h2 className="font-medium">{translateUi('frames_first_e66ff843')}</h2>
                   <p className="text-xs text-muted-foreground">
-                    Explore composition cheaply, then choose one keeper per shot.
+                    {' '}
+                    {translateUi('explore_composition_cheaply_then_ch_6927cd89')}{' '}
                   </p>
                 </div>
                 <Button variant="outline" onClick={addShot} disabled={Boolean(busy)}>
-                  <ImageIcon /> Add shot
+                  <ImageIcon /> {translateUi('add_shot_bcfd3d07')}{' '}
                 </Button>
               </div>
               {takeGrid('frame', 'frame')}
@@ -665,9 +695,10 @@ function ProductionStages({
             <div className="mx-auto grid max-w-5xl gap-px border border-border/60 bg-border/60 lg:grid-cols-2">
               <section className="space-y-4 bg-background p-5">
                 <div>
-                  <h2 className="font-medium">Voiceover</h2>
+                  <h2 className="font-medium">{translateUi('voiceover_317f3d76')}</h2>
                   <p className="text-xs text-muted-foreground">
-                    Generate a WAV take from the approved script.
+                    {' '}
+                    {translateUi('generate_a_wav_take_from_the_approv_678014fb')}{' '}
                   </p>
                 </div>
                 <Textarea
@@ -679,21 +710,22 @@ function ProductionStages({
                   disabled={!narrationText.trim() || Boolean(busy)}
                   onClick={() => void generateSound('narration')}
                 >
-                  <Sparkles /> Generate narration
+                  <Sparkles /> {translateUi('generate_narration_725b3dda')}{' '}
                 </Button>
               </section>
               <section className="space-y-4 bg-background p-5">
                 <div>
-                  <h2 className="font-medium">Music and beat grid</h2>
+                  <h2 className="font-medium">{translateUi('music_and_beat_grid_3f857b77')}</h2>
                   <p className="text-xs text-muted-foreground">
-                    Set musical direction, then correct BPM and offset before syncing cuts.
+                    {' '}
+                    {translateUi('set_musical_direction_then_correct__129c3a92')}{' '}
                   </p>
                 </div>
                 <Textarea
                   value={musicPrompt}
                   onChange={(event) => setMusicPrompt(event.target.value)}
                   rows={4}
-                  placeholder="Percussive, restrained, no vocals"
+                  placeholder={translateUi('percussive_restrained_no_vocals_282cb8e8')}
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <Input
@@ -705,7 +737,7 @@ function ProductionStages({
                     onChange={(event) => setBpm(event.target.value)}
                   />
                   <Input
-                    aria-label="Beat offset seconds"
+                    aria-label={translateUi('beat_offset_seconds_bf7d3445')}
                     type="number"
                     min="0"
                     step="0.01"
@@ -719,7 +751,7 @@ function ProductionStages({
                     disabled={!musicPrompt.trim() || Boolean(busy)}
                     onClick={() => void generateSound('music')}
                   >
-                    <Sparkles /> Generate music
+                    <Sparkles /> {translateUi('generate_music_bb3d6254')}{' '}
                   </Button>
                   <Button
                     variant="outline"
@@ -751,7 +783,7 @@ function ProductionStages({
                       );
                     }}
                   >
-                    <Waves /> Beat Sync
+                    <Waves /> {translateUi('beat_sync_e3d70f0e')}{' '}
                   </Button>
                 </div>
                 <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
@@ -762,7 +794,8 @@ function ProductionStages({
                       void commit({ commandType: 'set_sound_plan', soundPlan: soundDraft() })
                     }
                   >
-                    Save sound plan
+                    {' '}
+                    {translateUi('save_sound_plan_9fee8797')}{' '}
                   </Button>
                   <Button
                     disabled={Boolean(busy)}
@@ -773,7 +806,7 @@ function ProductionStages({
                       })
                     }
                   >
-                    <Check /> Approve sound
+                    <Check /> {translateUi('approve_sound_e42eaec1')}{' '}
                   </Button>
                 </div>
               </section>

@@ -10,14 +10,17 @@
 
 import type { AssetFieldValue, CustomField, CustomFieldValue } from '@continuum/contracts';
 import { Loader2, Settings2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { listAssetFieldValues, setAssetFieldValue } from '@/lib/library/customFields';
 import { validateCustomFieldValue, valuesByFieldId } from '@/lib/library/customFieldValue';
 import { useLibraryAccess } from '@/lib/library/useBrandRole';
 import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
+import { useCardFieldDisplay } from '../views/useLibraryFieldOptions';
 import { CustomFieldManagerDialog } from './CustomFieldManagerDialog';
 import { CustomFieldValueEditor } from './CustomFieldValueEditor';
 import { useCustomFields } from './useCustomFields';
@@ -28,9 +31,14 @@ export type AssetFieldsPanelProps = {
 };
 
 export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
+  const translateUi = useUiTranslations('library');
+  const uiErrorText = useUiErrorMessage();
+  const fieldDisplay = useCardFieldDisplay();
+
   const { fields, error: fieldsError, refresh } = useCustomFields(brandId);
   const [values, setValues] = useState<Map<string, CustomFieldValue> | null>(null);
-  const [valuesError, setValuesError] = useState<string | null>(null);
+  const [valuesFailure, setValuesFailure] = useState<unknown>(null);
+  const valuesError = valuesFailure === null ? null : uiErrorText(valuesFailure);
   const [savingFieldId, setSavingFieldId] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
   const { canEdit } = useLibraryAccess(brandId, { assetId });
@@ -65,7 +73,7 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
   useEffect(() => {
     let cancelled = false;
     setValues(null);
-    setValuesError(null);
+    setValuesFailure(null);
     listAssetFieldValues({ brandId, assetId })
       .then((rows: AssetFieldValue[]) => {
         if (!cancelled) setValues(valuesByFieldId(rows));
@@ -73,7 +81,7 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
       .catch((err: unknown) => {
         if (cancelled) return;
         setValues(new Map());
-        setValuesError((err as Error).message);
+        setValuesFailure(err);
       });
     return () => {
       cancelled = true;
@@ -82,8 +90,12 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
 
   const save = useCallback(
     async (field: CustomField, next: CustomFieldValue) => {
-      const checked = validateCustomFieldValue(field, next);
+      const checked = validateCustomFieldValue(field, next, fieldDisplay);
       if (!checked.ok) {
+        console.warn('[Custom field] invalid value', {
+          fieldId: field.id,
+          reason: checked.diagnosticReason,
+        });
         toast.error(checked.error);
         return;
       }
@@ -102,12 +114,17 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
         setValues((prev) => new Map(prev ?? []).set(field.id, saved.value));
       } catch (err) {
         setValues((prev) => new Map(prev ?? []).set(field.id, previous));
-        toast.error(`Saving ${field.name} failed · ${(err as Error).message}`);
+        toast.error(
+          translateUi('saving_value0_failed_value1_8ed644c5', {
+            value0: String(field.name),
+            value1: uiErrorText(err),
+          }),
+        );
       } finally {
         setSavingFieldId(null);
       }
     },
-    [brandId, assetId, values],
+    [brandId, assetId, values, translateUi, fieldDisplay, uiErrorText],
   );
 
   const loading = fields === null || values === null;
@@ -116,7 +133,8 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-3 pb-1">
         <p className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-          Custom fields
+          {' '}
+          {translateUi('custom_fields_5566db49')}{' '}
         </p>
         {canEdit ? (
           <Button
@@ -126,8 +144,7 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
             className="h-6 gap-1 px-1.5 text-2xs text-muted-foreground"
             onClick={() => setManagerOpen(true)}
           >
-            <Settings2 className="size-3.5" />
-            Manage
+            <Settings2 className="size-3.5" /> {translateUi('manage_5a234448')}{' '}
           </Button>
         ) : null}
       </div>
@@ -178,12 +195,14 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
 }
 
 function EmptyFields({ onAdd }: { onAdd: () => void }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
-      <p className="text-xs font-medium">No custom fields yet</p>
+      <p className="text-xs font-medium">{translateUi('no_custom_fields_yet_eb0a32b0')}</p>
       <p className="mt-1 text-2xs text-muted-foreground">
-        Track what your team needs to know about an asset — usage rights, a rating, the campaign it
-        belongs to.
+        {' '}
+        {translateUi('track_what_your_team_needs_to_know__eb9e3ba9')}{' '}
       </p>
       <Button
         type="button"
@@ -192,7 +211,8 @@ function EmptyFields({ onAdd }: { onAdd: () => void }) {
         className="mt-3 h-7 text-xs"
         onClick={onAdd}
       >
-        Add a field
+        {' '}
+        {translateUi('add_a_field_72d29bb1')}{' '}
       </Button>
     </div>
   );

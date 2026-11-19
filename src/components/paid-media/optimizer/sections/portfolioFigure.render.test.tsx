@@ -5,7 +5,8 @@ import {
   getOptimizationMetricDefinition,
   type PortfolioListItem,
 } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('motion/react', () => {
   const React = require('react');

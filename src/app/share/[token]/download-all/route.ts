@@ -2,10 +2,10 @@
 // Backend's share delivery (which resolves and signs the files itself).
 
 import type { SharePreparedDownload } from '@continuum/contracts';
-import { loadSharePresentation } from '../loadSharePayload';
-import { invokeLibraryShare } from '../shareEdge.server';
-import { fetchShareDelivery } from '../shareDownload.server';
-import { viewerContext } from '../shareEvents.server';
+import { loadSharePresentation } from '../../../[locale]/share/[token]/loadSharePayload';
+import { fetchShareDelivery } from '../../../[locale]/share/[token]/shareDownload.server.ts';
+import { invokeLibraryShare } from '../../../[locale]/share/[token]/shareEdge.server.ts';
+import { viewerContext } from '../../../[locale]/share/[token]/shareEvents.server.ts';
 
 export const maxDuration = 300;
 
@@ -30,7 +30,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   });
   if (!prepared.ok) {
     return new Response(
-      prepared.status === 403 ? 'Downloads are turned off for this link.' : 'This link is not available.',
+      prepared.status === 403
+        ? 'Downloads are turned off for this link.'
+        : 'This link is not available.',
       { status: prepared.status === 403 ? 403 : 404 },
     );
   }

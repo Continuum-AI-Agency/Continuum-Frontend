@@ -6,11 +6,12 @@
 
 import { editorCommandBatchSchema, type MediaAsset } from '@continuum/contracts';
 import { Loader2, Plus, Scissors } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { Link, useRouter } from '@/i18n/navigation';
 import { studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
 import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
 import {
@@ -27,6 +28,10 @@ export type EditTimelineButtonProps = {
 };
 
 export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimelineButtonProps) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const router = useRouter();
   const { show } = useToast();
   const [opening, setOpening] = useState(false);
@@ -36,8 +41,8 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
   const openStudio = async () => {
     if (!asset.headVersionId) {
       show({
-        title: 'Stored version unavailable',
-        description: 'Create a stored version before editing.',
+        title: translateUi('stored_version_unavailable_7bbc84a0'),
+        description: translateUi('create_a_stored_version_before_edit_c8addeb3'),
         variant: 'warning',
       });
       return;
@@ -150,8 +155,8 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
       router.push(studioVideoHref({ projectId: project.projectId, origin: 'library' }));
     } catch (error) {
       show({
-        title: 'Could not open video studio',
-        description: error instanceof Error ? error.message : 'Project setup failed.',
+        title: translateUi('could_not_open_video_studio_6f9881eb'),
+        description: uiErrorText(error),
         variant: 'error',
       });
     } finally {
@@ -173,10 +178,12 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
         ) : (
           <Scissors className="size-3.5" aria-hidden />
         )}
-        {asset.kind === 'video' ? 'Edit video' : 'Edit in timeline'}
+        {asset.kind === 'video'
+          ? translateUi('edit_video_fa924e29')
+          : translateUi('edit_in_timeline_ddcbe08b')}
       </Button>
       <Link href="/studio/video/new" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-        <Plus className="size-3.5" aria-hidden /> New edit
+        <Plus className="size-3.5" aria-hidden /> {translateUi('new_edit_2e7779e8')}{' '}
       </Link>
     </>
   );

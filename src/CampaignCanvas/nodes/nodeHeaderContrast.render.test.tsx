@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentType } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import type { CampaignNodeProps } from '../types';
 import { AdNode } from './AdNode';
 import { AdSetNode } from './AdSetNode';

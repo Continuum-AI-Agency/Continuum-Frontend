@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { ContinuumWordmark } from '@/components/shared/ContinuumWordmark';
 import { OnboardingStepper, type StepperState } from './OnboardingStepper';
 import { StartOverButton } from './StartOverButton';
@@ -34,6 +35,8 @@ export function OnboardingShell({
   headerRight,
   children,
 }: OnboardingShellProps) {
+  const tUi = useTranslations('onboarding');
+
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
       <header className="border-b border-border bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:bg-card/80">
@@ -41,7 +44,7 @@ export function OnboardingShell({
           <ContinuumWordmark />
           <div className="flex items-center gap-3">
             <p className="hidden text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground md:block">
-              Get set up
+              {tUi('m_1f0f384f88')}
             </p>
             {headerRight}
           </div>

@@ -9,7 +9,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { type BlendField, blendParseSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import parseExample from '../../../../packages/contracts/src/media/__fixtures__/blend-parse.example.json';
 import {
   groupSceneFields,

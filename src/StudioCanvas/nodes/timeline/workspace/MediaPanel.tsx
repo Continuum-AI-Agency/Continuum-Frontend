@@ -2,7 +2,7 @@
 
 import type { EditorProjectV2, VideoEditorPoolAsset } from '@continuum/contracts';
 import { AudioLines, Film, Image as ImageIcon, Loader2, Plus, Upload } from 'lucide-react';
-import Link from 'next/link';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useRef } from 'react';
 import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/context-menu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { VIDEO_STUDIO_ASSET_DRAG_TYPE } from '@/components/video-studio/types';
+import { Link } from '@/i18n/navigation';
+import { formatDecimal } from '@/lib/format/decimal';
 import { libraryVersionKey } from '../useClipPreviewUrls';
 import { IMPORTABLE_MEDIA, poolAssetFromLibrary } from './importMedia';
 import { RecordMenu } from './RecordMenu';
@@ -55,10 +57,13 @@ export function projectSources(
 }
 
 function AssetPreview({ asset, url }: { asset: VideoEditorPoolAsset; url?: string }) {
+  const translateUi = useUiTranslations('studio');
+
   if (!url)
     return (
       <div className="flex h-24 items-center justify-center rounded bg-muted text-2xs">
-        No preview
+        {' '}
+        {translateUi('no_preview_4b8bacd8')}{' '}
       </div>
     );
   if (asset.kind === 'image') {
@@ -97,6 +102,10 @@ export function MediaPanel({
   onImportFiles: (files: File[]) => void;
   onAddAsset: (asset: VideoEditorPoolAsset, options?: { newTrack?: boolean }) => void;
 }) {
+  const decimalLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const fileInput = useRef<HTMLInputElement>(null);
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-3">
@@ -107,7 +116,7 @@ export function MediaPanel({
           className="gap-1.5"
           onClick={() => fileInput.current?.click()}
         >
-          <Upload className="size-3.5" /> Import
+          <Upload className="size-3.5" /> {translateUi('import_2cff9baa')}{' '}
         </Button>
         <input
           ref={fileInput}
@@ -115,7 +124,7 @@ export function MediaPanel({
           multiple
           accept={IMPORTABLE_MEDIA}
           className="hidden"
-          aria-label="Import media files"
+          aria-label={translateUi('import_media_files_7c203fed')}
           onChange={(event) => {
             const files = [...(event.target.files ?? [])];
             event.target.value = '';
@@ -138,12 +147,14 @@ export function MediaPanel({
           key={file.id}
           className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1.5 text-2xs text-muted-foreground"
         >
-          <Loader2 className="size-3 animate-spin" /> Uploading {file.name}…
+          <Loader2 className="size-3 animate-spin" /> {translateUi('uploading_8b898ca3')}{' '}
+          {file.name}…
         </div>
       ))}
       {assets.length === 0 && importing.length === 0 ? (
         <p className="rounded-md border border-dashed p-4 text-center text-2xs text-muted-foreground">
-          Drop files anywhere in the editor, record, or pick from the Library.
+          {' '}
+          {translateUi('drop_files_anywhere_in_the_editor_r_9ca8ebc9')}{' '}
         </p>
       ) : null}
       <div className="grid grid-cols-2 gap-2">
@@ -196,7 +207,9 @@ export function MediaPanel({
                   <Button
                     size="icon"
                     variant="secondary"
-                    aria-label={`Add ${asset.title} at the playhead`}
+                    aria-label={translateUi('add_value0_at_the_playhead_4bc9b871', {
+                      value0: String(asset.title),
+                    })}
                     className="absolute top-1 right-1 size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                     onClick={() => onAddAsset(asset)}
                   >
@@ -208,16 +221,18 @@ export function MediaPanel({
                   <p className="truncate text-xs font-medium">{asset.title}</p>
                   <p className="text-2xs text-muted-foreground">
                     {asset.kind}
-                    {asset.durationSec ? ` · ${asset.durationSec.toFixed(1)}s` : ''}
+                    {asset.durationSec
+                      ? ` · ${formatDecimal(asset.durationSec, 1, decimalLocale)}s`
+                      : ''}
                   </p>
                 </HoverCardContent>
               </HoverCard>
               <ContextMenuContent className="w-52">
                 <ContextMenuItem onClick={() => onAddAsset(asset)}>
-                  <Plus /> Add at playhead
+                  <Plus /> {translateUi('add_at_playhead_1c335439')}{' '}
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => onAddAsset(asset, { newTrack: true })}>
-                  <Plus /> Add on a new track
+                  <Plus /> {translateUi('add_on_a_new_track_a34b8d35')}{' '}
                 </ContextMenuItem>
                 <ContextMenuItem
                   render={
@@ -227,7 +242,8 @@ export function MediaPanel({
                     />
                   }
                 >
-                  Open in Library
+                  {' '}
+                  {translateUi('open_in_library_c0a66bb6')}{' '}
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>

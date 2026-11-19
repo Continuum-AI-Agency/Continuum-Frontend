@@ -1,8 +1,10 @@
 'use client';
 
 import type { DesignImportResponse } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { importDesignTemplate } from '@/lib/library/templateSources';
 
 type DesignImport = {
@@ -19,6 +21,8 @@ export function useDesignTemplateImports(
   brandId: string,
   onImported: (result: DesignImportResponse) => Promise<void> | void,
 ) {
+  const uiErrorText = useUiErrorMessage();
+
   const [items, setItems] = useState<DesignImport[]>([]);
   const running = useRef(new Set<string>());
   const current = useRef({ brandId, onImported });
@@ -44,14 +48,13 @@ export function useDesignTemplateImports(
           assetId,
           name,
           state: 'error',
-          error:
-            error instanceof Error ? error.message : 'Could not make this template. Try again.',
+          error: uiErrorText(error),
         });
       } finally {
         running.current.delete(key);
       }
     },
-    [brandId],
+    [brandId, uiErrorText],
   );
   return { imports: items.filter((item) => item.brandId === brandId), start };
 }
@@ -67,6 +70,8 @@ export function DesignTemplateImports({
   sourceIds?: string[];
   onOpen?: (assetId: string) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const visible = imports.filter(
     (item) => !item.result || !sourceIds.includes(item.result.assetId),
   );
@@ -87,17 +92,18 @@ export function DesignTemplateImports({
               {item.state === 'error'
                 ? item.error
                 : item.state === 'importing'
-                  ? 'Making your template…'
+                  ? translateUi('making_your_template_4610bddc')
                   : item.result?.parseState === 'failed'
-                    ? 'The template was created but could not be read. Open it to review the file.'
+                    ? translateUi('the_template_was_created_but_could__ada17d65')
                     : item.result?.parseState === 'pending'
-                      ? 'Reading template layers…'
-                      : 'Template imported. Open it to check required fonts.'}
+                      ? translateUi('reading_template_layers_e90bf666')
+                      : translateUi('template_imported_open_it_to_check__e5fbd6be')}
             </p>
           </div>
           {item.state === 'error' ? (
             <Button type="button" size="sm" onClick={() => void onRetry(item.name, item.assetId)}>
-              Retry {item.name}
+              {' '}
+              {translateUi('retry_942087cc')} {item.name}
             </Button>
           ) : null}
           {item.result && onOpen ? (
@@ -107,7 +113,8 @@ export function DesignTemplateImports({
               variant="outline"
               onClick={() => onOpen(item.result!.assetId)}
             >
-              Open template
+              {' '}
+              {translateUi('open_template_42b4387d')}{' '}
             </Button>
           ) : null}
         </div>

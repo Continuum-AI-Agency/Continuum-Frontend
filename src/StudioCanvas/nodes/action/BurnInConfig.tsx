@@ -31,6 +31,7 @@ import {
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -210,6 +211,8 @@ function PlacementStage({
   onNudge: (dx: number, dy: number) => void;
   onImageSize: (width: number, height: number) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const stageRef = useRef<HTMLDivElement>(null);
   const grabRef = useRef<Point | null>(null);
   const rect = blockRect(placement, extent);
@@ -248,7 +251,8 @@ function PlacementStage({
         />
       ) : (
         <p className="absolute inset-0 flex items-center justify-center px-3 text-center text-2xs text-white/60">
-          Wire a picture into this action to place the type on it.
+          {' '}
+          {translateUi('wire_a_picture_into_this_action_to__a93bfa6b')}{' '}
         </p>
       )}
 
@@ -271,7 +275,7 @@ function PlacementStage({
 
       <button
         type="button"
-        aria-label="Type block — drag to place, arrow keys to nudge"
+        aria-label={translateUi('type_block_drag_to_place_arrow_keys_93971192')}
         data-testid="burn-in-block"
         className="absolute cursor-grab rounded-[2px] border border-brand-primary bg-brand-primary/25 active:cursor-grabbing"
         style={{
@@ -327,6 +331,8 @@ export function BurnInConfig({
   nodeId: string;
   config: Record<string, unknown>;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const patch = useNodeConfigPatch();
   const nodes = useStudioStore((state) => state.nodes);
   const edges = useStudioStore((state) => state.edges);
@@ -421,13 +427,15 @@ export function BurnInConfig({
     <div className="flex flex-col gap-3">
       <section className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <Label className="text-xs">Placement</Label>
+          <Label className="text-xs">{translateUi('placement_4df99399')}</Label>
           <span className="text-2xs text-muted-foreground">
             {live?.snapped
               ? ANCHOR_LABEL[live.anchor]
               : placement.offsetX === 0 && placement.offsetY === 0
                 ? ANCHOR_LABEL[placement.anchor]
-                : `${ANCHOR_LABEL[placement.anchor]} + nudge`}
+                : translateUi('value0_nudge_87927f5e', {
+                    value0: String(ANCHOR_LABEL[placement.anchor]),
+                  })}
           </span>
         </div>
         <PlacementStage
@@ -446,14 +454,14 @@ export function BurnInConfig({
           onPick={(anchor) => write({ anchor, offsetX: 0, offsetY: 0 })}
         />
         <p className="text-2xs text-muted-foreground">
-          Drag the block, or pick a point. Releasing on a point clears the nudge, so the placement
-          holds at any output size.
+          {' '}
+          {translateUi('drag_the_block_or_pick_a_point_rele_ea624597')}{' '}
         </p>
       </section>
 
       <section className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
-          <Label className="text-xs">Type</Label>
+          <Label className="text-xs">{translateUi('type_baaddf70')}</Label>
           <span
             className="text-2xs text-muted-foreground"
             data-testid="burn-in-type-source"
@@ -464,17 +472,19 @@ export function BurnInConfig({
         </div>
         <p className="text-2xs text-muted-foreground">
           {faces.source === 'fallback'
-            ? 'No typeface was found in this brand’s design system, brand book, kit or website, so the headline is set in a face Continuum ships. Add one and it is used the next time this runs.'
-            : `Read from ${BRAND_TYPE_SOURCE_LABEL[faces.source]}. The headline is set in it, never in a face typed here.`}
+            ? translateUi('no_typeface_was_found_in_this_brand_e6461caf')
+            : translateUi('read_from_value0_the_headline_is_se_b28a7478', {
+                value0: String(BRAND_TYPE_SOURCE_LABEL[faces.source]),
+              })}
         </p>
       </section>
 
       <section className="flex flex-col gap-1.5">
-        <Label className="text-xs">Ink</Label>
+        <Label className="text-xs">{translateUi('ink_f089d622')}</Label>
         <div className="flex flex-wrap gap-1">
           <button
             type="button"
-            aria-label="The palette's default ink"
+            aria-label={translateUi('the_palette_s_default_ink_68d3366c')}
             aria-pressed={inkHex === null && inkToken === ''}
             onClick={() => write({ inkToken: '', inkHex: null })}
             className={`h-6 rounded border px-2 text-2xs ${
@@ -483,7 +493,8 @@ export function BurnInConfig({
                 : 'border-border/60 text-muted-foreground hover:bg-muted/60'
             }`}
           >
-            Default
+            {' '}
+            {translateUi('default_21b111cb')}{' '}
           </button>
           {inkTokens.map((token) => (
             <button
@@ -504,7 +515,7 @@ export function BurnInConfig({
         </div>
         <div className="flex items-center gap-1" data-testid="burn-in-ink-custom">
           <ColorField
-            label="Custom ink"
+            label={translateUi('custom_ink_fd17e832')}
             value={inkHex}
             onChange={(hex) => write({ inkHex: hex, inkToken: '' })}
           />
@@ -514,8 +525,8 @@ export function BurnInConfig({
               variant="ghost"
               size="icon"
               className="size-7 shrink-0"
-              aria-label="Clear the custom ink"
-              title="Back to the palette"
+              aria-label={translateUi('clear_the_custom_ink_652e4dab')}
+              title={translateUi('back_to_the_palette_209b310c')}
               onClick={() => write({ inkHex: null })}
             >
               <X className="size-3" />
@@ -526,27 +537,27 @@ export function BurnInConfig({
           {ink
             ? `${describeHeadlineInk(ink)}. ${
                 inkHex
-                  ? 'A hand-picked colour stays this colour — re-tinting the palette will not move it.'
-                  : 'The token is a reference, so re-tinting the palette re-tints the headline.'
+                  ? translateUi('a_hand_picked_colour_stays_this_col_47114c7c')
+                  : translateUi('the_token_is_a_reference_so_re_tint_aa2ca2f3')
               }`
             : fallbackInk
-              ? 'No brand colour anywhere — not in a design system, a brand book, a kit or a website. A legible black or white is MEASURED from the photo at render time, and the piece says which it used.'
-              : 'No brand colour anywhere, and the fallback ink is switched off — this action will refuse rather than draw. Add a brand colour, or switch the fallback back on below.'}
+              ? translateUi('no_brand_colour_anywhere_not_in_a_d_3daed7ad')
+              : translateUi('no_brand_colour_anywhere_and_the_fa_cac63138')}
         </p>
       </section>
 
       <SliderField
-        label="Measure"
+        label={translateUi('measure_ebf940f2')}
         value={measure}
         min={0.2}
         max={1}
         step={0.01}
         format={{ style: 'percent', maximumFractionDigits: 0 }}
-        suffix=" of the width"
+        suffix={translateUi('widthFractionSuffix')}
         onChange={(value) => write({ measure: value })}
       />
       <SliderField
-        label="Edge margin"
+        label={translateUi('edge_margin_ca9bd9f0')}
         value={placement.marginFrac}
         min={0}
         max={0.25}
@@ -555,7 +566,7 @@ export function BurnInConfig({
         onChange={(value) => write({ marginFrac: value })}
       />
       <SliderField
-        label="Minimum contrast"
+        label={translateUi('minimum_contrast_0f1453cc')}
         value={minContrast}
         min={1}
         max={7}
@@ -567,12 +578,14 @@ export function BurnInConfig({
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col">
           <Label id={`burn-in-fallback-type-${nodeId}`} className="text-xs">
-            Use a fallback typeface
+            {' '}
+            {translateUi('use_a_fallback_typeface_e5d0dd7b')}{' '}
           </Label>
           <p className="max-w-[15rem] text-2xs text-muted-foreground">
-            OFF makes this action REFUSE TO RUN for a brand that names no typeface, instead of
-            setting the headline in {PRELOADED_TYPE_FACES.display}. Turn it off for a piece where a
-            substitute face is worse than no piece.
+            {' '}
+            {translateUi('off_makes_this_action_refuse_to_run_523d0a18')}{' '}
+            {PRELOADED_TYPE_FACES.display}
+            {translateUi('turn_it_off_for_a_piece_where_a_sub_b5859524')}{' '}
           </p>
         </div>
         <Switch
@@ -585,12 +598,12 @@ export function BurnInConfig({
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col">
           <Label id={`burn-in-fallback-ink-${nodeId}`} className="text-xs">
-            Measure a fallback ink
+            {' '}
+            {translateUi('measure_a_fallback_ink_60623b9b')}{' '}
           </Label>
           <p className="max-w-[15rem] text-2xs text-muted-foreground">
-            OFF makes this action REFUSE TO RUN for a brand with no colour, instead of measuring a
-            legible black or white off the photo. Never a hard-coded hex either way — the two
-            candidates are compared against the darkest and brightest of what is behind the type.
+            {' '}
+            {translateUi('off_makes_this_action_refuse_to_run_1a7a3c60')}{' '}
           </p>
         </div>
         <Switch
@@ -603,12 +616,12 @@ export function BurnInConfig({
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col">
           <Label id={`burn-in-escalate-${nodeId}`} className="text-xs">
-            Treat the background
+            {' '}
+            {translateUi('treat_the_background_84b51931')}{' '}
           </Label>
           <p className="max-w-[15rem] text-2xs text-muted-foreground">
-            Contrast outranks placement: type dragged over a dark patch lifts the PHOTO to reach the
-            bar. It is never moved somewhere friendlier. Off pins the photo and reports the ratio it
-            actually reached.
+            {' '}
+            {translateUi('contrast_outranks_placement_type_dr_8d93424b')}{' '}
           </p>
         </div>
         <Switch

@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // Guards the automations webhook surface after `action.outbound_webhook` moved
 // to the `production` lifecycle. Every assertion here failed (or would have
 // silently passed on a broken UI) while the coming-soon gates were still in
@@ -9,7 +10,7 @@ import type {
   AutomationWebhookDestination,
   AutomationWebhookEndpoint,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   automationDestinationUrlError,
@@ -241,7 +242,9 @@ describe('inbound endpoint creation gating', () => {
     expect(automationEndpointCreationError(new Error('webhook_trigger_not_found'))).toContain(
       'not in the saved draft yet',
     );
-    expect(automationEndpointCreationError(new Error('boom'))).toBe('boom');
+    expect(automationEndpointCreationError(new Error('boom'))).toBe(
+      'Could not create this endpoint.',
+    );
   });
 });
 

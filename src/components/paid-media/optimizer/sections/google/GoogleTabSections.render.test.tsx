@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { BID_CARD, EKATAR, GOALS, HISTORY, WITH_E1 } from './__fixtures__/googleTab';
 
 // The edge is the boundary: each scope answers its fixture. The portfolios' goals and the cards

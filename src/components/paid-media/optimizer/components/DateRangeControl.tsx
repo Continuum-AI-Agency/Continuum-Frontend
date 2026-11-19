@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // The dashboard's range picker: trailing presets, the portfolio's flight, or a custom
 // window. Writes a RangeSpec; the caller resolves it (rangeModel) and threads the
 // resolved dates into every panel, so there is exactly one period on screen.
@@ -24,6 +26,7 @@ type DateRangeControlProps = {
 };
 
 export function DateRangeControl({ value, onChange, hasFlight, className }: DateRangeControlProps) {
+  const uiText = useTranslations('scale');
   const presets = RANGE_PRESETS.filter((preset) => preset !== 'flight' || hasFlight);
   const activePreset = value.kind === 'preset' ? value.preset : null;
   const custom = value.kind === 'custom' ? { from: value.from, to: value.to } : null;
@@ -33,7 +36,7 @@ export function DateRangeControl({ value, onChange, hasFlight, className }: Date
     // across the row and, once it wraps under them, between the lines.
     <div className={cn('flex flex-wrap items-center gap-1.5 pointer-coarse:gap-[12px]', className)}>
       <ToggleGroup
-        aria-label="Reporting range"
+        aria-label={uiText('reporting_range_4822767')}
         onValueChange={(next) => {
           if (next) onChange({ kind: 'preset', preset: next as RangePreset });
         }}
@@ -62,7 +65,7 @@ export function DateRangeControl({ value, onChange, hasFlight, className }: Date
           onChange={(next) => {
             if (next.from && next.to) onChange({ kind: 'custom', from: next.from, to: next.to });
           }}
-          placeholder="Custom"
+          placeholder={uiText('custom_494ca78')}
           value={custom ?? { from: null, to: null }}
         />
       </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Account scope selection for organic metrics.
 // single: Overview / Post performance — one merged account combobox (pick platform+account together).
 // multi: Compare — one multi-select combobox (checkbox rows grouped by platform, color-coded).
@@ -71,6 +73,7 @@ function flattenAccounts(
 }
 
 export function MetricsScopeSelector(props: MetricsScopeSelectorProps) {
+  const uiText = useTranslations('organic');
   const { accountsByPlatform, mode, className } = props;
   const available = React.useMemo(
     () => connectedPlatforms(accountsByPlatform),
@@ -80,7 +83,7 @@ export function MetricsScopeSelector(props: MetricsScopeSelectorProps) {
   if (available.length === 0) {
     return (
       <div className={cn('text-sm text-muted-foreground', className)}>
-        No organic accounts connected.
+        {uiText('no_organic_accounts_connected_24baa6b')}
       </div>
     );
   }
@@ -127,6 +130,7 @@ function SingleAccountCombobox({
   accountId,
   onSelect,
 }: SingleAccountComboboxProps) {
+  const uiText = useTranslations('organic');
   const [open, setOpen] = React.useState(false);
 
   const selected = React.useMemo(() => {
@@ -152,7 +156,9 @@ function SingleAccountCombobox({
           >
             <span className="flex min-w-0 items-center gap-1.5">
               {selected ? <PlatformIcon platform={selected.platform} size={14} /> : null}
-              <span className="truncate">{selected ? selected.name : 'Select account'}</span>
+              <span className="truncate">
+                {selected ? selected.name : uiText('select_account_6dd7b48')}
+              </span>
             </span>
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" aria-hidden />
           </Button>
@@ -161,9 +167,9 @@ function SingleAccountCombobox({
 
       <PopoverContent className="w-[280px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search accounts…" className="h-9 text-xs" />
+          <CommandInput placeholder={uiText('search_accounts_0a6fa0b')} className="h-9 text-xs" />
           <CommandList>
-            <CommandEmpty>No accounts found.</CommandEmpty>
+            <CommandEmpty>{uiText('no_accounts_found_7fae03b')}</CommandEmpty>
             {available.map((p) => (
               <CommandGroup key={p} heading={PLATFORM_LABELS[p]}>
                 {(accountsByPlatform[p] ?? []).map((account) => {
@@ -216,6 +222,7 @@ function MultiAccountCombobox({
   onSelectedAccountKeysChange,
   onSelectedPlatformsChange,
 }: MultiAccountComboboxProps) {
+  const uiText = useTranslations('organic');
   const [open, setOpen] = React.useState(false);
 
   const allAccounts = React.useMemo(
@@ -289,9 +296,7 @@ function MultiAccountCombobox({
                   />
                 ))}
               </span>
-              <span className="truncate">
-                {count} {count === 1 ? 'account' : 'accounts'}
-              </span>
+              <span className="truncate">{uiText('account_count', { count })}</span>
             </span>
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" aria-hidden />
           </Button>
@@ -300,9 +305,9 @@ function MultiAccountCombobox({
 
       <PopoverContent className="w-[300px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search accounts…" className="h-9 text-xs" />
+          <CommandInput placeholder={uiText('search_accounts_0a6fa0b')} className="h-9 text-xs" />
           <CommandList>
-            <CommandEmpty>No accounts found.</CommandEmpty>
+            <CommandEmpty>{uiText('no_accounts_found_7fae03b')}</CommandEmpty>
             {available.map((p) => {
               const accounts = accountsByPlatform[p] ?? [];
               const allOn =
@@ -321,13 +326,23 @@ function MultiAccountCombobox({
                   {accounts.length > 1 ? (
                     <CommandItem
                       value={`toggle all ${PLATFORM_LABELS[p]}`}
+                      aria-label={
+                        allOn
+                          ? uiText('deselectPlatform', { platform: PLATFORM_LABELS[p] })
+                          : uiText('selectPlatform', { platform: PLATFORM_LABELS[p] })
+                      }
+                      keywords={[
+                        allOn
+                          ? uiText('deselectPlatform', { platform: PLATFORM_LABELS[p] })
+                          : uiText('selectPlatform', { platform: PLATFORM_LABELS[p] }),
+                      ]}
                       onSelect={() => togglePlatformAll(p, allOn)}
                       className="cursor-pointer gap-2 text-2xs text-muted-foreground"
                     >
                       <span className="size-4 shrink-0" aria-hidden />
                       {allOn
-                        ? `Deselect all ${PLATFORM_LABELS[p]}`
-                        : `Select all ${PLATFORM_LABELS[p]}`}
+                        ? uiText('deselectPlatform', { platform: PLATFORM_LABELS[p] })
+                        : uiText('selectPlatform', { platform: PLATFORM_LABELS[p] })}
                     </CommandItem>
                   ) : null}
                   {accounts.map((account, index) => {

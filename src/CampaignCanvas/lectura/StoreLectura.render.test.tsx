@@ -3,7 +3,8 @@
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { StructureDiff } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { SCAFFOLD_COPY_WITH_TESTS } from '@/lib/campaign-canvas/columnMap.fixtures';
 import type { CanvasHydration } from '@/lib/campaign-canvas/hydrate';
 import { useCampaignStore } from '../stores/useCampaignStore';

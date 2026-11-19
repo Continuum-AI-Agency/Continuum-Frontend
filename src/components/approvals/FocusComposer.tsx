@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -36,6 +37,8 @@ export function FocusComposer({
   onAdvance,
   bindGlobalKeys = true,
 }: Props) {
+  const tUi = useTranslations('common');
+
   const reduceMotion = useReducedMotion();
   const [payloadOpen, setPayloadOpen] = React.useState(false);
   const decisionRef = React.useRef<DecisionActionsHandle>(null);
@@ -72,10 +75,8 @@ export function FocusComposer({
     return (
       <Card className="border-dashed">
         <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-          <div className="text-base font-medium text-foreground">Queue clear.</div>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            New proposals arrive automatically as the rule engine and flow runs evaluate.
-          </p>
+          <div className="text-base font-medium text-foreground">{tUi('m_b688b33fbc')}</div>
+          <p className="max-w-sm text-sm text-muted-foreground">{tUi('m_c205bdd763')}</p>
         </CardContent>
       </Card>
     );
@@ -121,7 +122,8 @@ export function FocusComposer({
                   {whyText(action)}
                 </h2>
                 <div className="font-data text-xs text-muted-foreground">
-                  Queued {formatRelativeTime(action.created_at)}
+                  {tUi('m_ae6ff9044d')}
+                  {formatRelativeTime(action.created_at)}
                 </div>
               </div>
               <ComposerOverflowMenu
@@ -166,6 +168,8 @@ function TypeIcon({
   unsupported: boolean;
   typeLabel: string;
 }) {
+  const tUi = useTranslations('common');
+
   if (!unsupported) {
     return <Icon className="h-3 w-3" strokeWidth={1.5} />;
   }
@@ -181,7 +185,8 @@ function TypeIcon({
           }
         />
         <TooltipContent side="bottom" className="max-w-xs text-xs">
-          {typeLabel} isn&apos;t handled by the executor yet. Approving will mark this row FAILED.
+          {typeLabel}
+          {tUi('m_0afcd77c06')}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

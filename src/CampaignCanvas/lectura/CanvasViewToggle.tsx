@@ -5,6 +5,7 @@
 // and the one-time hint that explains an automatic switch.
 
 import { BookOpenText, Network, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import {
   CANVAS_VIEW_PHONE_MAX_WIDTH,
@@ -120,6 +121,7 @@ export function CanvasViewHint({
   hint: string | null;
   onDismiss: () => void;
 }) {
+  const uiText = useTranslations('scale');
   if (!hint) return null;
   return (
     <span
@@ -132,7 +134,7 @@ export function CanvasViewHint({
         type="button"
         className="grid size-4 shrink-0 place-items-center rounded-full hover:bg-foreground/10 hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
         onClick={onDismiss}
-        aria-label="Dismiss"
+        aria-label={uiText('dismiss_48845bf')}
       >
         <X className="size-3" aria-hidden />
       </button>
@@ -140,10 +142,10 @@ export function CanvasViewHint({
   );
 }
 
-const OPTIONS: { value: CanvasView; label: string; Icon: typeof Network }[] = [
-  { value: 'mapa', label: 'Map', Icon: Network },
-  { value: 'lectura', label: 'Read', Icon: BookOpenText },
-];
+const OPTIONS = [
+  { value: 'mapa', labelKey: 'map_be176b0', Icon: Network },
+  { value: 'lectura', labelKey: 'canvasViewRead', Icon: BookOpenText },
+] as const satisfies readonly { value: CanvasView; labelKey: string; Icon: typeof Network }[];
 
 export function CanvasViewToggle({
   view,
@@ -155,13 +157,14 @@ export function CanvasViewToggle({
   /** On a phone the map does not fit; the switch says so instead of hiding. */
   mapDisabled?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <fieldset
-      aria-label="Canvas view"
+      aria-label={uiText('canvas_view_7741e35')}
       className="inline-flex shrink-0 rounded-lg border border-border bg-card p-0.5 text-[13px]"
       data-testid="canvas-view-toggle"
     >
-      {OPTIONS.map(({ value, label, Icon }) => {
+      {OPTIONS.map(({ value, labelKey, Icon }) => {
         const disabled = value === 'mapa' && mapDisabled;
         return (
           <button
@@ -169,7 +172,7 @@ export function CanvasViewToggle({
             type="button"
             aria-pressed={view === value}
             disabled={disabled}
-            title={disabled ? 'The map needs a wider screen' : undefined}
+            title={disabled ? uiText('the_map_needs_a_wider_screen_4372475') : undefined}
             onClick={() => onChange(value)}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40',
@@ -178,7 +181,7 @@ export function CanvasViewToggle({
             data-view={value}
           >
             <Icon className="size-3.5" aria-hidden />
-            {label}
+            {uiText(labelKey)}
           </button>
         );
       })}

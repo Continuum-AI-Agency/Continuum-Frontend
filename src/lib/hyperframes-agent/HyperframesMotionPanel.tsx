@@ -11,6 +11,7 @@ import {
   staggerOffsets,
 } from '@continuum/contracts';
 import { ChevronRight } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type PointerEvent as ReactPointerEvent, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { EasingCurveEditor } from '@/StudioCanvas/nodes/timeline/motion/EasingCurveEditor';
@@ -132,6 +133,8 @@ export function HyperframesMotionPanel({
   busy: boolean;
   status: string | null;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const [drag, setDrag] = useState<Drag | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<KeySelection | null>(null);
@@ -185,7 +188,8 @@ export function HyperframesMotionPanel({
   if (doc.animations.length === 0)
     return (
       <p className="px-3 py-2 text-2xs text-muted-foreground">
-        This composition has no motion data yet.
+        {' '}
+        {translateUi('this_composition_has_no_motion_data_31141386')}{' '}
       </p>
     );
 
@@ -193,19 +197,21 @@ export function HyperframesMotionPanel({
 
   return (
     <section
-      aria-label="Motion timeline"
+      aria-label={translateUi('motion_timeline_f380d405')}
       className="w-full space-y-1 bg-background px-2 py-2 text-2xs"
       data-testid="hyperframes-motion-panel"
     >
       <header className="flex items-center justify-between gap-2">
-        <span className="font-semibold">Motion</span>
+        <span className="font-semibold">{translateUi('motion_8ca34424')}</span>
         <span
           className="text-muted-foreground"
           role="status"
           aria-live="polite"
           data-testid="motion-status"
         >
-          {busy ? 'Saving…' : (status ?? `${doc.animations.length} animations`)}
+          {busy
+            ? translateUi('saving_23e39291')
+            : (status ?? translateUi('motionAnimationCount', { count: doc.animations.length }))}
         </span>
       </header>
       <div className="grid grid-cols-[7.5rem_1fr] items-end gap-x-2">
@@ -237,7 +243,10 @@ export function HyperframesMotionPanel({
               <div className="flex min-w-0 items-center gap-1">
                 <button
                   type="button"
-                  aria-label={`${open ? 'Collapse' : 'Expand'} ${animation.label}`}
+                  aria-label={translateUi('motionAnimationToggle', {
+                    expanded: open ? 'yes' : 'no',
+                    name: animation.label,
+                  })}
                   aria-expanded={open}
                   className="shrink-0 text-muted-foreground"
                   onClick={() => setExpanded(open ? null : animation.id)}
@@ -249,7 +258,9 @@ export function HyperframesMotionPanel({
                 <input
                   type="checkbox"
                   checked={selected}
-                  aria-label={`Select ${animation.label}`}
+                  aria-label={translateUi('select_value0_b4b262ae', {
+                    value0: String(animation.label),
+                  })}
                   onChange={() => toggle(animation.id)}
                 />
                 <span className="truncate" title={animation.targets.join(', ')}>
@@ -264,7 +275,9 @@ export function HyperframesMotionPanel({
                 <div
                   role="slider"
                   tabIndex={0}
-                  aria-label={`${animation.label} timing`}
+                  aria-label={translateUi('value0_timing_51b79dd6', {
+                    value0: String(animation.label),
+                  })}
                   aria-valuemin={0}
                   aria-valuemax={durationSec}
                   aria-valuenow={round3(timing.startSec)}
@@ -296,7 +309,7 @@ export function HyperframesMotionPanel({
                   {offsets.length > 1 ? (
                     <span
                       role="presentation"
-                      title="Drag to stagger"
+                      title={translateUi('drag_to_stagger_f5d0f9d9')}
                       data-testid={`motion-stagger-${animation.id}`}
                       className="absolute -top-1 right-2 size-2 cursor-ew-resize rounded-full border border-background bg-amber-400"
                       onPointerDown={(event) => startDrag(event, animation, 'stagger')}
@@ -304,7 +317,7 @@ export function HyperframesMotionPanel({
                   ) : null}
                   <span
                     role="presentation"
-                    title="Drag to change duration"
+                    title={translateUi('drag_to_change_duration_80fcabcc')}
                     data-testid={`motion-edge-${animation.id}`}
                     className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-sm bg-background/50"
                     onPointerDown={(event) => startDrag(event, animation, 'duration')}

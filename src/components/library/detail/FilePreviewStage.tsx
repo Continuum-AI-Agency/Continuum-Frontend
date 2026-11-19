@@ -11,8 +11,10 @@
 
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
 import { Download, ExternalLink, FileIcon, ImagePlus, Loader2 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import { uploadCompanionPreview } from '@/lib/library/assetPreview';
 import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
@@ -23,6 +25,8 @@ import { FamilyViewer, type ViewerReview, viewerFamily } from '../viewers';
 import { fileExtension, formatBytes } from './assetFileMeta';
 
 export function PdfPreview({ src, title }: { src: string; title: string }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <div className="flex size-full flex-col">
       <iframe src={src} title={title} data-testid="pdf-preview" className="min-h-0 w-full flex-1" />
@@ -33,8 +37,7 @@ export function PdfPreview({ src, title }: { src: string; title: string }) {
           rel="noopener noreferrer"
           className={buttonVariants({ size: 'sm', variant: 'ghost' })}
         >
-          <ExternalLink className="size-4" />
-          Open PDF
+          <ExternalLink className="size-4" /> {translateUi('open_pdf_5b103479')}{' '}
         </a>
       </div>
     </div>
@@ -52,6 +55,12 @@ type Props = {
 };
 
 export function FilePreviewStage({ brandId, asset, version, review, onPreviewChanged }: Props) {
+  const displayLocale = useUiLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const [downloading, setDownloading] = useState(false);
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +78,7 @@ export function FilePreviewStage({ brandId, asset, version, review, onPreviewCha
       await downloadLibraryAsset({ brandId, assetId: asset.id, fileName: asset.fileName });
     } catch (err: unknown) {
       console.error('[FilePreviewStage] download failed', err);
-      setError('Could not mint a download link.');
+      setError(translateUi('could_not_mint_a_download_link_a0ee2598'));
     } finally {
       setDownloading(false);
     }
@@ -93,7 +102,7 @@ export function FilePreviewStage({ brandId, asset, version, review, onPreviewCha
       });
       onPreviewChanged?.();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not upload the companion preview.');
+      setError(uiErrorText(cause));
     } finally {
       setUploadingPreview(false);
       if (previewInputRef.current) previewInputRef.current.value = '';
@@ -133,33 +142,44 @@ export function FilePreviewStage({ brandId, asset, version, review, onPreviewCha
           {asset.mimeType} · {formatBytes(asset.sizeBytes ?? 0)}
         </p>
         {isAfterEffects ? (
-          <p className="text-xs font-medium text-foreground/80">Adobe After Effects project</p>
+          <p className="text-xs font-medium text-foreground/80">
+            {translateUi('adobe_after_effects_project_f64989c3')}
+          </p>
         ) : isPremiere ? (
-          <p className="text-xs font-medium text-foreground/80">Adobe Premiere Pro project</p>
+          <p className="text-xs font-medium text-foreground/80">
+            {translateUi('adobe_premiere_pro_project_69f95207')}
+          </p>
         ) : isMxf ? (
           <p className="text-xs font-medium text-foreground/80">
-            Broadcast MXF — plays via H.264 proxy
+            {' '}
+            {translateUi('broadcast_mxf_plays_via_h_264_proxy_58f1ff84')}{' '}
           </p>
         ) : null}
         <p className="text-xs text-muted-foreground/70">
-          Modified{' '}
-          {new Date(asset.updatedAt).toLocaleString(undefined, {
+          {' '}
+          {translateUi('modified_e8ce5dca')}{' '}
+          {new Date(asset.updatedAt).toLocaleString(displayLocale, {
             dateStyle: 'medium',
             timeStyle: 'short',
           })}
-          {asset.createdBy ? ` · Uploader ${asset.createdBy.slice(0, 8)}` : ''}
+          {asset.createdBy
+            ? translateUi('uploader_value0_2acdeb93', {
+                value0: String(asset.createdBy.slice(0, 8)),
+              })
+            : ''}
         </p>
         {officeType ? (
           <p data-testid="stage-no-preview" className="text-xs text-muted-foreground/60">
-            No preview — download to open
+            {' '}
+            {translateUi('no_preview_download_to_open_2a5c1eb0')}{' '}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground/60">
             {asset.preview?.errorCode === 'proxy_transcode_pending'
-              ? 'Building an H.264 proxy, or drop a same-stem MP4 (clip.mxf + clip.mp4).'
+              ? translateUi('building_an_h_264_proxy_or_drop_a_s_462b1ca0')
               : asset.preview?.state === 'awaiting_companion'
-                ? 'Add a PNG, JPEG, WebP, or MP4 companion to review this source in Continuum.'
-                : 'No preview is available yet. The original remains downloadable.'}
+                ? translateUi('add_a_png_jpeg_webp_or_mp4_companio_c634bc3a')
+                : translateUi('no_preview_is_available_yet_the_ori_d5a19dab')}
           </p>
         )}
       </div>
@@ -177,8 +197,8 @@ export function FilePreviewStage({ brandId, asset, version, review, onPreviewCha
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <ImagePlus className="size-4" />
-            )}
-            Add preview
+            )}{' '}
+            {translateUi('add_preview_cff47e69')}{' '}
           </Button>
         )}
         <Button type="button" size="sm" onClick={() => void download()} disabled={downloading}>
@@ -186,8 +206,8 @@ export function FilePreviewStage({ brandId, asset, version, review, onPreviewCha
             <Loader2 className="size-4 animate-spin" />
           ) : (
             <Download className="size-4" />
-          )}
-          Download
+          )}{' '}
+          {translateUi('download_d6eafe82')}{' '}
         </Button>
       </div>
       <input

@@ -1,22 +1,21 @@
 'use client';
 
+import Link from 'next/link';
 // H12 Market radar, expanded: competitor moves on top (named, newest first), trends below
 // (stored text in the account's language, newest first, then most confident). It reads the
 // same two stored sources as the tile, plus the brand's competitor list for the names.
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { useCompetitors } from '@/lib/api/competitorSpy';
 import { groupMoves, moveSentence, orderTrends, shortDay } from './marketRadarModel';
 import { useMarketRadar } from './useMarketRadar';
 
-export const RADAR_ORDER_NOTE =
-  'Newest first. Trends carry no relevance score, so same-day trends are ordered by confidence.';
-
-function confidenceLabel(confidence: number | null): string | null {
-  return confidence === null ? null : `${Math.round(confidence * 100)}% confidence`;
-}
-
 export default function MarketRadarModule({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('dashboard');
+  const confidenceLabel = (confidence: number | null): string | null =>
+    confidence === null
+      ? null
+      : uiText('percent_confidence_ee34148', { percent: Math.round(confidence * 100) });
   const radar = useMarketRadar(brandId);
   const competitors = useCompetitors(brandId);
   const nameById = useMemo(
@@ -28,20 +27,25 @@ export default function MarketRadarModule({ brandId }: { brandId: string }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-5" data-testid="home-market-module">
-      <p className="text-2xs text-muted-foreground">{RADAR_ORDER_NOTE}</p>
+      <p className="text-2xs text-muted-foreground">
+        {uiText('newest_first_trends_carry_no_relevance_score__c7b9731')}
+      </p>
 
-      <section aria-label="Competitor moves" className="flex min-w-0 flex-col gap-2">
+      <section
+        aria-label={uiText('competitor_moves_16b33aa')}
+        className="flex min-w-0 flex-col gap-2"
+      >
         <div className="flex items-baseline justify-between gap-2">
-          <h4 className="font-semibold text-xs">Competitors</h4>
+          <h4 className="font-semibold text-xs">{uiText('competitors_e699b0b')}</h4>
           <Link className="text-2xs underline underline-offset-2" href="/competitor-spy">
-            Open Brand Spy
+            {uiText('open_brand_spy_b553090')}
           </Link>
         </div>
         {groups.length === 0 ? (
           <p className="text-muted-foreground text-xs">
             {radar.reportExists
-              ? 'No competitor moves in the last scan.'
-              : 'No competitors tracked yet — add them in Brand Spy.'}
+              ? uiText('no_competitor_moves_in_the_last_scan_aef98fb')
+              : uiText('no_competitors_tracked_yet_add_them_in_brand__e11a6e8')}
           </p>
         ) : (
           <ul className="flex min-w-0 flex-col gap-1.5">
@@ -55,7 +59,7 @@ export default function MarketRadarModule({ brandId }: { brandId: string }) {
                 <span className="min-w-0">
                   {moveSentence(group, nameById.get(group.competitorId) ?? null)}
                   <small className="block text-2xs text-muted-foreground">
-                    Competitor · {shortDay(group.day)}
+                    {uiText('competitor_day_45da08c', { day: shortDay(group.day) })}
                   </small>
                 </span>
               </li>
@@ -64,15 +68,17 @@ export default function MarketRadarModule({ brandId }: { brandId: string }) {
         )}
       </section>
 
-      <section aria-label="Trends" className="flex min-w-0 flex-col gap-2">
+      <section aria-label={uiText('trends_e856c6c')} className="flex min-w-0 flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">
-          <h4 className="font-semibold text-xs">Trends</h4>
+          <h4 className="font-semibold text-xs">{uiText('trends_e856c6c')}</h4>
           <Link className="text-2xs underline underline-offset-2" href="/organic?tab=metrics">
-            Open trends
+            {uiText('open_trends_d927bff')}
           </Link>
         </div>
         {trends.length === 0 ? (
-          <p className="text-muted-foreground text-xs">No trends read for this brand yet.</p>
+          <p className="text-muted-foreground text-xs">
+            {uiText('no_trends_read_for_this_brand_yet_cccfc05')}
+          </p>
         ) : (
           <ul className="flex min-w-0 flex-col gap-1.5">
             {trends.map((trend) => {
@@ -90,7 +96,7 @@ export default function MarketRadarModule({ brandId }: { brandId: string }) {
                       <span className="mt-0.5 block text-muted-foreground">{trend.relevance}</span>
                     ) : null}
                     <small className="mt-0.5 block text-2xs text-muted-foreground tabular-nums">
-                      {['Trend', trend.day ? shortDay(trend.day) : null, confidence]
+                      {[uiText('trend_9e21771'), trend.day ? shortDay(trend.day) : null, confidence]
                         .filter(Boolean)
                         .join(' · ')}
                     </small>

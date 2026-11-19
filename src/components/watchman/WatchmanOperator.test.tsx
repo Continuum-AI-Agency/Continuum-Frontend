@@ -3,7 +3,8 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 
 const BRAND = '0f3a3d1e-6b7e-4f52-9e0a-2c9a1d5b7f11';
@@ -120,7 +121,7 @@ describe('WatchmanOperator', () => {
       ),
     );
     const wake = await screen.findByRole('button', { name: /heartbeat/ });
-    expect(wake.textContent).toContain('1 calls');
+    expect(wake.textContent).toContain('1 call');
     expect(wake.textContent).toContain('$0.0044');
     fireEvent.click(wake);
     await screen.findByText(/analytics_query/);

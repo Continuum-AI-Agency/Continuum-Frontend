@@ -11,6 +11,7 @@ import type { BoardModuleSize, GoogleTopCampaigns } from '@continuum/contracts';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { AlertTriangleIcon, CheckIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -183,6 +184,7 @@ export function MixLensView({
   size: BoardModuleSize;
   reason?: string;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <ModuleFrame
       action={
@@ -195,7 +197,7 @@ export function MixLensView({
       size={size}
       state={mixFrameState(state)}
       testId="board-module-mix"
-      title="Campaign mix"
+      title={uiText('campaign_mix_b9d96ee')}
     >
       <MixBody size={size} state={state} />
     </ModuleFrame>
@@ -224,11 +226,10 @@ function MixBody({ state, size }: { state: MixLensState; size: BoardModuleSize }
   );
 }
 
-function capitalized(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
 
 function SplitHeadline({ split, figureWindow }: { split: MixSplit; figureWindow: FigureWindow }) {
+  const uiText = useTranslations('scale');
   const lead = mixHeadlineRow(split);
   if (!lead) return null;
   const figure = figureProps(
@@ -242,7 +243,7 @@ function SplitHeadline({ split, figureWindow }: { split: MixSplit; figureWindow:
     return (
       <LensHeadline
         figure={figure}
-        label={`${lead.label} · share of spend`}
+        label={uiText('label_share_of_spend_89a114e', { label: lead.label })}
         testId="mix-headline"
         value={shareLabel(lead.spendShare)}
       />
@@ -251,7 +252,10 @@ function SplitHeadline({ split, figureWindow }: { split: MixSplit; figureWindow:
   return (
     <LensHeadline
       figure={figure}
-      label={`${lead.label} · share of spend → share of ${split.words.many}`}
+      label={uiText('label_share_of_spend_share_of_result_select_l_6b32a16', {
+        label: lead.label,
+        result: split.words.copy,
+      })}
       testId="mix-headline"
       value={`${shareLabel(lead.spendShare)} → ${shareLabel(lead.resultShare)}`}
     />
@@ -259,18 +263,37 @@ function SplitHeadline({ split, figureWindow }: { split: MixSplit; figureWindow:
 }
 
 /** "62% of spend → 8% of leads": a part's two shares, as its row says them. */
-function sharesLine(row: MixRow, split: MixSplit): string {
-  const spend = `${shareLabel(row.spendShare)} of spend`;
-  if (split.results == null) return spend;
-  if (split.results === 0) return `${spend} · no ${split.words.many} in this window`;
-  return `${spend} → ${shareLabel(row.resultShare ?? 0)} of ${split.words.many}`;
+function sharesLine(row: MixRow, split: MixSplit, uiText: ScaleCopy): string {
+  const share = shareLabel(row.spendShare);
+  const result = split.words.copy;
+  if (split.results == null) return uiText('share_of_spend_a18c065', { share });
+  if (split.results === 0) {
+    return uiText('share_of_spend_no_result_select_leads_leads_p_d7ae5ef', { share, result });
+  }
+  return uiText('share_of_spend_resultshare_of_result_select_l_114aec2', {
+    share,
+    resultShare: shareLabel(row.resultShare ?? 0),
+    result,
+  });
 }
 
-function costLine(row: MixRow, split: MixSplit, currency: string | null): string {
+function costLine(
+  row: MixRow,
+  split: MixSplit,
+  currency: string | null,
+  uiText: ScaleCopy,
+): string {
   if (row.costPerResult != null) {
-    return `${formatCurrency(row.costPerResult, currency)} per ${split.words.one}`;
+    return uiText('cost_per_result_select_leads_lead_purchases_p_5219808', {
+      cost: formatCurrency(row.costPerResult, currency),
+      result: split.words.copy,
+    });
   }
-  if (row.results != null) return `no ${split.words.one} yet`;
+  if (row.results != null) {
+    return uiText('no_result_select_leads_lead_purchases_purchas_5e061ec', {
+      result: split.words.copy,
+    });
+  }
   return formatCurrency(row.spend, currency);
 }
 
@@ -321,12 +344,13 @@ function ribbonPath(top: Segment, bottom: Segment): string {
 
 function SegmentBar({
   segments,
-  measure,
+  measureLabel,
   compact,
   onActive,
 }: {
   segments: readonly Segment[];
-  measure: string;
+  /** What a segment's share is of, with its part's name: "Search · share of spend". */
+  measureLabel: (label: string) => string;
   compact: boolean;
   onActive: (key: string | null) => void;
 }) {
@@ -340,7 +364,7 @@ function SegmentBar({
             delay={index * 0.06}
             fillClassName={compact ? 'inset-x-0 inset-y-1 rounded-full' : 'inset-0 rounded-[4px]'}
             key={segment.row.key}
-            label={`${segment.row.label} · share of ${measure}`}
+            label={measureLabel(segment.row.label)}
             onActive={(active) => onActive(active ? segment.row.key : null)}
             style={{
               left: `${segment.x0.toFixed(3)}%`,
@@ -379,25 +403,45 @@ function RibbonChart({
   currency: string | null;
   compact: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const [active, setActive] = useState<string | null>(null);
   const spend = segmentsOf(split.rows, (row) => row.spendShare);
   const results = split.results ? segmentsOf(split.rows, (row) => row.resultShare ?? 0) : null;
-  const words = split.words;
+  const result = split.words.copy;
   const summary = split.rows
-    .map(
-      (row) =>
-        `${row.label}: ${shareLabel(row.spendShare)} of spend${row.resultShare == null ? '' : `, ${shareLabel(row.resultShare)} of ${words.many}`}`,
+    .map((row) =>
+      row.resultShare == null
+        ? uiText('label_share_of_spend_0f3d91f', {
+            label: row.label,
+            share: shareLabel(row.spendShare),
+          })
+        : uiText('label_share_of_spend_resultshare_of_result_se_0fe958e', {
+            label: row.label,
+            share: shareLabel(row.spendShare),
+            resultShare: shareLabel(row.resultShare),
+            result,
+          }),
     )
     .join('. ');
   return (
     <figure
-      aria-label={`Spend and ${words.many} by campaign type. ${summary}.`}
+      aria-label={uiText('spend_and_result_select_leads_leads_purchases_6679056', {
+        result,
+        summary,
+      })}
       className="min-w-0 space-y-1"
       data-testid="mix-ribbons"
     >
-      {compact ? null : <BarCaption figure={formatCurrency(split.spend, currency)} name="Spend" />}
-      <SegmentBar compact={compact} measure="spend" onActive={setActive} segments={spend} />
+      {compact ? null : (
+        <BarCaption figure={formatCurrency(split.spend, currency)} name={uiText('spend_85f3d55')} />
+      )}
+      <SegmentBar
+        compact={compact}
+        measureLabel={(label) => uiText('label_share_of_spend_89a114e', { label })}
+        onActive={setActive}
+        segments={spend}
+      />
       {results ? (
         <>
           <svg
@@ -425,19 +469,24 @@ function RibbonChart({
           </svg>
           <SegmentBar
             compact={compact}
-            measure={words.many}
+            measureLabel={(label) =>
+              uiText('label_share_of_result_select_leads_leads_purc_82fbc76', { label, result })
+            }
             onActive={setActive}
             segments={results}
           />
           {compact ? null : (
-            <BarCaption figure={countLabel(split.results ?? 0)} name={capitalized(words.many)} />
+            <BarCaption
+              figure={countLabel(split.results ?? 0)}
+              name={uiText('result_select_leads_leads_purchases_purchases_56ee9d1', { result })}
+            />
           )}
         </>
       ) : (
         <p className="text-muted-foreground text-xs" data-testid="mix-no-results">
           {split.results === 0
-            ? `No ${words.many} in this window: only the spend splits here.`
-            : 'No single result is counted for these campaigns: only the spend splits here.'}
+            ? uiText('no_result_select_leads_leads_purchases_purcha_138c082', { result })
+            : uiText('no_single_result_is_counted_for_these_campaig_8cffaa1')}
         </p>
       )}
     </figure>
@@ -449,6 +498,7 @@ function legendOf(split: MixSplit): LegendItem[] {
 }
 
 function TypeRows({ split, currency }: { split: MixSplit; currency: string | null }) {
+  const uiText = useTranslations('scale');
   return (
     <ul className="divide-y divide-border/60" data-testid="mix-rows">
       {split.rows.map((row) => {
@@ -465,16 +515,18 @@ function TypeRows({ split, currency }: { split: MixSplit; currency: string | nul
                 <span className="font-medium text-foreground">{row.label}</span>
                 <span className="text-muted-foreground">
                   {' '}
-                  · {row.campaigns} {row.campaigns === 1 ? 'campaign' : 'campaigns'}
+                  {uiText('count_plural_one_campaign_other_campaigns_c5bb55b', {
+                    count: row.campaigns,
+                  })}
                 </span>
               </p>
               <p className="text-muted-foreground" data-testid="mix-row-shares">
-                {sharesLine(row, split)}
+                {sharesLine(row, split, uiText)}
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
               <span className="font-semibold tabular-nums" data-testid="mix-row-cost">
-                {costLine(row, split, currency)}
+                {costLine(row, split, currency, uiText)}
               </span>
               {standing ? <GoalBadge standing={standing} /> : null}
             </div>
@@ -522,6 +574,7 @@ function CampaignView({
   small: boolean;
   figureWindow: FigureWindow;
 }) {
+  const uiText = useTranslations('scale');
   const rows = small ? split.rows.slice(0, 3) : split.rows;
   const longest = Math.max(
     ...split.rows.flatMap((row) => [row.spendShare, row.resultShare ?? 0]),
@@ -547,7 +600,7 @@ function CampaignView({
                   {row.label}
                 </span>
                 <span className="shrink-0 font-semibold tabular-nums" data-testid="mix-row-cost">
-                  {costLine(row, split, currency)}
+                  {costLine(row, split, currency, uiText)}
                 </span>
               </div>
               <div className="space-y-0.5">
@@ -556,7 +609,7 @@ function CampaignView({
                   color={spendInk(row)}
                   delay={index * 0.05}
                   fillClassName="inset-x-0 inset-y-0.5 rounded-full"
-                  label={`${row.label} · share of spend`}
+                  label={uiText('label_share_of_spend_89a114e', { label: row.label })}
                   style={{ width: width(row.spendShare) }}
                   value={shareLabel(row.spendShare)}
                 />
@@ -566,7 +619,10 @@ function CampaignView({
                     color={resultColor(row.channel)}
                     delay={index * 0.05 + 0.03}
                     fillClassName="inset-x-0 inset-y-0.5 rounded-full"
-                    label={`${row.label} · share of ${split.words.many}`}
+                    label={uiText('label_share_of_result_select_leads_leads_purc_82fbc76', {
+                      label: row.label,
+                      result: split.words.copy,
+                    })}
                     style={{ width: width(row.resultShare) }}
                     value={shareLabel(row.resultShare)}
                   />
@@ -574,7 +630,7 @@ function CampaignView({
               </div>
               {small ? null : (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
-                  <span data-testid="mix-row-shares">{sharesLine(row, split)}</span>
+                  <span data-testid="mix-row-shares">{sharesLine(row, split, uiText)}</span>
                   {standing ? <GoalBadge standing={standing} /> : null}
                 </div>
               )}
@@ -584,13 +640,25 @@ function CampaignView({
       </ul>
       {split.results == null ? (
         <p className="text-muted-foreground text-xs" data-testid="mix-no-results">
-          No single result is counted for these campaigns: only the spend splits here.
+          {uiText('no_single_result_is_counted_for_these_campaig_8cffaa1')}
         </p>
       ) : null}
       <Legend
         items={[
-          { label: 'Share of spend', color: split.results ? NEUTRAL_MARK : resultInk },
-          ...(split.results ? [{ label: `Share of ${split.words.many}`, color: resultInk }] : []),
+          {
+            label: uiText('share_of_spend_eadd3f9'),
+            color: split.results ? NEUTRAL_MARK : resultInk,
+          },
+          ...(split.results
+            ? [
+                {
+                  label: uiText('share_of_result_select_leads_leads_purchases__5d2b608', {
+                    result: split.words.copy,
+                  }),
+                  color: resultInk,
+                },
+              ]
+            : []),
         ]}
         testId="mix-legend"
       />
@@ -605,23 +673,23 @@ function lineColor(row: MixLine): string {
   return row.share > row.target ? BOARD_COLOR.above : BOARD_COLOR.below;
 }
 
-function signedPoints(points: number): string {
-  return `${points > 0 ? '+' : ''}${points} pts`;
+function signedPoints(points: number, uiText: ScaleCopy): string {
+  return uiText('points_pts_b97032a', { points: `${points > 0 ? '+' : ''}${points}` });
 }
 
-function lineLegend(lines: MixLines): LegendItem[] {
+function lineLegend(lines: MixLines, uiText: ScaleCopy): LegendItem[] {
   const items: LegendItem[] = [];
   const off = lines.rows.filter((row) => row.flagged && row.target != null);
   if (off.some((row) => row.share > (row.target ?? 0))) {
-    items.push({ label: 'Over the agreed share', color: BOARD_COLOR.above });
+    items.push({ label: uiText('over_the_agreed_share_47b7ce7'), color: BOARD_COLOR.above });
   }
   if (off.some((row) => row.share < (row.target ?? 0))) {
-    items.push({ label: 'Under the agreed share', color: BOARD_COLOR.below });
+    items.push({ label: uiText('under_the_agreed_share_a0d1dfc'), color: BOARD_COLOR.below });
   }
   if (lines.rows.some((row) => !row.flagged)) {
-    items.push({ label: 'On the agreed split', color: NEUTRAL_MARK });
+    items.push({ label: uiText('on_the_agreed_split_e4e22c4'), color: NEUTRAL_MARK });
   }
-  items.push({ label: 'Agreed share', color: AGREED_TICK, mark: 'tick' });
+  items.push({ label: uiText('agreed_share_f60c7ab'), color: AGREED_TICK, mark: 'tick' });
   return items;
 }
 
@@ -634,6 +702,7 @@ function LineView({
   small: boolean;
   figureWindow: FigureWindow;
 }) {
+  const uiText = useTranslations('scale');
   const lead = mixHeadlineLine(lines);
   const top = Math.min(
     1,
@@ -654,8 +723,11 @@ function LineView({
           )}
           label={
             lead.target == null
-              ? `${lead.label} · share of spend`
-              : `${lead.label} · share of spend, agreed ${shareLabel(lead.target)}`
+              ? uiText('label_share_of_spend_89a114e', { label: lead.label })
+              : uiText('label_share_of_spend_agreed_share_e6087fb', {
+                  label: lead.label,
+                  share: shareLabel(lead.target),
+                })
           }
           testId="mix-headline"
           value={shareLabel(lead.share)}
@@ -679,7 +751,7 @@ function LineView({
                   {row.target == null ? null : (
                     <span className="text-muted-foreground">
                       {' '}
-                      · agreed {shareLabel(row.target)}
+                      {uiText('agreed_share_64c4480', { share: shareLabel(row.target) })}
                     </span>
                   )}
                 </span>
@@ -695,7 +767,7 @@ function LineView({
                 color={lineColor(row)}
                 delay={index * 0.06}
                 fillClassName="inset-x-0 inset-y-[3px] rounded-full"
-                label={`${row.label} · share of spend`}
+                label={uiText('label_share_of_spend_89a114e', { label: row.label })}
                 style={{ width: at(row.share) }}
                 value={shareLabel(row.share)}
               />
@@ -723,7 +795,7 @@ function LineView({
                     ) : (
                       <CheckIcon aria-hidden="true" />
                     )}
-                    {signedPoints(row.deviation)}
+                    {signedPoints(row.deviation, uiText)}
                   </Badge>
                 )}
               </div>
@@ -731,7 +803,7 @@ function LineView({
           </li>
         ))}
       </ul>
-      <Legend items={lineLegend(lines)} testId="mix-legend" />
+      <Legend items={lineLegend(lines, uiText)} testId="mix-legend" />
     </>
   );
 }

@@ -5,6 +5,7 @@ import {
   MinusCircle,
   WarningCircle,
 } from '@phosphor-icons/react';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { previewSectionSchema } from '@/lib/onboarding/agentClient';
 import type { AgentPreviewBuckets } from '../state/agentPreview';
@@ -18,6 +19,8 @@ type RunProgressBannerProps = {
 const TOTAL = previewSectionSchema.options.length;
 
 export function RunProgressBanner({ buckets, running, onRetry }: RunProgressBannerProps) {
+  const tUi = useTranslations('onboarding');
+
   const counts = useMemo(() => tally(buckets), [buckets]);
   if (!buckets) return null;
 
@@ -29,24 +32,32 @@ export function RunProgressBanner({ buckets, running, onRetry }: RunProgressBann
       {running ? (
         <span className="inline-flex items-center gap-1.5 text-foreground">
           <CircleNotch className="h-3 w-3 animate-spin text-[var(--primary)]" />
-          Analyzing {counts.done + counts.running} of {TOTAL}…
+          {tUi('m_3509043a38')}
+          {counts.done + counts.running}
+          {tUi('m_607f2de6ce')}
+          {TOTAL}…
         </span>
       ) : (
         <span className="inline-flex items-center gap-1.5 text-foreground">
           <CheckCircle className="h-3 w-3 text-[var(--success)]" />
-          {counts.done} of {TOTAL} sections complete
+          {counts.done}
+          {tUi('m_607f2de6ce')}
+          {TOTAL}
+          {tUi('m_7e4c9a6555')}
         </span>
       )}
       {counts.skipped > 0 ? (
         <span className="inline-flex items-center gap-1.5">
           <MinusCircle className="h-3 w-3 text-muted-foreground/60" />
-          {counts.skipped} unavailable
+          {counts.skipped}
+          {tUi('m_eeff07ed6d')}
         </span>
       ) : null}
       {counts.error > 0 ? (
         <span className="inline-flex items-center gap-1.5">
           <WarningCircle className="h-3 w-3 text-[var(--cs-warning,#cb8e00)]" />
-          {counts.error} couldn&apos;t complete
+          {counts.error}
+          {tUi('m_724d3e6cbf')}
         </span>
       ) : null}
       {thin && onRetry ? (
@@ -56,7 +67,7 @@ export function RunProgressBanner({ buckets, running, onRetry }: RunProgressBann
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm transition-colors hover:border-muted-foreground/30"
         >
           <ArrowsCounterClockwise className="h-3 w-3" />
-          Re-run analysis
+          {tUi('m_15ceaf8667')}
         </button>
       ) : null}
     </div>

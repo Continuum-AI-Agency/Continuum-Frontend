@@ -1,8 +1,9 @@
 'use client';
 
 import type { ApiRenderTemplateFont } from '@continuum/contracts';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
+import { Link } from '@/i18n/navigation';
 import { InspectorNote, InspectorSection } from '../../components/inspector/controls';
 
 /**
@@ -31,13 +32,15 @@ export function TemplateFontsRow({
   brandId: string | null;
   assetId: string | null;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   // Empty is not "no fonts needed" — it is "nobody read this template". Saying nothing is
   // better than a green tick over an unread file.
   if (fonts.length === 0) return null;
   const missing = fonts.filter((font) => !font.held);
 
   return (
-    <InspectorSection title="Typefaces">
+    <InspectorSection title={translateUi('typefaces_a6abd3ff')}>
       <div className="flex flex-wrap gap-1">
         {fonts.map((font) => (
           <Badge key={font.family} variant={font.held ? 'success' : 'warning'}>
@@ -45,25 +48,27 @@ export function TemplateFontsRow({
             {font.layers > 1 ? ` ×${font.layers}` : ''}
             {/* A house face is ours fleet-wide, not this brand's upload — worth saying, because
                 otherwise someone goes looking for an upload that was never theirs to make. */}
-            {font.scope === 'house' ? ' · house' : ''}
+            {font.scope === 'house' ? translateUi('house_21a7e9bf') : ''}
           </Badge>
         ))}
       </div>
       {missing.length > 0 ? (
         <InspectorNote>
-          {missing.length} face{missing.length === 1 ? '' : 's'} nobody has uploaded. Upload the
-          missing typefaces, or explicitly allow font substitution when rendering.{' '}
+          {missing.length} {translateUi('face_0282d9b7')}
+          {missing.length === 1 ? '' : 's'}{' '}
+          {translateUi('nobody_has_uploaded_upload_the_miss_25d0d28c')}{' '}
           {brandId ? (
             <Link className="underline underline-offset-2" href="/library?section=typography">
-              Upload them
+              {' '}
+              {translateUi('upload_them_154a0a57')}{' '}
             </Link>
           ) : null}
         </InspectorNote>
       ) : (
         <InspectorNote>
-          Every face is in the font repository and travels with the render. Whether the worker
-          installs it is the fleet&apos;s half
-          {assetId ? '' : ' — this template has no parsed source to push them to'}.
+          {' '}
+          {translateUi('every_face_is_in_the_font_repositor_ef9af3bc')}{' '}
+          {assetId ? '' : translateUi('this_template_has_no_parsed_source__75793fce')}.
         </InspectorNote>
       )}
     </InspectorSection>

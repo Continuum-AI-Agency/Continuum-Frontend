@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { ShimmeringText } from '../shimmering-text';
 import {
@@ -18,10 +19,13 @@ export interface ChartLoadingLabelProps {
 }
 
 export function ChartLoadingLabel({
-  text = 'Loading',
+  text: uiProvidedText,
   className,
   exiting = false,
 }: ChartLoadingLabelProps) {
+  const defaultUiText = useTranslations('common');
+  const text = uiProvidedText ?? defaultUiText('loading_dc38088');
+
   if (!text.trim()) {
     return null;
   }

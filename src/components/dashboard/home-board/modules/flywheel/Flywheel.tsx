@@ -1,5 +1,7 @@
 'use client';
 
+import type { HomeMode, OrganicWinner } from '@continuum/contracts';
+import Link from 'next/link';
 // H10 Flywheel: a section of the Creative expanded module, never a board tile. Three lanes, each
 // from a read that exists or honestly marked as not available (see flywheelModel.ts). The organic
 // winners read mounts here, so it runs only when someone opens the Creative module.
@@ -7,23 +9,48 @@
 // The organic lane acts only in operate mode, where the board's verb ("Create paused") is exactly
 // what the existing promote route does. In every other mode it links to the Organic page, where
 // the same action already lives.
-import type { HomeMode, OrganicWinner } from '@continuum/contracts';
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrganicWinners } from '@/hooks/useOrganicWinners';
 import { cn } from '@/lib/utils';
-import { CREATIVE_LINKS, type CreativeCard, STANDING_LABEL } from '../creative/creativeModel';
+import { CREATIVE_LINKS, type CreativeCard } from '../creative/creativeModel';
+import { STANDING_LABEL_KEYS } from '../creative/standingLabel';
 import {
   FLYWHEEL_LANES,
-  FLYWHEEL_SENTENCES,
+  type FLYWHEEL_SENTENCES,
   type FlywheelLaneId,
   liftLine,
   winnerTitle,
 } from './flywheelModel';
 import { PromoteWinnerDialog } from './PromoteWinnerDialog';
+
+/** FLYWHEEL_SENTENCES' catalog keys: each sentence said in the UI language. */
+const SENTENCE_KEYS = {
+  noWinners: 'no_organic_winners_yet_a_post_counts_after_3__733ef38',
+  winnersFailed: 'the_organic_winners_could_not_be_read_bf6eca1',
+  nothingToRefresh: 'no_ad_needs_a_new_creative_in_the_stored_crea_c777d8d',
+  noReport: 'no_creative_report_yet_so_no_ad_is_flagged_fo_67d1f43',
+  notAvailable: 'not_available_yet_continuum_does_not_link_a_p_2b3b1af',
+} as const satisfies Record<keyof typeof FLYWHEEL_SENTENCES, string>;
+
+/** FLYWHEEL_LANES' label and description keys, per lane. */
+const LANE_KEYS = {
+  'organic-to-paid': {
+    label: 'organic_paid_8ece0eb',
+    description: 'posts_that_beat_the_account_s_median_ready_to_9f64f4d',
+  },
+  'paid-to-creative': {
+    label: 'paid_creative_a5cbc2c',
+    description: 'ads_the_creative_report_says_need_a_new_creat_e7fa740',
+  },
+  'creative-to-organic': {
+    label: 'creative_organic_26ec151',
+    description: 'new_variants_to_publish_as_organic_posts_90748e6',
+  },
+} as const satisfies Record<FlywheelLaneId, { label: string; description: string }>;
 
 export type FlywheelProps = {
   brandId: string;
@@ -71,6 +98,7 @@ function WinnerItem({ winner, action }: { winner: OrganicWinner; action: ReactNo
 }
 
 function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refreshCandidates'>) {
+  const uiText = useTranslations('dashboard');
   const winners = useOrganicWinners(brandId);
   const [promoting, setPromoting] = useState<OrganicWinner | null>(null);
 
@@ -78,7 +106,7 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
   if (winners.isError && !winners.data) {
     return (
       <p className="text-destructive-ink text-xs" role="alert">
-        {FLYWHEEL_SENTENCES.winnersFailed}{' '}
+        {uiText(SENTENCE_KEYS.winnersFailed)}{' '}
         <Button
           className="h-5 px-1 text-xs"
           onClick={() => void winners.refetch()}
@@ -86,17 +114,19 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
           type="button"
           variant="link"
         >
-          Retry
+          {uiText('retry_942087c')}
         </Button>
       </p>
     );
   }
   const list = winners.data?.winners ?? [];
-  if (list.length === 0) return <LaneEmpty>{FLYWHEEL_SENTENCES.noWinners}</LaneEmpty>;
+  if (list.length === 0) return <LaneEmpty>{uiText(SENTENCE_KEYS.noWinners)}</LaneEmpty>;
 
   const actionFor = (winner: OrganicWinner): ReactNode => {
     if (winner.promotion !== null) {
-      return <span className="text-muted-foreground text-xs">Running as ad</span>;
+      return (
+        <span className="text-muted-foreground text-xs">{uiText('running_as_ad_9e284f5')}</span>
+      );
     }
     if (mode === 'operate') {
       return (
@@ -107,7 +137,7 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
     }
     return (
       <Link className="text-primary text-xs hover:underline" href={CREATIVE_LINKS.organicWinners}>
-        Open in Organic
+        {uiText('open_in_organic_f91ae76')}
       </Link>
     );
   };
@@ -131,10 +161,11 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
 }
 
 function PaidToCreative({ candidates }: { candidates: CreativeCard[] }) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="space-y-2">
       {candidates.length === 0 ? (
-        <LaneEmpty>{FLYWHEEL_SENTENCES.nothingToRefresh}</LaneEmpty>
+        <LaneEmpty>{uiText(SENTENCE_KEYS.nothingToRefresh)}</LaneEmpty>
       ) : (
         <ul>
           {candidates.map((card) => (
@@ -153,14 +184,14 @@ function PaidToCreative({ candidates }: { candidates: CreativeCard[] }) {
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <Badge variant={card.standing === 'losing' ? 'destructive' : 'warning'}>
-                  {STANDING_LABEL[card.standing]}
+                  {uiText(STANDING_LABEL_KEYS[card.standing])}
                 </Badge>
                 {card.optimizerRecommendationId ? (
                   <Link
                     className="text-primary text-xs hover:underline"
                     href={CREATIVE_LINKS.optimizer}
                   >
-                    Variants in the Optimizer
+                    {uiText('variants_in_the_optimizer_175c5bc')}
                   </Link>
                 ) : null}
               </div>
@@ -172,13 +203,14 @@ function PaidToCreative({ candidates }: { candidates: CreativeCard[] }) {
         className={buttonVariants({ variant: 'outline', size: 'sm' })}
         href={CREATIVE_LINKS.studio}
       >
-        Open AI Studio
+        {uiText('open_ai_studio_a71e737')}
       </Link>
     </div>
   );
 }
 
 export default function Flywheel({ brandId, mode, verbLabel, refreshCandidates }: FlywheelProps) {
+  const uiText = useTranslations('dashboard');
   const [laneId, setLaneId] = useState<FlywheelLaneId>('organic-to-paid');
   const winners = useOrganicWinners(brandId);
   const counts: Record<FlywheelLaneId, number | null> = {
@@ -190,8 +222,12 @@ export default function Flywheel({ brandId, mode, verbLabel, refreshCandidates }
 
   return (
     <section className="flex min-w-0 flex-col gap-3 rounded-xl border p-3" data-testid="flywheel">
-      <h4 className="font-semibold text-sm">Flywheel</h4>
-      <div aria-label="Flywheel lanes" className="flex flex-wrap gap-1" role="tablist">
+      <h4 className="font-semibold text-sm">{uiText('flywheel_9ecaa1f')}</h4>
+      <div
+        aria-label={uiText('flywheel_lanes_2ab1c22')}
+        className="flex flex-wrap gap-1"
+        role="tablist"
+      >
         {FLYWHEEL_LANES.map((candidate) => (
           <button
             aria-selected={candidate.id === laneId}
@@ -206,15 +242,19 @@ export default function Flywheel({ brandId, mode, verbLabel, refreshCandidates }
             role="tab"
             type="button"
           >
-            {candidate.label}
+            {uiText(LANE_KEYS[candidate.id].label)}
             <span className="tabular-nums">
-              {candidate.available ? (counts[candidate.id] ?? '…') : '· Not available yet'}
+              {candidate.available
+                ? (counts[candidate.id] ?? '…')
+                : `· ${uiText('not_available_yet_787406d')}`}
             </span>
           </button>
         ))}
       </div>
       <div className="min-w-0" role="tabpanel">
-        <p className="mb-2 text-muted-foreground text-xs">{lane.description}</p>
+        <p className="mb-2 text-muted-foreground text-xs">
+          {uiText(LANE_KEYS[lane.id].description)}
+        </p>
         {lane.id === 'organic-to-paid' ? (
           <OrganicToPaid brandId={brandId} mode={mode} verbLabel={verbLabel} />
         ) : null}
@@ -224,7 +264,7 @@ export default function Flywheel({ brandId, mode, verbLabel, refreshCandidates }
             className="text-muted-foreground text-xs leading-snug"
             data-testid="flywheel-lane-unavailable"
           >
-            {FLYWHEEL_SENTENCES.notAvailable}
+            {uiText(SENTENCE_KEYS.notAvailable)}
           </p>
         ) : null}
       </div>

@@ -3,8 +3,6 @@
 import {
   type ApiRenderTemplateContract,
   compactEncodeBlock,
-  describeMxfAudio,
-  describeMxfVideo,
   ENCODE_FILE_CONTAINERS,
   ENCODE_STYLES,
   type EncodeBlock,
@@ -22,6 +20,7 @@ import {
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, RotateCcw, X } from 'lucide-react';
+import { useFormatter, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -53,9 +52,6 @@ type Output = ApiRenderTemplateContract['outputs'][number];
 /** One container in scope and what applies to it when a field is unset. */
 export type InheritedEncode = { container: Container; settings: EncodeSettings | undefined };
 
-export const STILLS_NOTE =
-  'Stills take no output settings. Frame rate and files apply to animated formats.';
-
 const FILE_LABEL: Record<EncodeFileContainer, string> = {
   mp4: 'MP4',
   mov: 'MOV (ProRes)',
@@ -69,7 +65,6 @@ const INHERIT = '__inherit__';
 /** The style `<Select>` value for a file mix no style names. */
 const CUSTOM = '__custom__';
 
-const rate = (value: number) => String(Math.round(value * 1000) / 1000);
 const range = (from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => from + i);
 const onAny = (files: EncodeFileContainer[], ...wanted: EncodeFileContainer[]) =>
@@ -77,45 +72,33 @@ const onAny = (files: EncodeFileContainer[], ...wanted: EncodeFileContainer[]) =
 
 // `values` sees the files this scope actually makes, so each container's knobs show only while
 // its file is on: CRF for MP4, the ProRes profile for MOV, PCM audio for MOV and MXF.
+type ForgeTranslator = ReturnType<typeof useUiTranslations<'forge'>>;
+type FieldKey = keyof typeof import('../../../messages/forge/en.json');
+
 const FIELDS: Array<{
   key: EncodeSettingKey;
-  label: string;
+  labelKey: FieldKey;
   values: (files: EncodeFileContainer[]) => Leaf[];
-  text?: (value: Leaf, frameRate: number | null | undefined) => string;
 }> = [
   {
     key: 'fps',
-    label: 'Frame rate',
+    labelKey: 'fieldFps',
     values: () => ['comp', '24000/1001', 24, 25, '30000/1001', 30, 50, '60000/1001', 60],
-    text: (value, frameRate) =>
-      value === 'comp'
-        ? `Match the comp${frameRate ? ` (${rate(frameRate)} fps)` : ''}`
-        : typeof value === 'string' && value.includes('/')
-          ? `${rate(Number(value.split('/')[0]) / Number(value.split('/')[1]))} fps`
-          : `${value} fps`,
   },
-  {
-    key: 'audio.enabled',
-    label: 'Audio',
-    values: () => [true, false],
-    text: (value) => (value ? 'On' : 'Off'),
-  },
+  { key: 'audio.enabled', labelKey: 'fieldAudioEnabled', values: () => [true, false] },
   {
     key: 'video.mxfProfile',
-    label: 'MXF video profile',
+    labelKey: 'fieldMxfProfile',
     values: (files) => (files.includes('mxf') ? ['dnxhr-hq', 'xdcam-hd422-1080i5994'] : []),
-    text: (value) =>
-      value === 'xdcam-hd422-1080i5994' ? 'XDCAM HD422 · 1080i59.94' : 'DNxHR HQ · Progressive',
   },
   {
     key: 'audio.layout',
-    label: 'MXF audio layout',
+    labelKey: 'fieldAudioLayout',
     values: (files) => (files.includes('mxf') ? ['broadcast-4x-aes3', 'stereo'] : []),
-    text: (value) => (value === 'stereo' ? 'Stereo' : 'Broadcast 4× AES3'),
   },
   {
     key: 'audio.codec',
-    label: 'Audio codec',
+    labelKey: 'fieldAudioCodec',
     values: (files) => [
       ...(onAny(files, 'mp4', 'mov') ? ['aac'] : []),
       ...(files.includes('mov') ? ['pcm_s16le', 'pcm_s24le'] : []),
@@ -123,31 +106,28 @@ const FIELDS: Array<{
   },
   {
     key: 'audio.bitrate',
-    label: 'Audio bitrate',
-    // A bitrate is an AAC knob; PCM has none.
+    labelKey: 'fieldAudioBitrate',
     values: (files) =>
       onAny(files, 'mp4', 'mov') ? ['64k', '96k', '128k', '192k', '256k', '320k'] : [],
   },
   {
     key: 'audio.sampleRate',
-    label: 'Sample rate',
+    labelKey: 'fieldSampleRate',
     values: (files) => (onAny(files, 'mp4', 'mov', 'webm') ? [44100, 48000] : []),
-    text: (value) => `${Number(value) / 1000} kHz`,
   },
   {
     key: 'audio.channels',
-    label: 'Channels',
+    labelKey: 'fieldChannels',
     values: (files) => (onAny(files, 'mp4', 'mov', 'webm') ? range(1, 8) : []),
-    text: (value) => (value === 1 ? '1 (mono)' : value === 2 ? '2 (stereo)' : String(value)),
   },
   {
     key: 'video.crf',
-    label: 'Quality (CRF)',
+    labelKey: 'fieldQuality',
     values: (files) => (files.includes('mp4') ? range(10, 40) : []),
   },
   {
     key: 'video.pixFmt',
-    label: 'Pixel format',
+    labelKey: 'fieldPixelFormat',
     values: (files) => [
       ...(files.includes('mp4') ? ['yuv420p', 'yuv422p', 'yuv444p'] : []),
       ...(files.includes('mov') ? ['yuva444p12le', 'yuv422p10le', 'yuv444p10le'] : []),
@@ -155,14 +135,42 @@ const FIELDS: Array<{
   },
   {
     key: 'video.proresProfile',
-    label: 'ProRes profile',
+    labelKey: 'fieldProresProfile',
     values: (files) =>
       files.includes('mov') ? ['4444', '4444xq', 'hq', 'standard', 'lt', 'proxy'] : [],
   },
 ];
 
-const textOf = (key: EncodeSettingKey, value: Leaf, frameRate?: number | null) =>
-  FIELDS.find((field) => field.key === key)?.text?.(value, frameRate) ?? String(value);
+function textOf(
+  key: EncodeSettingKey,
+  value: Leaf,
+  frameRate: number | null | undefined,
+  t: ForgeTranslator,
+  number: (value: number) => string,
+): string {
+  if (key === 'fps') {
+    if (value === 'comp')
+      return frameRate ? t('matchCompRate', { rate: number(frameRate) }) : t('matchComp');
+    const [numerator, denominator] = String(value).split('/').map(Number);
+    return `${number(denominator ? numerator! / denominator : Number(value))} fps`;
+  }
+  if (key === 'audio.enabled') return t(value ? 'on' : 'off');
+  if (key === 'video.mxfProfile')
+    return value === 'xdcam-hd422-1080i5994' ? 'XDCAM HD422 · 1080i59.94' : t('dnxhrProgressive');
+  if (key === 'audio.layout') return t(value === 'stereo' ? 'stereo' : 'broadcastAes3');
+  if (key === 'audio.sampleRate') return `${number(Number(value) / 1000)} kHz`;
+  if (key === 'audio.channels' && (value === 1 || value === 2))
+    return t(value === 1 ? 'monoChannels' : 'stereoChannels', { count: number(Number(value)) });
+  return typeof value === 'number' ? number(value) : String(value);
+}
+
+const STYLE_COPY = {
+  web: { label: 'styleWeb', description: 'styleWebDescription' },
+  broadcast: { label: 'styleBroadcast', description: 'styleBroadcastDescription' },
+  'edit-master': { label: 'styleEditMaster', description: 'styleEditMasterDescription' },
+  'open-web': { label: 'styleOpenWeb', description: 'styleOpenWebDescription' },
+  'social-loop': { label: 'styleSocialLoop', description: 'styleSocialLoopDescription' },
+} as const;
 
 /** Which containers' knobs an output shows. Unknown (an older forge) shows both; a still, none. */
 export function containersOf(output: Pick<Output, 'mediaType'>): Container[] {
@@ -232,8 +240,14 @@ export function EncodeSettingsFields({
   /** Blank an inherited value back to the template. Only a draft child can. */
   onClear?: (key: EncodeSettingKey) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+  const formatter = useFormatter();
+  const formatNumber = (value: number) => formatter.number(value, { maximumFractionDigits: 3 });
+  const fileLabel = (file: EncodeFileContainer) =>
+    file === 'gif' ? translateUi('gifLoop') : FILE_LABEL[file];
+
   if (inherited.length === 0) {
-    return <p className="text-xs text-muted-foreground">{STILLS_NOTE}</p>;
+    return <p className="text-xs text-muted-foreground">{translateUi('stillsNote')}</p>;
   }
   const own = flattenEncodeSettings(settings);
   const from = inherited.map((item) => flattenEncodeSettings(item.settings));
@@ -241,21 +255,29 @@ export function EncodeSettingsFields({
     encodeFilesOf(mergeEncodeSettings(base, settings), container),
   );
   const filesOn = ENCODE_FILE_CONTAINERS.filter((file) => filesPer.some((f) => f.includes(file)));
+  const effectiveMxf = inherited.flatMap(({ settings: base }, index) =>
+    filesPer[index]?.includes('mxf') ? [mergeEncodeSettings(base, settings)] : [],
+  );
+  const mxfAudioOff = effectiveMxf.every((effective) => effective?.audio?.enabled === false);
   const mxfAudio = [
     ...new Set(
-      inherited.flatMap(({ settings: base }, index) =>
-        filesPer[index]?.includes('mxf')
-          ? [describeMxfAudio(mergeEncodeSettings(base, settings))]
-          : [],
+      effectiveMxf.map((effective) =>
+        translateUi(
+          effective?.audio?.enabled === false
+            ? 'mxfNoAudio'
+            : effective?.audio?.layout === 'stereo'
+              ? 'mxfStereoAudio'
+              : 'mxfMonoAudio',
+        ),
       ),
     ),
   ];
   const mxfVideo = [
     ...new Set(
-      inherited.flatMap(({ settings: base }, index) =>
-        filesPer[index]?.includes('mxf')
-          ? [describeMxfVideo(mergeEncodeSettings(base, settings))]
-          : [],
+      effectiveMxf.map((effective) =>
+        effective?.video?.mxfProfile === 'xdcam-hd422-1080i5994'
+          ? 'XDCAM HD422 · 1080i59.94 · 50 Mb/s'
+          : translateUi('dnxhrProgressive'),
       ),
     ),
   ];
@@ -294,13 +316,18 @@ export function EncodeSettingsFields({
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       <div className="flex flex-col gap-1 text-xs sm:col-span-2">
-        <span className="text-muted-foreground">Output style</span>
+        <span className="text-muted-foreground">{translateUi('outputStyle')}</span>
         <Select value={style?.id ?? CUSTOM} onValueChange={(next) => applyStyle(String(next))}>
-          <SelectTrigger aria-label="Output style" className="w-full">
+          <SelectTrigger aria-label={translateUi('outputStyle')} className="w-full">
             <SelectValue>
               {(value: unknown) => (
                 <span className="truncate">
-                  {ENCODE_STYLES.find((item) => item.id === value)?.label ?? 'Custom mix'}
+                  {(() => {
+                    const selected = ENCODE_STYLES.find((item) => item.id === value);
+                    return selected
+                      ? translateUi(STYLE_COPY[selected.id].label)
+                      : translateUi('customMix');
+                  })()}
                 </span>
               )}
             </SelectValue>
@@ -309,8 +336,10 @@ export function EncodeSettingsFields({
             {ENCODE_STYLES.map((item) => (
               <SelectItem key={item.id} value={item.id}>
                 <span className="flex flex-col">
-                  <span>{item.label}</span>
-                  <span className="text-xs text-muted-foreground">{item.description}</span>
+                  <span>{translateUi(STYLE_COPY[item.id].label)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {translateUi(STYLE_COPY[item.id].description)}
+                  </span>
                 </span>
               </SelectItem>
             ))}
@@ -318,7 +347,7 @@ export function EncodeSettingsFields({
         </Select>
       </div>
       <fieldset className="flex flex-col gap-1.5 text-xs sm:col-span-2">
-        <legend className="mb-1 text-muted-foreground">Files</legend>
+        <legend className="mb-1 text-muted-foreground">{translateUi('files_abc7e989')}</legend>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5">
           {ENCODE_FILE_CONTAINERS.map((file) => (
             // biome-ignore lint/a11y/noLabelWithoutControl: the Checkbox renders the control.
@@ -328,35 +357,31 @@ export function EncodeSettingsFields({
                 disabled={file === lastFile && fileState(file) === true}
                 onCheckedChange={() => toggleFile(file)}
               />
-              {FILE_LABEL[file]}
+              {fileLabel(file)}
             </label>
           ))}
         </div>
         {lastFile && fileState(lastFile) === true ? (
           <p className="text-muted-foreground">
-            {FILE_LABEL[lastFile]} stays on: every render delivers at least one file.
+            {translateUi('lastFileRequired', { file: fileLabel(lastFile) })}
           </p>
         ) : null}
       </fieldset>
       {filesOn.includes('mxf') ? (
         <div className="flex flex-col gap-1 text-xs sm:col-span-2" aria-live="polite">
           <p className="m-0">
-            <span className="font-medium">MXF video: </span>
+            <span className="font-medium">{translateUi('mxfVideoLabel')} </span>
             {mxfVideo.join(' / ')}
           </p>
           <p className="m-0">
-            <span className="font-medium">MXF audio: </span>
+            <span className="font-medium">{translateUi('mxfAudioLabel')} </span>
             {mxfAudio.join(' / ')}
           </p>
           <p className="m-0 text-muted-foreground">
-            {mxfAudio.every((audio) => audio === 'No audio')
-              ? 'MXF audio is off. The file will have no audio tracks.'
-              : 'Broadcast repeats the full stereo mix on CH1–2 and CH3–4 and requires source audio. Codec, bitrate, sample-rate and channel-count controls apply to other files.'}
+            {translateUi(mxfAudioOff ? 'mxfNoAudioNote' : 'mxfBroadcastNote')}
           </p>
           {mxfVideo.some((video) => video.includes('1080i59.94')) ? (
-            <p className="m-0 text-muted-foreground">
-              1080i59.94 uses 29.97 frames per second and requires a 29.97 fps composition.
-            </p>
+            <p className="m-0 text-muted-foreground">{translateUi('mxfInterlacedNote')}</p>
           ) : null}
         </div>
       ) : null}
@@ -369,33 +394,35 @@ export function EncodeSettingsFields({
         const fallback = [
           ...new Set(
             from.flatMap((flat) =>
-              flat[field.key] === undefined ? [] : [textOf(field.key, flat[field.key]!, frameRate)],
+              flat[field.key] === undefined
+                ? []
+                : [textOf(field.key, flat[field.key]!, frameRate, translateUi, formatNumber)],
             ),
           ),
         ];
         if (field.key === 'audio.layout' && fallback.length === 0)
-          fallback.push('Broadcast 4× AES3');
+          fallback.push(translateUi('broadcastAes3'));
         if (field.key === 'video.mxfProfile' && fallback.length === 0)
-          fallback.push('DNxHR HQ · Progressive');
+          fallback.push(translateUi('dnxhrProgressive'));
         const isCleared = cleared.includes(field.key);
         const placeholder = isCleared
-          ? 'Cleared (template)'
+          ? translateUi('clearedTemplate')
           : fallback.length
-            ? `Inherited: ${fallback.join(' / ')}`
-            : 'Fleet default';
+            ? translateUi('inheritedValue', { value: fallback.join(' / ') })
+            : translateUi('fleetDefault');
         // Pairs, not a record: a record would hoist integer-like keys (`24`, `25`) above `comp`.
         const options: Array<[string, string]> = [
           [INHERIT, placeholder],
           ...values.map((value): [string, string] => [
             String(value),
-            textOf(field.key, value, frameRate),
+            textOf(field.key, value, frameRate, translateUi, formatNumber),
           ]),
         ];
         const labels = Object.fromEntries(options);
         return (
           <div key={field.key} className="flex items-end gap-1">
             <div className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
-              <span className="text-muted-foreground">{field.label}</span>
+              <span className="text-muted-foreground">{translateUi(field.labelKey)}</span>
               <Select
                 value={current === undefined ? INHERIT : String(current)}
                 onValueChange={(next) =>
@@ -408,7 +435,7 @@ export function EncodeSettingsFields({
                   })
                 }
               >
-                <SelectTrigger aria-label={field.label} className="w-full">
+                <SelectTrigger aria-label={translateUi(field.labelKey)} className="w-full">
                   <SelectValue>
                     {(value: unknown) =>
                       value === INHERIT ? (
@@ -434,8 +461,8 @@ export function EncodeSettingsFields({
                 size="icon-xs"
                 variant="ghost"
                 className="mb-1.5 text-muted-foreground"
-                aria-label={`Reset ${field.label} to inherited`}
-                title="Reset to inherited"
+                aria-label={translateUi('resetField', { field: translateUi(field.labelKey) })}
+                title={translateUi('reset_to_inherited_af537e74')}
                 onClick={() => onSet({ [field.key]: undefined })}
               >
                 <RotateCcw className="size-3" aria-hidden />
@@ -446,8 +473,8 @@ export function EncodeSettingsFields({
                 size="icon-xs"
                 variant="ghost"
                 className="mb-1.5 text-muted-foreground"
-                aria-label={`Clear inherited ${field.label}`}
-                title="Clear inherited value"
+                aria-label={translateUi('clearField', { field: translateUi(field.labelKey) })}
+                title={translateUi('clear_inherited_value_6a234cfc')}
                 onClick={() => onClear(field.key)}
               >
                 <X className="size-3" aria-hidden />
@@ -470,6 +497,8 @@ export function OutputSettingsPanel({
   /** Read off the template row. A key alone is ambiguous — 133 exists in two sub-apps. */
   bindingId: string | null;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
   const [draft, setDraft] = useState<EncodeBlock>({});
@@ -498,7 +527,8 @@ export function OutputSettingsPanel({
   }, [load]);
 
   if (!contract) return null;
-  if (isStillsOnly(contract)) return <p className="text-xs text-muted-foreground">{STILLS_NOTE}</p>;
+  if (isStillsOnly(contract))
+    return <p className="text-xs text-muted-foreground">{translateUi('stillsNote')}</p>;
   if (!contract.encode) return null;
   const { defaults, stored } = contract.encode;
   const outputs = contract.outputs;
@@ -529,9 +559,13 @@ export function OutputSettingsPanel({
         queryKey: forgeQueryKeys.contract(brandId, bindingId, templateKey),
       });
       await load();
-      toast.success('Output settings saved');
+      toast.success(translateUi('output_settings_saved_a52d1afa'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save output settings');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_save_output_settings_a0e9c4cf'),
+      );
     } finally {
       setSaving(false);
     }
@@ -542,7 +576,7 @@ export function OutputSettingsPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs value={scope} onValueChange={(next) => setScope(String(next))}>
           <TabsList>
-            <TabsTrigger value="all">All outputs</TabsTrigger>
+            <TabsTrigger value="all">{translateUi('all_outputs_61deb5b9')}</TabsTrigger>
             {outputs.map((item) => (
               <TabsTrigger key={item.id} value={item.id}>
                 {item.label}
@@ -557,8 +591,8 @@ export function OutputSettingsPanel({
           onClick={save}
           className="gap-1.5"
         >
-          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-          Save
+          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+          {translateUi('save_1509f561')}{' '}
         </Button>
       </div>
       <EncodeSettingsFields

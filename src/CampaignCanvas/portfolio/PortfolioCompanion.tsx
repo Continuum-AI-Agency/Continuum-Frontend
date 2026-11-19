@@ -6,6 +6,7 @@
 // each approval stays on its own chat card.
 
 import { ChevronLeft } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { PortfolioRow, PortfolioViewModel } from '@/lib/campaign-canvas/portfolio';
 import type { VersionLine } from '@/lib/campaign-canvas/versions';
@@ -24,6 +25,7 @@ export function PortfolioCompanion({
   versionsByRow?: Readonly<Record<string, VersionLine>>;
   initialRowId?: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const [rowId, setRowId] = React.useState<string | null>(initialRowId);
   const row = portfolio.rows.find((entry) => entry.id === rowId) ?? null;
   return (
@@ -40,7 +42,7 @@ export function PortfolioCompanion({
         <>
           <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2 text-[13px] text-muted-foreground">
             <span className="min-w-0">
-              One proposal across several campaigns · approve each in chat
+              {uiText('one_proposal_across_several_campaigns_approve_6fa747a')}
             </span>
           </div>
           <div className="min-h-0 flex-1">
@@ -63,6 +65,7 @@ function PortfolioCampaign({
   versions: VersionLine | null;
   onBack: () => void;
 }) {
+  const uiText = useTranslations('scale');
   const { view, setView, isPhone, hint, dismissHint } = useCanvasView('proposed');
   const current =
     row.source.kind === 'live' ? (row.source.partIds.at(-1) ?? null) : row.source.versionId;
@@ -73,7 +76,7 @@ function PortfolioCampaign({
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
         <nav
-          aria-label="Breadcrumb"
+          aria-label={uiText('breadcrumb_2bd873d')}
           className="flex min-w-[12rem] flex-1 items-center gap-1 text-[13px]"
           data-testid="portfolio-breadcrumb"
         >
@@ -84,7 +87,9 @@ function PortfolioCampaign({
             data-testid="portfolio-back"
           >
             <ChevronLeft className="size-3.5" aria-hidden />
-            {portfolio.campaignCount} campaigns
+            {uiText('count_plural_one_campaign_other_campaigns_03261b4', {
+              count: portfolio.campaignCount,
+            })}
           </button>
           <span aria-hidden className="text-muted-foreground">
             ›

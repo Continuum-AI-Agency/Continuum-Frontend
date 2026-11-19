@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdAccount } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import { render } from '@/i18n/__tests__/render';
+import commonEs from '../../../../../messages/common/es.json';
+import commonPt from '../../../../../messages/common/pt-BR.json';
+import scaleEs from '../../../../../messages/scale/es.json';
+import scalePt from '../../../../../messages/scale/pt-BR.json';
 import vivo47 from '../sections/platforms/__fixtures__/google-vivo47-paid-media-metrics.json';
 import { MultiPlatformPickerView } from './MultiPlatformPicker';
 import {
@@ -322,13 +328,15 @@ describe('the Google group in Manage: what the portfolio holds, saved on its own
     expect(box('Paused · Pasarela')?.getAttribute('aria-checked')).toBe('false');
   });
 
-  it("shows the database's refusal when a save is refused", async () => {
+  it('shows safe guidance when a save is refused', async () => {
     renderEditable([], async () => {
       throw new Error('optimizer: google_ads campaign pmax-1 is already in portfolio 5aaf5931');
     });
     fireEvent.click(screen.getByText('PMax · Sedes'));
     fireEvent.click(screen.getByRole('button', { name: 'Save Google campaigns' }));
-    expect((await screen.findByRole('alert')).textContent).toContain('is already in portfolio');
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'An unexpected error occurred. Please try again.',
+    );
   });
 
   it('is a list only, and says why, until the members read answers', () => {
@@ -350,3 +358,35 @@ describe('the Google group in Manage: what the portfolio holds, saved on its own
     expect(screen.queryByRole('button', { name: 'Save Google campaigns' })).toBeNull();
   });
 });
+
+for (const locale of ['pt-BR', 'es'] as const) {
+  it(`renders localized picker labels in ${locale} while preserving campaign names and identity`, () => {
+    const { container } = render(
+      <NextIntlClientProvider
+        locale={locale}
+        timeZone="UTC"
+        messages={{
+          scale: locale === 'pt-BR' ? scalePt : scaleEs,
+          common: locale === 'pt-BR' ? commonPt : commonEs,
+        }}
+      >
+        <MultiPlatformPickerView
+          google={{ status: 'ready', inventory: vivo47Inventory() }}
+          portfolioCurrency="MXN"
+          metaAccount="Authored account"
+        >
+          <div>Authored Meta tree</div>
+        </MultiPlatformPickerView>
+      </NextIntlClientProvider>,
+    );
+    expect(container.textContent).toContain(
+      locale === 'pt-BR' ? 'grupo de anúncios' : 'grupo de anuncios',
+    );
+    expect(container.textContent).toContain('EKATAR · Marca');
+    expect(container.textContent).toContain('VIVO 47-EKATAR');
+    expect(container.textContent).toContain(
+      locale === 'pt-BR' ? 'O Google não permite' : 'Google no permite',
+    );
+    expect(container.querySelector('[data-child-kind="ad_group"]')).not.toBeNull();
+  });
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -10,6 +11,7 @@ import {
   resolveStyleWithPreset,
 } from '@/lib/clips/captionPresets';
 import type { BrandStyleInput } from '@/lib/clips/clipCaptionStyle';
+import { useStudioMetadata } from '../../hooks/useStudioMetadata';
 
 // The bespoke config panel for `video.subtitles`.
 //
@@ -35,6 +37,17 @@ type Props = {
 };
 
 export function SubtitlesConfig({ nodeId, config, onWrite, brandStyle }: Props) {
+  const translateUi = useUiTranslations('studio');
+
+  const registryText = useStudioMetadata();
+  const presetCopy = {
+    classic: ['captionPresetClassic', 'captionDescriptionClassic'],
+    pop: ['captionPresetPop', 'captionDescriptionPop'],
+    pulse: ['captionPresetPulse', 'captionDescriptionPulse'],
+    glide: ['captionPresetGlide', 'captionDescriptionGlide'],
+    fusion: ['captionPresetFusion', 'captionDescriptionFusion'],
+    boxed: ['captionPresetBoxed', 'captionDescriptionBoxed'],
+  } as const;
   const activeId = resolveCaptionPreset(
     typeof config.preset === 'string' ? config.preset : undefined,
   ).id;
@@ -45,7 +58,7 @@ export function SubtitlesConfig({ nodeId, config, onWrite, brandStyle }: Props) 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Style</Label>
+        <Label className="text-xs">{translateUi('style_7e744141')}</Label>
         <div className="grid grid-cols-3 gap-1.5">
           {CAPTION_PRESETS.map((preset) => {
             // Resolved through the SAME helper the burn-in uses, so a chip cannot advertise
@@ -53,14 +66,16 @@ export function SubtitlesConfig({ nodeId, config, onWrite, brandStyle }: Props) 
             const style = resolveStyleWithPreset(preset.style);
             const isActive = preset.id === activeId;
             const motion =
-              style.animation && style.animation.kind !== 'none' ? style.animation.kind : 'static';
+              style.animation && style.animation.kind !== 'none'
+                ? registryText(style.animation.kind)
+                : translateUi('captionMotionStatic');
             return (
               <button
                 key={preset.id}
                 type="button"
                 aria-pressed={isActive}
-                aria-label={`${preset.label} — ${preset.description}`}
-                title={preset.description}
+                aria-label={`${translateUi(presetCopy[preset.id][0])} — ${translateUi(presetCopy[preset.id][1])}`}
+                title={translateUi(presetCopy[preset.id][1])}
                 className={`flex flex-col items-center gap-1 rounded-md border px-2 py-2 transition-colors ${
                   isActive ? 'border-primary bg-primary/10' : 'border-border/60 hover:bg-muted/60'
                 }`}
@@ -92,15 +107,15 @@ export function SubtitlesConfig({ nodeId, config, onWrite, brandStyle }: Props) 
                     <span style={{ color: style.emphasis?.color ?? style.highlightColor }}>Bb</span>
                   </span>
                 </span>
-                <span className="text-3xs font-medium">{preset.label}</span>
+                <span className="text-3xs font-medium">
+                  {translateUi(presetCopy[preset.id][0])}
+                </span>
                 <span className="text-3xs text-muted-foreground">{motion}</span>
               </button>
             );
           })}
         </div>
-        <p className="text-3xs text-muted-foreground">
-          {resolveCaptionPreset(activeId).description}
-        </p>
+        <p className="text-3xs text-muted-foreground">{translateUi(presetCopy[activeId][1])}</p>
       </div>
 
       {brandFont.family && !brandFont.registered ? (
@@ -108,18 +123,22 @@ export function SubtitlesConfig({ nodeId, config, onWrite, brandStyle }: Props) 
         // and rendering Helvetica while claiming the brand face is the exact bug that made
         // fontFamily inert for as long as it was.
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-3xs text-amber-700 dark:text-amber-300">
-          Brand font “{brandFont.family}” is unavailable — captions will render in the preset face
-          instead.
+          {' '}
+          {translateUi('brand_font_f4cb5ee1')}
+          {brandFont.family}
+          {translateUi('is_unavailable_captions_will_render_5e8a212c')}{' '}
         </p>
       ) : null}
 
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col">
           <Label htmlFor={`subtitles-emphasize-${nodeId}`} className="text-xs">
-            Emphasise key words
+            {' '}
+            {translateUi('emphasise_key_words_f94ffaf4')}{' '}
           </Label>
           <span className="text-3xs text-muted-foreground">
-            Marks about one word a line. Falls back to a built-in picker if the model is down.
+            {' '}
+            {translateUi('marks_about_one_word_a_line_falls_b_7d3770f2')}{' '}
           </span>
         </div>
         <Switch
@@ -131,12 +150,13 @@ export function SubtitlesConfig({ nodeId, config, onWrite, brandStyle }: Props) 
 
       <div className="flex flex-col gap-1">
         <Label htmlFor={`subtitles-language-${nodeId}`} className="text-xs">
-          Language
+          {' '}
+          {translateUi('language_a4fe6526')}{' '}
         </Label>
         <Input
           id={`subtitles-language-${nodeId}`}
           className="h-7 text-xs"
-          placeholder="Auto-detect"
+          placeholder={translateUi('auto_detect_89ebfb7a')}
           value={language}
           onChange={(event) => onWrite('language', event.target.value.trim() || null)}
         />

@@ -12,9 +12,11 @@ import {
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { Palette } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { brandTypeInputsQueryKey, loadBrandTypeInputs } from '@/lib/brands/brandTypeInputs.client';
 import {
   editableTemplateFonts,
@@ -58,6 +60,10 @@ export function ApplyDesignSystemButton({
   designImport: boolean;
   onCreated: (saved: TemplateRevision) => void | Promise<void>;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   const { show } = useToast();
   const [busy, setBusy] = useState(false);
@@ -86,10 +92,10 @@ export function ApplyDesignSystemButton({
       });
       if (!edits.recolor && !edits.layers.length) {
         show({
-          title: 'Nothing to apply',
+          title: translateUi('nothing_to_apply_14428d8e'),
           description:
             report.skipped[0]?.reason ??
-            'Add colours or typefaces to your design system in Brand settings first.',
+            translateUi('add_colours_or_typefaces_to_your_de_4bbff051'),
           variant: 'info',
         });
         return;
@@ -108,15 +114,15 @@ export function ApplyDesignSystemButton({
       intent.current = null;
       await invalidateForgeBrand(queryClient, brandId);
       show({
-        title: 'Brand-aligned variant created',
+        title: translateUi('brand_aligned_variant_created_1f537d12'),
         description: describe(report),
         variant: report.skipped.length ? 'warning' : 'success',
       });
       await onCreated(saved);
     } catch (error) {
       show({
-        title: 'Could not apply your design system',
-        description: error instanceof Error ? error.message : undefined,
+        title: translateUi('could_not_apply_your_design_system_a02e29f0'),
+        description: uiErrorText(error),
         variant: 'error',
       });
     } finally {
@@ -134,7 +140,9 @@ export function ApplyDesignSystemButton({
       onClick={() => void apply()}
     >
       <Palette className="size-3.5" aria-hidden />
-      {busy ? 'Applying design system…' : 'Apply my design system'}
+      {busy
+        ? translateUi('applying_design_system_0bcddb23')
+        : translateUi('apply_my_design_system_cec958b3')}
     </Button>
   );
 }

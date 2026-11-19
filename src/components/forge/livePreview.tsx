@@ -12,6 +12,7 @@ import {
   worstFitByKey,
 } from '@continuum/contracts';
 import { useQueries, useQuery } from '@tanstack/react-query';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type JSX, memo, useEffect, useMemo } from 'react';
 import type { PreviewFormat } from '@/components/forge/FormatPreview';
 import { cn } from '@/lib/utils';
@@ -297,16 +298,18 @@ export function VariationStrip({
   selectedId: string;
   onSelect: (rowId: string) => void;
 }): JSX.Element {
+  const translateUi = useUiTranslations('forge');
+
   return (
     <fieldset
-      aria-label="All variations"
+      aria-label={translateUi('all_variations_1023483b')}
       className="m-0 flex min-w-0 shrink-0 items-end gap-1.5 overflow-x-auto border-0 p-0 pb-1"
     >
       {rows.slice(0, STRIP_MAX).map((row) => (
         <LiveThumb
           key={row.id}
           kit={kit}
-          label={row.label.trim() || 'Untitled'}
+          label={row.label.trim() || translateUi('untitled_f59ab8d1')}
           valuesKey={JSON.stringify(row.values)}
           pictures={pictures}
           selected={row.id === selectedId}
@@ -315,7 +318,7 @@ export function VariationStrip({
       ))}
       {rows.length > STRIP_MAX ? (
         <span className="shrink-0 text-2xs text-muted-foreground">
-          +{rows.length - STRIP_MAX} more
+          +{rows.length - STRIP_MAX} {translateUi('more_187897ce')}{' '}
         </span>
       ) : null}
     </fieldset>

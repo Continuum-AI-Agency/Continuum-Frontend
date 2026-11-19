@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type React from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 import { AdAccountSelector } from './AdAccountSelector';
 

@@ -12,6 +12,7 @@ import {
   ExternalLinkIcon,
   LockIcon,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -88,6 +89,7 @@ export function DecisionCardView({
   onSelectPortfolio,
   onCreatePortfolio,
 }: DecisionCardViewProps) {
+  const uiText = useTranslations('scale');
   const [stepsOpen, setStepsOpen] = useState(false);
   const stepsId = useId();
   const hasSteps = card.steps.length > 0;
@@ -120,7 +122,7 @@ export function DecisionCardView({
               </Badge>
               {card.doubted ? (
                 <span className="text-warning text-xs" data-testid="decision-doubted">
-                  Affected by the guard
+                  {uiText('affected_by_the_guard_c90101e')}
                 </span>
               ) : null}
             </div>
@@ -155,7 +157,10 @@ export function DecisionCardView({
                   className="hit-area inline-flex items-center gap-1 font-medium text-primary-ink text-xs hover:underline"
                   data-testid="decision-steps-toggle"
                 >
-                  {clientExecutes ? 'What the client does' : 'Steps'} · {card.steps.length}
+                  {uiText('client_select_yes_what_the_client_does_other__74f7458', {
+                    client: clientExecutes ? 'yes' : 'no',
+                    count: card.steps.length,
+                  })}
                   <ChevronDownIcon
                     aria-hidden="true"
                     className={cn(
@@ -195,7 +200,9 @@ export function DecisionCardView({
                 onClick={() => onSelectPortfolio(portfolioId)}
                 type="button"
               >
-                <span className="truncate">{portfolioName ?? 'Open portfolio'}</span>
+                <span className="truncate">
+                  {portfolioName ?? uiText('open_portfolio_4f22ccf')}
+                </span>
                 <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
               </button>
             ) : null}
@@ -216,7 +223,7 @@ export function DecisionCardView({
                 data-testid="decision-dismissed"
                 role="status"
               >
-                Dismissed
+                {uiText('dismissed_9d74727')}
               </span>
             ) : (
               <div className="flex flex-wrap items-center gap-1.5 @lg/decision:justify-end">

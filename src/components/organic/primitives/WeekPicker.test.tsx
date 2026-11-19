@@ -1,6 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { CalendarBody, CalendarProvider } from '@/components/kibo-ui/calendar';
+import { render } from '@/i18n/__tests__/render';
 
 import { WeekPicker } from './WeekPicker';
 

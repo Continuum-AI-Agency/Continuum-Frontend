@@ -32,8 +32,10 @@ import {
   META_REPORTED_ATTRIBUTION_NOTE,
 } from '@continuum/contracts';
 import { ExternalLink, TriangleAlert } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   type AssetPerformanceResponse,
   fetchAssetPerformance,
@@ -49,6 +51,7 @@ import {
   versionLabel,
   WINDOW_LABEL,
 } from '@/lib/library/performance';
+import { usePerformanceDisplay } from '@/lib/library/usePerformanceDisplay';
 import { cn } from '@/lib/utils';
 
 const VERDICT_STYLE: Record<NonNullable<DeploymentAd['verdict']>, string> = {
@@ -61,6 +64,7 @@ const VERDICT_STYLE: Record<NonNullable<DeploymentAd['verdict']>, string> = {
 type MetricEntry = { label: string; value: string };
 
 function VerdictChip({ verdict }: { verdict: NonNullable<DeploymentAd['verdict']> }) {
+  const { VERDICT_LABEL } = usePerformanceDisplay();
   return (
     <span
       className={cn(
@@ -68,12 +72,14 @@ function VerdictChip({ verdict }: { verdict: NonNullable<DeploymentAd['verdict']
         VERDICT_STYLE[verdict],
       )}
     >
-      {verdict}
+      {VERDICT_LABEL[verdict]}
     </span>
   );
 }
 
 function TrustBadges({ flags }: { flags: readonly DeploymentTrustFlag[] }) {
+  const { TRUST_FLAG_LABEL, TRUST_FLAG_TITLE } = usePerformanceDisplay();
+
   if (flags.length === 0) return null;
   return (
     <span className="flex flex-wrap gap-1">
@@ -106,13 +112,17 @@ function LinkBadge({
   linkMethod: DeploymentLinkMethod;
   confidence: number;
 }) {
+  const { TRUST_FLAG_TITLE, LINK_METHOD_LABEL } = usePerformanceDisplay();
+
+  const translateUi = useUiTranslations('library');
+
   const inferred = isInferredLinkMethod(linkMethod);
   return (
     <span
       title={
         inferred
           ? TRUST_FLAG_TITLE.inferred_link
-          : 'This link was observed, not guessed — the numbers belong to this creative.'
+          : translateUi('this_link_was_observed_not_guessed__e57620b3')
       }
       className={cn(
         'inline-flex items-center gap-1 rounded px-1 py-0.5 text-3xs',
@@ -123,7 +133,7 @@ function LinkBadge({
     >
       {inferred && <TriangleAlert className="size-2.5" />}
       {LINK_METHOD_LABEL[linkMethod]}
-      {inferred && ` · ${Math.round(confidence * 100)}% confident`}
+      {inferred && translateUi('performanceConfidence', { confidence })}
     </span>
   );
 }
@@ -152,48 +162,62 @@ function FunnelSplit({
   top: readonly MetricEntry[];
   bottom: readonly MetricEntry[];
 }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-      <MetricColumn title="Top of funnel" entries={top} />
-      <MetricColumn title="Bottom of funnel" entries={bottom} />
+      <MetricColumn title={translateUi('top_of_funnel_e105db01')} entries={top} />
+      <MetricColumn title={translateUi('bottom_of_funnel_67beb068')} entries={bottom} />
     </div>
   );
 }
 
-function adFunnel(ad: DeploymentAd): { top: MetricEntry[]; bottom: MetricEntry[] } {
+function adFunnel(
+  ad: DeploymentAd,
+  display: ReturnType<typeof usePerformanceDisplay>,
+): { top: MetricEntry[]; bottom: MetricEntry[] } {
+  const { formatCount, formatMoney, formatRate, formatMultiple } = display;
   const metrics = ad.metrics;
   return {
     top: [
-      { label: 'Impressions', value: formatCount(metrics.impressions) },
+      { label: display.t('impressions_c6310e90'), value: formatCount(metrics.impressions) },
       // Both click numbers, always together. Meta's `clicks` counts likes, comments
       // and shares, so showing only it (and only its CPC) flatters an ad nobody
       // actually visited from — on a live account $3.58/click vs $6.10/visit.
-      { label: 'Clicks (all)', value: formatCount(metrics.clicks) },
-      { label: 'Link clicks', value: formatCount(metrics.linkClicks) },
-      { label: 'CPC (all)', value: formatMoney(metrics.cpc) },
-      { label: 'Cost/visit', value: formatMoney(metrics.costPerLinkClick) },
-      { label: 'Link CTR', value: formatRate(metrics.linkCtr) },
-      { label: 'CPM', value: formatMoney(metrics.cpm) },
-      { label: 'Frequency', value: formatMultiple(metrics.frequency) },
-      { label: 'Hook', value: formatRate(metrics.hookRate) },
-      { label: 'Hold', value: formatRate(metrics.holdRate) },
+      { label: display.t('clicks_all_54555b1a'), value: formatCount(metrics.clicks) },
+      { label: display.t('link_clicks_87128bf9'), value: formatCount(metrics.linkClicks) },
+      { label: display.t('cpc_all_35ed1ed4'), value: formatMoney(metrics.cpc) },
+      { label: display.t('cost_visit_abf569e3'), value: formatMoney(metrics.costPerLinkClick) },
+      { label: display.t('link_ctr_87c51753'), value: formatRate(metrics.linkCtr) },
+      { label: display.t('cpm_13269d41'), value: formatMoney(metrics.cpm) },
+      { label: display.t('frequency_16b6668d'), value: formatMultiple(metrics.frequency) },
+      { label: display.t('hook_536ff505'), value: formatRate(metrics.hookRate) },
+      { label: display.t('hold_8e685d54'), value: formatRate(metrics.holdRate) },
     ],
     bottom: [
-      { label: 'Purchases', value: formatCount(metrics.purchases) },
-      { label: 'Leads', value: formatCount(metrics.leads) },
-      { label: 'Cost/purchase', value: formatMoney(metrics.costPerPurchase) },
-      { label: 'Cost/lead', value: formatMoney(metrics.costPerLead) },
-      { label: 'ROAS', value: formatMultiple(metrics.roas) },
-      { label: 'Completion', value: formatRate(metrics.completionRate) },
+      { label: display.t('purchases_a0718ef8'), value: formatCount(metrics.purchases) },
+      { label: display.t('leads_2f10a267'), value: formatCount(metrics.leads) },
+      { label: display.t('cost_purchase_f3110ca2'), value: formatMoney(metrics.costPerPurchase) },
+      { label: display.t('cost_lead_148ac999'), value: formatMoney(metrics.costPerLead) },
+      { label: display.t('roas_b81bd97d'), value: formatMultiple(metrics.roas) },
+      { label: display.t('completion_557fe004'), value: formatRate(metrics.completionRate) },
     ],
   };
 }
 
-const RANKING_LABEL: Record<string, string> = {
-  quality: 'Quality',
-  engagement: 'Engagement',
-  conversion: 'Conversion',
-};
+const RANKING_KEYS = {
+  quality: 'performanceQuality',
+  engagement: 'performanceEngagement',
+  conversion: 'performanceConversion',
+} as const;
+const RANKING_VALUES = {
+  ABOVE_AVERAGE: 'performanceRankingAbove',
+  AVERAGE: 'performanceRankingAverage',
+  BELOW_AVERAGE: 'performanceRankingBelow',
+  BELOW_AVERAGE_35: 'performanceRankingBottom35',
+  BELOW_AVERAGE_20: 'performanceRankingBottom20',
+  BELOW_AVERAGE_10: 'performanceRankingBottom10',
+} as const;
 
 /**
  * Meta's own grade for this creative against everything else bidding for the same
@@ -202,6 +226,8 @@ const RANKING_LABEL: Record<string, string> = {
  * auction. Showing it is how that tension becomes visible instead of invisible.
  */
 function MetaRankings({ metrics }: { metrics: DeploymentAd['metrics'] }) {
+  const translateUi = useUiTranslations('library');
+
   const entries = [
     ['quality', metrics.qualityRanking],
     ['engagement', metrics.engagementRateRanking],
@@ -212,9 +238,15 @@ function MetaRankings({ metrics }: { metrics: DeploymentAd['metrics'] }) {
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1">
-      <span className="text-3xs text-muted-foreground">Meta ranks this creative:</span>
+      <span className="text-3xs text-muted-foreground">
+        {translateUi('meta_ranks_this_creative_5c732ea6')}
+      </span>
       {present.map(([key, value]) => {
         const weak = isUnderperformingRanking(value);
+        const ranking =
+          value && Object.hasOwn(RANKING_VALUES, value)
+            ? translateUi(RANKING_VALUES[value as keyof typeof RANKING_VALUES])
+            : String(value).replace(/_/g, ' ').toLowerCase();
         return (
           <span
             key={key}
@@ -222,13 +254,9 @@ function MetaRankings({ metrics }: { metrics: DeploymentAd['metrics'] }) {
               'rounded px-1 py-0.5 text-3xs tabular-nums',
               weak ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground',
             )}
-            title={
-              weak
-                ? `Meta rates this creative below most ads competing for the same impression (${value})`
-                : String(value)
-            }
+            title={weak ? translateUi('performanceRankingBelowTitle', { ranking }) : ranking}
           >
-            {RANKING_LABEL[key]} {String(value).replace(/_/g, ' ').toLowerCase()}
+            {translateUi(RANKING_KEYS[key])} {ranking}
           </span>
         );
       })}
@@ -237,6 +265,8 @@ function MetaRankings({ metrics }: { metrics: DeploymentAd['metrics'] }) {
 }
 
 function VerdictMix({ mix }: { mix: Record<string, number> }) {
+  const translateUi = useUiTranslations('library');
+  const { VERDICT_LABEL } = usePerformanceDisplay();
   const entries = Object.entries(mix).filter(([, count]) => count > 0);
   if (entries.length === 0) return null;
   return (
@@ -250,7 +280,12 @@ function VerdictMix({ mix }: { mix: Record<string, number> }) {
               'bg-muted text-muted-foreground',
           )}
         >
-          {verdict} × {count}
+          {translateUi('performanceVerdictCount', {
+            verdict: Object.hasOwn(VERDICT_LABEL, verdict)
+              ? VERDICT_LABEL[verdict as keyof typeof VERDICT_LABEL]
+              : verdict,
+            count,
+          })}
         </span>
       ))}
     </span>
@@ -258,9 +293,14 @@ function VerdictMix({ mix }: { mix: Record<string, number> }) {
 }
 
 function VersionRollupCard({ rollup, leading }: { rollup: AssetVersionRollup; leading: boolean }) {
+  const { formatCount, formatMoney, formatRate, formatMultiple, versionLabel } =
+    usePerformanceDisplay();
+
+  const translateUi = useUiTranslations('library');
+
   const surfaces = [
-    rollup.adCount > 0 ? `${rollup.adCount} ad${rollup.adCount === 1 ? '' : 's'}` : null,
-    rollup.postCount > 0 ? `${rollup.postCount} post${rollup.postCount === 1 ? '' : 's'}` : null,
+    rollup.adCount > 0 ? translateUi('performanceAdCount', { count: rollup.adCount }) : null,
+    rollup.postCount > 0 ? translateUi('performancePostCount', { count: rollup.postCount }) : null,
   ].filter(Boolean);
 
   return (
@@ -271,15 +311,16 @@ function VersionRollupCard({ rollup, leading }: { rollup: AssetVersionRollup; le
         </span>
         {leading && (
           <span
-            title="Highest ROAS of the versions we could measure."
+            title={translateUi('highest_roas_of_the_versions_we_cou_68df2b1e')}
             className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-3xs font-medium text-emerald-600 dark:text-emerald-400"
           >
-            leading
+            {' '}
+            {translateUi('leading_30adc606')}{' '}
           </span>
         )}
         <span className="text-2xs text-muted-foreground">{surfaces.join(' · ')}</span>
         <span className="ml-auto text-2xs tabular-nums text-muted-foreground">
-          {formatMoney(rollup.spend)} spent
+          {formatMoney(rollup.spend)} {translateUi('spent_2705d83f')}{' '}
         </span>
       </div>
 
@@ -289,18 +330,24 @@ function VersionRollupCard({ rollup, leading }: { rollup: AssetVersionRollup; le
 
       <FunnelSplit
         top={[
-          { label: 'Impressions', value: formatCount(rollup.impressions) },
-          { label: 'Clicks', value: formatCount(rollup.clicks) },
-          { label: 'CTR', value: formatRate(rollup.ctr) },
-          { label: 'Organic reach', value: formatCount(rollup.organicReach) },
-          { label: 'Interactions', value: formatCount(rollup.organicInteractions) },
+          { label: translateUi('impressions_c6310e90'), value: formatCount(rollup.impressions) },
+          { label: translateUi('clicks_921fc980'), value: formatCount(rollup.clicks) },
+          { label: translateUi('ctr_07fce34d'), value: formatRate(rollup.ctr) },
+          { label: translateUi('organic_reach_b9faa630'), value: formatCount(rollup.organicReach) },
+          {
+            label: translateUi('interactions_9089e4b7'),
+            value: formatCount(rollup.organicInteractions),
+          },
         ]}
         bottom={[
-          { label: 'Purchases', value: formatCount(rollup.purchases) },
-          { label: 'Leads', value: formatCount(rollup.leads) },
-          { label: 'Cost/purchase', value: formatMoney(rollup.costPerPurchase) },
-          { label: 'Cost/lead', value: formatMoney(rollup.costPerLead) },
-          { label: 'ROAS', value: formatMultiple(rollup.roas) },
+          { label: translateUi('purchases_a0718ef8'), value: formatCount(rollup.purchases) },
+          { label: translateUi('leads_2f10a267'), value: formatCount(rollup.leads) },
+          {
+            label: translateUi('cost_purchase_f3110ca2'),
+            value: formatMoney(rollup.costPerPurchase),
+          },
+          { label: translateUi('cost_lead_148ac999'), value: formatMoney(rollup.costPerLead) },
+          { label: translateUi('roas_b81bd97d'), value: formatMultiple(rollup.roas) },
         ]}
       />
 
@@ -312,7 +359,12 @@ function VersionRollupCard({ rollup, leading }: { rollup: AssetVersionRollup; le
 }
 
 function AdDeploymentCard({ deployment, ad }: { deployment: AssetDeployment; ad: DeploymentAd }) {
-  const funnel = adFunnel(ad);
+  const { formatMoney, versionLabel } = usePerformanceDisplay();
+
+  const translateUi = useUiTranslations('library');
+
+  const performanceDisplay = usePerformanceDisplay();
+  const funnel = adFunnel(ad, performanceDisplay);
   const inferred = isInferredLinkMethod(deployment.linkMethod);
 
   return (
@@ -327,7 +379,8 @@ function AdDeploymentCard({ deployment, ad }: { deployment: AssetDeployment; ad:
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-medium text-foreground">{ad.adName ?? ad.adId}</p>
           <p className="truncate text-2xs text-muted-foreground">
-            {[ad.campaignName, ad.adsetName].filter(Boolean).join(' · ') || 'Meta ad'}
+            {[ad.campaignName, ad.adsetName].filter(Boolean).join(' · ') ||
+              translateUi('meta_ad_a5d0436f')}
           </p>
         </div>
         {ad.verdict && <VerdictChip verdict={ad.verdict} />}
@@ -339,7 +392,7 @@ function AdDeploymentCard({ deployment, ad }: { deployment: AssetDeployment; ad:
         </span>
         <LinkBadge linkMethod={deployment.linkMethod} confidence={deployment.confidence} />
         <span className="ml-auto text-2xs tabular-nums text-muted-foreground">
-          {formatMoney(ad.metrics.spend)} spent
+          {formatMoney(ad.metrics.spend)} {translateUi('spent_2705d83f')}{' '}
         </span>
       </div>
 
@@ -351,14 +404,21 @@ function AdDeploymentCard({ deployment, ad }: { deployment: AssetDeployment; ad:
         <div className="mt-1.5 flex flex-wrap gap-1 text-3xs text-muted-foreground">
           {ad.virality ? (
             <span className="rounded bg-muted px-1 py-0.5">
-              Virality {ad.virality.predicted_overall} · {ad.virality.grade}
-              {ad.virality.prediction_only ? ' · prediction' : ' · observed'}
+              {' '}
+              {translateUi('virality_4df0f609')} {ad.virality.predicted_overall} ·{' '}
+              {ad.virality.grade}
+              {ad.virality.prediction_only
+                ? translateUi('prediction_56e4978e')
+                : translateUi('observed_7a22a63f')}
             </span>
           ) : null}
           {ad.outcome ? (
             <span className="rounded bg-muted px-1 py-0.5">
               {ad.outcome.decision_kind.replaceAll('_', ' ')} ·{' '}
-              {ad.outcome.result ?? `${ad.outcome.delivery_days}/7 delivery days`}
+              {ad.outcome.result ??
+                translateUi('value0_7_delivery_days_35ea0a68', {
+                  value0: String(ad.outcome.delivery_days),
+                })}
             </span>
           ) : null}
           {ad.attributionSetting ? (
@@ -381,6 +441,12 @@ function PostDeploymentCard({
   deployment: AssetDeployment;
   post: DeploymentPost;
 }) {
+  const { formatCount, formatRate, versionLabel } = usePerformanceDisplay();
+
+  const displayLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('library');
+
   const metrics = post.metrics;
   const inferred = isInferredLinkMethod(deployment.linkMethod);
 
@@ -399,12 +465,12 @@ function PostDeploymentCard({
           </p>
           <p className="truncate text-2xs text-muted-foreground">
             {post.publishedAt
-              ? new Date(post.publishedAt).toLocaleDateString('en-US', {
+              ? new Date(post.publishedAt).toLocaleDateString(displayLocale, {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',
                 })
-              : 'Published post'}
+              : translateUi('published_post_59823c97')}
           </p>
         </div>
         {post.permalink && (
@@ -414,8 +480,8 @@ function PostDeploymentCard({
             rel="noreferrer"
             className="inline-flex shrink-0 items-center gap-1 text-2xs text-muted-foreground hover:text-foreground"
           >
-            View post
-            <ExternalLink className="size-3" />
+            {' '}
+            {translateUi('view_post_fe9715bc')} <ExternalLink className="size-3" />
           </a>
         )}
       </div>
@@ -429,15 +495,15 @@ function PostDeploymentCard({
 
       <FunnelSplit
         top={[
-          { label: 'Reach', value: formatCount(metrics.reach) },
-          { label: 'Views', value: formatCount(metrics.views) },
-          { label: 'Engagement', value: formatRate(metrics.engagementRate) },
+          { label: translateUi('reach_2068b81b'), value: formatCount(metrics.reach) },
+          { label: translateUi('views_69c40459'), value: formatCount(metrics.views) },
+          { label: translateUi('engagement_ea68771a'), value: formatRate(metrics.engagementRate) },
         ]}
         bottom={[
-          { label: 'Likes', value: formatCount(metrics.likes) },
-          { label: 'Comments', value: formatCount(metrics.comments) },
-          { label: 'Shares', value: formatCount(metrics.shares) },
-          { label: 'Saves', value: formatCount(metrics.saved) },
+          { label: translateUi('likes_cca0662f'), value: formatCount(metrics.likes) },
+          { label: translateUi('comments_355f79f2'), value: formatCount(metrics.comments) },
+          { label: translateUi('shares_d4ea333d'), value: formatCount(metrics.shares) },
+          { label: translateUi('saves_98971626'), value: formatCount(metrics.saved) },
         ]}
       />
     </li>
@@ -445,6 +511,8 @@ function PostDeploymentCard({
 }
 
 function DeploymentCard({ deployment }: { deployment: AssetDeployment }) {
+  const translateUi = useUiTranslations('library');
+
   if (deployment.surface === 'meta_ad' && deployment.ad) {
     return <AdDeploymentCard deployment={deployment} ad={deployment.ad} />;
   }
@@ -454,7 +522,12 @@ function DeploymentCard({ deployment }: { deployment: AssetDeployment }) {
   // The ledger says it ran here; the surface store has no row for it yet.
   return (
     <li className="rounded-md border border-border p-2.5 text-2xs text-muted-foreground">
-      Deployed to {deployment.surface === 'meta_ad' ? 'a Meta ad' : 'a post'} we can no longer read.
+      {' '}
+      {translateUi('deployed_to_06de7cfe')}{' '}
+      {deployment.surface === 'meta_ad'
+        ? translateUi('a_meta_ad_f194d272')
+        : translateUi('a_post_179c02fe')}{' '}
+      {translateUi('we_can_no_longer_read_98dc4f00')}{' '}
     </li>
   );
 }
@@ -477,6 +550,8 @@ function WindowSwitcher({
   window: PaidMetricWindow;
   onChange: (next: PaidMetricWindow) => void;
 }) {
+  const { WINDOW_LABEL } = usePerformanceDisplay();
+
   return (
     <div className="flex items-center gap-1">
       {PERFORMANCE_WINDOWS.map((candidate) => (
@@ -500,9 +575,11 @@ function WindowSwitcher({
 }
 
 function UsedIn({ usage }: { usage: AssetUsage }) {
+  const translateUi = useUiTranslations('library');
+
   if (usage.derivedAssets.length === 0) return null;
   return (
-    <Section title="Used in">
+    <Section title={translateUi('used_in_a02dadd1')}>
       <ul className="space-y-1">
         {usage.derivedAssets.map((derived) => (
           <li
@@ -515,8 +592,10 @@ function UsedIn({ usage }: { usage: AssetUsage }) {
                 {derived.title ?? derived.fileName}
               </span>
               <span className="block truncate text-3xs text-muted-foreground">
-                {derived.depth > 1 ? `${derived.depth} hops · ` : ''}
-                {derived.operation?.replaceAll('_', ' ') ?? 'legacy relation'}
+                {derived.depth > 1
+                  ? translateUi('value0_hops_35e6fa4e', { value0: String(derived.depth) })
+                  : ''}
+                {derived.operation?.replaceAll('_', ' ') ?? translateUi('legacy_relation_ea9906e4')}
               </span>
             </span>
             <span className="shrink-0 text-3xs uppercase tracking-wide text-muted-foreground">
@@ -559,6 +638,8 @@ export function PerformanceView({
   window,
   onWindowChange,
 }: PerformanceViewProps) {
+  const translateUi = useUiTranslations('library');
+
   const deployments = performance?.deployments ?? [];
   const rollups = performance?.versionRollups ?? [];
   const leader = leadingRollup(rollups);
@@ -568,7 +649,8 @@ export function PerformanceView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-1.5">
         <span className="text-2xs uppercase tracking-wide text-muted-foreground/70">
-          Performance
+          {' '}
+          {translateUi('performance_442aded8')}{' '}
         </span>
         <WindowSwitcher window={window} onChange={onWindowChange} />
       </div>
@@ -581,9 +663,12 @@ export function PerformanceView({
         ) : deployments.length === 0 ? (
           <div className="space-y-4 p-3">
             <div className="px-1 py-6 text-center">
-              <p className="text-xs text-foreground">This creative hasn&apos;t run anywhere yet.</p>
+              <p className="text-xs text-foreground">
+                {translateUi('this_creative_hasn_t_run_anywhere_y_d066a117')}
+              </p>
               <p className="mt-1 text-2xs text-muted-foreground">
-                Nothing links it to a Meta ad or a published post. Numbers appear here once it does.
+                {' '}
+                {translateUi('nothing_links_it_to_a_meta_ad_or_a__92013f92')}{' '}
               </p>
             </div>
             {usage && <UsedIn usage={usage} />}
@@ -591,7 +676,7 @@ export function PerformanceView({
         ) : (
           <div className="space-y-4 p-3">
             {rollups.length > 0 && (
-              <Section title="By version">
+              <Section title={translateUi('by_version_8685173f')}>
                 <div className="space-y-2">
                   {rollups.map((rollup) => (
                     <VersionRollupCard
@@ -604,7 +689,11 @@ export function PerformanceView({
               </Section>
             )}
 
-            <Section title={`Where it ran (${deployments.length})`}>
+            <Section
+              title={translateUi('where_it_ran_value0_f1ba81ea', {
+                value0: String(deployments.length),
+              })}
+            >
               <ul className="space-y-2">
                 {deployments.map((deployment) => (
                   <DeploymentCard key={deployment.deploymentId} deployment={deployment} />
@@ -632,6 +721,10 @@ export type PerformancePanelProps = {
 };
 
 export function PerformancePanel({ brandId, assetId }: PerformancePanelProps) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const [window, setWindow] = useState<PaidMetricWindow>('d30');
   const [data, setData] = useState<AssetPerformanceResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -649,7 +742,7 @@ export function PerformancePanel({ brandId, assetId }: PerformancePanelProps) {
       .catch((err: unknown) => {
         if (cancelled) return;
         setData(null);
-        setError(err instanceof Error ? err.message : 'Could not load performance');
+        setError(uiErrorText(err));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -658,7 +751,7 @@ export function PerformancePanel({ brandId, assetId }: PerformancePanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [brandId, assetId, window]);
+  }, [brandId, assetId, window, translateUi, uiErrorText]);
 
   const changeWindow = useCallback((next: PaidMetricWindow) => setWindow(next), []);
 

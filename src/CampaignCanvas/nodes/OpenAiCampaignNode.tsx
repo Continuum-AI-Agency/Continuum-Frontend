@@ -1,6 +1,8 @@
 'use client';
+
 import { AlertCircle, CheckCircle2, Copy, Layout, Plus, Trash2, XCircle } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
+import { memo, useCallback, useMemo } from 'react';
 import {
   Node,
   NodeContent,
@@ -28,33 +30,36 @@ import { EditableAmount } from '../components/EditableAmount';
 import { EditableLabel } from '../components/EditableLabel';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { CampaignNodeProps, OpenAiCampaignData } from '../types';
-import { formatMicros, microsToUnits, OpenAiRecordBadge, unitsToMicros } from './openAiNodeShared';
-
-const BIDDING_TYPES: Array<{
-  value: OpenAiCampaignData['biddingType'];
-  label: string;
-  description: string;
-}> = [
-  {
-    value: 'impressions',
-    label: 'Impressions (CPM)',
-    description: 'Pay per 1,000 impressions. Broad delivery for reach and awareness.',
-  },
-  {
-    value: 'clicks',
-    label: 'Clicks (CPC)',
-    description: 'Pay per valid click. Delivery favors people likely to engage.',
-  },
-  {
-    value: 'conversions',
-    label: 'Conversions (oCPC)',
-    description:
-      'Still billed per click, but delivery optimizes toward one tracked conversion event. Requires conversion bidding enabled on the account.',
-  },
-];
+import { microsToUnits, OpenAiRecordBadge, unitsToMicros } from './openAiNodeShared';
 
 export const OpenAiCampaignNode = memo(
   ({ id, data, selected }: CampaignNodeProps<'openai-campaign'>) => {
+    const uiText = useTranslations('scale');
+    const BIDDING_TYPES: Array<{
+      value: OpenAiCampaignData['biddingType'];
+      label: string;
+      description: string;
+    }> = useMemo(
+      () => [
+        {
+          value: 'impressions',
+          label: uiText('impressions_cpm_80f020e'),
+          description: uiText('pay_per_1_000_impressions_broad_delivery_for__ec127cf'),
+        },
+        {
+          value: 'clicks',
+          label: uiText('clicks_cpc_9b99e17'),
+          description: uiText('pay_per_valid_click_delivery_favors_people_li_96facb3'),
+        },
+        {
+          value: 'conversions',
+          label: uiText('conversions_ocpc_0ae021d'),
+          description: uiText('still_billed_per_click_but_delivery_optimizes_3a1fd7b'),
+        },
+      ],
+      [uiText],
+    );
+
     const updateNodeData = useCampaignStore((store) => store.updateNodeData);
     const removeNode = useCampaignStore((store) => store.removeNode);
     const duplicateNode = useCampaignStore((store) => store.duplicateNode);
@@ -105,7 +110,7 @@ export const OpenAiCampaignNode = memo(
                     <Layout className="h-4 w-4" />
                   </div>
                   <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    OpenAI Campaign
+                    {uiText('openai_campaign_4e4d507')}
                   </NodeTitle>
                 </div>
                 <div className="flex items-center gap-1">
@@ -129,12 +134,12 @@ export const OpenAiCampaignNode = memo(
 
               <NodeDescription className="text-xs text-muted-foreground">
                 {BIDDING_TYPES.find((type) => type.value === data.biddingType)?.label ??
-                  'Impressions (CPM)'}
+                  uiText('impressions_cpm_80f020e')}
               </NodeDescription>
 
               <div className="flex items-center gap-1.5">
                 <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                  Lifetime
+                  {uiText('lifetime_bdcd897')}
                 </span>
                 <span className="text-sm font-medium text-foreground">
                   {data.lifetimeSpendLimitMicros ? (
@@ -155,7 +160,7 @@ export const OpenAiCampaignNode = memo(
 
               {data.locationLabels?.length ? (
                 <Badge variant="outline" className="text-3xs px-1 py-0 uppercase opacity-70">
-                  {data.locationLabels.length} location{data.locationLabels.length === 1 ? '' : 's'}
+                  {uiText.rich('sentence_64af38e91728', { count: data.locationLabels.length })}
                 </Badge>
               ) : null}
 
@@ -165,30 +170,38 @@ export const OpenAiCampaignNode = memo(
         </ContextMenuTrigger>
 
         <ContextMenuContent className="w-64">
-          <ContextMenuLabel>Campaign Actions</ContextMenuLabel>
+          <ContextMenuLabel>{uiText('campaign_actions_6d62b9f')}</ContextMenuLabel>
           <ContextMenuGroup>
             <ContextMenuItem onClick={handleAddAdGroup}>
-              <Plus className="mr-2 h-4 w-4 text-primary" />
-              Add Ad Group
-              <ContextMenuItemInfo description="An ad group carries the bid and the billing event for its ads." />
+              {uiText.rich('sentence_8435ef517b1e', {
+                v0: () => <Plus className="mr-2 h-4 w-4 text-primary" />,
+                v1: () => (
+                  <ContextMenuItemInfo
+                    description={uiText('an_ad_group_carries_the_bid_and_the_billing_e_8693c97')}
+                  />
+                ),
+              })}
             </ContextMenuItem>
           </ContextMenuGroup>
 
           <ContextMenuSeparator />
-          <ContextMenuLabel>Configuration</ContextMenuLabel>
+          <ContextMenuLabel>{uiText('configuration_b332c34')}</ContextMenuLabel>
           <ContextMenuGroup>
             <ContextMenuSub>
               <ContextMenuSubTrigger disabled={isRecord}>
-                <Layout className="mr-2 h-4 w-4" />
-                Campaign goal
-                <ContextMenuItemInfo
-                  className="ml-2 mr-4"
-                  description={
-                    isRecord
-                      ? 'OpenAI does not allow the goal to change after a campaign exists. Create a new campaign to optimize for something else.'
-                      : 'How the campaign is billed and what delivery optimizes for.'
-                  }
-                />
+                {uiText.rich('sentence_4dceb83c0e0c', {
+                  v0: () => <Layout className="mr-2 h-4 w-4" />,
+                  v1: () => (
+                    <ContextMenuItemInfo
+                      className="ml-2 mr-4"
+                      description={
+                        isRecord
+                          ? uiText('openai_does_not_allow_the_goal_to_change_afte_349467f')
+                          : uiText('how_the_campaign_is_billed_and_what_delivery__8efbf94')
+                      }
+                    />
+                  ),
+                })}
               </ContextMenuSubTrigger>
               <ContextMenuSubContent className="w-56">
                 {BIDDING_TYPES.map((type) => (
@@ -210,12 +223,17 @@ export const OpenAiCampaignNode = memo(
           <ContextMenuGroup>
             <ContextMenuItem onClick={() => duplicateNode(id)}>
               <Copy className="mr-2 h-4 w-4" />
-              Duplicate
+              {uiText('duplicate_02cdaab')}
             </ContextMenuItem>
             <ContextMenuItem variant="destructive" onClick={() => removeNode(id)}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Remove from canvas
-              <ContextMenuItemInfo description="Removing a live campaign from the canvas schedules an archive on the next publish. Archiving cannot be undone." />
+              {uiText.rich('sentence_23658db467b7', {
+                v0: () => <Trash2 className="mr-2 h-4 w-4" />,
+                v1: () => (
+                  <ContextMenuItemInfo
+                    description={uiText('removing_a_live_campaign_from_the_canvas_sche_ba906d2')}
+                  />
+                ),
+              })}
             </ContextMenuItem>
           </ContextMenuGroup>
         </ContextMenuContent>

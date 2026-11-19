@@ -11,6 +11,7 @@ import {
   Send,
   UserMinus,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,6 +77,7 @@ export interface InstagramPostProps {
  * ```
  */
 export function InstagramPost({ data }: InstagramPostProps) {
+  const uiText = useTranslations('common');
   const resolved: NonNullable<InstagramPostProps['data']> = data ?? demoInstagramPost;
   const author = resolved?.author;
   const avatar = resolved?.avatar;
@@ -109,7 +111,7 @@ export function InstagramPost({ data }: InstagramPostProps) {
                   viewBox="0 0 24 24"
                   fill="currentColor"
                   role="img"
-                  aria-label="Verified"
+                  aria-label={uiText('m_aed3b8c6a7')}
                 >
                   <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.437 2.25c-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .494.083.964.237 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484z" />
                 </svg>
@@ -130,20 +132,20 @@ export function InstagramPost({ data }: InstagramPostProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem>
                 <Flag className="mr-2 h-4 w-4" />
-                Report
+                {uiText('m_ee45c30326')}
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <UserMinus className="mr-2 h-4 w-4" />
-                Unfollow
+                {uiText('m_e3a6fe565c')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
                 <Link className="mr-2 h-4 w-4" />
-                Copy link
+                {uiText('m_2f84eea5d4')}
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Code className="mr-2 h-4 w-4" />
-                Embed
+                {uiText('m_ad02e14e28')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -153,7 +155,7 @@ export function InstagramPost({ data }: InstagramPostProps) {
         <div className="aspect-square bg-muted">
           <img
             src={image}
-            alt={author ? `Instagram post by ${author}` : 'Instagram post'}
+            alt={author ? uiText('m_05ba884965', { v0: String(author) }) : uiText('m_e7991758e7')}
             className="w-full h-full object-cover"
           />
         </div>
@@ -164,21 +166,21 @@ export function InstagramPost({ data }: InstagramPostProps) {
             <div className="flex items-center gap-4">
               <button
                 type="button"
-                aria-label="Like"
+                aria-label={uiText('m_c7e02c95fe')}
                 className="hover:text-muted-foreground transition-colors cursor-pointer"
               >
                 <Heart className="h-6 w-6" />
               </button>
               <button
                 type="button"
-                aria-label="Comment"
+                aria-label={uiText('comment_44f5e3f')}
                 className="hover:text-muted-foreground transition-colors cursor-pointer"
               >
                 <MessageCircle className="h-6 w-6" />
               </button>
               <button
                 type="button"
-                aria-label="Share"
+                aria-label={uiText('share_29887a5')}
                 className="hover:text-muted-foreground transition-colors cursor-pointer"
               >
                 <Send className="h-6 w-6" />
@@ -186,13 +188,18 @@ export function InstagramPost({ data }: InstagramPostProps) {
             </div>
             <button
               type="button"
-              aria-label="Save"
+              aria-label={uiText('save_1509f56')}
               className="hover:text-muted-foreground transition-colors cursor-pointer"
             >
               <Bookmark className="h-6 w-6" />
             </button>
           </div>
-          {likes && <p className="font-semibold text-sm">{likes} likes</p>}
+          {likes && (
+            <p className="font-semibold text-sm">
+              {likes}
+              {uiText('m_bf619ec88a')}
+            </p>
+          )}
           {(author || caption) && (
             <p className="text-sm">
               {author && <span className="font-semibold">{author}</span>}

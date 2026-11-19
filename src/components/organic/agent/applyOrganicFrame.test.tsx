@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // Card terminality: a chat card must NOT remain in-flight once its job's terminal
 // frame arrives — on the live stream path and after a reload replay. Regression
 // coverage for the production incident where every job completed while the chat
@@ -7,7 +8,7 @@
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { organicStreamFrameSchema } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import type { OrganicSessionMessage } from '@/lib/organic/agent-sessions';
 import { applyOrganicFrame } from './applyOrganicFrame';
 import { ConceptCard } from './ConceptCard';

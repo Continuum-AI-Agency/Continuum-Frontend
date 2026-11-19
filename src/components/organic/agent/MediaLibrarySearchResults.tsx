@@ -2,6 +2,7 @@
 
 import type { MediaSearchResultsFrame } from '@continuum/contracts';
 import { Images } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromLibraryAsset } from '@/components/chat/media/media';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -12,9 +13,10 @@ import { useAssetMediaRecovery } from './useAssetMediaRecovery';
 type SearchResultItem = MediaSearchResultsFrame['data']['items'][number];
 
 function SimilarityBadge({ value }: { value: number }) {
+  const uiText = useTranslations('organic');
   const pct = Math.round(value * 100);
   const variant = pct >= 80 ? 'success' : pct >= 60 ? 'teal' : 'muted';
-  return <Pill variant={variant}>{pct}% match</Pill>;
+  return <Pill variant={variant}>{uiText.rich('sentence_eb86440bb16b', { v0: () => pct })}</Pill>;
 }
 
 // A library hit can be a video, and this used to render its signed MP4 straight into an <img>.
@@ -48,6 +50,7 @@ function MediaResultRow({
   onUse: (item: SearchResultItem) => void;
   disabled?: boolean;
 }) {
+  const uiText = useTranslations('organic');
   return (
     <div className="flex items-start gap-3 rounded-md border border-border/50 p-2">
       <MediaThumbnail item={item} />
@@ -84,7 +87,7 @@ function MediaResultRow({
         disabled={disabled}
         onClick={() => onUse(item)}
       >
-        Use
+        {uiText('use_c36d819')}
       </Button>
     </div>
   );
@@ -99,6 +102,7 @@ export function MediaLibrarySearchResults({
   onUseAsset: (item: SearchResultItem) => void;
   disabled?: boolean;
 }) {
+  const uiText = useTranslations('organic');
   const { query, items } = frame.data;
 
   return (
@@ -106,14 +110,18 @@ export function MediaLibrarySearchResults({
       <CardContent className="flex flex-col gap-2 p-3">
         <div className="flex items-center gap-1.5">
           <Images className="h-3.5 w-3.5 text-blue-500" />
-          <span className="text-sm font-medium text-foreground">Media library</span>
+          <span className="text-sm font-medium text-foreground">
+            {uiText('media_library_f1ae34e')}
+          </span>
           {query && (
             <span className="truncate text-xs text-muted-foreground">&ldquo;{query}&rdquo;</span>
           )}
         </div>
 
         {items.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No matching assets found.</p>
+          <p className="text-xs text-muted-foreground">
+            {uiText('no_matching_assets_found_f9229c8')}
+          </p>
         ) : (
           <div className="flex flex-col gap-1.5">
             {items.map((item) => (

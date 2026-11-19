@@ -1,7 +1,10 @@
 'use client';
 
 import type { RecommendedCompetitor } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { formatCompetitorNumber } from '@/components/competitor-spy/brandVisuals';
+import { competitorApiCode } from '@/components/competitors/competitorErrorCopy';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useCreateCompetitor,
@@ -13,13 +16,15 @@ import { RecommendedCompetitorCard } from './RecommendedCompetitorCard';
 const GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3';
 
 export function RecommendedCompetitors({ brandId }: { brandId: string }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('competitor');
   const { data, isLoading, isError } = useRecommendedCompetitors(brandId);
   const create = useCreateCompetitor(brandId);
   const dismiss = useDismissRecommendation(brandId);
   const [trackingName, setTrackingName] = useState<string | null>(null);
 
-  const limitReached =
-    create.error instanceof Error && create.error.message === 'competitor_limit_reached';
+  const limitReached = competitorApiCode(create.error) === 'competitor_limit_reached';
 
   const track = (rec: RecommendedCompetitor) => {
     setTrackingName(rec.name);
@@ -32,10 +37,10 @@ export function RecommendedCompetitors({ brandId }: { brandId: string }) {
   const recommendations = data ?? [];
   const heading = (
     <div className="flex items-baseline justify-between">
-      <h3 className="text-sm font-semibold">Recommended from onboarding</h3>
+      <h3 className="text-sm font-semibold">{uiText('recommended_from_onboarding_294d005')}</h3>
       {recommendations.length > 0 ? (
         <span className="font-mono text-xs tabular-nums text-muted-foreground">
-          {recommendations.length}
+          {formatCompetitorNumber(recommendations.length, uiLocale)}
         </span>
       ) : null}
     </div>
@@ -58,7 +63,9 @@ export function RecommendedCompetitors({ brandId }: { brandId: string }) {
     return (
       <section className="space-y-3">
         {heading}
-        <p className="text-xs text-muted-foreground">Couldn’t load recommendations right now.</p>
+        <p className="text-xs text-muted-foreground">
+          {uiText('couldn_t_load_recommendations_right_now_c50612d')}
+        </p>
       </section>
     );
   }
@@ -68,9 +75,11 @@ export function RecommendedCompetitors({ brandId }: { brandId: string }) {
       <section className="space-y-3">
         {heading}
         <div className="rounded-xl border border-dashed border-border p-6 text-center">
-          <p className="text-sm font-medium">Looking for competitors from your onboarding…</p>
+          <p className="text-sm font-medium">
+            {uiText('looking_for_competitors_from_your_onboarding_fe052c6')}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Competitors detected in your brand report show up here. Check back shortly.
+            {uiText('competitors_detected_in_your_brand_report_sho_6be4916')}
           </p>
         </div>
       </section>
@@ -82,7 +91,7 @@ export function RecommendedCompetitors({ brandId }: { brandId: string }) {
       {heading}
       {limitReached ? (
         <p className="text-xs text-destructive">
-          You can track at most 5 competitors. Remove one to add another.
+          {uiText('you_can_track_at_most_5_competitors_remove_on_bcdf59c')}
         </p>
       ) : null}
       <div className={GRID}>

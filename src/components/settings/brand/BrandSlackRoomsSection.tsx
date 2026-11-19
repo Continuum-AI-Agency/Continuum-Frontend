@@ -3,6 +3,7 @@
 import type { ApiRenderDeliveryDestination, RenderApprovalDestination } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Hash, Plus, RefreshCw, TriangleAlert, Unplug } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { AddSlackRoom } from '@/components/forge/AddSlackRoom';
 import {
@@ -30,11 +31,13 @@ import {
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { ApiError } from '@/lib/api/errors';
 import { slackInstallStartHref } from '@/lib/api/slackWorkspaces.client';
 import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
+import { settingsSlackCopy } from './settingsSlackCopy';
 
 // The rooms this brand's Slack workspaces receive: one channel per row, what it is for, and who
 // may approve a creative in it. This is the brand admin's own surface — before it existed, a room
@@ -71,9 +74,6 @@ const ROLE_PURPOSE: Record<ApiRenderDeliveryDestination['role'], string> = {
   dm: 'A direct message, not a channel',
 };
 
-const approverCount = (count: number) =>
-  count ? `${count} approver${count === 1 ? '' : 's'}` : 'no approvers yet';
-
 const PENDING_CODE = 'chat_destination_has_pending_approvals';
 
 /** A readiness pill is the control that fixes it, so it needs a visible keyboard focus of its own. */
@@ -92,6 +92,9 @@ function pendingApprovalRefusal(error: unknown): { count: number | null } | null
 }
 
 export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSectionProps) {
+  const tUi = useTranslations('settings');
+  const formatUiError = useUiErrorMessage();
+
   const { show } = useToast();
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
@@ -127,8 +130,8 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
       setRefusal(null);
       refreshRooms();
       show({
-        title: 'Room retired',
-        description: `Nothing new is posted to #${room.channelName}. Everything already delivered there stays.`,
+        title: tUi('m_c02a1fad73'),
+        description: tUi('m_0eba86740e', { v0: String(room.channelName) }),
         variant: 'success',
       });
     },
@@ -141,8 +144,10 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
       }
       setRetiring(null);
       show({
-        title: 'Could not retire that room',
-        description: describeSlackFailure(error),
+        title: tUi('m_b1be6de5a2'),
+        description: describeSlackFailure(error, (source) =>
+          settingsSlackCopy(source, tUi, formatUiError(error)),
+        ),
         variant: 'error',
       });
     },
@@ -150,7 +155,7 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
 
   if (rooms.isLoading) {
     return (
-      <div role="status" aria-label="Loading Slack rooms">
+      <div role="status" aria-label={tUi('m_e048967980')}>
         <Skeleton className="h-14 w-full rounded-lg" />
       </div>
     );
@@ -158,18 +163,16 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
 
   if (rooms.isError) {
     return isSlackDeliveryUnavailable(rooms.error) ? (
-      <p className="text-sm text-muted-foreground">
-        Slack delivery isn’t switched on for this workspace yet. Renders still go to the Library.
-      </p>
+      <p className="text-sm text-muted-foreground">{tUi('m_2d2c33c0b2')}</p>
     ) : (
       <div className="flex items-start justify-between gap-4 rounded-lg border border-warning/30 bg-warning/5 p-3">
         <p className="flex items-center gap-2 text-sm font-medium">
           <TriangleAlert className="size-4 text-warning" />
-          Slack rooms could not be loaded
+          {tUi('m_de827fce97')}
         </p>
         <Button type="button" size="sm" variant="outline" onClick={() => void rooms.refetch()}>
           <RefreshCw className="size-3.5" />
-          Retry
+          {tUi('m_9f5cd8a2e8')}
         </Button>
       </div>
     );
@@ -210,18 +213,18 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-center">
           <Hash className="mx-auto size-5 text-muted-foreground" />
-          <p className="mt-2 text-sm font-medium">No Slack room yet</p>
+          <p className="mt-2 text-sm font-medium">{tUi('m_7d28e9870a')}</p>
           <p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-muted-foreground">
             {slack?.state !== 'ready'
-              ? 'Connect a Slack workspace to this brand first — rooms are its channels.'
+              ? tUi('m_5907bbfaab')
               : canManage
-                ? 'Add the channel your team watches as an Ops room, and the one your client reads as a Client room. Finished renders post to Ops immediately; a Client room only gets a render that passed its check.'
-                : 'Ask a brand owner, admin or operator to add the channel finished renders should post to.'}
+                ? tUi('m_496622068e')
+                : tUi('m_2161157fe1')}
           </p>
         </div>
       ) : (
         <ul
-          aria-label="Slack rooms"
+          aria-label={tUi('m_600ba8d6dd')}
           className="divide-y divide-border/60 rounded-lg border border-border/70"
         >
           {rows.map((room) => {
@@ -234,11 +237,14 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-medium">{label}</p>
-                    <Pill variant={ROLE_TONE[room.role]} title={ROLE_PURPOSE[room.role]}>
-                      {ROLE_LABEL[room.role]}
+                    <Pill
+                      variant={ROLE_TONE[room.role]}
+                      title={settingsSlackCopy(ROLE_PURPOSE[room.role], tUi, formatUiError(null))}
+                    >
+                      {settingsSlackCopy(ROLE_LABEL[room.role], tUi, formatUiError(null))}
                     </Pill>
                     <span className="truncate text-xs text-muted-foreground">
-                      {room.workspaceName ?? slack?.workspaceName ?? 'Workspace unnamed'}
+                      {room.workspaceName ?? slack?.workspaceName ?? tUi('m_e3a4299475')}
                     </span>
                     <span
                       className={cn(
@@ -246,8 +252,10 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
                         active === 0 ? 'text-warning' : 'text-muted-foreground',
                       )}
                     >
-                      {active === undefined ? 'approvers unknown' : approverCount(active)}
-                      {requested ? ` · ${requested} asking` : ''}
+                      {active === undefined
+                        ? tUi('m_176f7c9829')
+                        : tUi('m_141d1c72f7', { count: active })}
+                      {requested ? tUi('m_8c1cff1fbe', { count: requested }) : ''}
                     </span>
                   </div>
                   {canManage ? (
@@ -257,10 +265,10 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
                         size="sm"
                         variant="ghost"
                         aria-expanded={open}
-                        aria-label={`Manage approvers for ${label}`}
+                        aria-label={tUi('m_7f2c4a5bfe', { v0: String(label) })}
                         onClick={() => setManaging(open ? null : room.id)}
                       >
-                        Manage approvers
+                        {tUi('m_d7a73bc122')}
                       </Button>
                       <AlertDialog
                         open={retiring === room.id}
@@ -275,45 +283,42 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
                               type="button"
                               size="sm"
                               variant="ghost"
-                              aria-label={`Retire ${label}`}
+                              aria-label={tUi('m_518b3be2f7', { v0: String(label) })}
                               className="text-muted-foreground hover:text-destructive"
                             >
                               <Unplug className="size-3.5" />
-                              Retire
+                              {tUi('m_c9714c15af')}
                             </Button>
                           }
                         />
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Retire {label}?</AlertDialogTitle>
+                            <AlertDialogTitle>
+                              {tUi('m_7184b7d5c2')}
+                              {label}?
+                            </AlertDialogTitle>
                             <AlertDialogDescription>
-                              Nothing new is posted to {label} and nobody approves there any more.
-                              Everything already delivered stays, and you can add the channel back
-                              later.
+                              {tUi('m_3cd1180d48')}
+                              {label}
+                              {tUi('m_37021626b0')}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           {refusal && retiring === room.id ? (
                             <p role="alert" className="text-sm text-warning">
                               {refusal.count === null
-                                ? `Approvals are still pending in ${label}, and it is the only room left that can decide them. Decide them first, or add another room.`
-                                : `${refusal.count} approval${refusal.count === 1 ? '' : 's'} ${
-                                    refusal.count === 1 ? 'is' : 'are'
-                                  } still pending in ${label}, and it is the only room left that can decide ${
-                                    refusal.count === 1 ? 'it' : 'them'
-                                  }. Decide ${
-                                    refusal.count === 1 ? 'it' : 'them'
-                                  } first, or add another room.`}
+                                ? tUi('m_ed7f193568', { v0: String(label) })
+                                : tUi('pendingApprovals', { count: refusal.count, room: label })}
                             </p>
                           ) : null}
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Keep it</AlertDialogCancel>
+                            <AlertDialogCancel>{tUi('m_d9f3692497')}</AlertDialogCancel>
                             {refusal && retiring === room.id ? null : (
                               <AlertDialogAction
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 disabled={retire.isPending}
                                 onClick={() => retire.mutate(room)}
                               >
-                                Retire room
+                                {tUi('m_bb288ff52b')}
                               </AlertDialogAction>
                             )}
                           </AlertDialogFooter>
@@ -327,8 +332,8 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
                     <DestinationApproversPanel brandId={brandId} destination={approvalRoom} />
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      {label} can’t take approvals — only channel rooms can, and this one is
-                      addressed directly.
+                      {label}
+                      {tUi('m_cb3b022e55')}
                     </p>
                   )
                 ) : null}
@@ -346,16 +351,17 @@ export function BrandSlackRoomsSection({ brandId, canManage }: BrandSlackRoomsSe
           onAdded={() => {
             setAdding(false);
             refreshRooms();
-            show({ title: 'Slack room added', variant: 'success' });
+            show({ title: tUi('m_f0c468b783'), variant: 'success' });
           }}
         />
       ) : slack?.state === 'ready' ? (
         <Button type="button" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
-          <Plus className="size-3.5" aria-hidden /> Add a room
+          <Plus className="size-3.5" aria-hidden />
+          {tUi('m_1eb3ad1e48')}
         </Button>
       ) : (
         <a href={installHref} className={buttonVariants({ size: 'sm' })}>
-          {slack?.state === 'not_installed' ? 'Reinstall Slack' : 'Connect Slack'}
+          {slack?.state === 'not_installed' ? tUi('m_584473dc4c') : tUi('m_cc7f4b66f4')}
         </a>
       )}
     </div>
@@ -385,19 +391,22 @@ function SlackReadiness({
   onAddRoom: () => void;
   onManageApprovers: () => void;
 }) {
+  const tUi = useTranslations('settings');
+  const uiLocale = useLocale();
+
   const steps = [
     {
       key: 'workspace',
       state: workspaceConnected ? 'done' : 'missing',
-      label: workspaceConnected ? 'Workspace connected' : 'Connect a Slack workspace',
-      missing: 'connect a Slack workspace',
+      label: workspaceConnected ? tUi('m_09b9dc447c') : tUi('m_b68fe586db'),
+      missing: tUi('m_b8aa44f1cd'),
       href: installHref,
     },
     {
       key: 'room',
       state: rooms > 0 ? 'done' : 'missing',
-      label: rooms > 0 ? `${rooms} room${rooms === 1 ? '' : 's'}` : 'Add the first room',
-      missing: 'add a room',
+      label: rooms > 0 ? tUi('slackRoomCount', { count: rooms }) : tUi('m_f123b89ca4'),
+      missing: tUi('m_5d6eb3e04e'),
       onClick: canManage && workspaceConnected ? onAddRoom : undefined,
     },
     {
@@ -405,11 +414,11 @@ function SlackReadiness({
       state: activeApprovers === null ? 'unknown' : activeApprovers > 0 ? 'done' : 'missing',
       label:
         activeApprovers === null
-          ? 'Approvers unknown'
+          ? tUi('m_7a687d57af')
           : activeApprovers > 0
-            ? `${activeApprovers} can approve`
-            : 'Activate an approver',
-      missing: 'activate someone who can approve',
+            ? tUi('m_8a90a53f18', { count: activeApprovers })
+            : tUi('m_fee9ddde6a'),
+      missing: tUi('m_47a2ef2fef'),
       onClick: canManage && rooms > 0 ? onManageApprovers : undefined,
     },
   ] as const;
@@ -418,7 +427,7 @@ function SlackReadiness({
 
   return (
     <div className="space-y-2">
-      <ul aria-label="Slack readiness" className="flex flex-wrap items-center gap-2">
+      <ul aria-label={tUi('m_703dd863d3')} className="flex flex-wrap items-center gap-2">
         {steps.map((step) => {
           const pill = (
             <Pill
@@ -455,12 +464,14 @@ function SlackReadiness({
       {/* Never claims a readiness it could not read: an unknown approver count is said out loud. */}
       <p role="status" className="text-xs text-muted-foreground">
         {missing.length
-          ? `Before renders and approvals can reach Slack: ${missing
-              .map((step) => step.missing)
-              .join(', then ')}.`
+          ? tUi('m_2a3ebbbd8e', {
+              v0: new Intl.ListFormat(uiLocale, { type: 'conjunction' }).format(
+                missing.map((step) => step.missing),
+              ),
+            })
           : unknown
-            ? 'Renders can reach Slack. Who may approve there could not be read — retry to check.'
-            : 'Renders and approvals can reach Slack.'}
+            ? tUi('m_bb38899b5d')
+            : tUi('m_ec561cf401')}
       </p>
     </div>
   );

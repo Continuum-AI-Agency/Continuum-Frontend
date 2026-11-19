@@ -9,6 +9,7 @@
 
 import type { BoardModuleSize, PlatformCard } from '@continuum/contracts';
 import type { UseQueryResult } from '@tanstack/react-query';
+import { useLocale, useTranslations } from 'next-intl';
 import { type ReactElement, type ReactNode, useMemo } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { bareAccountId } from '@/lib/paid-media/accountId';
@@ -261,13 +262,17 @@ export function LensWindow({
   range: { since: string; until: string } | null;
   testId: string;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <span
       className="whitespace-nowrap text-muted-foreground text-xs"
       data-testid={`${testId}-window`}
-      title={range ? windowRangeLabel(range.since, range.until) : undefined}
+      title={range ? windowRangeLabel(range.since, range.until, uiLocale) : undefined}
     >
-      Last {range ? daysIn(range) : LENS_WINDOW_DAYS} days
+      {uiText('days_plural_one_last_day_other_last_days_e696416', {
+        days: range ? daysIn(range) : LENS_WINDOW_DAYS,
+      })}
     </span>
   );
 }

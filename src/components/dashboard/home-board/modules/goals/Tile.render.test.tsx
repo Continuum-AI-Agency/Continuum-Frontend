@@ -12,8 +12,9 @@ import {
 } from '@continuum/contracts';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as renderInDom, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
+import { render as renderInDom } from '@/i18n/__tests__/render';
 import { ApiError, markFetchFailure } from '@/lib/api/errors';
 import type { RequestOptions } from '@/lib/api/http.types';
 import type { HomeAdAccount } from '@/lib/home/homeAccounts';
@@ -101,7 +102,7 @@ const request = async (options: RequestOptions<unknown>) => {
 mock.module('@/lib/api/http', () => ({ request, http: { request } }));
 
 const saved: { scope: string; metrics: string[] }[] = [];
-mock.module('@/app/(post-auth)/dashboard/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/dashboard/actions', () => ({
   saveHomeObjectivesAction: async (
     _brandId: string,
     scope: string,

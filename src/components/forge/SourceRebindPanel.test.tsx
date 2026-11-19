@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { FORGE_PROJECT_FILE_MAX_MB } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { unzipSync, zipSync } from 'fflate';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const preview = mock(async () => ({
   assetId: '11111111-1111-4111-8111-111111111111',

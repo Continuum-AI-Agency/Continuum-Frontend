@@ -1,6 +1,7 @@
 'use client';
 
 import { Pause, Play } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { LayerEditorLayer } from '../../types';
@@ -26,6 +27,8 @@ export function LayerMotionDock({
   timeSec: number;
   onSeek: (timeSec: number) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const durationSec = useMemo(() => layerMotionDurationSec(layers), [layers]);
   const [playing, setPlaying] = useState(false);
   const timeRef = useRef(timeSec);
@@ -56,7 +59,11 @@ export function LayerMotionDock({
         size="icon"
         variant="ghost"
         className="size-7 active:scale-[0.96]"
-        aria-label={playing ? 'Pause layer motion' : 'Play layer motion'}
+        aria-label={
+          playing
+            ? translateUi('pause_layer_motion_1bcc6a20')
+            : translateUi('play_layer_motion_a3b054a5')
+        }
         onClick={() => setPlaying((current) => !current)}
       >
         {playing ? (
@@ -74,7 +81,7 @@ export function LayerMotionDock({
         max={durationSec}
         step={0.01}
         value={Math.max(0, Math.min(durationSec, timeSec))}
-        aria-label="Layer motion playhead"
+        aria-label={translateUi('layer_motion_playhead_917c8357')}
         className="h-1 min-w-0 flex-1 accent-primary"
         onChange={(event) => {
           setPlaying(false);

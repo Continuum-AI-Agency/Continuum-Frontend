@@ -1,10 +1,15 @@
+import { NextIntlClientProvider } from 'next-intl';
+import { render } from '@/i18n/__tests__/render';
+import enMessages from '../../../../../messages/automations/en.json';
+import esMessages from '../../../../../messages/automations/es.json';
+import ptMessages from '../../../../../messages/automations/pt-BR.json';
 // The whole reason the rail keeps its panels mounted is that swapping tabs must not
 // unmount the inspector and throw away its scroll position, focus and in-flight edit,
 // so that is what this spec pins down. (This used to require a fork of Radix Tabs;
 // Base UI expresses it as `keepMounted`.)
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { type RightRailTab, RightRailTabs } from './RightRailTabs';
 
@@ -59,7 +64,7 @@ describe('RightRailTabs', () => {
 
     expect(screen.getByTestId('inspector-body-mounts').textContent).toBe('mounted');
 
-    fireEvent.click(screen.getByRole('tab', { name: /runs/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /runs/i }));
 
     expect(panelFor('runs').hasAttribute('hidden')).toBe(false);
     // The outgoing panel is `inert` immediately but only takes `hidden` once Base UI's
@@ -86,9 +91,32 @@ describe('RightRailTabs', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: /runs/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /runs/i }));
 
     expect(onTabChange).toHaveBeenCalledTimes(1);
     expect(onTabChange.mock.calls[0]?.[0]).toBe('runs');
   });
 });
+
+for (const [locale, messages, label] of [
+  ['en', enMessages, 'Runs'],
+  ['pt-BR', ptMessages, 'Execuções'],
+  ['es', esMessages, 'Ejecuciones'],
+] as const) {
+  test(`localized tab ${locale} reports the stable runs ID`, () => {
+    const change = mock((_tab: RightRailTab) => {});
+    render(
+      <NextIntlClientProvider locale={locale} timeZone="UTC" messages={{ automations: messages }}>
+        <RightRailTabs
+          tab="inspector"
+          onTabChange={change}
+          inspector={<span>inspector-body</span>}
+          runs={<span>runs-body</span>}
+        />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(screen.getByRole('tab', { name: label }));
+    expect(change.mock.calls[0]?.[0]).toBe('runs');
+    expect(panelFor('inspector').hasAttribute('hidden')).toBe(false);
+  });
+}

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import {
   Sheet,
   SheetContent,
@@ -16,21 +18,20 @@ type Props = {
 };
 
 export function PayloadSheet({ action, open, onOpenChange }: Props) {
+  const uiText = useTranslations('common');
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-[480px] sm:max-w-[520px]">
         <SheetHeader>
-          <SheetTitle className="text-base">Raw action payload</SheetTitle>
-          <SheetDescription className="text-xs">
-            The action_payload and any upstream result returned by the executor.
-          </SheetDescription>
+          <SheetTitle className="text-base">{uiText('m_26a9ab994f')}</SheetTitle>
+          <SheetDescription className="text-xs">{uiText('m_ffd9c800ea')}</SheetDescription>
         </SheetHeader>
         <div className="mt-4 space-y-4 overflow-y-auto px-4 pb-6">
-          <Section title="action_payload" value={action.action_payload} />
-          {action.result ? <Section title="result" value={action.result} /> : null}
-          {action.error ? <Section title="error" value={action.error} /> : null}
+          <Section title={uiText('m_979c56a2c9')} value={action.action_payload} />
+          {action.result ? <Section title={uiText('m_37a5301a88')} value={action.result} /> : null}
+          {action.error ? <Section title={uiText('error_ca00fcc')} value={action.error} /> : null}
           <Section
-            title="ids"
+            title={uiText('m_3adc09b3cd')}
             value={{
               id: action.id,
               rule_id: action.rule_id ?? null,

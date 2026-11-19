@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import type { LibraryPlayback, MediaAsset } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { clearLibraryPlaybackCache, fetchLibraryPlayback } from '@/lib/library/libraryPlayback';
 import { MediaCard } from './MediaCard';

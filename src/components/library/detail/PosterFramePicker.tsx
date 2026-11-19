@@ -9,10 +9,13 @@
 
 import type { MediaAsset } from '@continuum/contracts';
 import { Aperture, Check, Loader2 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import { persistAssetRendition } from '@/lib/library/assetPreview';
 import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
 import { generateVideoPoster } from '@/lib/library/videoPoster';
@@ -26,6 +29,12 @@ type Props = {
 };
 
 export function PosterFramePicker({ brandId, asset, src, onPosterChanged }: Props) {
+  const decimalLocale = useUiLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const [open, setOpen] = useState(false);
   const [scrubMs, setScrubMs] = useState(0);
   const [durationMs, setDurationMs] = useState(asset.durationMs ?? 0);
@@ -70,7 +79,7 @@ export function PosterFramePicker({ brandId, asset, src, onPosterChanged }: Prop
       onPosterChanged?.();
       setOpen(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not set the poster frame.');
+      setError(uiErrorText(cause));
     } finally {
       setBusy(false);
     }
@@ -81,15 +90,16 @@ export function PosterFramePicker({ brandId, asset, src, onPosterChanged }: Prop
       <PopoverTrigger
         render={
           <Button type="button" variant="outline" size="sm">
-            <Aperture className="size-3.5" aria-hidden />
-            Poster
+            <Aperture className="size-3.5" aria-hidden /> {translateUi('poster_1ba76ea7')}{' '}
           </Button>
         }
       />
       <PopoverContent align="end" className="w-80 space-y-3">
         <div>
-          <p className="text-sm font-medium">Choose poster frame</p>
-          <p className="text-xs text-muted-foreground">Scrub to the frame you want on the card.</p>
+          <p className="text-sm font-medium">{translateUi('choose_poster_frame_17f36d23')}</p>
+          <p className="text-xs text-muted-foreground">
+            {translateUi('scrub_to_the_frame_you_want_on_the__1053c722')}
+          </p>
         </div>
         <div className="overflow-hidden rounded-md border border-border bg-muted">
           {/* biome-ignore lint/a11y/useMediaCaption: silent frame-scrubbing preview of the user's own video */}
@@ -114,15 +124,15 @@ export function PosterFramePicker({ brandId, asset, src, onPosterChanged }: Prop
           max={Math.max(durationMs, 1)}
           step={100}
           onValueChange={seek}
-          aria-label="Poster frame time"
+          aria-label={translateUi('poster_frame_time_fa7963e2')}
         />
         <div className="flex items-center justify-between">
           <span className="text-xs tabular-nums text-muted-foreground">
-            {(scrubMs / 1000).toFixed(1)}s
+            {formatDecimal(scrubMs / 1000, 1, decimalLocale)}s
           </span>
           <Button type="button" size="sm" onClick={() => void confirm()} disabled={busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-            Set poster
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{' '}
+            {translateUi('set_poster_b258b95c')}{' '}
           </Button>
         </div>
         {error ? <p className="text-xs text-destructive">{error}</p> : null}

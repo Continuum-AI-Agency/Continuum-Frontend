@@ -1,9 +1,12 @@
 import { Hand, MousePointer2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useStudioStore } from '../stores/useStudioStore';
 
 export function InteractionModeToggle() {
+  const translateUi = useUiTranslations('studio');
+
   const { interactionMode, setInteractionMode } = useStudioStore();
 
   return (
@@ -13,7 +16,7 @@ export function InteractionModeToggle() {
         size="icon"
         className={`h-8 w-8 transition-all ${interactionMode === 'pan' ? 'shadow-sm bg-background' : ''}`}
         onClick={() => setInteractionMode('pan')}
-        title="Pan Mode (H)"
+        title={translateUi('pan_mode_h_2548e741')}
       >
         <Hand className="w-4 h-4" />
       </Button>
@@ -22,7 +25,7 @@ export function InteractionModeToggle() {
         size="icon"
         className={`h-8 w-8 transition-all ${interactionMode === 'select' ? 'shadow-sm bg-background' : ''}`}
         onClick={() => setInteractionMode('select')}
-        title="Selection Mode (V)"
+        title={translateUi('selection_mode_v_3c4db91d')}
       >
         <MousePointer2 className="w-4 h-4" />
       </Button>

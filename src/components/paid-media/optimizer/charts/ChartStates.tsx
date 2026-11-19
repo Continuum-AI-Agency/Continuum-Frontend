@@ -1,4 +1,5 @@
 import { InboxIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { ErrorRetryState } from '@/components/shared/state/ErrorRetryState';
@@ -13,8 +14,9 @@ import { cn } from '@/lib/utils';
 // live yet — so it must render, never vanish. Composes the shared state kit.
 
 export function ChartSkeleton({ className }: { className?: string }) {
+  const uiText = useTranslations('scale');
   return (
-    <LoadingState label="Loading chart">
+    <LoadingState label={uiText('loading_chart_f8116af')}>
       <Skeleton className={cn('w-full rounded-lg bg-muted/70', className ?? 'h-24')} />
     </LoadingState>
   );
@@ -45,7 +47,7 @@ export function ChartEmpty({
 }
 
 export function ChartError({
-  message = 'This chart could not load.',
+  message,
   onRetry,
   className,
 }: {
@@ -53,5 +55,12 @@ export function ChartError({
   onRetry?: () => void;
   className?: string;
 }) {
-  return <ErrorRetryState className={cn('py-6', className)} message={message} onRetry={onRetry} />;
+  const uiText = useTranslations('scale');
+  return (
+    <ErrorRetryState
+      className={cn('py-6', className)}
+      message={message ?? uiText('chartLoadFailure')}
+      onRetry={onRetry}
+    />
+  );
 }

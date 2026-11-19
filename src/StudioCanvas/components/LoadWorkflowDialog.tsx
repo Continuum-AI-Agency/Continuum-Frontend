@@ -1,5 +1,6 @@
 import type { PipelineManifest } from '@continuum/contracts';
 import { Download, Ellipsis, Pencil, RotateCw, Trash2, X } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { PipelineContract } from '@/components/ai-studio/PipelineContract';
 import { useApplyLibraryWorkflow, WorkflowCard } from '@/components/ai-studio/WorkflowLibrary';
@@ -16,6 +17,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { useBrandPipelineManifests } from '@/lib/ai-studio/pipelines';
 import { useWorkflowLibrary } from '@/lib/ai-studio/useWorkflowLibrary';
 import {
@@ -43,11 +46,11 @@ type MutationState =
   | { kind: 'deleting'; workflowId: string }
   | { kind: 'saving'; workflowId: string };
 
-const formatTimestamp = (value?: string) => {
+const formatTimestamp = (value: string | undefined, locale: UiLocale = 'en') => {
   if (!value) return 'Unknown date';
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) return 'Unknown date';
-  return new Date(timestamp).toLocaleDateString();
+  return new Date(timestamp).toLocaleDateString(locale);
 };
 
 type LoadWorkflowDialogProps = {
@@ -128,6 +131,10 @@ function WorkflowRow({
   onRenameCommit: (workflowId: string, name: string) => Promise<void> | void;
   onRenameRequest: (workflow: AiStudioWorkflow) => void;
 }) {
+  const calendarLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const isRenaming = mutationState.kind === 'renaming' && mutationState.workflowId === workflow.id;
   const isConfirmingDelete =
     mutationState.kind === 'confirming-delete' && mutationState.workflowId === workflow.id;
@@ -173,7 +180,7 @@ function WorkflowRow({
             void onRenameCommit(workflow.id, input.value.trim());
           }}
         >
-          {isSaving ? 'Saving…' : 'Save'}
+          {isSaving ? translateUi('saving_23e39291') : translateUi('save_1509f561')}
         </Button>
         <Button
           type="button"
@@ -183,7 +190,8 @@ function WorkflowRow({
           disabled={isSaving}
           onClick={onMutationCancel}
         >
-          Cancel
+          {' '}
+          {translateUi('cancel_19766ed6')}{' '}
         </Button>
       </div>
     );
@@ -193,7 +201,9 @@ function WorkflowRow({
     return (
       <div className="flex flex-col gap-2 px-3 py-2">
         <p className="text-xs text-foreground">
-          Delete <span className="font-medium">{workflow.name}</span>? This cannot be undone.
+          {' '}
+          {translateUi('delete_e2d0a549')} <span className="font-medium">{workflow.name}</span>
+          {translateUi('this_cannot_be_undone_7f5d26a5')}{' '}
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -204,7 +214,7 @@ function WorkflowRow({
             disabled={isDeleting}
             onClick={() => void onDeleteConfirm(workflow.id)}
           >
-            {isDeleting ? 'Deleting…' : 'Delete'}
+            {isDeleting ? translateUi('deleting_43b5894c') : translateUi('delete_e2d0a549')}
           </Button>
           <Button
             type="button"
@@ -214,7 +224,8 @@ function WorkflowRow({
             disabled={isDeleting}
             onClick={onMutationCancel}
           >
-            Cancel
+            {' '}
+            {translateUi('cancel_19766ed6')}{' '}
           </Button>
         </div>
       </div>
@@ -235,14 +246,16 @@ function WorkflowRow({
           <p className="truncate text-xs text-secondary">{workflow.description}</p>
         )}
         <p className="text-xs text-muted-foreground">
-          Updated {formatTimestamp(workflow.updatedAt ?? workflow.createdAt)}
+          {' '}
+          {translateUi('updated_3a5ecca1')}{' '}
+          {formatTimestamp(workflow.updatedAt ?? workflow.createdAt, calendarLocale)}
         </p>
         {manifest && <PipelineContract manifest={manifest} className="mt-1.5" />}
       </button>
 
       <div className="mt-1 flex shrink-0 items-center gap-1">
         <span className="rounded border border-border/70 px-2 py-0.5 text-2xs font-medium text-muted-foreground">
-          {onAttachWorkflow ? 'Attach' : 'Load'}
+          {onAttachWorkflow ? translateUi('attach_d406ade2') : translateUi('load_8a6bdb6b')}
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -252,7 +265,9 @@ function WorkflowRow({
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                aria-label={`Options for ${workflow.name}`}
+                aria-label={translateUi('options_for_value0_9846f3af', {
+                  value0: String(workflow.name),
+                })}
                 onClick={(e) => e.stopPropagation()}
               >
                 <Ellipsis className="h-3.5 w-3.5" />
@@ -262,21 +277,20 @@ function WorkflowRow({
           <DropdownMenuContent align="end" className="w-44">
             {onAttachWorkflow && (
               <DropdownMenuItem onSelect={() => void onApplyWorkflow(workflow)}>
-                <Download className="mr-2 h-3.5 w-3.5" />
-                Load onto canvas
+                <Download className="mr-2 h-3.5 w-3.5" /> {translateUi(
+                  'load_onto_canvas_08aab4ef',
+                )}{' '}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onSelect={() => onRenameRequest(workflow)}>
-              <Pencil className="mr-2 h-3.5 w-3.5" />
-              Rename
+              <Pencil className="mr-2 h-3.5 w-3.5" /> {translateUi('rename_3064d79a')}{' '}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
               onSelect={() => onDeleteRequest(workflow.id)}
             >
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
-              Delete
+              <Trash2 className="mr-2 h-3.5 w-3.5" /> {translateUi('delete_e2d0a549')}{' '}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -310,6 +324,8 @@ function WorkflowPanel({
   onRenameRequest,
   query,
 }: WorkflowPanelProps) {
+  const translateUi = useUiTranslations('studio');
+
   // Search applies to whichever list is on screen; a query that filters the tab you are not
   // looking at is how a tab reads as empty when it is not.
   const rows = React.useMemo(
@@ -322,13 +338,15 @@ function WorkflowPanel({
     <div className="grid gap-3 p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">My Workflows</p>
+          <p className="text-sm font-semibold text-foreground">
+            {translateUi('my_workflows_a749a3fd')}
+          </p>
           <p className="text-xs text-muted-foreground">
             {activeTab === 'premade'
-              ? 'Templates that ship with Continuum — load one and make it yours.'
+              ? translateUi('templates_that_ship_with_continuum__9042db4c')
               : activeTab === 'pipeline'
-                ? 'Published for the optimizer to run on its own.'
-                : 'Your saved workflows — search, load, rename, or delete.'}
+                ? translateUi('published_for_the_optimizer_to_run__86f56c07')
+                : translateUi('your_saved_workflows_search_load_re_b2537890')}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -339,9 +357,11 @@ function WorkflowPanel({
             className="h-7 w-7"
             onClick={onRefresh}
             disabled={!brandProfileId || isLoading}
-            aria-label="Refresh workflows"
+            aria-label={translateUi('refresh_workflows_b67b81be')}
             title={
-              !brandProfileId ? 'Select a brand profile to load workflows.' : 'Refresh workflows'
+              !brandProfileId
+                ? translateUi('select_a_brand_profile_to_load_work_9a35cf7b')
+                : translateUi('refresh_workflows_b67b81be')
             }
           >
             <RotateCw className="h-4 w-4" />
@@ -353,7 +373,7 @@ function WorkflowPanel({
               size="icon"
               className="h-7 w-7"
               onClick={onClose}
-              aria-label="Close workflow loader"
+              aria-label={translateUi('close_workflow_loader_38308cec')}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -364,13 +384,18 @@ function WorkflowPanel({
       <Tabs value={activeTab} onValueChange={(value) => onTabChange(value as WorkflowTab)}>
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="premade" className="text-xs">
-            Pre-mades
+            {' '}
+            {translateUi('pre_mades_f8df8130')}{' '}
           </TabsTrigger>
           <TabsTrigger value="saved" className="text-xs">
-            Saved{savedCount > 0 ? ` (${savedCount})` : ''}
+            {' '}
+            {translateUi('saved_b5c120b3')}
+            {savedCount > 0 ? ` (${savedCount})` : ''}
           </TabsTrigger>
           <TabsTrigger value="pipeline" className="text-xs">
-            Pipelines{pipelines.length > 0 ? ` (${pipelines.length})` : ''}
+            {' '}
+            {translateUi('pipelines_d1a8fffe')}
+            {pipelines.length > 0 ? ` (${pipelines.length})` : ''}
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -381,7 +406,9 @@ function WorkflowPanel({
         <>
           <Input
             placeholder={
-              activeTab === 'pipeline' ? 'Search your pipelines…' : 'Search your saved workflows…'
+              activeTab === 'pipeline'
+                ? translateUi('search_your_pipelines_050db05f')
+                : translateUi('search_your_saved_workflows_090c7be0')
             }
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
@@ -390,7 +417,8 @@ function WorkflowPanel({
 
           {!brandProfileId && (
             <p className="text-xs text-muted-foreground">
-              Select a brand profile to see your saved workflows.
+              {' '}
+              {translateUi('select_a_brand_profile_to_see_your__3277a550')}{' '}
             </p>
           )}
           {error && <p className="text-xs text-danger">{error}</p>}
@@ -398,7 +426,9 @@ function WorkflowPanel({
           <div className="overflow-hidden rounded-md border border-subtle bg-surface">
             <ScrollArea style={{ height: `${WORKFLOW_VISIBLE_ROWS * WORKFLOW_ROW_HEIGHT}px` }}>
               {isLoading ? (
-                <div className="p-3 text-xs text-secondary">Loading workflows…</div>
+                <div className="p-3 text-xs text-secondary">
+                  {translateUi('loading_workflows_6de60ee0')}
+                </div>
               ) : rows.length === 0 ? (
                 <EmptyState tab={activeTab} query={query} />
               ) : (
@@ -435,12 +465,19 @@ function WorkflowPanel({
  * way forward is the state people screenshot and send to support.
  */
 function EmptyState({ tab, query }: { tab: WorkflowTab; query: string }) {
+  const translateUi = useUiTranslations('studio');
+
   if (query) {
     return (
       <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
         <Download className="h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">Nothing matches “{query}”</p>
-        <p className="text-xs text-muted-foreground">Try a different name.</p>
+        <p className="text-sm font-medium text-muted-foreground">
+          {translateUi('nothing_matches_fd6075a1')}
+          {query}”
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {translateUi('try_a_different_name_4e761553')}
+        </p>
       </div>
     );
   }
@@ -448,12 +485,14 @@ function EmptyState({ tab, query }: { tab: WorkflowTab; query: string }) {
     <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
       <Download className="h-8 w-8 text-muted-foreground/40" />
       <p className="text-sm font-medium text-muted-foreground">
-        {tab === 'pipeline' ? 'No pipelines published yet' : 'No saved workflows yet'}
+        {tab === 'pipeline'
+          ? translateUi('no_pipelines_published_yet_81994b22')
+          : translateUi('no_saved_workflows_yet_9668c6f1')}
       </p>
       <p className="text-xs text-muted-foreground">
         {tab === 'pipeline'
-          ? 'Build a canvas, leave an input unwired, then Save → Pipeline. The optimizer can run what you publish here.'
-          : 'Build a workflow in the canvas and save it to see it here.'}
+          ? translateUi('build_a_canvas_leave_an_input_unwir_7fb2922f')
+          : translateUi('build_a_workflow_in_the_canvas_and__3e7c151a')}
       </p>
     </div>
   );
@@ -469,13 +508,19 @@ function PremadeGrid({
   isLoading: boolean;
   onUse: (item: WorkflowLibraryItem) => Promise<void> | void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div className="overflow-hidden rounded-md border border-subtle bg-surface">
       <ScrollArea style={{ height: `${WORKFLOW_VISIBLE_ROWS * WORKFLOW_ROW_HEIGHT}px` }}>
         {isLoading ? (
-          <div className="p-3 text-xs text-secondary">Loading templates…</div>
+          <div className="p-3 text-xs text-secondary">
+            {translateUi('loading_templates_3800ee71')}
+          </div>
         ) : items.length === 0 ? (
-          <div className="p-3 text-xs text-secondary">No templates available.</div>
+          <div className="p-3 text-xs text-secondary">
+            {translateUi('no_templates_available_805cbc51')}
+          </div>
         ) : (
           <div className="grid gap-3 p-3">
             {items.map((item) => (
@@ -495,6 +540,10 @@ export function LoadWorkflowDialog({
   showTrigger = true,
   onAttachWorkflow,
 }: LoadWorkflowDialogProps) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const applyWorkflowToCanvas = useApplyWorkflow();
   const { show } = useToast();
   const [internalOpen, setInternalOpen] = React.useState(false);
@@ -530,13 +579,13 @@ export function LoadWorkflowDialog({
       const result = await listAiStudioWorkflowsAction(brandProfileId);
       setWorkflows(sortWorkflowsByRecency(result));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unable to load workflows';
+      const message = uiErrorText(err);
       setError(message);
-      show({ title: 'Load failed', description: message, variant: 'error' });
+      show({ title: translateUi('load_failed_d352597f'), description: message, variant: 'error' });
     } finally {
       setIsLoading(false);
     }
-  }, [brandProfileId, show]);
+  }, [brandProfileId, show, translateUi, uiErrorText]);
 
   React.useEffect(() => {
     if (isOpen) {
@@ -607,16 +656,24 @@ export function LoadWorkflowDialog({
       setMutationState({ kind: 'saving', workflowId });
       try {
         await updateAiStudioWorkflowAction({ brandProfileId, workflowId, name: trimmed });
-        show({ title: 'Workflow renamed', description: trimmed, variant: 'success' });
+        show({
+          title: translateUi('workflow_renamed_da70edbe'),
+          description: trimmed,
+          variant: 'success',
+        });
         setMutationState({ kind: 'idle' });
         void fetchWorkflows();
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Rename failed';
-        show({ title: 'Rename failed', description: message, variant: 'error' });
+        const message = uiErrorText(err);
+        show({
+          title: translateUi('rename_failed_d0fbffa5'),
+          description: message,
+          variant: 'error',
+        });
         setMutationState({ kind: 'idle' });
       }
     },
-    [brandProfileId, fetchWorkflows, show],
+    [brandProfileId, fetchWorkflows, show, translateUi, uiErrorText],
   );
 
   const handleDeleteRequest = React.useCallback((workflowId: string) => {
@@ -630,16 +687,20 @@ export function LoadWorkflowDialog({
       setMutationState({ kind: 'deleting', workflowId });
       try {
         await deleteAiStudioWorkflowAction({ brandProfileId, workflowId });
-        show({ title: 'Workflow deleted', variant: 'success' });
+        show({ title: translateUi('workflow_deleted_6721a3e7'), variant: 'success' });
         setMutationState({ kind: 'idle' });
         void fetchWorkflows();
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Delete failed';
-        show({ title: 'Delete failed', description: message, variant: 'error' });
+        const message = uiErrorText(err);
+        show({
+          title: translateUi('delete_failed_8727e2ba'),
+          description: message,
+          variant: 'error',
+        });
         setMutationState({ kind: 'idle' });
       }
     },
-    [brandProfileId, fetchWorkflows, show],
+    [brandProfileId, fetchWorkflows, show, translateUi, uiErrorText],
   );
 
   const handleMutationCancel = React.useCallback(() => {
@@ -688,7 +749,7 @@ export function LoadWorkflowDialog({
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <Download className="mr-2 h-4 w-4" /> My Workflows
+            <Download className="mr-2 h-4 w-4" /> {translateUi('my_workflows_a749a3fd')}{' '}
           </Button>
         }
       />

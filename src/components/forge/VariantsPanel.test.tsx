@@ -1,7 +1,13 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import { type TemplateRevisionVariant, templateVariantSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { forgeQueryKeys } from './queryKeys';
 import { VariantsPanel } from './VariantsPanel';
 

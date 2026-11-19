@@ -8,23 +8,23 @@
  * the only way forward is a new post, so that is what the panel offers instead.
  */
 import { AlertTriangle, Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { requestDraftRecreate } from '@/lib/organic/agent-retry';
-import { ORGANIC_ACTION_LABELS } from '@/lib/organic/organicActionCopy';
 
 type RecreateState =
   | { kind: 'idle' }
   | { kind: 'busy' }
   | { kind: 'no_job' }
   | { kind: 'still_generating' }
-  | { kind: 'error'; message: string };
+  | { kind: 'error' };
 
-const NOTICES: Record<Exclude<RecreateState['kind'], 'idle' | 'busy' | 'error'>, string> = {
-  no_job:
-    'Nothing generated this post, so there is nothing to recreate it from. Create a new post in its place.',
-  still_generating: "It is still being generated. It will appear in the Calendar when it's done.",
-};
+const NOTICE_KEYS = {
+  no_job: 'nothing_generated_this_post_so_there_is_nothi_dc3756f',
+  still_generating: 'it_is_still_being_generated_it_will_appear_in_a0467de',
+  error: 'couldn_t_recreate_this_post_try_again_236db18',
+} as const satisfies Record<Exclude<RecreateState['kind'], 'idle' | 'busy'>, string>;
 
 export function MissingDraftPanel({
   draftId,
@@ -45,6 +45,7 @@ export function MissingDraftPanel({
   onClose: () => void;
   recreate?: typeof requestDraftRecreate;
 }) {
+  const uiText = useTranslations('organic');
   const [state, setState] = React.useState<RecreateState>({ kind: 'idle' });
 
   const handleRecreate = React.useCallback(async () => {
@@ -61,16 +62,12 @@ export function MissingDraftPanel({
       else if (code === 'no_generation_job' || code === 'invalid_draft_id')
         setState({ kind: 'no_job' });
       else if (code === 'not_retryable') setState({ kind: 'still_generating' });
-      else setState({ kind: 'error', message: "Couldn't recreate this post. Try again." });
+      else setState({ kind: 'error' });
     }
   }, [brandId, draftId, onDraftExists, onRecreated, recreate]);
 
   const notice =
-    state.kind === 'no_job' || state.kind === 'still_generating'
-      ? NOTICES[state.kind]
-      : state.kind === 'error'
-        ? state.message
-        : null;
+    state.kind === 'idle' || state.kind === 'busy' ? null : uiText(NOTICE_KEYS[state.kind]);
 
   return (
     <div className="flex h-full flex-col gap-3 p-4" role="alert" data-testid="missing-draft-panel">
@@ -78,10 +75,11 @@ export function MissingDraftPanel({
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
           <div className="flex flex-col gap-1">
-            <h2 className="text-sm font-semibold text-foreground">This post failed to save</h2>
+            <h2 className="text-sm font-semibold text-foreground">
+              {uiText('this_post_failed_to_save_de27f50')}
+            </h2>
             <p className="text-xs text-muted-foreground">
-              It isn't in your Calendar anymore: it never saved, or it was deleted. Recreate it to
-              get a real draft in the same slot.
+              {uiText('it_isn_t_in_your_calendar_anymore_it_never_sa_90a1d93')}
             </p>
           </div>
         </div>
@@ -89,7 +87,7 @@ export function MissingDraftPanel({
           type="button"
           variant="ghost"
           size="icon-xs"
-          aria-label="Close preview"
+          aria-label={uiText('close_preview_7d8ab36')}
           onClick={onClose}
         >
           <X className="size-3.5" />
@@ -100,7 +98,7 @@ export function MissingDraftPanel({
         {state.kind === 'no_job' ? (
           <Button type="button" size="sm" onClick={onCreatePost}>
             <Plus className="size-3.5" />
-            Create a post
+            {uiText('create_a_post_2530702')}
           </Button>
         ) : (
           <Button
@@ -114,12 +112,12 @@ export function MissingDraftPanel({
             ) : (
               <RefreshCw className="size-3.5" />
             )}
-            {ORGANIC_ACTION_LABELS.recreateDraft}
+            {uiText('recreate_draft_96eb4ef')}
           </Button>
         )}
       </div>
       <p className="text-3xs text-muted-foreground" title={draftId}>
-        Draft {draftId.slice(0, 8)}
+        {uiText('draft_id_b52d61c', { id: draftId.slice(0, 8) })}
       </p>
     </div>
   );

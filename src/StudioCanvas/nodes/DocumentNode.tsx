@@ -7,10 +7,11 @@ import {
   useEdges,
 } from '@xyflow/react';
 import { Copy, FileText, Library, Loader2, Trash2, Unlink, Upload, X } from 'lucide-react';
+import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { type DocumentView, describeError } from '@/components/documents/types';
+import { type DocumentView, describeError, describeStep } from '@/components/documents/types';
 import { useDocuments } from '@/components/documents/useDocuments';
 import { Button } from '@/components/ui/button';
 import {
@@ -127,15 +128,20 @@ function resolveDocStatus(
   uploadStates: Map<string, DocUploadState>,
   liveDocById: Map<string, DocumentView>,
   libraryLoading: boolean,
+  translateCommon: ReturnType<typeof useUiTranslations<'common'>>,
+  locale: string,
 ): { status: DocChipState; step?: string } {
   if (doc.sourceDocumentId) {
     const live = liveDocById.get(doc.sourceDocumentId);
     if (live) {
       if (live.status === 'ready') return { status: 'ready' };
       if (live.status === 'error') {
-        return { status: 'error', step: describeError(live.errorCode, live.errorMessage) };
+        return {
+          status: 'error',
+          step: describeError(live.errorCode, live.errorMessage, translateCommon, live.uiErrorCode),
+        };
       }
-      return { status: 'processing', step: live.progressStep ?? undefined };
+      return { status: 'processing', step: describeStep(live, translateCommon, locale).text };
     }
     // Not having heard of a document is not the same fact as the document processing.
     // While the library read is in flight we genuinely do not know; once it has
@@ -165,6 +171,11 @@ async function ingestDocumentFile(file: File, brandId: string): Promise<string> 
 }
 
 export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<DocumentNodeData>>) {
+  const dropUiLocale = useDropLocale();
+
+  const translateUi = useUiTranslations('studio');
+  const translateCommon = useUiTranslations('common');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -253,20 +264,21 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
         // the moment the library read or the realtime INSERT reports it; clearing it
         // here left a just-ingested document reading as missing in that gap.
       } catch (err) {
-        const msg = err instanceof Error ? err.message : `Failed to ingest ${file.name}`;
-        show({ title: 'Upload failed', description: msg, variant: 'error' });
+        console.error('[DocumentNode] Document ingestion failed', err);
+        const msg = translateUi('documentIngestFailed', { fileName: file.name });
+        show({ title: translateUi('upload_failed_6efc5d27'), description: msg, variant: 'error' });
         setUploadStates((prev) => new Map(prev).set(docName, 'error'));
       }
     },
-    [brandId, data.documents, id, show, triggerSave, updateNodeData],
+    [brandId, data.documents, id, show, triggerSave, updateNodeData, translateUi],
   );
 
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!brandId) {
         show({
-          title: 'No brand selected',
-          description: 'Select a brand before uploading documents.',
+          title: translateUi('no_brand_selected_fbf312c1'),
+          description: translateUi('select_a_brand_before_uploading_doc_66341cc2'),
           variant: 'warning',
         });
         return;
@@ -293,7 +305,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
         void ingestFile(file, doc.name, startIndex + i);
       }
     },
-    [addDocuments, brandId, data.documents, ingestFile, show],
+    [addDocuments, brandId, data.documents, ingestFile, show, translateUi],
   );
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
@@ -311,8 +323,8 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
       if (files && files.length > 0) {
         if (!brandId) {
           show({
-            title: 'No brand selected',
-            description: 'Select a brand before uploading documents.',
+            title: translateUi('no_brand_selected_fbf312c1'),
+            description: translateUi('select_a_brand_before_uploading_doc_66341cc2'),
             variant: 'warning',
           });
           return;
@@ -333,8 +345,10 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
 
         if (rejectedCount > 0) {
           show({
-            title: 'Some files ignored',
-            description: `${rejectedCount} file(s) were not a supported document type.`,
+            title: translateUi('some_files_ignored_cff3d24f'),
+            description: translateUi('value0_file_s_were_not_a_supported__101ce6c6', {
+              count: Number(rejectedCount),
+            }),
             variant: 'warning',
           });
         }
@@ -357,7 +371,10 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
 
       if (!rawPayload) return;
 
-      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64);
+      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64, undefined, {
+        t: translateUi,
+        locale: dropUiLocale,
+      });
       if (resolved.status === 'error') {
         show({
           title: resolved.title,
@@ -369,8 +386,8 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
 
       if (resolved.nodeType !== 'document') {
         show({
-          title: 'Unsupported asset',
-          description: 'Only document assets can be dropped here.',
+          title: translateUi('unsupported_asset_add38b25'),
+          description: translateUi('only_document_assets_can_be_dropped_b6fa40de'),
           variant: 'warning',
         });
         return;
@@ -394,14 +411,14 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
         addDocuments([{ name: resolved.fileName || 'Document', type, content: resolved.dataUrl }]);
       }
     },
-    [addDocuments, brandId, data.documents, ingestFile, show],
+    [addDocuments, brandId, data.documents, ingestFile, show, translateUi, dropUiLocale],
   );
 
   const openPicker = useCallback(async () => {
     if (!brandId) {
       show({
-        title: 'No brand selected',
-        description: 'Select a brand first.',
+        title: translateUi('no_brand_selected_fbf312c1'),
+        description: translateUi('select_a_brand_first_3e2921fe'),
         variant: 'warning',
       });
       return;
@@ -421,21 +438,24 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
       if (error) throw error;
       setPlatformDocs((rows ?? []) as PlatformDocRow[]);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load documents';
-      show({ title: 'Load failed', description: msg, variant: 'error' });
+      console.error('[DocumentNode] Document library read failed', err);
+      const msg = translateUi('documentLoadFailed');
+      show({ title: translateUi('load_failed_d352597f'), description: msg, variant: 'error' });
       setPickerOpen(false);
     } finally {
       setPickerLoading(false);
     }
-  }, [brandId, show]);
+  }, [brandId, show, translateUi]);
 
   const selectPlatformDoc = useCallback(
     (row: PlatformDocRow) => {
       const alreadyAdded = (data.documents ?? []).some((d) => d.sourceDocumentId === row.id);
       if (alreadyAdded) {
         show({
-          title: 'Already added',
-          description: `"${row.name}" is already in this node.`,
+          title: translateUi('already_added_253b22d7'),
+          description: translateUi('value0_is_already_in_this_node_68faff55', {
+            value0: String(row.name),
+          }),
           variant: 'warning',
         });
         return;
@@ -451,7 +471,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
       ]);
       setPickerOpen(false);
     },
-    [addDocuments, data.documents, show],
+    [addDocuments, data.documents, show, translateUi],
   );
 
   return (
@@ -459,13 +479,16 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Select platform document</DialogTitle>
+            <DialogTitle>{translateUi('select_platform_document_6314bbac')}</DialogTitle>
           </DialogHeader>
           {pickerLoading ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              {translateUi('loading_ba3bbbe1')}
+            </p>
           ) : platformDocs.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">
-              No ready documents found for this brand.
+              {' '}
+              {translateUi('no_ready_documents_found_for_this_b_54db26a6')}{' '}
             </p>
           ) : (
             <ul className="nodrag nowheel max-h-72 divide-y divide-border overflow-y-auto rounded-md border border-border">
@@ -532,7 +555,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                     onClick={openPicker}
                     onMouseDown={(e) => e.stopPropagation()}
                     className="absolute right-2 top-2 z-20 h-6 w-6 rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100"
-                    title="Select from platform"
+                    title={translateUi('select_from_platform_a06cfbb9')}
                   >
                     <Library className="w-3 h-3" />
                   </Button>
@@ -545,6 +568,8 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                           uploadStates,
                           liveDocById,
                           libraryLoading,
+                          translateCommon,
+                          dropUiLocale,
                         );
                         return (
                           <div
@@ -572,13 +597,15 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                                 )}
                               >
                                 {status === 'processing'
-                                  ? (step ?? 'processing…')
+                                  ? (step ?? translateUi('processing_61c2d44d'))
                                   : status === 'error'
-                                    ? (step ?? 'error')
+                                    ? (step ?? translateUi('error_ca00fccf'))
                                     : status === 'missing'
-                                      ? 'unavailable'
+                                      ? translateUi('unavailable_ba691ba0')
                                       : doc.sourceDocumentId
-                                        ? `${doc.type} · ready`
+                                        ? translateUi('value0_ready_c5a9e289', {
+                                            value0: String(doc.type),
+                                          })
                                         : doc.type}
                               </p>
                             </div>
@@ -604,11 +631,11 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                             <EmptyMedia variant="icon">
                               <FileText />
                             </EmptyMedia>
-                            <EmptyTitle>No Documents</EmptyTitle>
+                            <EmptyTitle>{translateUi('no_documents_a2c7fcaa')}</EmptyTitle>
                             <EmptyDescription>
                               {brandId
-                                ? 'Drag & drop, upload, or select from platform'
-                                : 'Select a brand to upload documents'}
+                                ? translateUi('drag_drop_upload_or_select_from_pla_20dcc512')
+                                : translateUi('select_a_brand_to_upload_documents_3976d37c')}
                             </EmptyDescription>
                           </EmptyHeader>
                         </Empty>
@@ -643,33 +670,33 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                   }
                 />
                 <TooltipContent>
-                  <p>Document Output: {docConnections} connections</p>
+                  <p>
+                    {translateUi('document_output_de3fc477')} {docConnections}{' '}
+                    {translateUi('connections_1e5fac86')}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </div>
           }
         />
         <ContextMenuContent className="w-52">
-          <ContextMenuLabel>Document Context</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('document_context_ac43faa0')}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <Unlink className="mr-2 h-4 w-4" />
-            Detach connections
+            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
           </ContextMenuItem>
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>

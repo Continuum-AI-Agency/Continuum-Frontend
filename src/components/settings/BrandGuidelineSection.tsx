@@ -1,3 +1,6 @@
+import { useLocale } from 'next-intl';
+
+import { getTranslations } from 'next-intl/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { RegenerateGuidelineButton } from './RegenerateGuidelineButton';
 
@@ -21,6 +24,10 @@ type GuidelineRow = {
 };
 
 export async function BrandGuidelineSection({ brandId }: BrandGuidelineSectionProps) {
+  const uiLocale = useLocale();
+
+  const tUi = await getTranslations('settings');
+
   const supabase = await createSupabaseServerClient();
 
   const { data: guideline } = await supabase
@@ -54,23 +61,24 @@ export async function BrandGuidelineSection({ brandId }: BrandGuidelineSectionPr
 
   const hasReport = Boolean(report);
   const docsReady = (nonReadyCount ?? 0) === 0;
-  const blockReason = !hasReport
-    ? 'Waiting on brand report to finish.'
-    : !docsReady
-      ? 'Waiting on document indexing to finish.'
-      : null;
+  const blockReason = !hasReport ? tUi('m_63ae97118b') : !docsReady ? tUi('m_25a3ac58fc') : null;
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="text-sm font-medium text-foreground">
-            {guideline ? `Brand guideline · v${guideline.version}` : 'Brand guideline'}
+            {guideline
+              ? tUi('m_240aa874d0', { v0: String(guideline.version) })
+              : tUi('m_03693dc0e0')}
           </div>
           <p className="text-xs text-muted-foreground">
             {guideline
-              ? `Status: ${guideline.status} · Updated ${new Date(guideline.updated_at).toLocaleDateString()}`
-              : 'Auto-generated once your brand report and uploaded documents are processed.'}
+              ? tUi('m_9aebac6f79', {
+                  v0: String(guideline.status),
+                  v1: String(new Date(guideline.updated_at).toLocaleDateString(uiLocale)),
+                })
+              : tUi('m_48e9f7eef1')}
           </p>
         </div>
         <RegenerateGuidelineButton
@@ -81,16 +89,19 @@ export async function BrandGuidelineSection({ brandId }: BrandGuidelineSectionPr
       </div>
       {guideline ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <GuidelineCard heading="Notes" body={guideline.notes ?? '—'} />
-          <GuidelineCard heading="Colors" body={summarize(guideline.colors)} />
-          <GuidelineCard heading="Typography" body={summarize(guideline.typography)} />
-          <GuidelineCard heading="Logo" body={summarize(guideline.logo)} />
-          <GuidelineCard heading="Style & design" body={summarize(guideline.style_design)} />
-          <GuidelineCard heading="Verbal identity" body={summarize(guideline.verbal_identity)} />
+          <GuidelineCard heading={tUi('m_70440046a3')} body={guideline.notes ?? '—'} />
+          <GuidelineCard heading={tUi('m_88d5e4cac1')} body={summarize(guideline.colors)} />
+          <GuidelineCard heading={tUi('m_f4beb9af58')} body={summarize(guideline.typography)} />
+          <GuidelineCard heading={tUi('m_83fce83274')} body={summarize(guideline.logo)} />
+          <GuidelineCard heading={tUi('m_288f4bd009')} body={summarize(guideline.style_design)} />
+          <GuidelineCard
+            heading={tUi('m_1a83d154e6')}
+            body={summarize(guideline.verbal_identity)}
+          />
         </div>
       ) : (
         <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 text-center text-sm text-muted-foreground">
-          {blockReason ?? 'Your guideline will appear here once generation completes.'}
+          {blockReason ?? tUi('m_bc8a2b2b84')}
         </p>
       )}
     </div>

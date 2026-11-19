@@ -1,7 +1,9 @@
 'use client';
-
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 import { deliveryLabel } from './reportModel';
 
 // Was this ad set being SERVED? Every cost, CTR and CPA figure on its row is a ratio that
@@ -12,7 +14,10 @@ import { deliveryLabel } from './reportModel';
 // Renders nothing for a normally-serving ad set, and nothing when delivery is UNKNOWN. A
 // missing read must not decorate the row with reassurance it has not earned.
 export function DeliveryPill({ state }: { state: string | null | undefined }) {
-  const delivery = deliveryLabel(state);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const delivery = deliveryLabel(state, optimizerText);
   if (!delivery) return null;
 
   return (

@@ -3,6 +3,7 @@
 // error. The Google tab shows it in place of its read; the Home shows it when every Google read
 // it made was refused (PP-DT-K-home-google-no-access-conflated). One copy for both.
 
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import * as typeScale from '../../typeScale';
 import { PlatformChip } from './PlatformChip';
@@ -42,41 +43,44 @@ function EmptyState({
 }
 
 export function GoogleReadNotice({ state }: { state: GoogleReadNoticeState }) {
+  const uiText = useTranslations('scale');
   switch (state.status) {
     case 'no-connection':
       return (
         <EmptyState
-          body="Google Ads isn't connected. Connect a Google login with access to the Ads account, then grant that account to this brand."
+          body={uiText('googleTabNoConnection')}
           connect
           testId="google-empty-no-connection"
-          title="No Google connection"
+          title={uiText('no_google_connection_afe8a59')}
         />
       );
     case 'no-grant':
       return (
         <EmptyState
-          body="Your Google login is connected, but no Google Ads account is granted to this brand. Grant one in Settings → Integrations."
+          body={uiText('googleTabNoGrant')}
           connect
           testId="google-empty-no-grant"
-          title="No Google Ads account granted to this brand"
+          title={uiText('no_google_ads_account_granted_to_this_brand_e53da31')}
         />
       );
     case 'no-role':
       return (
         <EmptyState
-          body="Reading Google Ads needs the Operator, Admin or Owner role on this brand, and yours is Viewer. Ask an owner or admin of the brand to change it."
+          body={uiText('reading_google_ads_needs_the_operator_admin_o_720c042')}
           connect={false}
           testId="google-empty-no-role"
-          title="Your role on this brand can’t read Google Ads"
+          title={uiText('your_role_on_this_brand_can_t_read_google_ads_f65f2ba')}
         />
       );
     case 'no-access':
       return (
         <EmptyState
-          body="This brand lists the account, but no live Google connection grants it to the brand. Grant it again in Settings → Integrations."
+          body={uiText('this_brand_lists_the_account_but_no_live_goog_a4e4dd1')}
           connect
           testId="google-empty-no-access"
-          title={`No live Google grant reaches ${state.account.name ?? state.account.account_id}`}
+          title={uiText('no_live_google_grant_reaches_account_143ce8a', {
+            account: state.account.name ?? state.account.account_id,
+          })}
         />
       );
     case 'error':
@@ -87,8 +91,10 @@ export function GoogleReadNotice({ state }: { state: GoogleReadNoticeState }) {
           testId="google-empty-error"
           title={
             state.account
-              ? `Google Ads could not be read for ${state.account.name ?? state.account.account_id}`
-              : 'Google Ads could not be read'
+              ? uiText('template_7f7ae35fd49f', {
+                  v0: state.account.name ?? state.account.account_id,
+                })
+              : uiText('google_ads_could_not_be_read_6d8c63a')
           }
         />
       );

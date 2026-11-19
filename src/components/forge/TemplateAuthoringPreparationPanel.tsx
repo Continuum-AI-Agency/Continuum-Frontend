@@ -1,5 +1,14 @@
 'use client';
 
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
+
+export type PreparationUi = {
+  t: ReturnType<typeof useUiTranslations<'forge'>>;
+  locale: ReturnType<typeof useUiLocale>;
+};
+
 import type { TemplateAuthoringDocument } from '@continuum/contracts';
 import { Check, Circle, Download, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -91,80 +100,147 @@ function preflightProgress(value: unknown): PreflightProgress | null {
   };
 }
 
-function diagnosticCopy(diagnostic: PreflightDiagnostic) {
+function diagnosticCopy(diagnostic: PreflightDiagnostic, ui?: PreparationUi) {
   const { code } = diagnostic;
   if (code.includes('artwork_missing'))
-    return 'The private package still has unresolved footage dependencies.';
-  if (code.includes('font')) return diagnostic.reason ?? 'Exact font evidence is still pending.';
+    return (
+      ui?.t('the_private_package_still_has_unres_7df2ca5c') ??
+      'The private package still has unresolved footage dependencies.'
+    );
+  if (code.includes('font'))
+    return ui
+      ? ui.t('exact_font_evidence_is_still_pendin_6926afe0')
+      : (diagnostic.reason ?? 'Exact font evidence is still pending.');
   if (code.includes('format_inventory_pending'))
-    return 'Forge could not verify the delivery-format mapping, so no composition has been selected for repair.';
+    return (
+      ui?.t('forge_could_not_verify_the_delivery_bfb17ddc') ??
+      'Forge could not verify the delivery-format mapping, so no composition has been selected for repair.'
+    );
   if (code.includes('format') && code.includes('pending'))
-    return diagnostic.reason ?? 'A required delivery-format check is still pending.';
+    return ui
+      ? ui.t('a_required_delivery_format_check_is_0a7ddded')
+      : (diagnostic.reason ?? 'A required delivery-format check is still pending.');
   if (code.includes('parse') && code.includes('pending'))
-    return diagnostic.reason ?? 'The private package parse check is still pending.';
-  return diagnostic.reason ?? 'Additional private preflight evidence is pending.';
+    return ui
+      ? ui.t('the_private_package_parse_check_is__dc0b459c')
+      : (diagnostic.reason ?? 'The private package parse check is still pending.');
+  return ui
+    ? ui.t('additional_private_preflight_eviden_9b7266bf')
+    : (diagnostic.reason ?? 'Additional private preflight evidence is pending.');
 }
 
 const verificationLabels = [
-  ['packageIntegrity', 'Package integrity'],
-  ['writerReadback', 'Edits preserved'],
-  ['sourcePreservation', 'Original preserved'],
-  ['dependencies', 'Fonts and artwork'],
-  ['format', 'Delivery formats'],
-  ['nativeAfterEffects', 'Native render'],
+  ['packageIntegrity', 'package_integrity_c706413b'],
+  ['writerReadback', 'edits_preserved_0ab7e306'],
+  ['sourcePreservation', 'original_preserved_f5a3ccab'],
+  ['dependencies', 'fonts_and_artwork_87a00558'],
+  ['format', 'delivery_formats_6c25fe32'],
+  ['nativeAfterEffects', 'native_render_830ba123'],
 ] as const;
 
-function formatBytes(size: number) {
+function formatBytes(size: number, locale: ReturnType<typeof useUiLocale>) {
   if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  if (size < 1024 * 1024) return `${formatDecimal(size / 1024, 1, locale)} KB`;
+  return `${formatDecimal(size / (1024 * 1024), 1, locale)} MB`;
 }
 
-function stateCopy(workflow: Workflow, syncStatus: LayerDraftSyncStatus, draftDirty: boolean) {
+function stateCopy(
+  workflow: Workflow,
+  syncStatus: LayerDraftSyncStatus,
+  draftDirty: boolean,
+  ui?: PreparationUi,
+) {
   if (syncStatus === 'conflict' || syncStatus === 'source-mismatch')
-    return 'Resolve the saved draft difference before preparing a package.';
+    return (
+      ui?.t('resolve_the_saved_draft_difference__993f31bc') ??
+      'Resolve the saved draft difference before preparing a package.'
+    );
   if (syncStatus === 'error')
-    return 'The private draft needs a successful retry before preparation.';
+    return (
+      ui?.t('the_private_draft_needs_a_successfu_396ad086') ??
+      'The private draft needs a successful retry before preparation.'
+    );
   if (syncStatus === 'saving' || syncStatus === 'unsaved' || draftDirty)
-    return 'Saving the private draft before preparation.';
+    return (
+      ui?.t('saving_the_private_draft_before_pre_3348bc44') ??
+      'Saving the private draft before preparation.'
+    );
   const preflight = preflightProgress(workflow.preparation?.progress);
   if (
     preflight?.stage === 'private_preflight_complete' &&
     preflight.providerActivation === 'pending'
   )
-    return 'Private package preflight passed. Forge provider activation is pending; the package stays available while native After Effects verification waits for a runner.';
+    return (
+      ui?.t('private_package_preflight_passed_fo_a75eb93e') ??
+      'Private package preflight passed. Forge provider activation is pending; the package stays available while native After Effects verification waits for a runner.'
+    );
   if (preflight?.stage === 'private_preflight_pending') {
     const hasNamedRepairs = preflight.diagnostics?.some(
       (diagnostic) =>
         diagnostic.affectedFontPostScriptNames?.length || diagnostic.missingFootage?.length,
     );
     return hasNamedRepairs
-      ? 'Saved private package is waiting for the listed repairs.'
-      : 'Saved private package is waiting for pending preflight checks.';
+      ? (ui?.t('saved_private_package_is_waiting_fo_53362d72') ??
+          'Saved private package is waiting for the listed repairs.')
+      : (ui?.t('saved_private_package_is_waiting_fo_11f5ed42') ??
+          'Saved private package is waiting for pending preflight checks.');
   }
   switch (workflow.state) {
     case 'waiting':
-      return 'The saved authoring changes are settling before package preparation.';
+      return (
+        ui?.t('the_saved_authoring_changes_are_set_27ef9c3d') ??
+        'The saved authoring changes are settling before package preparation.'
+      );
     case 'compiling':
-      return 'Building a private package from this exact draft revision.';
+      return (
+        ui?.t('building_a_private_package_from_thi_08224ae0') ??
+        'Building a private package from this exact draft revision.'
+      );
     case 'preparing':
-      return 'Checking the private package and preserving its source lineage.';
+      return (
+        ui?.t('checking_the_private_package_and_pr_86eabbdc') ??
+        'Checking the private package and preserving its source lineage.'
+      );
     case 'rendering':
-      return 'Requesting native sample frames for the delivery compositions.';
+      return (
+        ui?.t('requesting_native_sample_frames_for_57cd8092') ??
+        'Requesting native sample frames for the delivery compositions.'
+      );
     case 'needs-input':
-      return 'The package is retained privately. An After Effects runner is needed to finish native verification.';
+      return (
+        ui?.t('the_package_is_retained_privately_a_f3d1f244') ??
+        'The package is retained privately. An After Effects runner is needed to finish native verification.'
+      );
     case 'failed':
-      return 'Preparation paused. Your private draft and any completed package are retained.';
+      return (
+        ui?.t('preparation_paused_your_private_dra_84870fae') ??
+        'Preparation paused. Your private draft and any completed package are retained.'
+      );
     case 'ready':
       if (workflow.artifact?.state === 'reviewed')
-        return 'This exact package has an explicit review decision and can be saved as a version.';
+        return (
+          ui?.t('this_exact_package_has_an_explicit__d94a79eb') ??
+          'This exact package has an explicit review decision and can be saved as a version.'
+        );
       if (workflow.artifact?.state === 'committed')
-        return 'This exact private package has been published as a version.';
+        return (
+          ui?.t('this_exact_private_package_has_been_ce213188') ??
+          'This exact private package has been published as a version.'
+        );
       if (workflow.artifact?.verification.nativeAfterEffects === 'passed')
-        return 'Native samples passed. Review the package before saving a version.';
-      return 'The private package is available. Native After Effects verification is still pending.';
+        return (
+          ui?.t('native_samples_passed_review_the_pa_b7130404') ??
+          'Native samples passed. Review the package before saving a version.'
+        );
+      return (
+        ui?.t('the_private_package_is_available_na_7cc1ea5e') ??
+        'The private package is available. Native After Effects verification is still pending.'
+      );
     default:
-      return 'Preparation starts automatically after a supported authoring change is saved.';
+      return (
+        ui?.t('preparation_starts_automatically_af_bc69f4fc') ??
+        'Preparation starts automatically after a supported authoring change is saved.'
+      );
   }
 }
 
@@ -174,15 +250,28 @@ function nextActionCopy(
   draftDirty: boolean,
   diagnostics: PreflightDiagnostic[],
   dependencies: TemplateAuthoringDocument['dependencies'],
+  ui?: PreparationUi,
 ) {
   if (syncStatus === 'conflict' || syncStatus === 'source-mismatch')
-    return 'Reconcile the saved and local draft above before preparing this package.';
+    return (
+      ui?.t('reconcile_the_saved_and_local_draft_784edaac') ??
+      'Reconcile the saved and local draft above before preparing this package.'
+    );
   if (syncStatus === 'error')
-    return 'Retry the private draft save above. Your local work remains available.';
+    return (
+      ui?.t('retry_the_private_draft_save_above__472bdda7') ??
+      'Retry the private draft save above. Your local work remains available.'
+    );
   if (syncStatus === 'saving' || syncStatus === 'unsaved' || draftDirty)
-    return 'Let the private draft finish saving; preparation resumes from the saved revision.';
+    return (
+      ui?.t('let_the_private_draft_finish_saving_4e29bf27') ??
+      'Let the private draft finish saving; preparation resumes from the saved revision.'
+    );
   if (diagnostics.some((diagnostic) => diagnostic.affectedFontPostScriptNames?.length))
-    return 'Open Fonts check to resolve the exact listed faces, then preparation will resume.';
+    return (
+      ui?.t('open_fonts_check_to_resolve_the_exa_5f06ab62') ??
+      'Open Fonts check to resolve the exact listed faces, then preparation will resume.'
+    );
   const missingFootage = diagnostics.flatMap((diagnostic) => diagnostic.missingFootage ?? []);
   if (missingFootage.length) {
     const hasExactRepair = missingFootage.some((footage) => {
@@ -194,22 +283,42 @@ function nextActionCopy(
       return matches.length === 1 && matches[0]?.relinkReason === null;
     });
     return hasExactRepair
-      ? 'Relink the matching package dependency from Library below; the exact package will be checked again automatically.'
-      : 'No verified Library target matches this package dependency yet. Keep the package private and retry after the dependency is available.';
+      ? (ui?.t('relink_the_matching_package_depende_5358ef47') ??
+          'Relink the matching package dependency from Library below; the exact package will be checked again automatically.')
+      : (ui?.t('no_verified_library_target_matches__ee392cbc') ??
+          'No verified Library target matches this package dependency yet. Keep the package private and retry after the dependency is available.');
   }
   if (diagnostics.some((diagnostic) => diagnostic.code.includes('format_inventory_pending')))
-    return 'No composition has a verified delivery-format mapping yet, so there is no safe format repair target. Retry after the mapping evidence is corrected.';
+    return (
+      ui?.t('no_composition_has_a_verified_deliv_3f3f2f9e') ??
+      'No composition has a verified delivery-format mapping yet, so there is no safe format repair target. Retry after the mapping evidence is corrected.'
+    );
   const providerPending =
     preflightProgress(workflow.preparation?.progress)?.providerActivation === 'pending';
   if (workflow.state === 'needs-input' || providerPending)
-    return 'Retry preparation to resume provider activation. Native After Effects verification remains pending until a runner returns frames.';
+    return (
+      ui?.t('retry_preparation_to_resume_provide_5698e0d7') ??
+      'Retry preparation to resume provider activation. Native After Effects verification remains pending until a runner returns frames.'
+    );
   if (workflow.state === 'failed')
-    return 'Retry preparation to resume this exact private package revision; your draft and completed package are retained.';
+    return (
+      ui?.t('retry_preparation_to_resume_this_ex_5ec215fc') ??
+      'Retry preparation to resume this exact private package revision; your draft and completed package are retained.'
+    );
   if (workflow.artifact && workflow.artifact.verification.nativeAfterEffects !== 'passed')
-    return 'Keep editing or download the private package. Version review remains locked until native After Effects samples pass.';
+    return (
+      ui?.t('keep_editing_or_download_the_privat_0a5b6ff2') ??
+      'Keep editing or download the private package. Version review remains locked until native After Effects samples pass.'
+    );
   if (workflow.canReview)
-    return 'Review this exact package to enable the existing version-saving action.';
-  return 'Supported authoring changes save privately and resume preparation automatically.';
+    return (
+      ui?.t('review_this_exact_package_to_enable_65889742') ??
+      'Review this exact package to enable the existing version-saving action.'
+    );
+  return (
+    ui?.t('supported_authoring_changes_save_pr_1266375a') ??
+    'Supported authoring changes save privately and resume preparation automatically.'
+  );
 }
 
 export function templatePreparationSummary(
@@ -217,25 +326,32 @@ export function templatePreparationSummary(
   syncStatus: LayerDraftSyncStatus,
   draftDirty: boolean,
   dependencies: TemplateAuthoringDocument['dependencies'],
+  ui?: PreparationUi,
 ): { label: string; detail: string; action: 'fonts' | 'save' | 'checks' | null } {
   if (syncStatus === 'conflict' || syncStatus === 'source-mismatch') {
     return {
-      label: 'Draft conflict',
-      detail: 'Reconcile the saved draft difference before package preparation can continue.',
+      label: ui?.t('draft_conflict_ea099ac1') ?? 'Draft conflict',
+      detail:
+        ui?.t('reconcile_the_saved_draft_differenc_c25768cf') ??
+        'Reconcile the saved draft difference before package preparation can continue.',
       action: 'save',
     };
   }
   if (syncStatus === 'error') {
     return {
-      label: 'Save failed',
-      detail: 'Retry saving the private draft; your local edits are still available.',
+      label: ui?.t('save_failed_53ad6f99') ?? 'Save failed',
+      detail:
+        ui?.t('retry_saving_the_private_draft_your_6e7f1e82') ??
+        'Retry saving the private draft; your local edits are still available.',
       action: 'save',
     };
   }
   if (syncStatus === 'saving' || syncStatus === 'unsaved' || draftDirty) {
     return {
-      label: 'Saving edits',
-      detail: 'The private draft must finish saving before preparation can continue.',
+      label: ui?.t('saving_edits_5ca18e46') ?? 'Saving edits',
+      detail:
+        ui?.t('the_private_draft_must_finish_savin_a4891d30') ??
+        'The private draft must finish saving before preparation can continue.',
       action: 'save',
     };
   }
@@ -247,8 +363,11 @@ export function templatePreparationSummary(
   ];
   if (missingFonts.length) {
     return {
-      label: 'Fonts need attention',
-      detail: `Resolve these exact font faces in Fonts check: ${missingFonts.join(', ')}.`,
+      label: ui?.t('fonts_need_attention_34a6a77e') ?? 'Fonts need attention',
+      detail:
+        ui?.t('resolve_these_exact_font_faces_in_f_057f9927', {
+          value0: String(missingFonts.join(', ')),
+        }) ?? `Resolve these exact font faces in Fonts check: ${missingFonts.join(', ')}.`,
       action: 'fonts',
     };
   }
@@ -260,10 +379,13 @@ export function templatePreparationSummary(
   if (artworkMissing) {
     const names = [...new Set(missingFootage.map((footage) => footage.name ?? footage.file))];
     return {
-      label: 'Artwork needs attention',
+      label: ui?.t('artwork_needs_attention_24e96459') ?? 'Artwork needs attention',
       detail: names.length
-        ? `Resolve these missing package dependencies: ${names.join(', ')}.`
-        : 'The package reports unresolved artwork dependencies. Review the package checks for details.',
+        ? (ui?.t('resolve_these_missing_package_depen_8abafd22', {
+            value0: String(names.join(', ')),
+          }) ?? `Resolve these missing package dependencies: ${names.join(', ')}.`)
+        : (ui?.t('the_package_reports_unresolved_artw_1bf1ae5f') ??
+          'The package reports unresolved artwork dependencies. Review the package checks for details.'),
       action: 'checks',
     };
   }
@@ -278,32 +400,39 @@ export function templatePreparationSummary(
       (item) => item.code.includes('format') && item.code.includes('pending'),
     );
     return {
-      label: 'Delivery formats pending',
+      label: ui?.t('delivery_formats_pending_3acd51aa') ?? 'Delivery formats pending',
       detail: diagnostic
-        ? diagnosticCopy(diagnostic)
-        : 'The required delivery-format check is still pending.',
+        ? diagnosticCopy(diagnostic, ui)
+        : (ui?.t('the_required_delivery_format_check__52943d75') ??
+          'The required delivery-format check is still pending.'),
       action: 'checks',
     };
   }
 
   if (workflow.state === 'compiling') {
     return {
-      label: 'Building package',
-      detail: 'Creating a private package from the saved draft.',
+      label: ui?.t('building_package_d9b722e6') ?? 'Building package',
+      detail:
+        ui?.t('creating_a_private_package_from_the_1f459c9e') ??
+        'Creating a private package from the saved draft.',
       action: null,
     };
   }
   if (workflow.state === 'preparing') {
     return {
-      label: 'Checking package',
-      detail: 'Verifying package contents and preserving the original source.',
+      label: ui?.t('checking_package_4b0d1069') ?? 'Checking package',
+      detail:
+        ui?.t('verifying_package_contents_and_pres_a32d7382') ??
+        'Verifying package contents and preserving the original source.',
       action: null,
     };
   }
   if (workflow.state === 'rendering') {
     return {
-      label: 'Rendering samples',
-      detail: 'Requesting native sample frames for the delivery compositions.',
+      label: ui?.t('rendering_samples_5212e4d8') ?? 'Rendering samples',
+      detail:
+        ui?.t('requesting_native_sample_frames_for_57cd8092') ??
+        'Requesting native sample frames for the delivery compositions.',
       action: null,
     };
   }
@@ -311,20 +440,25 @@ export function templatePreparationSummary(
   if (workflow.artifact && workflow.artifact.verification.nativeAfterEffects !== 'passed') {
     const providerPending = preflight?.providerActivation === 'pending';
     return {
-      label: 'Native render pending',
+      label: ui?.t('native_render_pending_dbfef427') ?? 'Native render pending',
       detail: providerPending
-        ? 'Package checks are complete; native sample frames are waiting for the configured render provider.'
+        ? (ui?.t('package_checks_are_complete_native__ccde1749') ??
+          'Package checks are complete; native sample frames are waiting for the configured render provider.')
         : workflow.state === 'needs-input'
-          ? 'The preparation state is waiting for an After Effects runner to return native sample frames.'
-          : 'Native sample frames have not been verified for this package.',
+          ? (ui?.t('the_preparation_state_is_waiting_fo_e8329293') ??
+            'The preparation state is waiting for an After Effects runner to return native sample frames.')
+          : (ui?.t('native_sample_frames_have_not_been__63d34691') ??
+            'Native sample frames have not been verified for this package.'),
       action: 'checks',
     };
   }
 
   if (workflow.canPublish) {
     return {
-      label: 'Ready to publish',
-      detail: 'All required checks and native samples passed for this exact package.',
+      label: ui?.t('ready_to_publish_c056e02b') ?? 'Ready to publish',
+      detail:
+        ui?.t('all_required_checks_and_native_samp_93099e05') ??
+        'All required checks and native samples passed for this exact package.',
       action: 'save',
     };
   }
@@ -332,36 +466,41 @@ export function templatePreparationSummary(
   if (workflow.artifact?.state === 'committed') {
     const versionId = workflow.artifact.commit?.versionId;
     return {
-      label: 'Version published',
+      label: ui?.t('version_published_016929aa') ?? 'Version published',
       detail: versionId
-        ? `Version ${versionId} was published from this exact package.`
-        : 'This exact package has a confirmed published version.',
+        ? (ui?.t('version_value0_was_published_from_t_3d2c96dc', { value0: String(versionId) }) ??
+          `Version ${versionId} was published from this exact package.`)
+        : (ui?.t('this_exact_package_has_a_confirmed__198219bd') ??
+          'This exact package has a confirmed published version.'),
       action: null,
     };
   }
 
   if (workflow.state === 'needs-input') {
     return {
-      label: 'Preparation needs input',
-      detail: nextActionCopy(workflow, syncStatus, draftDirty, diagnostics, dependencies),
+      label: ui?.t('preparation_needs_input_16622eb6') ?? 'Preparation needs input',
+      detail: nextActionCopy(workflow, syncStatus, draftDirty, diagnostics, dependencies, ui),
       action: 'checks',
     };
   }
   if (workflow.state === 'failed') {
     return {
-      label: 'Preparation paused',
-      detail: nextActionCopy(workflow, syncStatus, draftDirty, diagnostics, dependencies),
+      label: ui?.t('preparation_paused_c556d8c3') ?? 'Preparation paused',
+      detail: nextActionCopy(workflow, syncStatus, draftDirty, diagnostics, dependencies, ui),
       action: 'checks',
     };
   }
   return {
-    label: 'Draft saved',
-    detail: 'Supported authoring changes prepare a private package automatically after saving.',
+    label: ui?.t('draft_saved_5ccb8caa') ?? 'Draft saved',
+    detail:
+      ui?.t('supported_authoring_changes_prepare_a8862caf') ??
+      'Supported authoring changes prepare a private package automatically after saving.',
     action: null,
   };
 }
 
-function userFacingError(error: string) {
+function userFacingError(error: string, ui?: PreparationUi) {
+  if (ui) return ui.t('private_preparation_could_not_conti_442bc070');
   return /\b(?:authoring|template|private)_[a-z0-9_]+\b|\bPRIVATE_[A-Z0-9_]+\b/i.test(error)
     ? 'Private preparation could not continue. Your draft remains available; use the next step below and retry.'
     : error;
@@ -390,6 +529,34 @@ export function TemplateAuthoringPreparationPanel({
   onInspectComposition?: (compId: number) => void;
   reviewInVersionAction?: boolean;
 }) {
+  const translateUi = useUiTranslations('forge');
+  const preparationLocale = useUiLocale();
+  const uiErrorText = useUiErrorMessage();
+  const checkLabel = (value: string | undefined) => {
+    const keys = {
+      passed: 'preparationCheckPassed',
+      pass: 'preparationCheckPassed',
+      verified: 'preparationCheckPassed',
+      complete: 'preparationCheckPassed',
+      completed: 'preparationCheckPassed',
+      ready: 'preparationCheckPassed',
+      failed: 'preparationCheckFailed',
+      fail: 'preparationCheckFailed',
+      pending: 'preparationCheckPending',
+      configured: 'preparationProviderConfigured',
+      active: 'preparationProviderConfigured',
+      unconfigured: 'preparationProviderUnavailable',
+      unavailable: 'preparationProviderUnavailable',
+    } as const;
+    return translateUi(
+      value && Object.hasOwn(keys, value)
+        ? keys[value as keyof typeof keys]
+        : value
+          ? 'preparationCheckUnknown'
+          : 'preparationCheckPending',
+    );
+  };
+
   const [reviewing, setReviewing] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [packageError, setPackageError] = useState<string | null>(null);
@@ -447,18 +614,18 @@ export function TemplateAuthoringPreparationPanel({
           setSamples(entries.filter((entry): entry is NonNullable<typeof entry> => !!entry));
       })
       .catch((reason: unknown) => {
-        if (!cancelled)
-          setSampleError(
-            reason instanceof Error ? reason.message : 'Could not load the private sample frames.',
-          );
+        if (!cancelled) setSampleError(uiErrorText(reason));
       });
     return () => {
       cancelled = true;
       for (const url of objectUrls) URL.revokeObjectURL(url);
     };
-  }, [workflow.artifact?.artifactId, sampleKey]);
+  }, [workflow.artifact?.artifactId, sampleKey, uiErrorText]);
 
-  const stateDescription = stateCopy(workflow, syncStatus, draftDirty);
+  const stateDescription = stateCopy(workflow, syncStatus, draftDirty, {
+    t: translateUi,
+    locale: preparationLocale,
+  });
   const checks = workflow.artifact?.verification;
   const preflight = preflightProgress(workflow.preparation?.progress);
   const nextAction = nextActionCopy(
@@ -467,6 +634,7 @@ export function TemplateAuthoringPreparationPanel({
     draftDirty,
     preflight?.diagnostics ?? [],
     dependencies,
+    { t: translateUi, locale: preparationLocale },
   );
   const exactComposition = (sourceCompId: number, layerId?: number) => {
     if (!authoringDocument) return null;
@@ -506,7 +674,8 @@ export function TemplateAuthoringPreparationPanel({
             id="template-authoring-preparation-title"
             className="text-xs font-semibold text-foreground"
           >
-            Private package preparation
+            {' '}
+            {translateUi('private_package_preparation_8a48c84d')}{' '}
           </h3>
           <p role="status" className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
             {stateDescription}
@@ -516,7 +685,7 @@ export function TemplateAuthoringPreparationPanel({
         workflow.state === 'preparing' ||
         workflow.state === 'rendering' ? (
           <Loader2
-            aria-label="Preparation in progress"
+            aria-label={translateUi('preparation_in_progress_1d6050e9')}
             className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground"
           />
         ) : null}
@@ -527,13 +696,16 @@ export function TemplateAuthoringPreparationPanel({
           {preflight.diagnostics.map((diagnostic, index) => (
             <li key={`${index}:${diagnostic.code}`}>
               {!diagnostic.missingFootage?.length ? (
-                <span>{diagnosticCopy(diagnostic)}</span>
+                <span>
+                  {diagnosticCopy(diagnostic, { t: translateUi, locale: preparationLocale })}
+                </span>
               ) : null}
               {diagnostic.affectedFontPostScriptNames?.length ? (
                 <>
                   <span>
                     {' '}
-                    Affected font faces: {diagnostic.affectedFontPostScriptNames.join(', ')}.
+                    {translateUi('affected_font_faces_859643f8')}{' '}
+                    {diagnostic.affectedFontPostScriptNames.join(', ')}.
                   </span>
                   {onOpenFontRepair ? (
                     <Button
@@ -543,12 +715,14 @@ export function TemplateAuthoringPreparationPanel({
                       className="ml-1 h-auto p-0"
                       onClick={onOpenFontRepair}
                     >
-                      Open Fonts check
+                      {' '}
+                      {translateUi('open_fonts_check_ca16c0e2')}{' '}
                     </Button>
                   ) : null}
                   {fontLayerContext(diagnostic.affectedFontPostScriptNames).length ? (
                     <span className="block pl-2">
-                      Affected layers:{' '}
+                      {' '}
+                      {translateUi('affected_layers_a3797d08')}{' '}
                       {fontLayerContext(diagnostic.affectedFontPostScriptNames)
                         .map(
                           ({ node, composition }) =>
@@ -571,7 +745,8 @@ export function TemplateAuthoringPreparationPanel({
                             className="ml-1 h-auto p-0"
                             onClick={() => onInspectComposition(target.compId!)}
                           >
-                            Inspect affected composition
+                            {' '}
+                            {translateUi('inspect_affected_composition_a1177775')}{' '}
                           </Button>
                         );
                       })()
@@ -589,13 +764,17 @@ export function TemplateAuthoringPreparationPanel({
                         className="ml-1 h-auto p-0"
                         onClick={() => onInspectComposition(target.compId!)}
                       >
-                        Inspect affected composition
+                        {' '}
+                        {translateUi('inspect_affected_composition_a1177775')}{' '}
                       </Button>
                     );
                   })()
                 : null}
               {diagnostic.missingFootage?.length ? (
-                <ul className="list-disc pl-4" aria-label="Unresolved package footage">
+                <ul
+                  className="list-disc pl-4"
+                  aria-label={translateUi('unresolved_package_footage_b4682ef4')}
+                >
                   {diagnostic.missingFootage.map((footage, footageIndex) => (
                     <li key={`${footageIndex}:${footage.file}`}>
                       <span className="[overflow-wrap:anywhere]">
@@ -624,7 +803,8 @@ export function TemplateAuthoringPreparationPanel({
                               disabled={syncStatus !== 'saved' || draftDirty}
                               onClick={() => onRelinkDependency(exact.footageItemId)}
                             >
-                              Relink from Library
+                              {' '}
+                              {translateUi('relink_from_library_ba87d929')}{' '}
                             </Button>
                             {onInspectComposition && affectedCompositions.length === 1 ? (
                               <Button
@@ -636,7 +816,8 @@ export function TemplateAuthoringPreparationPanel({
                                   onInspectComposition(affectedCompositions[0]!.compId!)
                                 }
                               >
-                                Inspect affected composition
+                                {' '}
+                                {translateUi('inspect_affected_composition_a1177775')}{' '}
                               </Button>
                             ) : null}
                           </>
@@ -644,11 +825,13 @@ export function TemplateAuthoringPreparationPanel({
                           <span className="ml-1">· {exact.relinkReason}</span>
                         ) : matches.length > 1 ? (
                           <span className="ml-1">
-                            · Multiple package dependencies match; no automatic target was chosen.
+                            {' '}
+                            {translateUi('multiple_package_dependencies_match_a3bb7c03')}{' '}
                           </span>
                         ) : (
                           <span className="ml-1">
-                            · No exact editable package dependency was identified.
+                            {' '}
+                            {translateUi('no_exact_editable_package_dependenc_bf896472')}{' '}
                           </span>
                         );
                       })()}
@@ -665,26 +848,36 @@ export function TemplateAuthoringPreparationPanel({
         data-testid="preparation-next-step"
         className="max-w-3xl text-xs leading-relaxed text-foreground"
       >
-        <span className="font-medium">Next step:</span> {nextAction}
+        <span className="font-medium">{translateUi('next_step_707b05c5')}</span> {nextAction}
       </p>
 
       {workflow.preparation ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>
-            Preparation:{' '}
+            {' '}
+            {translateUi('preparation_55084680')}{' '}
             <span className="font-medium text-foreground">
               {workflow.preparation.state.replaceAll('_', ' ')}
             </span>
           </span>
-          {workflow.preparation.runId ? <span>Run {workflow.preparation.runId}</span> : null}
+          {workflow.preparation.runId ? (
+            <span>
+              {translateUi('run_00d60e31')} {workflow.preparation.runId}
+            </span>
+          ) : null}
         </div>
       ) : null}
 
       {preflight?.stage ? (
         <p role="status" className="text-xs text-muted-foreground">
-          Package preflight: format {preflight.checks?.format ?? 'pending'}, dependencies{' '}
-          {preflight.checks?.dependencies ?? 'pending'}
-          {preflight.providerActivation ? ` · Forge provider ${preflight.providerActivation}` : ''}
+          {' '}
+          {translateUi('package_preflight_format_12c2641f')} {checkLabel(preflight.checks?.format)}
+          {translateUi('dependencies_603accd6')} {checkLabel(preflight.checks?.dependencies)}
+          {preflight.providerActivation
+            ? translateUi('forgeProviderState', {
+                status: checkLabel(preflight.providerActivation),
+              })
+            : ''}
         </p>
       ) : null}
 
@@ -714,11 +907,7 @@ export function TemplateAuthoringPreparationPanel({
                 anchor.click();
                 window.setTimeout(() => URL.revokeObjectURL(url), 1000);
               } catch (reason) {
-                setPackageError(
-                  reason instanceof Error
-                    ? reason.message
-                    : 'Could not download this private package.',
-                );
+                setPackageError(uiErrorText(reason));
               } finally {
                 setDownloading(false);
               }
@@ -729,7 +918,9 @@ export function TemplateAuthoringPreparationPanel({
             ) : (
               <Download data-icon="inline-start" />
             )}
-            {downloading ? 'Verifying package…' : 'Download private package'}
+            {downloading
+              ? translateUi('verifying_package_3e2e01da')
+              : translateUi('download_private_package_472829f9')}
           </Button>
           {packageError ? (
             <p role="alert" className="text-xs text-destructive">
@@ -742,16 +933,19 @@ export function TemplateAuthoringPreparationPanel({
       {workflow.artifact || checks ? (
         <Collapsible className="rounded-md border border-border bg-muted/20">
           <CollapsibleTrigger className="flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-accent">
-            Package details and verification
+            {' '}
+            {translateUi('package_details_and_verification_90e2ad56')}{' '}
             <span aria-hidden className="text-muted-foreground">
-              {checks ? 'View checks' : 'View details'}
+              {checks ? translateUi('view_checks_d9afefde') : translateUi('view_details_d1bf045b')}
             </span>
           </CollapsibleTrigger>
           <CollapsibleContent className="grid gap-2 border-t border-border p-2 text-xs sm:grid-cols-2">
             {workflow.artifact ? (
               <>
                 <div className="min-w-0">
-                  <span className="text-muted-foreground">Private package</span>
+                  <span className="text-muted-foreground">
+                    {translateUi('private_package_b6f29fd2')}
+                  </span>
                   <p
                     className="truncate font-medium text-foreground"
                     title={workflow.artifact.filename}
@@ -760,17 +954,23 @@ export function TemplateAuthoringPreparationPanel({
                   </p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Package size</span>
+                  <span className="text-muted-foreground">
+                    {translateUi('package_size_df358ee3')}
+                  </span>
                   <p className="font-medium text-foreground">
-                    {formatBytes(workflow.artifact.sizeBytes)}
+                    {formatBytes(workflow.artifact.sizeBytes, preparationLocale)}
                   </p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Draft revision</span>
+                  <span className="text-muted-foreground">
+                    {translateUi('draft_revision_eb00feff')}
+                  </span>
                   <p className="font-mono text-foreground">{workflow.artifact.draftRevision}</p>
                 </div>
                 <div className="min-w-0">
-                  <span className="text-muted-foreground">Package checksum</span>
+                  <span className="text-muted-foreground">
+                    {translateUi('package_checksum_dcaace66')}
+                  </span>
                   <p
                     className="truncate font-mono text-foreground"
                     title={workflow.artifact.packageChecksum}
@@ -782,7 +982,7 @@ export function TemplateAuthoringPreparationPanel({
             ) : null}
             {checks ? (
               <fieldset
-                aria-label="Package verification checks"
+                aria-label={translateUi('package_verification_checks_c17d2d8d')}
                 className="grid gap-x-3 gap-y-1 border-0 p-0 sm:col-span-2 sm:grid-cols-2"
               >
                 {verificationLabels.map(([key, label]) => {
@@ -801,10 +1001,10 @@ export function TemplateAuthoringPreparationPanel({
                           value === 'failed' ? 'text-destructive' : 'text-muted-foreground'
                         }
                       >
-                        {label}
+                        {translateUi(label)}
                       </span>
                       <span className="ml-auto font-medium capitalize text-foreground">
-                        {value}
+                        {checkLabel(value)}
                       </span>
                     </div>
                   );
@@ -817,7 +1017,7 @@ export function TemplateAuthoringPreparationPanel({
 
       {samples.length ? (
         <fieldset
-          aria-label="Verified native sample frames"
+          aria-label={translateUi('verified_native_sample_frames_bc78b18c')}
           className="grid grid-cols-2 gap-2 border-0 p-0 sm:grid-cols-4"
         >
           {samples.map((sample) => (
@@ -848,35 +1048,38 @@ export function TemplateAuthoringPreparationPanel({
 
       {workflow.error ? (
         <p role="alert" className="text-xs text-destructive">
-          {userFacingError(workflow.error)}
+          {userFacingError(workflow.error, { t: translateUi, locale: preparationLocale })}
         </p>
       ) : null}
       {workflow.state === 'needs-input' || workflow.state === 'failed' ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" size="xs" variant="outline" onClick={() => void workflow.retry()}>
-            <RefreshCw data-icon="inline-start" />
-            Retry preparation
+            <RefreshCw data-icon="inline-start" /> {translateUi('retry_preparation_e42e093a')}{' '}
           </Button>
           <span className="text-xs text-muted-foreground">
-            Retry keeps this private draft and resumes the same package revision.
+            {' '}
+            {translateUi('retry_keeps_this_private_draft_and__d4752866')}{' '}
           </span>
         </div>
       ) : null}
 
       {workflow.artifact?.state === 'committed' ? (
         <p role="status" className="text-xs font-medium text-foreground">
-          Published version {workflow.artifact.commit?.versionId ?? 'confirmed'} from this exact
-          private package.
+          {' '}
+          {translateUi('published_version_e5dfd8a7')}{' '}
+          {workflow.artifact.commit?.versionId ?? translateUi('confirmed_9599915b')}{' '}
+          {translateUi('from_this_exact_private_package_f5d0835f')}{' '}
         </p>
       ) : workflow.artifact?.state === 'reviewed' ? (
         <p role="status" className="text-xs font-medium text-foreground">
-          Reviewed for version saving. The version action below will save these exact package bytes.
+          {' '}
+          {translateUi('reviewed_for_version_saving_the_ver_aeb69cb9')}{' '}
         </p>
       ) : workflow.canReview ? (
         reviewInVersionAction ? (
           <p role="status" className="text-xs text-muted-foreground">
-            All checks passed for this exact package. The version action will review and publish it
-            together.
+            {' '}
+            {translateUi('all_checks_passed_for_this_exact_pa_298a0b2a')}{' '}
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
@@ -894,27 +1097,31 @@ export function TemplateAuthoringPreparationPanel({
                 <Loader2 className="animate-spin" data-icon="inline-start" />
               ) : (
                 <Check data-icon="inline-start" />
-              )}
-              Approve for version saving
+              )}{' '}
+              {translateUi('approve_for_version_saving_241ad219')}{' '}
             </Button>
             <span className="text-xs text-muted-foreground">
-              This decision is available only after all checks pass for the exact package above.
+              {' '}
+              {translateUi('this_decision_is_available_only_aft_92736d11')}{' '}
             </span>
           </div>
         )
       ) : workflow.artifact ? (
         <p className="text-xs text-muted-foreground">
-          Version review stays locked until package integrity, source preservation, dependency,
-          format, and native After Effects checks pass.
+          {' '}
+          {translateUi('version_review_stays_locked_until_p_242004b4')}{' '}
         </p>
       ) : null}
 
       {workflow.state === 'failed' && !workflow.artifact ? (
         <p className="text-xs text-muted-foreground">
-          The local and private server draft remain available for another attempt.
+          {' '}
+          {translateUi('the_local_and_private_server_draft__2bfdd59e')}{' '}
         </p>
       ) : null}
-      <span className="sr-only">Draft revision {draftRevision}</span>
+      <span className="sr-only">
+        {translateUi('draft_revision_eb00feff')} {draftRevision}
+      </span>
     </section>
   );
 }

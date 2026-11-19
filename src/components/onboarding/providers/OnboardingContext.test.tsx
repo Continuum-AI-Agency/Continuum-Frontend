@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, spyOn } from 'bun:test';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, screen } from '@testing-library/react';
 import { UnrecognizedActionError } from 'next/dist/client/components/unrecognized-action-error';
-import * as actions from '@/app/onboarding/actions';
+import * as actions from '@/app/[locale]/onboarding/actions';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { render } from '@/i18n/__tests__/render';
 import { createDefaultOnboardingState } from '@/lib/onboarding/state';
 import * as client from '@/lib/supabase/client';
 import { OnboardingProvider, useOnboarding } from './OnboardingContext';

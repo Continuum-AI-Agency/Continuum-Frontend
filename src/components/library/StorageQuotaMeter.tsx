@@ -2,8 +2,10 @@
 
 import { type DriveQuota, driveQuotaSchema, storageQuotaLevel } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { Progress } from '@/components/ui/progress';
+import type { UiLocale } from '@/i18n/config';
+import { Link } from '@/i18n/navigation';
 import { http } from '@/lib/api/http';
 import { cn } from '@/lib/utils';
 
@@ -13,8 +15,8 @@ import { cn } from '@/lib/utils';
 /** Where the allowance is explained and how to raise it — see DriveBrands. */
 export const STORAGE_ALLOWANCE_HREF = '/settings/drive#storage';
 
-export function formatGb(bytes: number): string {
-  return `${Number((bytes / 1e9).toFixed(1))} GB`;
+export function formatGb(bytes: number, locale: UiLocale = 'en'): string {
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1, useGrouping: false }).format(Number((bytes / 1e9).toFixed(1)))} GB`;
 }
 
 /** `onUpgrade` lets a page that already holds the allowance explainer open it in place. */
@@ -25,6 +27,9 @@ export function StorageQuotaMeterView({
   quota: DriveQuota;
   onUpgrade?: () => void;
 }) {
+  const translateUi = useUiTranslations('library');
+  const locale = useUiLocale();
+
   const { level, ratio } = storageQuotaLevel(quota);
   const percent = Math.min(100, Math.round(ratio * 100));
   const heldBytes = quota.usedBytes + quota.reservedBytes;
@@ -32,11 +37,12 @@ export function StorageQuotaMeterView({
   return (
     <div data-testid="storage-quota-meter" className="space-y-1.5">
       <p className="text-xs text-muted-foreground">
-        {formatGb(heldBytes)} of {formatGb(quota.capacityBytes)} used
+        {formatGb(heldBytes, locale)} {translateUi('of_28391d3b')}{' '}
+        {formatGb(quota.capacityBytes, locale)} {translateUi('used_f8391613')}{' '}
       </p>
       <Progress
         value={percent}
-        aria-label="Library storage used"
+        aria-label={translateUi('library_storage_used_65d1e45f')}
         className={cn(
           'h-1.5',
           level === 'warn' && '[&_[data-slot=progress-indicator]]:bg-warning',
@@ -49,14 +55,17 @@ export function StorageQuotaMeterView({
           role={level === 'full' ? 'alert' : 'status'}
           className={cn('text-xs', level === 'full' ? 'text-destructive' : 'text-warning')}
         >
-          {level === 'full' ? 'Library full — uploads are paused.' : `Library is ${percent}% full.`}{' '}
+          {level === 'full'
+            ? translateUi('library_full_uploads_are_paused_762d8852')
+            : translateUi('library_is_value0_full_c82d3da0', { value0: String(percent) })}{' '}
           <Link
             data-testid="storage-quota-upgrade"
             href={STORAGE_ALLOWANCE_HREF}
             onClick={onUpgrade}
             className="font-medium underline underline-offset-2"
           >
-            Upgrade storage
+            {' '}
+            {translateUi('upgrade_storage_7def8745')}{' '}
           </Link>
         </p>
       )}

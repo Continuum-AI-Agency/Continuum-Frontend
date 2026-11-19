@@ -1,4 +1,7 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { ApiError } from '@/lib/api/errors';
 
 /**
  * Moves a draft back to 'draft' server-side, cancelling a pending scheduled publish.
@@ -28,6 +31,7 @@ export async function patchDraftStatus(
   backendDraftId: string,
   status: 'draft' | 'scheduled',
   headers: Record<string, string>,
+  formatError?: (error: unknown) => string,
 ): Promise<string | null> {
   try {
     const response = await fetch(
@@ -39,10 +43,17 @@ export async function patchDraftStatus(
       },
     );
     if (response.ok) return null;
-    const payload = (await response.json().catch(() => ({}))) as { message?: string };
+    const payload = (await response.json().catch(() => ({}))) as {
+      message?: string;
+      code?: string;
+    };
+    if (formatError)
+      return formatError(
+        new ApiError(payload.message ?? 'Status change refused', response.status, payload.code),
+      );
     return payload.message ?? `The server refused the change (${response.status}).`;
   } catch {
-    return 'Network error.';
+    return formatError?.(new Error('Network error')) ?? 'Network error.';
   }
 }
 
@@ -71,6 +82,8 @@ export type UseUnscheduleDraftResult = {
 };
 
 export function useUnscheduleDraft(): UseUnscheduleDraftResult {
+  const uiText = useTranslations('organic');
+  const formatUiError = useUiErrorMessage();
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const { show } = useToast();
   const [isUnscheduling, setIsUnscheduling] = React.useState(false);
@@ -94,8 +107,8 @@ export function useUnscheduleDraft(): UseUnscheduleDraftResult {
       );
       if (targets.length === 0) {
         show({
-          title: 'Already published',
-          description: 'A published post cannot move back to draft.',
+          title: uiText('already_published_5df8fe6'),
+          description: uiText('a_published_post_cannot_move_back_to_draft_3116d9e'),
           variant: 'error',
         });
         return false;
@@ -107,7 +120,12 @@ export function useUnscheduleDraft(): UseUnscheduleDraftResult {
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const moved: OrganicCalendarDraft[] = [];
         for (const member of targets) {
-          const failure = await patchDraftStatus(member.backendDraftId as string, 'draft', headers);
+          const failure = await patchDraftStatus(
+            member.backendDraftId as string,
+            'draft',
+            headers,
+            formatUiError,
+          );
           if (failure) {
             // All or nothing: the scheduled rows already pulled go back on the schedule, so the
             // card still reads as the one scheduled post it is.
@@ -120,12 +138,14 @@ export function useUnscheduleDraft(): UseUnscheduleDraftResult {
               updateDraft(done.id, (d) => ({ ...d, status: 'draft' as const }));
             }
             show({
-              title: 'Could not move back to draft',
+              title: uiText('could_not_move_back_to_draft_4f447ea'),
               description: [
                 `${platformLabel(member)}: ${failure}`,
-                'The post is still scheduled and will publish at its scheduled time.',
+                uiText('postStillScheduled'),
                 stranded.length > 0
-                  ? `${stranded.map(platformLabel).join(', ')} could not be re-scheduled and will not publish.`
+                  ? uiText('postStrandedUnscheduled', {
+                      platforms: stranded.map(platformLabel).join(', '),
+                    })
                   : '',
               ]
                 .filter(Boolean)
@@ -141,8 +161,8 @@ export function useUnscheduleDraft(): UseUnscheduleDraftResult {
           updateDraft(member.id, (d) => ({ ...d, status: 'draft' as const }));
         }
         show({
-          title: 'Moved back to draft',
-          description: 'This post will no longer publish automatically.',
+          title: uiText('moved_back_to_draft_f7a819a'),
+          description: uiText('this_post_will_no_longer_publish_automaticall_8acd452'),
           variant: 'success',
         });
         return true;
@@ -150,7 +170,7 @@ export function useUnscheduleDraft(): UseUnscheduleDraftResult {
         setIsUnscheduling(false);
       }
     },
-    [show, updateDraft],
+    [show, updateDraft, uiText, formatUiError],
   );
 
   return { unschedule, isUnscheduling };

@@ -12,6 +12,7 @@
 
 import type { MediaComment } from '@continuum/contracts';
 import { MessageSquarePlus, SquareDashedBottom, X } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import { formatTimecode } from '@/components/library/detail/annotationGeometry';
 import { CommentComposer } from '@/components/library/detail/CommentComposer';
@@ -56,6 +57,10 @@ function ThreadPopover({
   posting: boolean;
   onReply: (body: string) => void;
 }) {
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const entries = [thread.root, ...thread.replies];
   return (
     <div className="flex flex-col gap-2">
@@ -70,7 +75,7 @@ function ThreadPopover({
             <div className="flex items-baseline gap-2">
               <span className="truncate text-xs font-medium">{authorLabel(comment)}</span>
               <span className="shrink-0 text-2xs text-muted-foreground/70">
-                {formatRelativeTime(comment.createdAt)}
+                {formatRelativeTime(comment.createdAt, undefined, currentUiLocale)}
               </span>
             </div>
             <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
@@ -80,8 +85,8 @@ function ThreadPopover({
         </div>
       ))}
       <CommentComposer
-        placeholder="Reply..."
-        submitLabel="Reply"
+        placeholder={translateUi('reply_772fa553')}
+        submitLabel={translateUi('reply_c253f451')}
         busy={posting}
         onSubmit={onReply}
       />
@@ -96,6 +101,8 @@ export function TimelineCommentLayer({
   playheadSec,
   onSeek,
 }: Props) {
+  const translateUi = useUiTranslations('studio');
+
   const assetIds = useMemo(
     () => Array.from(new Set(placements.map((placement) => placement.assetId))),
     [placements],
@@ -190,13 +197,13 @@ export function TimelineCommentLayer({
             disabled={!playheadResolves}
             title={
               playheadResolves
-                ? 'Comment on the source frame under the playhead'
-                : 'The playhead is not over a video clip'
+                ? translateUi('comment_on_the_source_frame_under_t_4a912165')
+                : translateUi('the_playhead_is_not_over_a_video_cl_757792b2')
             }
             onClick={() => setDraftInSec(playheadSec)}
           >
-            <MessageSquarePlus className="size-3.5" />
-            Comment at {formatTimecode(playheadSec * 1000)}
+            <MessageSquarePlus className="size-3.5" /> {translateUi('comment_at_dfbbc28a')}{' '}
+            {formatTimecode(playheadSec * 1000)}
           </Button>
         ) : (
           <>
@@ -205,18 +212,18 @@ export function TimelineCommentLayer({
               variant="outline"
               size="sm"
               disabled={playheadSec <= draftInSec}
-              title="Extend this comment into a range ending at the playhead"
+              title={translateUi('extend_this_comment_into_a_range_en_348de0e0')}
               onClick={() => setDraftOutSec(playheadSec)}
             >
-              <SquareDashedBottom className="size-3.5" />
-              End at {formatTimecode(playheadSec * 1000)}
+              <SquareDashedBottom className="size-3.5" /> {translateUi('end_at_d55048a0')}{' '}
+              {formatTimecode(playheadSec * 1000)}
             </Button>
             {draftOutSec !== null && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                aria-label="Clear the end point and comment on a single moment"
+                aria-label={translateUi('clear_the_end_point_and_comment_on__7e76d128')}
                 onClick={() => setDraftOutSec(null)}
               >
                 <X className="size-3.5" />
@@ -230,7 +237,7 @@ export function TimelineCommentLayer({
         <div className="rounded-lg border border-border bg-muted/30 p-2.5">
           {draftAnchor ? (
             <CommentComposer
-              placeholder="Comment on this moment of the source clip..."
+              placeholder={translateUi('comment_on_this_moment_of_the_sourc_0eca9803')}
               busy={posting}
               autoFocus
               annotationChip={
@@ -238,7 +245,7 @@ export function TimelineCommentLayer({
                   {draftAnchor.endMs === null
                     ? formatTimecode(draftAnchor.timeMs)
                     : `${formatTimecode(draftAnchor.timeMs)}–${formatTimecode(draftAnchor.endMs)}`}{' '}
-                  on the source
+                  {translateUi('on_the_source_db95b90b')}{' '}
                 </span>
               }
               onSubmit={postDraft}
@@ -249,7 +256,8 @@ export function TimelineCommentLayer({
             // two clips, so there is no single source range to anchor it to.
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs text-destructive">
-                That range crosses a cut — set in and out points inside one clip.
+                {' '}
+                {translateUi('that_range_crosses_a_cut_set_in_and_37619714')}{' '}
               </p>
               <div className="ml-auto flex items-center gap-1.5">
                 <Button
@@ -258,10 +266,12 @@ export function TimelineCommentLayer({
                   size="sm"
                   onClick={() => setDraftOutSec(null)}
                 >
-                  Back to a moment
+                  {' '}
+                  {translateUi('back_to_a_moment_bf4634d3')}{' '}
                 </Button>
                 <Button type="button" variant="ghost" size="sm" onClick={clearDraft}>
-                  Cancel
+                  {' '}
+                  {translateUi('cancel_19766ed6')}{' '}
                 </Button>
               </div>
             </div>
@@ -287,6 +297,8 @@ function TimelineCommentMarker({
   onSeek: (sec: number) => void;
   onReply: (body: string, thread: CommentThread) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   if (!thread) return null;
 
   const leftPx = marker.outputStartSec * pxPerSec;
@@ -295,7 +307,9 @@ function TimelineCommentMarker({
   const initials = initialsFor(authorLabel(thread.root));
   const label =
     widthPx === null
-      ? `Comment at ${formatTimecode(marker.outputStartSec * 1000)}`
+      ? translateUi('comment_at_value0_a86e186d', {
+          value0: String(formatTimecode(marker.outputStartSec * 1000)),
+        })
       : `Comment from ${formatTimecode(marker.outputStartSec * 1000)} to ${formatTimecode((marker.outputEndSec ?? 0) * 1000)}`;
 
   return (

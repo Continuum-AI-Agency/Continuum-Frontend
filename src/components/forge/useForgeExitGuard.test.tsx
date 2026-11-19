@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import type { LayerDraftState } from '@/components/forge/layerDraft';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { confirmForgeExit, useForgeExitGuard } from './useForgeExitGuard';
 
 afterEach(() => {

@@ -1,7 +1,9 @@
 'use client';
+
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, isTextUIPart, type UIMessage } from 'ai';
 import { Bot, Loader2, Send, Sparkles, User } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,7 @@ function getMessageText(message: UIMessage): string {
 }
 
 export const CampaignChat = () => {
+  const uiText = useTranslations('scale');
   const { processAIAction } = useCampaignAI();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
@@ -78,9 +81,9 @@ export const CampaignChat = () => {
           <Sparkles className="h-4 w-4" />
         </div>
         <div>
-          <h2 className="text-sm font-semibold">Campaign Architect</h2>
+          <h2 className="text-sm font-semibold">{uiText('campaign_architect_8381e23')}</h2>
           <p className="text-2xs text-muted-foreground uppercase tracking-wider">
-            AI Assistant Powered by Gemini
+            {uiText('ai_assistant_powered_by_gemini_8e27ea8')}
           </p>
         </div>
       </div>
@@ -93,9 +96,11 @@ export const CampaignChat = () => {
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-10 text-center opacity-50">
               <Bot className="mb-2 h-10 w-10" />
-              <p className="text-sm font-medium">How can I help you build your campaign today?</p>
+              <p className="text-sm font-medium">
+                {uiText('how_can_i_help_you_build_your_campaign_today_5640a5a')}
+              </p>
               <p className="mt-1 text-xs italic">
-                "Create a sales campaign with 3 ad sets targeting fitness enthusiasts"
+                {uiText('create_a_sales_campaign_with_3_ad_sets_target_bc440a5')}
               </p>
             </div>
           )}
@@ -120,7 +125,7 @@ export const CampaignChat = () => {
               >
                 {getMessageText(m)
                   .replace(/```json\n[\s\S]*?\n```/g, '')
-                  .trim() || 'Building your campaign structure...'}
+                  .trim() || uiText('building_your_campaign_structure_039cfdf')}
               </div>
             </div>
           ))}
@@ -130,7 +135,7 @@ export const CampaignChat = () => {
                 <Loader2 className="h-4 w-4 animate-spin" />
               </div>
               <div className="rounded-lg bg-accent px-3 py-2 text-sm italic opacity-70">
-                Thinking...
+                {uiText('thinking_b4739a4')}
               </div>
             </div>
           )}
@@ -145,7 +150,7 @@ export const CampaignChat = () => {
           <Input
             value={input}
             onChange={handleInputChange}
-            placeholder="Ask Architect to build something..."
+            placeholder={uiText('ask_architect_to_build_something_17634b2')}
             className="pr-10"
             disabled={isLoading}
           />
@@ -160,7 +165,7 @@ export const CampaignChat = () => {
           </Button>
         </form>
         <p className="mt-2 text-2xs text-center text-muted-foreground">
-          Architect can create nodes, suggest targeting, and validate your structure.
+          {uiText('architect_can_create_nodes_suggest_targeting__5d45fed')}
         </p>
       </div>
     </div>

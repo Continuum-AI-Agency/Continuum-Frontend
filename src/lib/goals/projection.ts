@@ -6,7 +6,10 @@ import type {
   GoalSummary,
 } from '@continuum/contracts';
 import { parseGoalArtifactMarkdown } from '@continuum/contracts';
+import type { UiLocale } from '@/i18n/config';
 import { type GoalSnapshotWithChatDeliveries, projectGoalDelivery } from './chatDelivery';
+import { goalControlLabel } from './controlLabels';
+import { type GoalDisplayTranslator, goalEventKeys, localizeGoalCopy } from './displayCopy';
 import {
   type GoalActivityView,
   type GoalArtifactStatusView,
@@ -34,18 +37,22 @@ function artifactStatusView(status: GoalArtifact['status']): GoalArtifactStatusV
   return 'draft';
 }
 
-function labelFromId(value: string): string {
+function labelFromId(value: string, t?: GoalDisplayTranslator): string {
   const normalized = value.replace(/[-_]+/g, ' ').trim();
-  return normalized.length > 0
-    ? normalized.replace(/\b\w/g, (character) => character.toUpperCase())
-    : 'Artifact';
+  const label =
+    normalized.length > 0 ? normalized.replace(/\b\w/g, (c) => c.toUpperCase()) : 'Artifact';
+  return t ? localizeGoalCopy(goalControlLabel(value, t), t) : label;
 }
 
 function actorName(actor: GoalActor): string {
   return actor.kind === 'agent' ? actor.agent : actor.userId;
 }
 
-function participantFromActor(actor: GoalActor, detail: string): GoalParticipantView {
+function participantFromActor(
+  actor: GoalActor,
+  detail: string,
+  t?: GoalDisplayTranslator,
+): GoalParticipantView {
   const name = actorName(actor);
   return {
     id: actor.kind === 'agent' ? `agent:${actor.agent}` : `human:${actor.userId}`,
@@ -54,34 +61,48 @@ function participantFromActor(actor: GoalActor, detail: string): GoalParticipant
     detail,
     initials: initialsForParticipant(name),
     isAgent: actor.kind === 'agent',
-    statusLabel: actor.kind === 'agent' ? 'Agent' : null,
+    statusLabel: actor.kind === 'agent' ? (t ? t('m_5ce2e6f402') : 'Agent') : null,
   };
 }
 
-function uniqueParticipants(snapshot: GoalSnapshotWithChatDeliveries): GoalParticipantView[] {
+function uniqueParticipants(
+  snapshot: GoalSnapshotWithChatDeliveries,
+  t?: GoalDisplayTranslator,
+): GoalParticipantView[] {
   const participants = new Map<string, GoalParticipantView>();
   const add = (participant: GoalParticipantView) => {
     if (!participants.has(participant.id)) participants.set(participant.id, participant);
   };
 
   for (const participant of snapshot.participants) {
-    const projected = participantFromActor(participant.actor, participant.detail ?? 'Goal member');
+    const projected = participantFromActor(
+      participant.actor,
+      participant.detail ?? (t ? t('m_4ac9c8e277') : 'Goal member'),
+      t,
+    );
     add({
       ...projected,
       name: participant.displayName,
       initials: initialsForParticipant(participant.displayName),
     });
   }
-  add(participantFromActor(snapshot.goal.createdBy, 'Goal creator'));
+  add(participantFromActor(snapshot.goal.createdBy, t ? t('m_8936d51753') : 'Goal creator', t));
   if (snapshot.goal.facilitator) {
-    add(participantFromActor(snapshot.goal.facilitator, 'Accountable facilitator'));
+    add(
+      participantFromActor(
+        snapshot.goal.facilitator,
+        t ? t('m_1c9b51d9a0') : 'Accountable facilitator',
+        t,
+      ),
+    );
   }
   for (const assignment of snapshot.assignments) {
     if (assignment.assignee) {
       add(
         participantFromActor(
           assignment.assignee,
-          `${labelFromId(assignment.responsibility)} · ${assignment.title}`,
+          `${labelFromId(assignment.responsibility, t)} · ${assignment.title}`,
+          t,
         ),
       );
     }
@@ -89,20 +110,22 @@ function uniqueParticipants(snapshot: GoalSnapshotWithChatDeliveries): GoalParti
   return [...participants.values()];
 }
 
-function eventSubject(event: GoalEvent): string {
+function eventSubject(event: GoalEvent, t?: GoalDisplayTranslator): string {
   switch (event.type) {
     case 'goal.created':
       return event.data.goal.title;
     case 'goal.updated':
-      return 'the Goal charter';
+      return t ? t('m_3791f71ce3') : 'the Goal charter';
     case 'goal.activated':
-      return 'the Goal';
+      return t ? t('m_728a5a7814') : 'the Goal';
     case 'goal.completed':
-      return 'the Goal';
+      return t ? t('m_728a5a7814') : 'the Goal';
     case 'plan.proposed':
       return event.data.plan.summary;
     case 'plan.activated':
-      return `plan v${event.data.planVersion}`;
+      return t
+        ? t('m_a1f6d89532', { version: event.data.planVersion })
+        : `plan v${event.data.planVersion}`;
     case 'workstream.upserted':
       return event.data.workstream.title;
     case 'assignment.upserted':
@@ -130,8 +153,8 @@ function eventSubject(event: GoalEvent): string {
   }
 }
 
-function eventVerb(type: GoalEvent['type']): string {
-  return type.replaceAll('.', ' ');
+function eventVerb(type: GoalEvent['type'], t?: GoalDisplayTranslator): string {
+  return t ? t(goalEventKeys[type]) : type.replaceAll('.', ' ');
 }
 
 export function projectGoalSummary(goal: GoalSummary): GoalSummaryView {
@@ -148,14 +171,17 @@ export function projectGoalSummary(goal: GoalSummary): GoalSummaryView {
   };
 }
 
-export function projectGoalActivity(events: GoalEvent[]): GoalActivityView[] {
+export function projectGoalActivity(
+  events: GoalEvent[],
+  t?: GoalDisplayTranslator,
+): GoalActivityView[] {
   return [...events]
     .sort((left, right) => right.seq - left.seq)
     .map((event) => ({
       id: event.eventId,
       actorName: actorName(event.actor),
-      verb: eventVerb(event.type),
-      subject: eventSubject(event),
+      verb: eventVerb(event.type, t),
+      subject: eventSubject(event, t),
       occurredAt: event.ts,
       sequence: event.seq,
     }));
@@ -164,13 +190,15 @@ export function projectGoalActivity(events: GoalEvent[]): GoalActivityView[] {
 export function projectGoalWorkspace(
   snapshot: GoalSnapshotWithChatDeliveries,
   events: GoalEvent[],
+  t?: GoalDisplayTranslator,
+  locale: UiLocale = 'en',
 ): GoalWorkspaceView {
   const alignmentsByArtifact = new Map(
     snapshot.alignments
       .filter((alignment) => alignment.subject.kind === 'artifact')
       .map((alignment) => [alignment.subject.id, alignment]),
   );
-  const participants = uniqueParticipants(snapshot);
+  const participants = uniqueParticipants(snapshot, t);
   const displayNameForActor = (actor: GoalActor) =>
     participants.find(
       (participant) =>
@@ -205,14 +233,20 @@ export function projectGoalWorkspace(
       return {
         id: artifact.id,
         title: artifact.title,
-        kindLabel: labelFromId(artifact.artifactType),
+        kindLabel: labelFromId(artifact.artifactType, t),
         status: artifactStatusView(artifact.status),
         dependsOnArtifactIds: artifact.dependencyIds,
         versionLabel: artifact.acceptedVersionId
-          ? `Accepted · ${artifact.acceptedVersionId}`
+          ? t
+            ? t('m_b43b096611', { version: artifact.acceptedVersionId })
+            : `Accepted · ${artifact.acceptedVersionId}`
           : document?.versionId || artifact.headVersionId
-            ? `Current · ${document?.versionId ?? artifact.headVersionId}`
-            : 'Awaiting Library version',
+            ? t
+              ? t('m_ff5dadeb7c', { version: document?.versionId ?? artifact.headVersionId ?? '' })
+              : `Current · ${document?.versionId ?? artifact.headVersionId}`
+            : t
+              ? t('m_ef7b077e39')
+              : 'Awaiting Library version',
         headVersionId: document?.versionId ?? artifact.headVersionId ?? null,
         promotedToBrandDocumentId: artifact.promotedToBrandDocumentId ?? null,
         updatedAt: artifact.updatedAt,
@@ -228,7 +262,12 @@ export function projectGoalWorkspace(
         draftRevision: document?.editable ? snapshot.revision : null,
         canEdit: Boolean(document?.editable && markdown !== null && artifact.format === 'markdown'),
         alignmentLabel: alignment
-          ? `${labelFromId(alignment.status)} · ${alignment.criterionIds.length} criteria`
+          ? t
+            ? t('m_066ae905e4', {
+                status: labelFromId(alignment.status, t),
+                count: alignment.criterionIds.length,
+              })
+            : `${labelFromId(alignment.status)} · ${alignment.criterionIds.length} criteria`
           : null,
       };
     }),
@@ -243,10 +282,16 @@ export function projectGoalWorkspace(
           request.targets[0]?.kind === 'actor'
             ? displayNameForActor(request.targets[0].actor)
             : request.targets[0]?.kind === 'capability'
-              ? request.targets[0].capability
-              : (request.targets[0]?.assignmentId ?? 'Unassigned'),
-        statusLabel: 'Waiting',
-        note: request.dueAt ? `Due ${request.dueAt}` : null,
+              ? t
+                ? goalControlLabel(request.targets[0].capability, t)
+                : request.targets[0].capability
+              : (request.targets[0]?.assignmentId ?? (t ? t('m_e57016edce') : 'Unassigned')),
+        statusLabel: t ? localizeGoalCopy('Waiting', t) : 'Waiting',
+        note: request.dueAt
+          ? t
+            ? t('m_13cb39aa93', { date: new Date(request.dueAt).toLocaleString(locale) })
+            : `Due ${request.dueAt}`
+          : null,
       })),
     inputRequests: snapshot.requests
       .filter((request) => request.status === 'open')
@@ -256,22 +301,26 @@ export function projectGoalWorkspace(
         );
         const deliveries = snapshot.chatDeliveries
           .filter((delivery) => delivery.requestId === request.id)
-          .map(projectGoalDelivery);
-        const targetLabel = request.targets
-          .map((target) =>
-            target.kind === 'actor'
-              ? displayNameForActor(target.actor)
-              : target.kind === 'capability'
-                ? labelFromId(target.capability)
+          .map((delivery) => projectGoalDelivery(delivery, t));
+        const targetLabel = request.targets.map((target) =>
+          target.kind === 'actor'
+            ? displayNameForActor(target.actor)
+            : target.kind === 'capability'
+              ? labelFromId(target.capability, t)
+              : t
+                ? t('m_208fe88879', { id: target.assignmentId })
                 : `Assignment ${target.assignmentId}`,
-          )
-          .join(', ');
+        );
+        const joinedTargetLabel = new Intl.ListFormat(locale, {
+          style: 'long',
+          type: 'conjunction',
+        }).format(targetLabel);
         return {
           id: request.id,
           kind: request.kind,
           title: request.prompt,
           requesterName: displayNameForActor(request.requestedBy),
-          targetLabel,
+          targetLabel: joinedTargetLabel,
           targetUserIds: [
             ...new Set([
               ...targetUserIds,
@@ -289,7 +338,7 @@ export function projectGoalWorkspace(
           checklistItemIds: request.checklistItemIds,
         };
       }),
-    activity: projectGoalActivity(events),
+    activity: projectGoalActivity(events, t),
     workNodes: snapshot.workNodes,
     capabilityRoutes: snapshot.capabilityRoutes,
     supervisor: snapshot.supervisor ?? null,

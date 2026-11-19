@@ -9,7 +9,7 @@ import type {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -17,6 +17,9 @@ import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
+import { Link } from '@/i18n/navigation';
+import { useValidationErrorMap } from '@/i18n/validation';
 import { fetchNativeHyperframesUploads } from '@/lib/library/hyperframesNative';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { nativeEditorHref } from './nativeEditorEdits';
@@ -46,9 +49,15 @@ export function NativeUploadedVariants({
   onBusyChange: (value: boolean) => void;
   onSaved: (revisionId: string) => void;
 }) {
+  const validationErrorMap = useValidationErrorMap();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('forge');
+
   const client = useQueryClient();
   const form = useForm<z.infer<typeof uploadNameSchema>>({
-    resolver: zodResolver(uploadNameSchema),
+    resolver: zodResolver(uploadNameSchema, { error: validationErrorMap }),
     defaultValues: { name: '' },
   });
   const [uploading, setUploading] = useState(false);
@@ -113,12 +122,12 @@ export function NativeUploadedVariants({
   const upload = async (file: File) => {
     if (!canUpload || !parent || dirty || saving || active.current) return;
     if (!(await form.trigger())) {
-      setError('Use a variant name of at most 120 characters.');
+      setError(translateUi('use_a_variant_name_of_at_most_120_c_7c3ec603'));
       return;
     }
     if (active.current) return;
     if (!/\.(html?|zip)$/i.test(file.name)) {
-      setError('Choose a native HTML file or HTML ZIP package.');
+      setError(translateUi('choose_a_native_html_file_or_html_z_641ddc2f'));
       return;
     }
     const controller = new AbortController();
@@ -146,8 +155,7 @@ export function NativeUploadedVariants({
             'Uploaded variant',
         },
       });
-      if (!result.ingestJobId)
-        throw Error('The native upload acknowledgement is incomplete. Retry the upload.');
+      if (!result.ingestJobId) throw new LocalizedUiError(translateUi('nativeUploadAckIncomplete'));
       setJobId(result.ingestJobId);
       setWatched({
         assetId: result.assetId,
@@ -156,9 +164,8 @@ export function NativeUploadedVariants({
       });
       form.reset();
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'The native upload could not be registered.',
-      );
+      console.error('[NativeUploadedVariants] Upload failed', cause);
+      setError(uiErrorText(cause));
     } finally {
       active.current = null;
       setUploading(false);
@@ -179,15 +186,20 @@ export function NativeUploadedVariants({
     ).values(),
   ];
   return (
-    <section className="space-y-3 border-t pt-3" aria-label="Uploaded native variants">
-      <p className="text-sm font-medium">Upload a native source variant</p>
+    <section
+      className="space-y-3 border-t pt-3"
+      aria-label={translateUi('uploaded_native_variants_a56aaba9')}
+    >
+      <p className="text-sm font-medium">
+        {translateUi('upload_a_native_source_variant_18112a07')}
+      </p>
       <p className="text-xs text-muted-foreground">
-        Upload HTML or an HTML ZIP. It becomes a saved child of this revision after parsing and
-        compilation succeed.
+        {' '}
+        {translateUi('upload_html_or_an_html_zip_it_becom_78aa4372')}{' '}
       </p>
       <Input
-        aria-label="Uploaded native variant name"
-        placeholder="Variant name"
+        aria-label={translateUi('uploaded_native_variant_name_04272c91')}
+        placeholder={translateUi('variant_name_0f204472')}
         maxLength={120}
         {...form.register('name')}
         aria-invalid={!!form.formState.errors.name}
@@ -195,7 +207,7 @@ export function NativeUploadedVariants({
       />
       <input
         type="file"
-        aria-label="Upload native variant"
+        aria-label={translateUi('upload_native_variant_f852bdf8')}
         accept=".html,.htm,.zip"
         disabled={!canUpload || dirty || saving || uploading}
         onChange={(event) => {
@@ -206,20 +218,22 @@ export function NativeUploadedVariants({
       />
       {!enabled && history.isSuccess ? (
         <p className="text-xs text-muted-foreground">
-          Uploaded source variants are unavailable right now.
+          {' '}
+          {translateUi('uploaded_source_variants_are_unavai_642e2788')}{' '}
         </p>
       ) : null}
       {dirty ? (
         <p className="text-xs text-muted-foreground">
-          Save or discard the current edits before uploading a source variant.
+          {' '}
+          {translateUi('save_or_discard_the_current_edits_b_a10b6edf')}{' '}
         </p>
       ) : null}
-      {uploading ? <p role="status">Uploading native source…</p> : null}
+      {uploading ? <p role="status">{translateUi('uploading_native_source_318af512')}</p> : null}
       {error || history.error || selected.error ? (
         <Alert variant="destructive">
-          <AlertTitle>Native upload needs attention</AlertTitle>
+          <AlertTitle>{translateUi('native_upload_needs_attention_97ae2337')}</AlertTitle>
           <AlertDescription>
-            {error ?? 'Upload status could not be read.'}{' '}
+            {error ?? translateUi('upload_status_could_not_be_read_c056736b')}{' '}
             <Button
               variant="outline"
               size="sm"
@@ -228,30 +242,38 @@ export function NativeUploadedVariants({
                 if (jobId) void selected.refetch();
               }}
             >
-              Refresh uploads
+              {' '}
+              {translateUi('refresh_uploads_e73ecc73')}{' '}
             </Button>
           </AlertDescription>
         </Alert>
       ) : null}
-      <ul className="divide-y divide-border text-xs" aria-label="Native source uploads">
+      <ul
+        className="divide-y divide-border text-xs"
+        aria-label={translateUi('native_source_uploads_12e0a1e5')}
+      >
         {items.map((item) => (
           <li key={item.jobId} className="space-y-1 py-2">
             <p className="font-medium">
               {item.intent.name} ·{' '}
               {item.ingest.state === 'pending' && item.parseState !== 'parsed'
-                ? 'Parsing pending'
+                ? translateUi('parsing_pending_b5b7ebf4')
                 : item.ingest.state}
             </p>
-            {item.ingest.error ? <p role="alert">{item.ingest.error}</p> : null}
+            {item.ingest.error ? (
+              <p role="alert">{translateUi('nativeUploadIngestFailed')}</p>
+            ) : null}
             <div className="flex flex-wrap gap-3">
               <Link
                 href={`${nativeEditorHref(view.brandId, view.assetId, item.intent.parentRevisionId)}&uploadJobId=${item.jobId}`}
               >
-                Upload job
+                {' '}
+                {translateUi('upload_job_5c6293ff')}{' '}
               </Link>
               {item.revisionId ? (
                 <Link href={nativeEditorHref(view.brandId, view.assetId, item.revisionId)}>
-                  Open saved variant
+                  {' '}
+                  {translateUi('open_saved_variant_a4026a5e')}{' '}
                 </Link>
               ) : null}
             </div>
@@ -266,7 +288,8 @@ export function NativeUploadedVariants({
           disabled={history.isFetchingNextPage}
           onClick={() => void history.fetchNextPage()}
         >
-          Older uploads
+          {' '}
+          {translateUi('older_uploads_8389340e')}{' '}
         </Button>
       ) : null}
     </section>

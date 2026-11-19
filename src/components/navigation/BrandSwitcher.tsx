@@ -1,8 +1,9 @@
 'use client';
 
 import { AlertTriangle, ChevronsUpDown, Layers, Loader2, Plus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { createBrandProfileAction } from '@/app/(post-auth)/settings/actions';
+import { createBrandProfileAction } from '@/app/[locale]/(post-auth)/settings/actions';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -25,6 +26,7 @@ import { useSwitchBrand } from '@/hooks/useSwitchBrand';
 import { getBrandMenuItemLabel } from '@/lib/brands/brand-switcher-utils';
 
 export function BrandSwitcher() {
+  const uiText = useTranslations('navigation');
   const { isMobile } = useSidebar();
   const { activeBrandId, brandSummaries, isSwitching } = useActiveBrandContext();
   const switchBrand = useSwitchBrand();
@@ -66,7 +68,7 @@ export function BrandSwitcher() {
             render={
               <SidebarMenuButton
                 size="lg"
-                aria-label="Switch brand"
+                aria-label={uiText('switch_brand_9ddd1f2')}
                 className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-foreground)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-hidden">
@@ -102,12 +104,12 @@ export function BrandSwitcher() {
           >
             <Command className="bg-transparent text-[var(--popover-foreground)]">
               <CommandInput
-                placeholder="Search brands..."
+                placeholder={uiText('search_brands_70253c8')}
                 className="h-9 text-[var(--popover-foreground)] placeholder:text-[color-mix(in_srgb,var(--popover-foreground)_56%,transparent)]"
               />
               <CommandList>
-                <CommandEmpty>No brands found.</CommandEmpty>
-                <CommandGroup heading="Brands">
+                <CommandEmpty>{uiText('no_brands_found_d6f5a79')}</CommandEmpty>
+                <CommandGroup heading={uiText('brands_ec26be2')}>
                   {brands.map((brand) => (
                     <CommandItem
                       key={brand.id}
@@ -138,12 +140,12 @@ export function BrandSwitcher() {
                       {!brand.completed && (
                         <AlertTriangle
                           className="size-3.5 shrink-0 text-amber-500"
-                          aria-label="Onboarding incomplete"
+                          aria-label={uiText('onboarding_incomplete_41e5f9a')}
                         />
                       )}
                       {brand.isPending && (
                         <span className="text-2xs bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
-                          Pending
+                          {uiText('pending_331551b')}
                         </span>
                       )}
                     </CommandItem>
@@ -165,7 +167,7 @@ export function BrandSwitcher() {
                       <Plus className="size-4" />
                     </div>
                     <div className="font-medium text-[color-mix(in_srgb,var(--popover-foreground)_70%,transparent)]">
-                      Add brand
+                      {uiText('add_brand_55f389a')}
                     </div>
                   </CommandItem>
                 </CommandGroup>

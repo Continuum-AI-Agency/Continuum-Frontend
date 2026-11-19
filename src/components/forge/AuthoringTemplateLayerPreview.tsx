@@ -2,11 +2,11 @@
 
 import type {
   FontInventoryRow,
-  TemplateAuthoringNode,
   TemplateAuthoringCommand,
+  TemplateAuthoringNode,
 } from '@continuum/contracts';
-import type { AuthoringEditableLayer, AuthoringLayerEdit } from './authoringTemplateLayerTypes';
 import { Minus, Plus, RotateCcw, Scan, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   type CSSProperties,
   useCallback,
@@ -26,21 +26,22 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
-import { createLayerPreview, poseDelta, type PreviewEdits } from './authoringLayerPreviewSvg';
 import { TemplateLayerInspector } from './AuthoringTemplateLayerInspector';
-import { templateArtworkPreviewKey } from './templateAuthoringProjection';
+import { createLayerPreview, type PreviewEdits, poseDelta } from './authoringLayerPreviewSvg';
+import type { AuthoringEditableLayer, AuthoringLayerEdit } from './authoringTemplateLayerTypes';
 import { maskPreviewMatrix } from './templateAuthoringMasks';
 import type { AuthoredRenderNodeSample } from './templateAuthoringMotion';
+import { templateArtworkPreviewKey } from './templateAuthoringProjection';
 import {
   alignFrames,
-  frameCanvasSelection,
   type CanvasAlignment,
   type CanvasGuides,
-  type CanvasViewMeasurement,
   type CanvasLayerFrame,
   type CanvasPoint,
   type CanvasRect,
+  type CanvasViewMeasurement,
   canvasGestureAllowed,
+  frameCanvasSelection,
   moveFrames,
   normalizeAngle,
   normalizeSelection,
@@ -51,8 +52,8 @@ import {
   snapPoint,
   snapTranslation,
   toggleSelection,
-  usableSnapRects,
   unionBounds,
+  usableSnapRects,
 } from './templateLayerCanvasGeometry';
 
 /** A flattened precomp's child selects its containing layer in the composition being edited. */
@@ -79,7 +80,10 @@ export function previewTarget(
 }
 
 function generatedGroupHasKeyframes(node: TemplateAuthoringNode | null | undefined) {
-  return node?.kind === 'group' && (node.keyframeChannels ?? []).some((channel) => channel.keyframes.length > 0);
+  return (
+    node?.kind === 'group' &&
+    (node.keyframeChannels ?? []).some((channel) => channel.keyframes.length > 0)
+  );
 }
 
 function pointerIsOnRenderedResizeEdge(
@@ -89,14 +93,21 @@ function pointerIsOnRenderedResizeEdge(
   handleWidth: number,
   handleHeight: number,
 ) {
-  if (point.x < bounds.left || point.x > bounds.left + bounds.width ||
-    point.y < bounds.top || point.y > bounds.top + bounds.height) return true;
+  if (
+    point.x < bounds.left ||
+    point.x > bounds.left + bounds.width ||
+    point.y < bounds.top ||
+    point.y > bounds.top + bounds.height
+  )
+    return true;
   const horizontalBand = Math.min(bounds.width / 4, handleWidth / 2 || 5);
   const verticalBand = Math.min(bounds.height / 4, handleHeight / 2 || 5);
-  return (!handle.includes('w') || point.x - bounds.left <= horizontalBand) &&
+  return (
+    (!handle.includes('w') || point.x - bounds.left <= horizontalBand) &&
     (!handle.includes('e') || bounds.left + bounds.width - point.x <= horizontalBand) &&
     (!handle.includes('n') || point.y - bounds.top <= verticalBand) &&
-    (!handle.includes('s') || bounds.top + bounds.height - point.y <= verticalBand);
+    (!handle.includes('s') || bounds.top + bounds.height - point.y <= verticalBand)
+  );
 }
 
 type CanvasGesture = {
@@ -210,7 +221,11 @@ function svgLayerBounds(svg: SVGSVGElement, layerId: number): CanvasRect | null 
 function renderedElementBounds(svg: SVGSVGElement, element: SVGGraphicsElement): CanvasRect | null {
   let current: Element | null = element;
   while (current && current !== svg) {
-    if (current.getAttribute('display') === 'none' || current.getAttribute('visibility') === 'hidden') return null;
+    if (
+      current.getAttribute('display') === 'none' ||
+      current.getAttribute('visibility') === 'hidden'
+    )
+      return null;
     const opacity = current.getAttribute('opacity');
     if (opacity !== null && Number(opacity) <= 0) return null;
     current = current.parentElement;
@@ -219,12 +234,16 @@ function renderedElementBounds(svg: SVGSVGElement, element: SVGGraphicsElement):
   const inverse = svg.getScreenCTM()?.inverse();
   if (!inverse || rect.width <= 0 || rect.height <= 0) return null;
   const points = [
-    pointFromClient(inverse, rect.left, rect.top), pointFromClient(inverse, rect.right, rect.top),
-    pointFromClient(inverse, rect.right, rect.bottom), pointFromClient(inverse, rect.left, rect.bottom),
+    pointFromClient(inverse, rect.left, rect.top),
+    pointFromClient(inverse, rect.right, rect.top),
+    pointFromClient(inverse, rect.right, rect.bottom),
+    pointFromClient(inverse, rect.left, rect.bottom),
   ];
   return {
-    left: Math.min(...points.map((point) => point.x)), top: Math.min(...points.map((point) => point.y)),
-    right: Math.max(...points.map((point) => point.x)), bottom: Math.max(...points.map((point) => point.y)),
+    left: Math.min(...points.map((point) => point.x)),
+    top: Math.min(...points.map((point) => point.y)),
+    right: Math.max(...points.map((point) => point.x)),
+    bottom: Math.max(...points.map((point) => point.y)),
   };
 }
 
@@ -258,14 +277,30 @@ function authoredNodeSnapTargets(
 ) {
   const members = authoredNodeTree(selected, nodes);
   const excludedNodeIds = new Set(members.map((member) => member.nodeId));
-  const excludedLayerIds = new Set(members.flatMap((member) => member.sourceRef ? [member.sourceRef.layerId] : []));
-  const targets = layers.filter((layer) => layer.compId === compId && layer.visible &&
-    typeof layer.opacity === 'number' && layer.opacity > 0 &&
-    !excludedLayerIds.has(layer.layerId))
+  const excludedLayerIds = new Set(
+    members.flatMap((member) => (member.sourceRef ? [member.sourceRef.layerId] : [])),
+  );
+  const targets = layers
+    .filter(
+      (layer) =>
+        layer.compId === compId &&
+        layer.visible &&
+        typeof layer.opacity === 'number' &&
+        layer.opacity > 0 &&
+        !excludedLayerIds.has(layer.layerId),
+    )
     .map((layer) => svgLayerBounds(svg, layer.layerId));
   for (const node of nodes) {
-    if (node.sourceRef || !activeNodeIds.includes(node.nodeId) || node.visible === false || excludedNodeIds.has(node.nodeId)) continue;
-    const element = svg.querySelector<SVGGraphicsElement>(`[data-authored-node-id="${node.nodeId}"]`);
+    if (
+      node.sourceRef ||
+      !activeNodeIds.includes(node.nodeId) ||
+      node.visible === false ||
+      excludedNodeIds.has(node.nodeId)
+    )
+      continue;
+    const element = svg.querySelector<SVGGraphicsElement>(
+      `[data-authored-node-id="${node.nodeId}"]`,
+    );
     if (element) targets.push(renderedElementBounds(svg, element));
   }
   const artboard = viewBoxBounds(svg);
@@ -304,8 +339,8 @@ function layerFrame(
 ): CanvasLayerFrame | null {
   const bounds = svgLayerBounds(svg, layer.layerId);
   const position = edit
-    ? [edit.x ?? layer.x ?? 0, edit.y ?? layer.y ?? 0] as [number, number]
-    : layer.position ?? [layer.x ?? 0, layer.y ?? 0];
+    ? ([edit.x ?? layer.x ?? 0, edit.y ?? layer.y ?? 0] as [number, number])
+    : (layer.position ?? [layer.x ?? 0, layer.y ?? 0]);
   if (!position) return null;
   const measured = bounds ?? {
     left: position[0],
@@ -322,7 +357,10 @@ function layerFrame(
   };
 }
 
-function authoredParentTransform(node: TemplateAuthoringNode, nodes: readonly TemplateAuthoringNode[]): string {
+function authoredParentTransform(
+  node: TemplateAuthoringNode,
+  nodes: readonly TemplateAuthoringNode[],
+): string {
   const transforms: string[] = [];
   const visited = new Set<string>();
   let parentId = node.parentNodeId;
@@ -334,8 +372,11 @@ function authoredParentTransform(node: TemplateAuthoringNode, nodes: readonly Te
       const [x, y] = parent.position ?? [0, 0];
       const [sx, sy] = parent.scale ?? [100, 100];
       const rotation = parent.rotation ?? 0;
-      const parts = [x || y ? `translate(${x} ${y})` : '', rotation ? `rotate(${rotation})` : '',
-        sx !== 100 || sy !== 100 ? `scale(${sx / 100} ${sy / 100})` : ''].filter(Boolean);
+      const parts = [
+        x || y ? `translate(${x} ${y})` : '',
+        rotation ? `rotate(${rotation})` : '',
+        sx !== 100 || sy !== 100 ? `scale(${sx / 100} ${sy / 100})` : '',
+      ].filter(Boolean);
       transforms.unshift(parts.join(' '));
     }
     parentId = parent.parentNodeId;
@@ -402,6 +443,8 @@ export function TemplateLayerPreview({
   artboard?: { width: number | null; height: number | null };
   selectedNodeId?: string | null;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const canvas = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const preview = useRef<ReturnType<typeof createLayerPreview>>(null);
@@ -446,41 +489,61 @@ export function TemplateLayerPreview({
     [previewEdits, compId, layers, edits],
   );
   const currentSelection = normalizeSelection(selectionIds, layers, compId);
-  const selectedAuthoredNode = authoredNodes.find((node) => node.nodeId === selectedNodeId && !node.sourceRef);
+  const selectedAuthoredNode = authoredNodes.find(
+    (node) => node.nodeId === selectedNodeId && !node.sourceRef,
+  );
   const authoredRenderSamples = useMemo(() => {
-    const canonicalIds = new Set(authoredNodes.filter((node) => !node.sourceRef && authoredNodeIds.includes(node.nodeId))
-      .map((node) => node.nodeId));
-    return new Map(authoredRenderNodes.filter((sample) => canonicalIds.has(sample.nodeId))
-      .map((sample) => [sample.nodeId, sample] as const));
+    const canonicalIds = new Set(
+      authoredNodes
+        .filter((node) => !node.sourceRef && authoredNodeIds.includes(node.nodeId))
+        .map((node) => node.nodeId),
+    );
+    return new Map(
+      authoredRenderNodes
+        .filter((sample) => canonicalIds.has(sample.nodeId))
+        .map((sample) => [sample.nodeId, sample] as const),
+    );
   }, [authoredNodes, authoredNodeIds, authoredRenderNodes]);
-  const authoredDisplayNodes = useMemo(() => authoredNodes.map((node) => {
-    const sample = authoredRenderSamples.get(node.nodeId);
-    if (!sample || node.sourceRef) return node;
-    return {
-      ...node,
-      ...(sample.position != null ? { position: sample.position } : {}),
-      ...(sample.scale != null ? { scale: sample.scale } : {}),
-      ...(sample.rotation != null ? { rotation: sample.rotation } : {}),
-      ...(sample.opacity != null ? { opacity: sample.opacity } : {}),
-      ...(sample.visible !== undefined ? { visible: sample.visible } : {}),
-    };
-  }), [authoredNodes, authoredRenderSamples]);
-  const authoredSelectionElements = useCallback((node: TemplateAuthoringNode) => {
-    const svg = canvas.current?.querySelector('svg');
-    if (!svg) return [] as SVGGElement[];
-    const members = node.kind === 'group'
-      ? authoredNodeTree(node, authoredNodes).filter((candidate) => candidate.nodeId !== node.nodeId)
-      : [node];
-    const elements = members.flatMap((member) => {
-      if (member.sourceRef) {
-        return Array.from(svg.querySelectorAll<SVGGElement>('[data-layer-id]'))
-          .filter((element) => Number(element.dataset.layerId) === member.sourceRef?.layerId);
-      }
-      return Array.from(svg.querySelectorAll<SVGGElement>('[data-authored-node-id]'))
-        .filter((element) => element.dataset.authoredNodeId === member.nodeId);
-    });
-    return [...new Set(elements)];
-  }, [authoredNodes]);
+  const authoredDisplayNodes = useMemo(
+    () =>
+      authoredNodes.map((node) => {
+        const sample = authoredRenderSamples.get(node.nodeId);
+        if (!sample || node.sourceRef) return node;
+        return {
+          ...node,
+          ...(sample.position != null ? { position: sample.position } : {}),
+          ...(sample.scale != null ? { scale: sample.scale } : {}),
+          ...(sample.rotation != null ? { rotation: sample.rotation } : {}),
+          ...(sample.opacity != null ? { opacity: sample.opacity } : {}),
+          ...(sample.visible !== undefined ? { visible: sample.visible } : {}),
+        };
+      }),
+    [authoredNodes, authoredRenderSamples],
+  );
+  const authoredSelectionElements = useCallback(
+    (node: TemplateAuthoringNode) => {
+      const svg = canvas.current?.querySelector('svg');
+      if (!svg) return [] as SVGGElement[];
+      const members =
+        node.kind === 'group'
+          ? authoredNodeTree(node, authoredNodes).filter(
+              (candidate) => candidate.nodeId !== node.nodeId,
+            )
+          : [node];
+      const elements = members.flatMap((member) => {
+        if (member.sourceRef) {
+          return Array.from(svg.querySelectorAll<SVGGElement>('[data-layer-id]')).filter(
+            (element) => Number(element.dataset.layerId) === member.sourceRef?.layerId,
+          );
+        }
+        return Array.from(svg.querySelectorAll<SVGGElement>('[data-authored-node-id]')).filter(
+          (element) => element.dataset.authoredNodeId === member.nodeId,
+        );
+      });
+      return [...new Set(elements)];
+    },
+    [authoredNodes],
+  );
   const frameForIds = useCallback(
     (ids: readonly number[]) => {
       const svg = canvas.current?.querySelector('svg');
@@ -506,16 +569,24 @@ export function TemplateLayerPreview({
   const authoredIsGroup = selectedAuthoredNode?.kind === 'group';
   const selectedAuthoredGroupHasMotion = generatedGroupHasKeyframes(selectedAuthoredNode);
   const selectedAuthoredGroupStaticTransformAllowed = !selectedAuthoredGroupHasMotion;
-  const moveAuthoredGroupAllowed = authoredIsGroup && selectedAuthoredGroupStaticTransformAllowed &&
-    !!selectedAuthoredNode?.capabilities.transform && !selectedAuthoredNode.transformLocks.position;
-  const resizeAllowed = currentSelection.length > 0
-    ? nativeResizeAllowed
-    : selectedAuthoredGroupStaticTransformAllowed && !!selectedAuthoredNode?.capabilities.transform &&
-      !selectedAuthoredNode.transformLocks.scale && selectedAuthoredNode.rotation === 0;
-  const rotateAllowed = currentSelection.length > 0
-    ? nativeRotateAllowed
-    : selectedAuthoredGroupStaticTransformAllowed && !!selectedAuthoredNode?.capabilities.transform &&
-      !selectedAuthoredNode.transformLocks.rotation;
+  const moveAuthoredGroupAllowed =
+    authoredIsGroup &&
+    selectedAuthoredGroupStaticTransformAllowed &&
+    !!selectedAuthoredNode?.capabilities.transform &&
+    !selectedAuthoredNode.transformLocks.position;
+  const resizeAllowed =
+    currentSelection.length > 0
+      ? nativeResizeAllowed
+      : selectedAuthoredGroupStaticTransformAllowed &&
+        !!selectedAuthoredNode?.capabilities.transform &&
+        !selectedAuthoredNode.transformLocks.scale &&
+        selectedAuthoredNode.rotation === 0;
+  const rotateAllowed =
+    currentSelection.length > 0
+      ? nativeRotateAllowed
+      : selectedAuthoredGroupStaticTransformAllowed &&
+        !!selectedAuthoredNode?.capabilities.transform &&
+        !selectedAuthoredNode.transformLocks.rotation;
   const multiAlignAllowed = currentSelection.length > 1 && moveAllowed;
 
   const updateSelection = useCallback(
@@ -551,7 +622,8 @@ export function TemplateLayerPreview({
 
   useLayoutEffect(() => {
     const svg = preview.current?.root;
-    if (!svg || !artboard?.width || !artboard.height || artboard.width <= 0 || artboard.height <= 0) return;
+    if (!svg || !artboard?.width || !artboard.height || artboard.width <= 0 || artboard.height <= 0)
+      return;
     svg.setAttribute('viewBox', `0 0 ${artboard.width} ${artboard.height}`);
     svg.dataset.effectiveArtboard = `${artboard.width}x${artboard.height}`;
     let frame = svg.querySelector('[data-canvas-artboard-frame]');
@@ -574,12 +646,14 @@ export function TemplateLayerPreview({
     const svg = preview.current?.root;
     if (!svg) return;
     svg.querySelectorAll('[data-authored-node-id]').forEach((element) => element.remove());
-    svg.querySelectorAll<SVGElement>('[data-authoring-group-original-transform]').forEach((element) => {
-      const original = element.getAttribute('data-authoring-group-original-transform') ?? '';
-      if (original) element.setAttribute('transform', original);
-      else element.removeAttribute('transform');
-      element.removeAttribute('data-authoring-group-original-transform');
-    });
+    svg
+      .querySelectorAll<SVGElement>('[data-authoring-group-original-transform]')
+      .forEach((element) => {
+        const original = element.getAttribute('data-authoring-group-original-transform') ?? '';
+        if (original) element.setAttribute('transform', original);
+        else element.removeAttribute('transform');
+        element.removeAttribute('data-authoring-group-original-transform');
+      });
     for (const id of removedSourceNodeIds) {
       const match = /^aep:\d+:(\d+)$/.exec(id);
       if (!match) continue;
@@ -589,7 +663,8 @@ export function TemplateLayerPreview({
     }
     const ns = 'http://www.w3.org/2000/svg';
     const groups: SVGGElement[] = [];
-    const groupOffset = (node: TemplateAuthoringNode) => authoredParentTransform(node, authoredNodes);
+    const groupOffset = (node: TemplateAuthoringNode) =>
+      authoredParentTransform(node, authoredNodes);
     for (const node of [...authoredNodes].sort((a, b) => b.index - a.index)) {
       if (!authoredNodeIds.includes(node.nodeId) || node.sourceRef) continue;
       const group = document.createElementNS(ns, 'g');
@@ -603,7 +678,10 @@ export function TemplateLayerPreview({
         const [x, y] = node.position;
         const [width, height] = node.size;
         const [scaleX, scaleY] = node.scale ?? [100, 100];
-        group.setAttribute('transform', `${groupOffset(node)} translate(${x} ${y}) rotate(${node.rotation ?? 0}) scale(${scaleX / 100} ${scaleY / 100})`.trim());
+        group.setAttribute(
+          'transform',
+          `${groupOffset(node)} translate(${x} ${y}) rotate(${node.rotation ?? 0}) scale(${scaleX / 100} ${scaleY / 100})`.trim(),
+        );
         const image = document.createElementNS(ns, 'image');
         image.setAttribute('x', String(-width / 2));
         image.setAttribute('y', String(-height / 2));
@@ -621,7 +699,10 @@ export function TemplateLayerPreview({
         const [x, y] = node.position;
         const [width, height] = node.size;
         const [scaleX, scaleY] = node.scale ?? [100, 100];
-        group.setAttribute('transform', `${groupOffset(node)} translate(${x} ${y}) rotate(${node.rotation ?? 0}) scale(${scaleX / 100} ${scaleY / 100})`.trim());
+        group.setAttribute(
+          'transform',
+          `${groupOffset(node)} translate(${x} ${y}) rotate(${node.rotation ?? 0}) scale(${scaleX / 100} ${scaleY / 100})`.trim(),
+        );
         const shape = document.createElementNS(ns, node.shape === 'ellipse' ? 'ellipse' : 'rect');
         const [pathX, pathY] = node.pathPosition ?? [0, 0];
         if (node.shape === 'ellipse') {
@@ -640,10 +721,13 @@ export function TemplateLayerPreview({
             shape.setAttribute(key, 'none');
             return;
           }
-          const color = paint.color.map((value) => Math.round(Math.max(0, Math.min(1, value)) * 255)).join(', ');
+          const color = paint.color
+            .map((value) => Math.round(Math.max(0, Math.min(1, value)) * 255))
+            .join(', ');
           shape.setAttribute(key, `rgb(${color})`);
           shape.setAttribute(`${key}-opacity`, String(paint.opacity));
-          if (key === 'stroke' && 'width' in paint) shape.setAttribute('stroke-width', String(paint.width));
+          if (key === 'stroke' && 'width' in paint)
+            shape.setAttribute('stroke-width', String(paint.width));
         };
         setPaint('fill', node.fill);
         setPaint('stroke', node.stroke);
@@ -651,24 +735,37 @@ export function TemplateLayerPreview({
       } else if (node.textContent && node.position) {
         const [x, y] = node.position;
         const [scaleX, scaleY] = node.scale ?? [100, 100];
-        group.setAttribute('transform', `${groupOffset(node)} translate(${x} ${y}) rotate(${node.rotation ?? 0}) scale(${scaleX / 100} ${scaleY / 100})`.trim());
+        group.setAttribute(
+          'transform',
+          `${groupOffset(node)} translate(${x} ${y}) rotate(${node.rotation ?? 0}) scale(${scaleX / 100} ${scaleY / 100})`.trim(),
+        );
         const text = document.createElementNS(ns, 'text');
         text.textContent = node.textContent;
         text.setAttribute('font-size', String(node.fontSize ?? 48));
         text.setAttribute('font-family', node.fontRef?.postScriptName ?? node.font ?? 'sans-serif');
-        if (node.fillColor) text.setAttribute('fill', `rgb(${node.fillColor.map((value) => Math.round(Math.max(0, Math.min(1, value)) * 255)).join(' ')})`);
+        if (node.fillColor)
+          text.setAttribute(
+            'fill',
+            `rgb(${node.fillColor.map((value) => Math.round(Math.max(0, Math.min(1, value)) * 255)).join(' ')})`,
+          );
         group.append(text);
       } else if (node.sourceNodeId) {
         const source = authoredNodes.find((candidate) => candidate.nodeId === node.sourceNodeId);
         const sourceRef = source?.sourceRef;
         if (!sourceRef) continue;
-        const sourceLayer = layers.find((candidate) => candidate.compId === sourceRef.compId && candidate.layerId === sourceRef.layerId);
-        const originals = [...svg.querySelectorAll(`[data-layer-id="${sourceRef.layerId}"]`)]
-          .filter((element) => element.closest('svg') === svg);
+        const sourceLayer = layers.find(
+          (candidate) =>
+            candidate.compId === sourceRef.compId && candidate.layerId === sourceRef.layerId,
+        );
+        const originals = [
+          ...svg.querySelectorAll(`[data-layer-id="${sourceRef.layerId}"]`),
+        ].filter((element) => element.closest('svg') === svg);
         if (!sourceLayer || !originals.length) continue;
         for (const original of originals) {
           const clone = original.cloneNode(true) as SVGGElement;
-          clone.querySelectorAll('[data-layer-id]').forEach((element) => element.removeAttribute('data-layer-id'));
+          clone
+            .querySelectorAll('[data-layer-id]')
+            .forEach((element) => element.removeAttribute('data-layer-id'));
           clone.removeAttribute('data-layer-id');
           group.append(clone);
         }
@@ -685,16 +782,27 @@ export function TemplateLayerPreview({
         if (event.button === 1 || spaceDown.current) return;
         select(event);
         if (
-          event.button !== 0 || !authoredCallbacks.current.onAuthoredGestureCommit || !node.capabilities.transform ||
-          node.transformLocks.position || !node.position ||
+          event.button !== 0 ||
+          !authoredCallbacks.current.onAuthoredGestureCommit ||
+          !node.capabilities.transform ||
+          node.transformLocks.position ||
+          !node.position ||
           generatedGroupHasKeyframes(node)
-        ) return;
+        )
+          return;
         const inverse = svg.getScreenCTM()?.inverse();
         if (!inverse) return;
         const measuredBounds = renderedElementBounds(svg, group);
         const bounds = measuredBounds ? unionBounds([measuredBounds]) : null;
         if (!bounds) return;
-        const targets = authoredNodeSnapTargets(svg, layers, compId, authoredNodes, authoredNodeIds, node);
+        const targets = authoredNodeSnapTargets(
+          svg,
+          layers,
+          compId,
+          authoredNodes,
+          authoredNodeIds,
+          node,
+        );
         const tolerance = canvasSnapTolerance(inverse, event);
         authoredBodyGesture.current = group;
         canvas.current?.focus({ preventScroll: true });
@@ -710,7 +818,13 @@ export function TemplateLayerPreview({
           const rawDx = point.x - start.x;
           const rawDy = point.y - start.y;
           if (!moved && Math.hypot(rawDx, rawDy) < 2) return;
-          const delta = snapTranslation(bounds, point.x - start.x, point.y - start.y, targets, tolerance);
+          const delta = snapTranslation(
+            bounds,
+            point.x - start.x,
+            point.y - start.y,
+            targets,
+            tolerance,
+          );
           const { dx, dy } = delta;
           moved = true;
           setGuides(delta.guides);
@@ -723,14 +837,20 @@ export function TemplateLayerPreview({
           window.removeEventListener('pointerup', finish);
           window.removeEventListener('pointercancel', cancel);
           setAuthoredGestureRevision((revision) => revision + 1);
-          if (!moved) { setGuides({}); return; }
+          if (!moved) {
+            setGuides({});
+            return;
+          }
           const point = pointFromClient(inverse, finishEvent.clientX, finishEvent.clientY);
-          const delta = snapTranslation(bounds, point.x - start.x, point.y - start.y, targets, tolerance);
+          const delta = snapTranslation(
+            bounds,
+            point.x - start.x,
+            point.y - start.y,
+            targets,
+            tolerance,
+          );
           setGuides(delta.guides);
-          const next: [number, number] = [
-            startPosition[0] + delta.dx,
-            startPosition[1] + delta.dy,
-          ];
+          const next: [number, number] = [startPosition[0] + delta.dx, startPosition[1] + delta.dy];
           authoredCallbacks.current.onAuthoredGestureCommit?.(node.nodeId, { position: next });
         };
         const cancel = (cancelEvent: PointerEvent) => {
@@ -749,13 +869,22 @@ export function TemplateLayerPreview({
       };
       group.addEventListener('pointerdown', onPointerDown);
       group.addEventListener('keydown', (event) => {
-        if (event instanceof KeyboardEvent && (event.key === 'Enter' || event.key === ' ')) select(event);
+        if (event instanceof KeyboardEvent && (event.key === 'Enter' || event.key === ' '))
+          select(event);
       });
       groups.push(group);
       svg.append(group);
     }
     return () => groups.forEach((group) => group.remove());
-  }, [authoredNodes, authoredNodeIds, artworkPreviewUrls, compId, layers, markup, removedSourceNodeIds]);
+  }, [
+    authoredNodes,
+    authoredNodeIds,
+    artworkPreviewUrls,
+    compId,
+    layers,
+    markup,
+    removedSourceNodeIds,
+  ]);
 
   useLayoutEffect(() => {
     const svg = preview.current?.root;
@@ -763,7 +892,12 @@ export function TemplateLayerPreview({
     svg.querySelectorAll('[data-authoring-mask-boundary]').forEach((element) => element.remove());
     const ns = 'http://www.w3.org/2000/svg';
     for (const node of authoredNodes) {
-      if (!node.sourceRef || node.sourceRef.compId !== compId || !authoredNodeIds.includes(node.nodeId) || !node.masks?.length)
+      if (
+        !node.sourceRef ||
+        node.sourceRef.compId !== compId ||
+        !authoredNodeIds.includes(node.nodeId) ||
+        !node.masks?.length
+      )
         continue;
       const matrix = sourceChecksum ? maskPreviewMatrix(node, sourceChecksum) : null;
       if (!matrix) continue;
@@ -774,7 +908,10 @@ export function TemplateLayerPreview({
       for (const mask of node.masks) {
         const outline = document.createElementNS(ns, mask.shape === 'ellipse' ? 'ellipse' : 'rect');
         outline.dataset.authoringMaskBoundary = mask.draftMaskId;
-        outline.setAttribute('aria-label', `${mask.name} boundary; source pixels are not clipped in preview`);
+        outline.setAttribute(
+          'aria-label',
+          `${mask.name} boundary; source pixels are not clipped in preview`,
+        );
         outline.setAttribute('fill', 'none');
         outline.setAttribute('stroke', 'var(--warning)');
         outline.setAttribute('stroke-width', '2');
@@ -827,13 +964,25 @@ export function TemplateLayerPreview({
     if (!svg) return;
     for (const member of authoredNodes) {
       if (!member.sourceRef || member.sourceRef.compId !== compId || !member.position) continue;
-      const alreadyRenderedPosition = basePreview.current[member.sourceRef.layerId]?.position ??
-        layers.find((candidate) => candidate.compId === compId && candidate.layerId === member.sourceRef?.layerId)?.position;
+      const alreadyRenderedPosition =
+        basePreview.current[member.sourceRef.layerId]?.position ??
+        layers.find(
+          (candidate) =>
+            candidate.compId === compId && candidate.layerId === member.sourceRef?.layerId,
+        )?.position;
       if (!alreadyRenderedPosition) continue;
-      const sourceLayer = layers.find((candidate) => candidate.compId === compId && candidate.layerId === member.sourceRef?.layerId);
+      const sourceLayer = layers.find(
+        (candidate) =>
+          candidate.compId === compId && candidate.layerId === member.sourceRef?.layerId,
+      );
       const renderedEdit = basePreview.current[member.sourceRef.layerId];
-      const renderedPose = { position: alreadyRenderedPosition, visible: renderedEdit?.visible ?? sourceLayer?.visible ?? true, opacity: renderedEdit?.opacity ?? sourceLayer?.opacity ?? null,
-        rotation: renderedEdit?.rotation ?? sourceLayer?.rotation ?? null, scale: renderedEdit?.scale ?? sourceLayer?.scale ?? null };
+      const renderedPose = {
+        position: alreadyRenderedPosition,
+        visible: renderedEdit?.visible ?? sourceLayer?.visible ?? true,
+        opacity: renderedEdit?.opacity ?? sourceLayer?.opacity ?? null,
+        rotation: renderedEdit?.rotation ?? sourceLayer?.rotation ?? null,
+        scale: renderedEdit?.scale ?? sourceLayer?.scale ?? null,
+      };
       // `current` is the pose already painted into the native SVG (including sampled keyframes).
       // Align to the canonical authored pose only for channels that the preview did not supply;
       // otherwise this correction would immediately cancel the sampled native motion.
@@ -845,14 +994,22 @@ export function TemplateLayerPreview({
       };
       const correctionX = correctionTarget.position[0] - alreadyRenderedPosition[0];
       const correctionY = correctionTarget.position[1] - alreadyRenderedPosition[1];
-      const poseChanged = (correctionTarget.rotation ?? 0) !== (renderedPose.rotation ?? 0) ||
-        (correctionTarget.scale ?? [100, 100]).some((value, index) => value !== (renderedPose.scale ?? [100, 100])[index]);
+      const poseChanged =
+        (correctionTarget.rotation ?? 0) !== (renderedPose.rotation ?? 0) ||
+        (correctionTarget.scale ?? [100, 100]).some(
+          (value, index) => value !== (renderedPose.scale ?? [100, 100])[index],
+        );
       const parentTransform = authoredParentTransform(member, authoredNodes);
-      const delta = poseChanged ? poseDelta(renderedPose, correctionTarget) : correctionX || correctionY
-        ? `translate(${correctionX} ${correctionY})` : '';
+      const delta = poseChanged
+        ? poseDelta(renderedPose, correctionTarget)
+        : correctionX || correctionY
+          ? `translate(${correctionX} ${correctionY})`
+          : '';
       const prefix = [parentTransform, delta].filter(Boolean).join(' ');
       if (!prefix) continue;
-      for (const original of svg.querySelectorAll<SVGElement>(`[data-layer-id="${member.sourceRef.layerId}"]`)) {
+      for (const original of svg.querySelectorAll<SVGElement>(
+        `[data-layer-id="${member.sourceRef.layerId}"]`,
+      )) {
         if (original.closest('svg') !== svg) continue;
         const transform = original.getAttribute('transform') ?? '';
         original.setAttribute('transform', `${prefix} ${transform}`.trim());
@@ -885,7 +1042,8 @@ export function TemplateLayerPreview({
       return;
     }
     const authoredRects = selectedAuthoredNode
-      ? authoredSelectionElements(selectedAuthoredNode).map((element) => element.getBoundingClientRect())
+      ? authoredSelectionElements(selectedAuthoredNode)
+          .map((element) => element.getBoundingClientRect())
           .filter((rect) => rect.width > 0 && rect.height > 0)
       : [];
     const authoredRect = authoredRects.length
@@ -894,13 +1052,18 @@ export function TemplateLayerPreview({
           top: Math.min(...authoredRects.map((rect) => rect.top)),
           right: Math.max(...authoredRects.map((rect) => rect.right)),
           bottom: Math.max(...authoredRects.map((rect) => rect.bottom)),
-          width: Math.max(...authoredRects.map((rect) => rect.right)) - Math.min(...authoredRects.map((rect) => rect.left)),
-          height: Math.max(...authoredRects.map((rect) => rect.bottom)) - Math.min(...authoredRects.map((rect) => rect.top)),
+          width:
+            Math.max(...authoredRects.map((rect) => rect.right)) -
+            Math.min(...authoredRects.map((rect) => rect.left)),
+          height:
+            Math.max(...authoredRects.map((rect) => rect.bottom)) -
+            Math.min(...authoredRects.map((rect) => rect.top)),
         }
       : null;
-    const bounds = authoredRect && authoredRect.width > 0 && authoredRect.height > 0
-      ? authoredRect
-      : screenSelectionBounds(svg, currentSelection);
+    const bounds =
+      authoredRect && authoredRect.width > 0 && authoredRect.height > 0
+        ? authoredRect
+        : screenSelectionBounds(svg, currentSelection);
     if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
       setSelectionBox(null);
       return;
@@ -912,8 +1075,15 @@ export function TemplateLayerPreview({
       width: bounds.width,
       height: bounds.height,
     };
-    setSelectionBox((previous) => previous && previous.left === next.left && previous.top === next.top &&
-      previous.width === next.width && previous.height === next.height ? previous : next);
+    setSelectionBox((previous) =>
+      previous &&
+      previous.left === next.left &&
+      previous.top === next.top &&
+      previous.width === next.width &&
+      previous.height === next.height
+        ? previous
+        : next,
+    );
   }, [currentSelection.join(','), selectedAuthoredNode?.nodeId, authoredSelectionElements]);
 
   useLayoutEffect(() => {
@@ -927,7 +1097,8 @@ export function TemplateLayerPreview({
       if (!nodeId) continue;
       const canonical = canonicalById.get(nodeId);
       const display = displayById.get(nodeId);
-      if (!canonical || canonical.sourceRef || !display || !authoredNodeIds.includes(nodeId)) continue;
+      if (!canonical || canonical.sourceRef || !display || !authoredNodeIds.includes(nodeId))
+        continue;
 
       let visible = display.visible !== false;
       let inheritedOpacity = 1;
@@ -946,26 +1117,37 @@ export function TemplateLayerPreview({
       }
       if (visible) group.removeAttribute('display');
       else group.setAttribute('display', 'none');
-      group.setAttribute('opacity', String((display.opacity ?? 100) / 100 * inheritedOpacity));
+      group.setAttribute('opacity', String(((display.opacity ?? 100) / 100) * inheritedOpacity));
 
       if (display.kind === 'group') continue;
       const parentTransform = authoredParentTransform(display, authoredDisplayNodes);
       if (canonical.sourceNodeId) {
         const source = canonicalById.get(canonical.sourceNodeId);
-        const delta = source?.sourceRef && source.position && display.position
-          ? poseDelta(source, display)
-          : null;
+        const delta =
+          source?.sourceRef && source.position && display.position
+            ? poseDelta(source, display)
+            : null;
         const transform = [parentTransform, delta].filter(Boolean).join(' ');
         if (transform) group.setAttribute('transform', transform);
         else group.removeAttribute('transform');
       } else if (display.position) {
         const [x, y] = display.position;
         const [scaleX, scaleY] = display.scale ?? [100, 100];
-        group.setAttribute('transform', `${parentTransform} translate(${x} ${y}) rotate(${display.rotation ?? 0}) scale(${scaleX / 100} ${scaleY / 100})`.trim());
+        group.setAttribute(
+          'transform',
+          `${parentTransform} translate(${x} ${y}) rotate(${display.rotation ?? 0}) scale(${scaleX / 100} ${scaleY / 100})`.trim(),
+        );
       }
     }
     measureSelection();
-  }, [authoredNodes, authoredNodeIds, authoredDisplayNodes, authoredRenderSamples, measureSelection, authoredGestureRevision]);
+  }, [
+    authoredNodes,
+    authoredNodeIds,
+    authoredDisplayNodes,
+    authoredRenderSamples,
+    measureSelection,
+    authoredGestureRevision,
+  ]);
 
   useLayoutEffect(() => {
     const readView = (): CanvasViewMeasurement | null => {
@@ -973,10 +1155,18 @@ export function TemplateLayerPreview({
       const matrix = host?.querySelector('svg')?.getScreenCTM();
       if (!host || !matrix || !host.clientWidth || !host.clientHeight) return null;
       const rect = host.getBoundingClientRect();
-      return { width: host.clientWidth, height: host.clientHeight, matrix: {
-        a: matrix.a, b: matrix.b, c: matrix.c, d: matrix.d,
-        e: matrix.e - rect.left, f: matrix.f - rect.top,
-      } };
+      return {
+        width: host.clientWidth,
+        height: host.clientHeight,
+        matrix: {
+          a: matrix.a,
+          b: matrix.b,
+          c: matrix.c,
+          d: matrix.d,
+          e: matrix.e - rect.left,
+          f: matrix.f - rect.top,
+        },
+      };
     };
     cameraMeasurement.current = readView();
     measureSelection();
@@ -984,10 +1174,18 @@ export function TemplateLayerPreview({
       const before = cameraMeasurement.current;
       const after = readView();
       cameraMeasurement.current = after;
-      if (before && after && (before.width !== after.width || before.height !== after.height) &&
-          !active.current && !authoredHandle.current) {
+      if (
+        before &&
+        after &&
+        (before.width !== after.width || before.height !== after.height) &&
+        !active.current &&
+        !authoredHandle.current
+      ) {
         const next = retainCanvasViewOnResize({ zoom, pan }, before, after);
-        if (next) { setZoom(next.zoom); setPan(next.pan); }
+        if (next) {
+          setZoom(next.zoom);
+          setPan(next.pan);
+        }
       }
       measureSelection();
     });
@@ -998,19 +1196,21 @@ export function TemplateLayerPreview({
   }, [markup, previewEdits, shadowEdits, zoom, pan, measureSelection]);
 
   const framesForGesture = (ids: readonly number[]) => frameForIds(ids);
-  const snapTargets = useCallback((ids: readonly number[]) => {
-    const svg = canvas.current?.querySelector('svg');
-    if (!svg) return [];
-    const selected = new Set(ids);
-    const boxes = layers
-      .filter((entry) => entry.compId === compId && !selected.has(entry.layerId))
-      .map((entry) => svgLayerBounds(svg, entry.layerId))
-      .filter((box): box is CanvasRect => !!box);
-    const canvasBounds = viewBoxBounds(svg);
-    if (canvasBounds) boxes.push(canvasBounds);
-    return boxes;
-  }, [layers, compId]);
-
+  const snapTargets = useCallback(
+    (ids: readonly number[]) => {
+      const svg = canvas.current?.querySelector('svg');
+      if (!svg) return [];
+      const selected = new Set(ids);
+      const boxes = layers
+        .filter((entry) => entry.compId === compId && !selected.has(entry.layerId))
+        .map((entry) => svgLayerBounds(svg, entry.layerId))
+        .filter((box): box is CanvasRect => !!box);
+      const canvasBounds = viewBoxBounds(svg);
+      if (canvasBounds) boxes.push(canvasBounds);
+      return boxes;
+    },
+    [layers, compId],
+  );
 
   const updateShadow = (batch: readonly AuthoringLayerEdit[]) => {
     const next = { ...shadowRef.current };
@@ -1145,29 +1345,51 @@ export function TemplateLayerPreview({
     const svg = canvas.current?.querySelector('svg');
     const screenMatrix = svg?.getScreenCTM();
     const elements = node ? authoredSelectionElements(node) : [];
-    if (!node?.capabilities.transform || node.sourceRef || !node.position || !svg || !screenMatrix || !elements.length ||
-      generatedGroupHasKeyframes(node)) return false;
+    if (
+      !node?.capabilities.transform ||
+      node.sourceRef ||
+      !node.position ||
+      !svg ||
+      !screenMatrix ||
+      !elements.length ||
+      generatedGroupHasKeyframes(node)
+    )
+      return false;
     if (kind === 'move' && node.transformLocks.position) return false;
     if (kind === 'resize' && (node.transformLocks.scale || node.rotation !== 0)) return false;
     if (kind === 'rotate' && node.transformLocks.rotation) return false;
     const inverse = screenMatrix.inverse();
     const start = pointFromClient(inverse, event.clientX, event.clientY);
-    const bounds = unionBounds(elements.flatMap((element) => {
-      const measured = renderedElementBounds(svg, element);
-      return measured ? [measured] : [];
-    }));
+    const bounds = unionBounds(
+      elements.flatMap((element) => {
+        const measured = renderedElementBounds(svg, element);
+        return measured ? [measured] : [];
+      }),
+    );
     if (!bounds) return false;
     const [scaleX, scaleY] = node.scale ?? [100, 100];
     const rotation = node.rotation ?? 0;
     const [positionX, positionY] = node.position;
     const gesture: AuthoredHandleGesture = {
-      pointerId: event.pointerId, node, kind, handle, inverse, start,
+      pointerId: event.pointerId,
+      node,
+      kind,
+      handle,
+      inverse,
+      start,
       pivot: { x: positionX, y: positionY },
       startAngle: Math.atan2(start.y - positionY, start.x - positionX),
-      startPosition: [positionX, positionY], startScale: [scaleX, scaleY], startRotation: rotation,
+      startPosition: [positionX, positionY],
+      startScale: [scaleX, scaleY],
+      startRotation: rotation,
       targets: authoredNodeSnapTargets(svg, layers, compId, authoredNodes, authoredNodeIds, node),
-      tolerance: canvasSnapTolerance(inverse, event), edit: {}, bounds,
-      elements: elements.map((element) => ({ element, transform: element.getAttribute('transform') })),
+      tolerance: canvasSnapTolerance(inverse, event),
+      edit: {},
+      bounds,
+      elements: elements.map((element) => ({
+        element,
+        transform: element.getAttribute('transform'),
+      })),
     };
     authoredHandle.current = gesture;
     setGuides({});
@@ -1179,15 +1401,24 @@ export function TemplateLayerPreview({
     return true;
   };
 
-  const updateAuthoredHandle = (gesture: AuthoredHandleGesture, clientX: number, clientY: number) => {
+  const updateAuthoredHandle = (
+    gesture: AuthoredHandleGesture,
+    clientX: number,
+    clientY: number,
+  ) => {
     const point = pointFromClient(gesture.inverse, clientX, clientY);
     const [positionX, positionY] = gesture.startPosition;
     let position: [number, number] = [positionX, positionY];
-    let scale: [number, number] = [...gesture.startScale];
+    const scale: [number, number] = [...gesture.startScale];
     let rotation = gesture.startRotation;
     if (gesture.kind === 'move') {
-      const delta = snapTranslation(gesture.bounds, point.x - gesture.start.x, point.y - gesture.start.y,
-        gesture.targets, gesture.tolerance);
+      const delta = snapTranslation(
+        gesture.bounds,
+        point.x - gesture.start.x,
+        point.y - gesture.start.y,
+        gesture.targets,
+        gesture.tolerance,
+      );
       setGuides(delta.guides);
       position = [positionX + delta.dx, positionY + delta.dy];
       const { dx, dy } = delta;
@@ -1198,7 +1429,9 @@ export function TemplateLayerPreview({
     }
     if (gesture.kind === 'rotate') {
       const radians = Math.atan2(point.y - gesture.pivot.y, point.x - gesture.pivot.x);
-      rotation = normalizeAngle(gesture.startRotation + ((radians - gesture.startAngle) * 180) / Math.PI);
+      rotation = normalizeAngle(
+        gesture.startRotation + ((radians - gesture.startAngle) * 180) / Math.PI,
+      );
     } else {
       const bounds = gesture.bounds;
       if (!gesture.handle) return;
@@ -1207,14 +1440,14 @@ export function TemplateLayerPreview({
         const anchor = handle.includes('w') ? bounds.right : bounds.left;
         const startSize = Math.max(1, bounds.right - bounds.left);
         const nextSize = Math.max(1, Math.abs(point.x - anchor));
-        scale[0] = gesture.startScale[0] * nextSize / startSize;
+        scale[0] = (gesture.startScale[0] * nextSize) / startSize;
         position[0] += (point.x + anchor) / 2 - (bounds.left + bounds.right) / 2;
       }
       if (handle.includes('n') || handle.includes('s')) {
         const anchor = handle.includes('n') ? bounds.bottom : bounds.top;
         const startSize = Math.max(1, bounds.bottom - bounds.top);
         const nextSize = Math.max(1, Math.abs(point.y - anchor));
-        scale[1] = gesture.startScale[1] * nextSize / startSize;
+        scale[1] = (gesture.startScale[1] * nextSize) / startSize;
         position[1] += (point.y + anchor) / 2 - (bounds.top + bounds.bottom) / 2;
       }
     }
@@ -1224,7 +1457,10 @@ export function TemplateLayerPreview({
       for (const { element, transform } of gesture.elements)
         element.setAttribute('transform', [delta, transform].filter(Boolean).join(' '));
     } else {
-      gesture.elements[0]?.element.setAttribute('transform', `translate(${position[0]} ${position[1]}) rotate(${rotation}) scale(${scale[0] / 100} ${scale[1] / 100})`);
+      gesture.elements[0]?.element.setAttribute(
+        'transform',
+        `translate(${position[0]} ${position[1]}) rotate(${rotation}) scale(${scale[0] / 100} ${scale[1] / 100})`,
+      );
     }
   };
 
@@ -1233,13 +1469,18 @@ export function TemplateLayerPreview({
     if (authored && event.pointerId === authored.pointerId) {
       authoredHandle.current = null;
       for (const { element, transform } of authored.elements)
-        transform === null ? element.removeAttribute('transform') : element.setAttribute('transform', transform);
+        transform === null
+          ? element.removeAttribute('transform')
+          : element.setAttribute('transform', transform);
       if (!cancelled && Object.keys(authored.edit).length) {
         onAuthoredGestureCommit?.(authored.node.nodeId, authored.edit);
       } else if (authored.node.kind !== 'group') {
         const [x, y] = authored.startPosition;
         const [sx, sy] = authored.startScale;
-        authored.elements[0]?.element.setAttribute('transform', `translate(${x} ${y}) rotate(${authored.startRotation}) scale(${sx / 100} ${sy / 100})`);
+        authored.elements[0]?.element.setAttribute(
+          'transform',
+          `translate(${x} ${y}) rotate(${authored.startRotation}) scale(${sx / 100} ${sy / 100})`,
+        );
       }
       setGuides({});
       setAuthoredGestureRevision((revision) => revision + 1);
@@ -1299,11 +1540,21 @@ export function TemplateLayerPreview({
   const frameSelection = () => {
     const host = canvas.current;
     if (!host || !selectionBox) return;
-    const next = frameCanvasSelection({ zoom, pan }, {
-      left: selectionBox.left, top: selectionBox.top,
-      right: selectionBox.left + selectionBox.width, bottom: selectionBox.top + selectionBox.height,
-    }, { width: host.clientWidth, height: host.clientHeight }, ZOOM_MAX);
-    if (next) { setZoom(next.zoom); setPan(next.pan); }
+    const next = frameCanvasSelection(
+      { zoom, pan },
+      {
+        left: selectionBox.left,
+        top: selectionBox.top,
+        right: selectionBox.left + selectionBox.width,
+        bottom: selectionBox.top + selectionBox.height,
+      },
+      { width: host.clientWidth, height: host.clientHeight },
+      ZOOM_MAX,
+    );
+    if (next) {
+      setZoom(next.zoom);
+      setPan(next.pan);
+    }
   };
 
   const onPointerDown = (event: React.PointerEvent) => {
@@ -1340,14 +1591,21 @@ export function TemplateLayerPreview({
       event.preventDefault();
       const resizeHandle = handle as ResizeHandle;
       const hostBounds = canvas.current?.getBoundingClientRect();
-      const handleBounds = target?.closest<HTMLElement>('[data-canvas-handle]')?.getBoundingClientRect();
-      if (event.button === 0 && selectionBox && hostBounds && !pointerIsOnRenderedResizeEdge(
-        resizeHandle,
-        selectionBox,
-        { x: event.clientX - hostBounds.left, y: event.clientY - hostBounds.top },
-        handleBounds?.width ?? 0,
-        handleBounds?.height ?? 0,
-      )) {
+      const handleBounds = target
+        ?.closest<HTMLElement>('[data-canvas-handle]')
+        ?.getBoundingClientRect();
+      if (
+        event.button === 0 &&
+        selectionBox &&
+        hostBounds &&
+        !pointerIsOnRenderedResizeEdge(
+          resizeHandle,
+          selectionBox,
+          { x: event.clientX - hostBounds.left, y: event.clientY - hostBounds.top },
+          handleBounds?.width ?? 0,
+          handleBounds?.height ?? 0,
+        )
+      ) {
         if (selectedAuthoredNode) {
           if (!beginAuthoredHandle(event, 'move')) setOpen(true);
         } else if (!beginTransform(event, 'move', currentSelection)) {
@@ -1411,14 +1669,33 @@ export function TemplateLayerPreview({
   };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
-    if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
-    const singleSelected = !!selectedNodeId && (selectedAuthoredNode ? 1 : currentSelection.length) === 1;
-    if (!disabled && singleSelected && !event.repeat && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd' && onDuplicateNode) {
+    if (
+      event.target instanceof Element &&
+      event.target.closest('input, textarea, select, [contenteditable="true"]')
+    )
+      return;
+    const singleSelected =
+      !!selectedNodeId && (selectedAuthoredNode ? 1 : currentSelection.length) === 1;
+    if (
+      !disabled &&
+      singleSelected &&
+      !event.repeat &&
+      (event.ctrlKey || event.metaKey) &&
+      event.key.toLowerCase() === 'd' &&
+      onDuplicateNode
+    ) {
       event.preventDefault();
       event.stopPropagation();
       onDuplicateNode();
-    } else if (!disabled && singleSelected && !event.repeat && !event.ctrlKey && !event.metaKey &&
-      (event.key === 'Delete' || event.key === 'Backspace') && onDeleteNode) {
+    } else if (
+      !disabled &&
+      singleSelected &&
+      !event.repeat &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      (event.key === 'Delete' || event.key === 'Backspace') &&
+      onDeleteNode
+    ) {
       event.preventDefault();
       onDeleteNode();
     } else if (event.key === ' ') {
@@ -1452,20 +1729,30 @@ export function TemplateLayerPreview({
       event.preventDefault();
       setZoom(1);
       setPan({ x: 0, y: 0 });
-    } else if (selectedAuthoredNode?.position && selectedAuthoredNode.capabilities.transform &&
+    } else if (
+      selectedAuthoredNode?.position &&
+      selectedAuthoredNode.capabilities.transform &&
       !selectedAuthoredNode.transformLocks.position &&
       !generatedGroupHasKeyframes(selectedAuthoredNode) &&
-      !event.metaKey && !event.ctrlKey && !event.altKey) {
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
       const direction: Record<string, CanvasPoint> = {
-        ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 },
-        ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
+        ArrowLeft: { x: -1, y: 0 },
+        ArrowRight: { x: 1, y: 0 },
+        ArrowUp: { x: 0, y: -1 },
+        ArrowDown: { x: 0, y: 1 },
       };
       const delta = direction[event.key];
       if (!delta) return;
       event.preventDefault();
       const step = event.shiftKey ? 10 : 1;
       onAuthoredGestureCommit?.(selectedAuthoredNode.nodeId, {
-        position: [selectedAuthoredNode.position[0] + delta.x * step, selectedAuthoredNode.position[1] + delta.y * step],
+        position: [
+          selectedAuthoredNode.position[0] + delta.x * step,
+          selectedAuthoredNode.position[1] + delta.y * step,
+        ],
       });
     } else if (currentSelection.length && !event.metaKey && !event.ctrlKey && !event.altKey) {
       const direction: Record<string, CanvasPoint> = {
@@ -1503,8 +1790,8 @@ export function TemplateLayerPreview({
             <div
               ref={canvas}
               role="application"
-              aria-roledescription="template canvas"
-              aria-label="Interactive template preview"
+              aria-roledescription={translateUi('templateCanvasRole')}
+              aria-label={translateUi('interactive_template_preview_b850d502')}
               aria-describedby="template-preview-help"
               // biome-ignore lint/a11y/noNoninteractiveTabindex: the canvas provides layer selection, transform handles, and zoom/pan shortcuts.
               tabIndex={0}
@@ -1537,7 +1824,7 @@ export function TemplateLayerPreview({
               <div
                 ref={content}
                 role="img"
-                aria-label="Layout preview of the template with these edits"
+                aria-label={translateUi('layout_preview_of_the_template_with_b19ce0df')}
                 className="size-full select-none"
                 style={{ transform: translated, transformOrigin: '0 0' }}
               />
@@ -1574,7 +1861,7 @@ export function TemplateLayerPreview({
                     <button
                       type="button"
                       data-canvas-handle="move"
-                      aria-label="Move selected group"
+                      aria-label={translateUi('move_selected_group_98a244b9')}
                       className="pointer-events-auto absolute left-1/2 -top-2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   ) : null}
@@ -1584,7 +1871,10 @@ export function TemplateLayerPreview({
                           key={handle}
                           type="button"
                           data-canvas-handle={handle}
-                          aria-label={`Resize selected ${liveCount === 1 ? 'layer' : 'layers'} from ${handle}`}
+                          aria-label={translateUi('resize_selected_value0_from_value1_54258c6d', {
+                            value0: String(liveCount === 1 ? 'layer' : 'layers'),
+                            value1: String(handle),
+                          })}
                           className="pointer-events-auto absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           style={HANDLE_POSITIONS[handle]}
                         />
@@ -1599,7 +1889,9 @@ export function TemplateLayerPreview({
                       <button
                         type="button"
                         data-canvas-handle="rotate"
-                        aria-label={`Rotate selected ${liveCount === 1 ? 'layer' : 'layers'}`}
+                        aria-label={translateUi('rotate_selected_value0_78668966', {
+                          value0: String(liveCount === 1 ? 'layer' : 'layers'),
+                        })}
                         className="pointer-events-auto absolute left-1/2 -top-5 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
                     </>
@@ -1617,7 +1909,7 @@ export function TemplateLayerPreview({
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  aria-label="Zoom out"
+                  aria-label={translateUi('zoom_out_bc7b631a')}
                   onClick={() => zoomAt(zoom / 1.2)}
                 >
                   <Minus aria-hidden />
@@ -1631,19 +1923,26 @@ export function TemplateLayerPreview({
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  aria-label="Zoom in"
+                  aria-label={translateUi('zoom_in_0e47f09a')}
                   onClick={() => zoomAt(zoom * 1.2)}
                 >
                   <Plus aria-hidden />
                 </Button>
-                <Button size="icon-xs" variant="ghost" aria-label="Frame selected layers" title="Frame selection (Shift+2)" disabled={!selectionBox} onClick={frameSelection}>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label={translateUi('frame_selected_layers_08bbde68')}
+                  title={translateUi('frame_selection_shift_2_82b332a6')}
+                  disabled={!selectionBox}
+                  onClick={frameSelection}
+                >
                   <Scan aria-hidden />
                 </Button>
                 <Button
                   size="xs"
                   variant="ghost"
-                  aria-label="Reset canvas view"
-                  title="Fit artboard (0)"
+                  aria-label={translateUi('reset_canvas_view_0ac0a082')}
+                  title={translateUi('fit_artboard_0_fc816196')}
                   onClick={() => {
                     setZoom(1);
                     setPan({ x: 0, y: 0 });
@@ -1656,30 +1955,37 @@ export function TemplateLayerPreview({
                 <p className="pointer-events-none absolute inset-x-3 bottom-3 bg-background/90 px-2 py-1 text-2xs text-muted-foreground">
                   {displayedLayer.name}:{' '}
                   {(edit?.visible ?? displayedLayer.visible)
-                    ? 'no visible marks in this preview. Use the layer controls.'
-                    : 'hidden in this composition.'}
+                    ? translateUi('no_visible_marks_in_this_preview_us_ee73d197')
+                    : translateUi('hidden_in_this_composition_0dfaf461')}
                 </p>
               ) : null}
               <span className="sr-only" aria-live="polite">
                 {liveCount
-                  ? `${liveCount} layer${liveCount === 1 ? '' : 's'} selected.`
-                  : 'No layers selected.'}{' '}
-                Hold Shift while selecting to add or remove layers. Hold Space and drag to pan. Use
-                plus/minus or the wheel to zoom.
+                  ? translateUi('value0_layer_value1_selected_fb12b124', {
+                      count: Number(liveCount),
+                    })
+                  : translateUi('no_layers_selected_708f38bb')}{' '}
+                {translateUi('hold_shift_while_selecting_to_add_o_6d956cc4')}{' '}
               </span>
             </div>
           }
         />
         <ContextMenuContent className="min-w-48">
-          <ContextMenuLabel>Canvas</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('canvas_3824a9f4')}</ContextMenuLabel>
           {displayedLayer ? (
-            <ContextMenuItem onSelect={() => setOpen(true)}>Layer controls</ContextMenuItem>
+            <ContextMenuItem onSelect={() => setOpen(true)}>
+              {translateUi('layer_controls_a77d8702')}
+            </ContextMenuItem>
           ) : null}
           {selectedNodeId && onDuplicateNode ? (
-            <ContextMenuItem disabled={disabled} onSelect={onDuplicateNode}>Duplicate selected layer</ContextMenuItem>
+            <ContextMenuItem disabled={disabled} onSelect={onDuplicateNode}>
+              {translateUi('duplicate_selected_layer_4f05e173')}
+            </ContextMenuItem>
           ) : null}
           {selectedNodeId && onDeleteNode ? (
-            <ContextMenuItem disabled={disabled} onSelect={onDeleteNode}>Delete selected layer</ContextMenuItem>
+            <ContextMenuItem disabled={disabled} onSelect={onDeleteNode}>
+              {translateUi('delete_selected_layer_15c7b7d4')}
+            </ContextMenuItem>
           ) : null}
           <ContextMenuItem
             disabled={
@@ -1706,10 +2012,11 @@ export function TemplateLayerPreview({
               if (ids[0] !== undefined) onSelect(ids[0]);
             }}
           >
-            Select editable layers
+            {' '}
+            {translateUi('select_editable_layers_c1d247cb')}{' '}
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuLabel>Align selected</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('align_selected_8d4ee794')}</ContextMenuLabel>
           {(
             [
               ['left', 'Align left'],
@@ -1731,7 +2038,7 @@ export function TemplateLayerPreview({
         </ContextMenuContent>
       </ContextMenu>
       <PopoverContent
-        aria-label="Layer controls"
+        aria-label={translateUi('layer_controls_a77d8702')}
         side="right"
         align="start"
         collisionPadding={12}
@@ -1740,11 +2047,11 @@ export function TemplateLayerPreview({
         className="max-h-[70dvh] w-64 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3"
       >
         <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="text-xs font-medium">Layer controls</span>
+          <span className="text-xs font-medium">{translateUi('layer_controls_a77d8702')}</span>
           <Button
             size="icon-xs"
             variant="ghost"
-            aria-label="Close layer controls"
+            aria-label={translateUi('close_layer_controls_cc3314b1')}
             onClick={() => setOpen(false)}
           >
             <X aria-hidden />
@@ -1763,7 +2070,8 @@ export function TemplateLayerPreview({
         ) : null}
         {displayedLayer?.parentId ? (
           <p className="mt-3 text-2xs text-muted-foreground">
-            Move this layer with X and Y in its parent’s coordinates.
+            {' '}
+            {translateUi('move_this_layer_with_x_and_y_in_its_bd2586fd')}{' '}
           </p>
         ) : null}
       </PopoverContent>

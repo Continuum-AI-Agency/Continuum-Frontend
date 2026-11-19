@@ -1,6 +1,7 @@
 'use client';
-import { RotateCw } from 'lucide-react';
 
+import { RotateCw } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { PaidPerformanceMetricKey } from '@/components/paid-media/PaidMediaReportingWidget';
@@ -22,6 +23,7 @@ import {
   BudgetPacingSummaryStrip,
 } from './BudgetPacingSummaryStrip';
 import { BudgetPacingTable } from './BudgetPacingTable';
+import { budgetPacingRangeLabel } from './budgetPacingPresentation';
 
 type Props = {
   brandId: string;
@@ -32,7 +34,7 @@ type Props = {
 type LoadState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'error'; message: string }
+  | { status: 'error' }
   | { status: 'success'; data: BudgetPacingResponse };
 
 function mapMetricToSummaryCard(metric?: PaidPerformanceMetricKey): BudgetPacingSummaryCardKey {
@@ -63,6 +65,8 @@ function BudgetPacingLoadingSkeleton() {
 }
 
 export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric }: Props) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState<RangeOption>('7d');
   const summaryCard = mapMetricToSummaryCard(selectedMetric);
@@ -83,8 +87,7 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
     if (!selectedAccountId) return { status: 'idle' };
     if (!entry) return { status: 'idle' };
     if (entry.status === 'loading') return { status: 'loading' };
-    if (entry.status === 'error')
-      return { status: 'error', message: entry.error ?? 'Failed to load budget pacing' };
+    if (entry.status === 'error') return { status: 'error' };
     if (entry.status === 'success' && entry.data) return { status: 'success', data: entry.data };
     return { status: 'idle' };
   }, [entry, selectedAccountId]);
@@ -108,9 +111,13 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
     >
       <div className="flex flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/15 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <div className="flex min-w-0 items-center gap-2">
-          <h3 className="truncate text-sm font-semibold tracking-tight">Budget Pace</h3>
+          <h3 className="truncate text-sm font-semibold tracking-tight">
+            {uiText('budget_pace_d212d0e')}
+          </h3>
           <span className="whitespace-nowrap rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-2xs uppercase tracking-[0.08em] text-muted-foreground tabular-nums">
-            Spend vs target · {selectedRange}
+            {uiText.rich('sentence_a1815f1db6c9', {
+              v0: budgetPacingRangeLabel(selectedRange, uiLocale, () => uiText('all_a52ace4')),
+            })}
           </span>
         </div>
         <Button
@@ -120,7 +127,7 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
           onClick={() => {
             if (selectedAccountId) fetchPacing(selectedAccountId, true);
           }}
-          aria-label="Refresh pacing"
+          aria-label={uiText('refresh_pacing_52b3ec9')}
         >
           <RotateCw className={state.status === 'loading' ? 'animate-spin' : undefined} />
         </Button>
@@ -131,7 +138,7 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
 
         {state.status === 'error' && (
           <Alert variant="destructive">
-            <AlertDescription>{state.message}</AlertDescription>
+            <AlertDescription>{uiText('budgetLoadFailed')}</AlertDescription>
           </Alert>
         )}
 
@@ -155,7 +162,9 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
         )}
 
         {state.status === 'idle' && !selectedAccountId && (
-          <p className="py-8 text-center text-sm text-muted-foreground">No ad account selected.</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            {uiText('no_ad_account_selected_bd061c2')}
+          </p>
         )}
       </div>
     </section>

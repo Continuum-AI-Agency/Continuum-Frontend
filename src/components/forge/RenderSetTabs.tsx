@@ -23,6 +23,7 @@ import {
   Text,
   Trash2,
 } from 'lucide-react';
+import { useLocale, type useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ActionMenuItems, type GridAction } from '@/components/forge/gridActions';
 import { NameDialog } from '@/components/forge/RenderSetMenu';
@@ -55,6 +56,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
+import type { UiLocale } from '@/i18n/config';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/errors';
 import { pluralize } from '@/lib/format/pluralize';
@@ -96,10 +98,24 @@ export function rendersLine(
   renders: SetRenders | undefined,
   complete: boolean,
   now = Date.now(),
+  locale: UiLocale = 'en',
+  labels?: {
+    empty: string;
+    recentEmpty: string;
+    count: (count: number, recent: boolean) => string;
+  },
 ): string {
-  if (!renders) return complete ? 'No renders yet' : 'No recent renders';
+  if (!renders)
+    return labels
+      ? complete
+        ? labels.empty
+        : labels.recentEmpty
+      : complete
+        ? 'No renders yet'
+        : 'No recent renders';
   const noun = `${complete ? '' : 'recent '}render${renders.count === 1 ? '' : 's'}`;
-  return `${renders.count} ${noun} · ${formatRelativeTime(renders.lastAt, now)}`;
+  const summary = labels ? labels.count(renders.count, !complete) : `${renders.count} ${noun}`;
+  return `${summary} · ${formatRelativeTime(renders.lastAt, now, locale)}`;
 }
 
 /**
@@ -131,6 +147,8 @@ function SetDescription({
   editRequest: number;
   onSave: (description: string | null) => Promise<void>;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   // `null` while not editing; the text being sent shows until the save settles.
   const [draft, setDraft] = useState<string | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new request opens the field.
@@ -145,7 +163,7 @@ function SetDescription({
       <div className="flex min-w-64 flex-1 flex-col gap-0.5">
         <Textarea
           autoFocus
-          aria-label={`Description of ${name}`}
+          aria-label={translateUi('description_of_value0_3bcccf41', { value0: String(name) })}
           value={draft}
           maxLength={FORGE_RENDER_SET_MAX_DESCRIPTION}
           rows={1}
@@ -172,7 +190,7 @@ function SetDescription({
           }}
         />
         <p className="flex justify-between gap-2 font-mono text-3xs tabular-nums text-muted-foreground">
-          <span>Enter saves · Esc cancels</span>
+          <span>{translateUi('enter_saves_esc_cancels_301611b3')}</span>
           <span>
             {draft.length}/{FORGE_RENDER_SET_MAX_DESCRIPTION}
           </span>
@@ -193,7 +211,7 @@ function SetDescription({
         sending && 'opacity-60',
       )}
     >
-      {shown || 'Add a description'}
+      {shown || translateUi('add_a_description_e707b452')}
     </button>
   );
 }
@@ -202,15 +220,19 @@ function SetDescription({
  * Downloads the set as one zip: each row's newest finished render, retries folded in, with a
  * manifest that also lists the rows that did not finish.
  */
-async function downloadRenderSet(brandId: string, set: ForgeRenderSet) {
+async function downloadRenderSet(
+  brandId: string,
+  set: ForgeRenderSet,
+  translate: ReturnType<typeof useTranslations<'forge'>>,
+) {
   try {
     const share = await apiRendersApi.shareRenderSetZip(brandId, set.id);
     window.location.assign(`${getApiBaseUrl()}${share.path}`);
   } catch (error) {
     toast.error(
       error instanceof ApiError && error.payload?.error === 'render_batch_not_ready'
-        ? `Nothing from “${set.name}” has finished rendering yet.`
-        : 'Could not prepare the download. Try again.',
+        ? translate('setNothingFinished', { name: set.name })
+        : translate('setDownloadFailed'),
     );
   }
 }
@@ -219,24 +241,26 @@ async function downloadRenderSet(brandId: string, set: ForgeRenderSet) {
  * Shares the set as its Library collection: a link that anyone can open and anyone on the brand can
  * revoke from the Library. Minted per click — the link is the credential, so it is never cached.
  */
-async function shareRenderSet(brandId: string, set: ForgeRenderSet) {
+async function shareRenderSet(
+  brandId: string,
+  set: ForgeRenderSet,
+  translate: ReturnType<typeof useTranslations<'forge'>>,
+) {
   try {
     const share = await apiRendersApi.shareRenderSet(brandId, set.id);
     const url = `${window.location.origin}${share.path}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success(
-        `Link copied — ${pluralize(share.assetCount, 'render')}, revocable from the Library`,
-      );
+      toast.success(translate('setLinkCopied', { count: share.assetCount }));
     } catch {
       // Safari refuses a clipboard write that follows a network round trip.
-      window.prompt('Copy this link. It can be revoked from the Library.', url);
+      window.prompt(translate('setCopyLink'), url);
     }
   } catch (error) {
     toast.error(
       error instanceof ApiError && error.payload?.error === 'render_set_not_in_library'
-        ? `Nothing from “${set.name}” is in the Library yet. Render it first, then share.`
-        : 'Could not make the link. Try again.',
+        ? translate('setNothingInLibrary', { name: set.name })
+        : translate('setShareFailed'),
     );
   }
 }
@@ -258,13 +282,15 @@ function TabRename({
   onDone: () => void;
   onRename: (name: string) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [text, setText] = useState(set.name);
   return (
     <Input
       autoFocus
       value={text}
       maxLength={200}
-      aria-label={`Rename ${set.name}`}
+      aria-label={translateUi('rename_value0_bb7a240d', { value0: String(set.name) })}
       className="h-7 w-40 shrink-0 text-xs"
       onChange={(event) => setText(event.target.value)}
       onBlur={onDone}
@@ -336,6 +362,15 @@ export function RenderSetTabs({
   onSettings: (set: ForgeRenderSet) => void;
   onImportDraft: () => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+  const locale = useLocale();
+  const renderLabels = {
+    empty: translateUi('noRenders'),
+    recentEmpty: translateUi('noRecentRenders'),
+    count: (count: number, recent: boolean) =>
+      translateUi(recent ? 'recentRenderCount' : 'renderCount', { count }),
+  };
+
   const [dialog, setDialog] = useState<SetsDialog | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [describing, setDescribing] = useState(0);
@@ -362,14 +397,14 @@ export function RenderSetTabs({
       [
         {
           id: 'open',
-          label: 'Open',
+          label: translateUi('open_ed077f3d'),
           icon: FolderOpen,
           disabledReason: active ? 'Already open' : null,
           run: () => open(set),
         },
         {
           id: 'settings',
-          label: 'Settings…',
+          label: translateUi('settings_7a04083b'),
           icon: Settings2,
           hint: 'Where this set’s renders go: a default ad set, Slack, approval, Proof or Final',
           disabledReason: active ? null : 'Open the set first',
@@ -377,39 +412,49 @@ export function RenderSetTabs({
         },
         {
           id: 'rename',
-          label: 'Rename…',
+          label: translateUi('rename_6fa62b3d'),
           icon: Pencil,
           run: () => setDialog({ kind: 'rename', set }),
         },
         {
           id: 'describe',
-          label: 'Edit description',
+          label: translateUi('edit_description_3495f1b0'),
           icon: Text,
           disabledReason: active ? null : 'Open the set first',
           run: () => setDescribing((current) => current + 1),
         },
-        { id: 'duplicate', label: 'Duplicate', icon: Copy, run: () => onDuplicate(set) },
+        {
+          id: 'duplicate',
+          label: translateUi('duplicate_02cdaabf'),
+          icon: Copy,
+          run: () => onDuplicate(set),
+        },
         {
           id: 'download',
-          label: 'Download set',
+          label: translateUi('download_set_5bfdcac2'),
           icon: Download,
           hint: 'One zip of every row’s newest render, with a manifest',
-          run: () => void downloadRenderSet(brandId, set),
+          run: () => void downloadRenderSet(brandId, set, translateUi),
         },
         {
           id: 'share',
-          label: 'Share render set',
+          label: translateUi('share_render_set_ecf2c04f'),
           icon: Share2,
           hint: 'Copies a link to its renders in the Library',
-          run: () => void shareRenderSet(brandId, set),
+          run: () => void shareRenderSet(brandId, set, translateUi),
         },
-        { id: 'history', label: 'Version history…', icon: History, run: () => onHistory(set) },
+        {
+          id: 'history',
+          label: translateUi('version_history_ac3fc859'),
+          icon: History,
+          run: () => onHistory(set),
+        },
         ...(set.contractHash === contractHash
           ? []
           : [
               {
                 id: 'update',
-                label: 'Update to current template',
+                label: translateUi('update_to_current_template_12c0a8ec'),
                 icon: RefreshCw,
                 run: () => (active ? onUpdate(set) : confirmDiscard(() => onSwitch(set))),
               },
@@ -418,7 +463,7 @@ export function RenderSetTabs({
       [
         {
           id: 'delete',
-          label: 'Delete…',
+          label: translateUi('delete_9ce78fe3'),
           icon: Trash2,
           destructive: true,
           run: () => setDialog({ kind: 'delete', set }),
@@ -430,7 +475,10 @@ export function RenderSetTabs({
   const rowsOf = (set: ForgeRenderSet) => (set.id === activeSet?.id ? activeRows : set.rows.length);
 
   return (
-    <section aria-label="Render sets" className="flex shrink-0 flex-col gap-1">
+    <section
+      aria-label={translateUi('render_sets_00d1ed04')}
+      className="flex shrink-0 flex-col gap-1"
+    >
       <div className="flex min-w-0 items-end gap-1 border-b border-border">
         <Tabs
           value={activeId}
@@ -443,13 +491,13 @@ export function RenderSetTabs({
           <TabsList
             ref={listRef}
             variant="line"
-            aria-label="Render sets"
+            aria-label={translateUi('render_sets_00d1ed04')}
             // Wider than the pane once there are enough sets: it scrolls sideways, never wraps.
             className="h-9 w-full max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:thin]"
           >
             {activeSet ? null : (
               <TabsTrigger value={UNSAVED} data-set-id={UNSAVED} className="flex-none text-xs">
-                <span className="italic">Unsaved set</span>
+                <span className="italic">{translateUi('unsaved_set_fe567ee3')}</span>
                 <span className="font-mono text-2xs tabular-nums text-muted-foreground">
                   {activeRows}
                 </span>
@@ -491,7 +539,7 @@ export function RenderSetTabs({
                     {older ? (
                       <>
                         <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-warning" />
-                        <span className="sr-only">Older template</span>
+                        <span className="sr-only">{translateUi('older_template_631ab51f')}</span>
                       </>
                     ) : null}
                     <span className="truncate">{set.name}</span>
@@ -503,7 +551,7 @@ export function RenderSetTabs({
                         <span aria-hidden className="text-primary">
                           •
                         </span>
-                        <span className="sr-only">Unsaved changes</span>
+                        <span className="sr-only">{translateUi('unsaved_changes_a710c2b9')}</span>
                       </>
                     ) : null}
                   </ContextMenuTrigger>
@@ -520,8 +568,8 @@ export function RenderSetTabs({
             type="button"
             size="icon-xs"
             variant="ghost"
-            aria-label="New render set"
-            title="New render set"
+            aria-label={translateUi('new_render_set_33ea6e8b')}
+            title={translateUi('new_render_set_33ea6e8b')}
             disabled={!canCreate}
             onClick={() => confirmDiscard(() => setDialog({ kind: 'new' }))}
           >
@@ -532,7 +580,8 @@ export function RenderSetTabs({
               disabled={sets.length === 0}
               render={
                 <Button type="button" size="xs" variant="ghost" className="gap-1">
-                  All sets <ChevronDown aria-hidden />
+                  {' '}
+                  {translateUi('all_sets_9d5e2c25')} <ChevronDown aria-hidden />
                 </Button>
               }
             />
@@ -540,9 +589,12 @@ export function RenderSetTabs({
               <Command
                 filter={(_id, search, keywords = []) => defaultFilter(keywords.join(' '), search)}
               >
-                <CommandInput placeholder="Filter sets" aria-label="Filter render sets" />
+                <CommandInput
+                  placeholder={translateUi('filter_sets_ab8b91c7')}
+                  aria-label={translateUi('filter_render_sets_db155c60')}
+                />
                 <CommandList>
-                  <CommandEmpty>No set matches.</CommandEmpty>
+                  <CommandEmpty>{translateUi('no_set_matches_8259c4f4')}</CommandEmpty>
                   {sets.map((set) => (
                     <CommandItem
                       key={set.id}
@@ -557,9 +609,15 @@ export function RenderSetTabs({
                         <span className="truncate">{set.name}</span>
                         <span className="truncate text-2xs text-muted-foreground">
                           {[
-                            `${rowsOf(set)} row${rowsOf(set) === 1 ? '' : 's'}`,
+                            translateUi('rowCount', { count: rowsOf(set) }),
                             renders.data
-                              ? rendersLine(renders.data.bySet.get(set.id), renders.data.complete)
+                              ? rendersLine(
+                                  renders.data.bySet.get(set.id),
+                                  renders.data.complete,
+                                  undefined,
+                                  locale,
+                                  renderLabels,
+                                )
                               : null,
                             set.description,
                           ]
@@ -588,7 +646,9 @@ export function RenderSetTabs({
                     type="button"
                     size="icon-xs"
                     variant="ghost"
-                    aria-label={`Actions for ${activeSet.name}`}
+                    aria-label={translateUi('actions_for_value0_33da220b', {
+                      value0: String(activeSet.name),
+                    })}
                     className="text-muted-foreground"
                   >
                     <MoreHorizontal aria-hidden />
@@ -610,15 +670,22 @@ export function RenderSetTabs({
             </span>
             <span className="font-mono tabular-nums text-muted-foreground">
               {renders.data
-                ? rendersLine(renders.data.bySet.get(activeSet.id), renders.data.complete)
+                ? rendersLine(
+                    renders.data.bySet.get(activeSet.id),
+                    renders.data.complete,
+                    undefined,
+                    locale,
+                    renderLabels,
+                  )
                 : renders.isError
-                  ? 'Renders unavailable'
+                  ? translateUi('renders_unavailable_d1a44614')
                   : ' '}
             </span>
           </>
         ) : (
           <span className="text-muted-foreground">
-            Not saved yet — name the set with + to keep these rows.
+            {' '}
+            {translateUi('not_saved_yet_name_the_set_with_to__73205d6b')}{' '}
           </span>
         )}
         {delivery ? <span className="ml-auto flex min-w-0 items-center">{delivery}</span> : null}
@@ -630,17 +697,17 @@ export function RenderSetTabs({
             className={delivery ? undefined : 'ml-auto'}
             onClick={() => confirmDiscard(onImportDraft)}
           >
-            <History data-icon="inline-start" /> Import browser draft
+            <History data-icon="inline-start" /> {translateUi('import_browser_draft_0694875c')}{' '}
           </Button>
         ) : null}
       </div>
 
       <NameDialog
         open={dialog?.kind === 'new'}
-        title="New render set"
-        description="Starts from one row seeded with the designer's values."
+        title={translateUi('new_render_set_33ea6e8b')}
+        description={translateUi('starts_from_one_row_seeded_with_the_a68310fc')}
         initialName="Untitled set"
-        confirmLabel="Create"
+        confirmLabel={translateUi('create_4759498a')}
         onOpenChange={(open) => !open && setDialog(null)}
         onConfirm={async (name) => {
           await onNew(name);
@@ -649,9 +716,9 @@ export function RenderSetTabs({
       />
       <NameDialog
         open={dialog?.kind === 'rename'}
-        title="Rename render set"
+        title={translateUi('rename_render_set_f8b05ccf')}
         initialName={dialog?.kind === 'rename' ? dialog.set.name : ''}
-        confirmLabel="Rename"
+        confirmLabel={translateUi('rename_3064d79a')}
         onOpenChange={(open) => !open && setDialog(null)}
         onConfirm={async (name) => {
           if (dialog?.kind === 'rename') await onRename(dialog.set, name);
@@ -665,14 +732,19 @@ export function RenderSetTabs({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete “{dialog?.kind === 'delete' ? dialog.set.name : ''}”?
+              {' '}
+              {translateUi('delete_fdd77e66')}
+              {dialog?.kind === 'delete' ? dialog.set.name : ''}”?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The saved rows go. Renders already made from this set stay in Render ledger.
+              {' '}
+              {translateUi('the_saved_rows_go_renders_already_m_8314b90e')}{' '}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>
+              {translateUi('cancel_19766ed6')}
+            </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={deleting}
@@ -687,7 +759,8 @@ export function RenderSetTabs({
                 }
               }}
             >
-              Delete
+              {' '}
+              {translateUi('delete_e2d0a549')}{' '}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

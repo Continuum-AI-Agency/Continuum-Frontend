@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { Button, buttonVariants } from './button';
 import { ButtonGroup } from './button-group';
@@ -55,9 +56,13 @@ describe('hit-area utilities', () => {
       expect(block).toContain(pseudo);
       expect(block).toContain('opacity: 0');
       expect(block).toContain('--hit-area-floor: 24px');
-      expect(block).toMatch(/pointer: coarse\)\s*\{\s*--hit-area-floor: var\(--hit-area-coarse, 44px\)/);
+      expect(block).toMatch(
+        /pointer: coarse\)\s*\{\s*--hit-area-floor: var\(--hit-area-coarse, 44px\)/,
+      );
       expect(block).toContain('max(var(--hit-area-floor), var(--hit-area-min-w, 0px))');
-      expect(block).toContain('min(var(--hit-area-floor), calc(100% + var(--hit-area-gap-y, 100vh)))');
+      expect(block).toContain(
+        'min(var(--hit-area-floor), calc(100% + var(--hit-area-gap-y, 100vh)))',
+      );
       expect(block).not.toMatch(/\d(\.\d+)?rem/);
     }
   });
@@ -219,9 +224,9 @@ describe('neighbouring pads never overlap', () => {
     // header bar) has no `group/tabs` ancestor, and a group variant would silently not apply.
     expect(list).toContain('data-horizontal:hit-area-row');
     expect(list).toContain('data-vertical:hit-area-column');
-    expect(container.querySelector('[data-slot="tabs-list"]')?.getAttribute('data-orientation')).toBe(
-      'horizontal',
-    );
+    expect(
+      container.querySelector('[data-slot="tabs-list"]')?.getAttribute('data-orientation'),
+    ).toBe('horizontal');
     expect(list).toContain('data-[variant=line]:[--hit-area-gap:calc(var(--spacing)*1)]');
     for (const tab of getAllByRole('tab')) {
       const classes = classesOf(tab);

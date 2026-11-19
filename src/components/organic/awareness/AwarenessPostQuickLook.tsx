@@ -1,4 +1,6 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { formatDecimal } from '@/lib/format/decimal';
 
 // Hover-card body for a single top post behind an AI-Awareness "Top posts by hook
 // rate" row. Used when we only have the awareness snapshot (no full OrganicPost
@@ -8,17 +10,15 @@
 // skeleton so the card never looks "empty" on first hover.
 
 import { ExternalLink } from 'lucide-react';
-
 import { Skeleton } from '@/components/ui/skeleton';
+import type { UiLocale } from '@/i18n/config';
 import { hookRateTextColor } from '@/lib/organic/hook-rate-color';
 import { type AwarenessTopPost, postKindLabel } from './types';
 
-const nf = new Intl.NumberFormat('en-US');
-
-function formatCaptured(timestamp: string | null | undefined): string | null {
+function formatCaptured(timestamp: string | null | undefined, locale: UiLocale): string | null {
   if (!timestamp) return null;
   const date = new Date(timestamp);
-  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString(locale);
 }
 
 export function AwarenessPostQuickLook({
@@ -28,7 +28,9 @@ export function AwarenessPostQuickLook({
   post: AwarenessTopPost;
   loading?: boolean;
 }) {
-  const captured = formatCaptured(post.timestamp);
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
+  const captured = formatCaptured(post.timestamp, uiLocale);
   const kind = postKindLabel(post);
   const hasCaption = Boolean(post.caption?.trim().length);
   const hasThumb = Boolean(post.thumbnailUrl);
@@ -37,7 +39,7 @@ export function AwarenessPostQuickLook({
     <div className="flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
         <span className="rounded bg-accent/15 px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wide text-accent">
-          {kind}
+          {uiText('contentKindLabel', { kind: kind.toLowerCase() })}
         </span>
         {captured ? <span className="text-2xs text-muted-foreground">{captured}</span> : null}
       </div>
@@ -46,7 +48,7 @@ export function AwarenessPostQuickLook({
         // biome-ignore lint/performance/noImgElement: transient signed thumbnails, not Next-optimizable
         <img
           src={post.thumbnailUrl!}
-          alt={post.caption ?? `Top ${kind}`}
+          alt={post.caption ?? uiText('topContentKind', { kind: kind.toLowerCase() })}
           className="max-h-44 w-full rounded-md border border-subtle object-cover"
           loading="lazy"
         />
@@ -55,18 +57,20 @@ export function AwarenessPostQuickLook({
       ) : null}
 
       <div className="flex items-baseline justify-between gap-2 border-t border-subtle pt-2">
-        <span className="text-xs text-muted-foreground">Hook rate</span>
+        <span className="text-xs text-muted-foreground">{uiText('hook_rate_bd1de47')}</span>
         <span
           className="text-sm font-semibold tabular-nums"
           style={post.hookRate !== null ? { color: hookRateTextColor(post.hookRate) } : undefined}
         >
-          {post.hookRate !== null ? `${post.hookRate.toFixed(1)}%` : '—'}
+          {post.hookRate !== null ? `${formatDecimal(post.hookRate, 1, uiLocale)}%` : '—'}
         </span>
       </div>
       {post.views !== null ? (
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-xs text-muted-foreground">Views</span>
-          <span className="text-sm font-semibold tabular-nums">{nf.format(post.views)}</span>
+          <span className="text-xs text-muted-foreground">{uiText('views_69c4045')}</span>
+          <span className="text-sm font-semibold tabular-nums">
+            {post.views.toLocaleString(uiLocale)}
+          </span>
         </div>
       ) : null}
 
@@ -81,7 +85,7 @@ export function AwarenessPostQuickLook({
         </div>
       ) : (
         <p className="text-xs leading-snug text-muted-foreground">
-          Caption unavailable for this post.
+          {uiText('caption_unavailable_for_this_post_51fa537')}
         </p>
       )}
 
@@ -92,7 +96,7 @@ export function AwarenessPostQuickLook({
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-accent transition-colors hover:text-foreground"
         >
-          Open post
+          {uiText('open_post_92a0ae1')}
           <ExternalLink className="size-3" aria-hidden />
         </a>
       ) : null}

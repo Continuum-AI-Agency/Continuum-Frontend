@@ -4,7 +4,13 @@ import {
   type VideoEditorOpName,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApiError } from '@/lib/api/errors';
 import type { VideoStudioContext } from '../types';
 
@@ -29,7 +35,7 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
     return answer();
   },
 }));
-mock.module('next/navigation', () => ({ useRouter: () => ({ push: () => undefined }) }));
+mock.module('@/i18n/navigation', () => ({ useRouter: () => ({ push: () => undefined }) }));
 mock.module('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: (toast: (typeof toasts)[number]) => toasts.push(toast) }),
 }));
@@ -174,14 +180,17 @@ describe('BriefDialog', () => {
       pollAnswers.push(() => ({ jobId: 'job_1', state: 'failed', error: 'No speech found.' }));
       submit();
       await waitFor(
-        () => expect(screen.getByRole('alert').textContent).toContain('No speech found.'),
+        () => expect(screen.getByRole('alert').textContent).toContain('The draft failed.'),
         {
           timeout: TIMEOUT_MS,
         },
       );
       submit();
       await waitFor(
-        () => expect(screen.getByRole('alert').textContent).toContain('The draft could not start.'),
+        () =>
+          expect(screen.getByRole('alert').textContent).toContain(
+            'An unexpected error occurred. Please try again.',
+          ),
         { timeout: TIMEOUT_MS },
       );
       expect(screen.queryByTestId('brief-progress')).toBeNull();
@@ -201,7 +210,10 @@ describe('BriefDialog', () => {
       });
       submit();
       await waitFor(
-        () => expect(screen.getByRole('alert').textContent).toContain('No draft job_2'),
+        () =>
+          expect(screen.getByRole('alert').textContent).toContain(
+            'This item is no longer available.',
+          ),
         { timeout: TIMEOUT_MS },
       );
       await new Promise((resolve) => setTimeout(resolve, 2_000));

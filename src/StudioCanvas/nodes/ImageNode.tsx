@@ -27,6 +27,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -70,6 +71,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -98,6 +100,12 @@ const REFERENCE_TYPE_LABELS: Readonly<Record<string, string>> = {
 };
 
 export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageNodeData>>) {
+  const dropUiLocale = useDropLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
@@ -113,7 +121,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
-  const refBadge = referenceStatusBadge(data.referenceStatus);
+  const refBadge = referenceStatusBadge(data.referenceStatus, translateUi);
 
   const handleRefTypeChange = useCallback(
     (value: string) => {
@@ -218,9 +226,9 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       });
       setMarkupOpen(false);
       triggerSave();
-      show({ title: 'Markup saved', variant: 'success' });
+      show({ title: translateUi('markup_saved_854648a0'), variant: 'success' });
     },
-    [id, updateNodeData, triggerSave, show],
+    [id, updateNodeData, triggerSave, show, translateUi],
   );
 
   const handleResetToOriginal = useCallback(() => {
@@ -233,8 +241,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       hasMarkup: false,
     });
     triggerSave();
-    show({ title: 'Reset to original', variant: 'success' });
-  }, [data.originalImage, data.image, id, updateNodeData, triggerSave, show]);
+    show({ title: translateUi('reset_to_original_7b591d09'), variant: 'success' });
+  }, [data.originalImage, data.image, id, updateNodeData, triggerSave, show, translateUi]);
 
   const handleClearReference = useCallback(() => {
     setPreview(undefined);
@@ -387,8 +395,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       if (file) {
         if (!file.type.startsWith('image/')) {
           show({
-            title: 'Unsupported asset',
-            description: 'Only image files can be dropped here.',
+            title: translateUi('unsupported_asset_add38b25'),
+            description: translateUi('only_image_files_can_be_dropped_her_70cf11e3'),
             variant: 'warning',
           });
           return;
@@ -409,9 +417,9 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
             sourceUrl: undefined,
           });
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to read dropped file';
+          const message = uiErrorText(error);
           show({
-            title: 'Drop failed',
+            title: translateUi('drop_failed_abc2b996'),
             description: message,
             variant: 'error',
           });
@@ -426,7 +434,12 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
 
       if (!rawPayload) return;
 
-      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveCanvasDropBase64);
+      const resolved = await resolveCreativeAssetDrop(
+        rawPayload,
+        resolveCanvasDropBase64,
+        undefined,
+        { t: translateUi, locale: dropUiLocale, errorText: uiErrorText },
+      );
       if (resolved.status === 'error') {
         show({
           title: resolved.title,
@@ -438,8 +451,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
 
       if (resolved.nodeType !== 'image') {
         show({
-          title: 'Unsupported asset',
-          description: 'Only image assets can be dropped here.',
+          title: translateUi('unsupported_asset_add38b25'),
+          description: translateUi('only_image_assets_can_be_dropped_he_81e80f01'),
           variant: 'warning',
         });
         return;
@@ -455,7 +468,15 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
         sourceUrl: resolved.sourceUrl,
       });
     },
-    [applyPreviewImage, fileToDataUrl, show, uploadLocalReference],
+    [
+      applyPreviewImage,
+      fileToDataUrl,
+      show,
+      uploadLocalReference,
+      translateUi,
+      uiErrorText,
+      dropUiLocale,
+    ],
   );
 
   const addReformattedNode = useCallback(
@@ -497,9 +518,12 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       };
       store.setNodes(resolveCollisions([...store.nodes, derivedNode]) as StudioNode[]);
       store.triggerSave();
-      show({ title: `${result.aspectRatio} copy added`, variant: 'success' });
+      show({
+        title: translateUi('value0_copy_added_562d8295', { value0: String(result.aspectRatio) }),
+        variant: 'success',
+      });
     },
-    [id, show],
+    [id, show, translateUi],
   );
   // Not `data.assetId`: a node seeded by "Open in Canvas" carries its Library pointer
   // under `libraryAssetId`, and reading only one key greyed this out on an asset that
@@ -568,8 +592,16 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                         event.stopPropagation();
                         fileInputRef.current?.click();
                       }}
-                      title={preview ? 'Replace image' : 'Upload image'}
-                      aria-label={preview ? 'Replace image' : 'Upload image'}
+                      title={
+                        preview
+                          ? translateUi('replace_image_fcedcb5e')
+                          : translateUi('upload_image_ffe4df6c')
+                      }
+                      aria-label={
+                        preview
+                          ? translateUi('replace_image_fcedcb5e')
+                          : translateUi('upload_image_ffe4df6c')
+                      }
                     >
                       <Upload className="h-3 w-3" />
                     </Button>
@@ -577,7 +609,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                       nodeType="image"
                       data={data}
                       baseName="canvas-image"
-                      label="Download image"
+                      label={translateUi('download_image_3ac575dc')}
                       className="static h-6 w-6 opacity-100"
                     />
                     {preview && (
@@ -597,8 +629,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                             className="h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground"
                             disabled={!libraryAssetId || !brandId}
                             onMouseDown={(event) => event.stopPropagation()}
-                            title="Reformat image"
-                            aria-label="Reformat image"
+                            title={translateUi('reformat_image_b86c06cf')}
+                            aria-label={translateUi('reformat_image_b86c06cf')}
                           >
                             <Scaling className="h-3 w-3" />
                           </Button>
@@ -616,8 +648,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                           event.stopPropagation();
                           handleClearReference();
                         }}
-                        title="Clear image"
-                        aria-label="Clear image"
+                        title={translateUi('clear_image_20231a40')}
+                        aria-label={translateUi('clear_image_20231a40')}
                       >
                         <X className="h-3 w-3" />
                       </Button>
@@ -636,15 +668,18 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                           event.stopPropagation();
                           setMarkupOpen(true);
                         }}
-                        title="Markup image"
-                        aria-label="Markup image"
+                        title={translateUi('markup_image_c1077adf')}
+                        aria-label={translateUi('markup_image_c1077adf')}
                       >
                         <SquarePen className="h-3 w-3" />
                       </Button>
                     )}
                     <Select value={refType} onValueChange={handleRefTypeChange}>
                       <SelectTrigger className="h-6 w-[94px] text-2xs px-1.5 py-0 border border-border/60 bg-background/90 shadow-sm">
-                        <SelectValue placeholder="Type" items={REFERENCE_TYPE_LABELS} />
+                        <SelectValue
+                          placeholder={translateUi('type_baaddf70')}
+                          items={REFERENCE_TYPE_LABELS}
+                        />
                       </SelectTrigger>
                       <SelectContent>
                         {Object.entries(REFERENCE_TYPE_LABELS).map(([value, label]) => (
@@ -660,7 +695,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                       <img
                         loading="lazy"
                         src={data.originalImage ?? preview}
-                        alt="Preview"
+                        alt={translateUi('preview_324b134f')}
                         className="h-full w-full select-none object-contain"
                         draggable={false}
                       />
@@ -668,7 +703,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                         <img
                           loading="lazy"
                           src={data.markupLayer}
-                          alt="Markup overlay"
+                          alt={translateUi('markup_overlay_45af9456')}
                           className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"
                           draggable={false}
                         />
@@ -676,7 +711,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                       {data.hasMarkup && (
                         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-amber-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
                           <SquarePen className="h-2.5 w-2.5" />
-                          <span>Marked up</span>
+                          <span>{translateUi('marked_up_fd4d094c')}</span>
                         </div>
                       )}
                       {/* Stock licences require the photographer to be credited
@@ -693,7 +728,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                           >
                             {data.attribution.photographerName}
                           </a>
-                          {' on '}
+                          {translateUi('unsplashCreditOn')}
                           <a
                             href={data.attribution.sourceUrl}
                             target="_blank"
@@ -732,7 +767,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                           />
                           <TooltipContent className="flex max-w-[220px] flex-col items-start gap-1.5">
                             <p className="text-xs">
-                              {data.referenceError ?? 'Upload failed — try again'}
+                              {translateUi('upload_failed_try_again_eb575f9b')}
                             </p>
                             <Button
                               size="sm"
@@ -741,8 +776,9 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                               onMouseDown={(event) => event.stopPropagation()}
                               onClick={handleRetryUpload}
                             >
-                              <RotateCw className="mr-1 h-3 w-3" />
-                              Retry
+                              <RotateCw className="mr-1 h-3 w-3" /> {translateUi(
+                                'retry_942087cc',
+                              )}{' '}
                             </Button>
                           </TooltipContent>
                         </Tooltip>
@@ -760,8 +796,10 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                           <EmptyMedia variant="icon">
                             <ImageIcon />
                           </EmptyMedia>
-                          <EmptyTitle>Upload Image</EmptyTitle>
-                          <EmptyDescription>Drag & drop or click</EmptyDescription>
+                          <EmptyTitle>{translateUi('upload_image_ff02f4a0')}</EmptyTitle>
+                          <EmptyDescription>
+                            {translateUi('drag_drop_or_click_f5869ccd')}
+                          </EmptyDescription>
                         </EmptyHeader>
                       </Empty>
                     </Label>
@@ -796,16 +834,19 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                   }
                 />
                 <TooltipContent>
-                  <p>Image Output: {imageConnections} connections</p>
+                  <p>
+                    {translateUi('image_output_2e0d0197')} {imageConnections}{' '}
+                    {translateUi('connections_1e5fac86')}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </div>
           }
         />
         <ContextMenuContent className="w-56">
-          <ContextMenuLabel>Image Reference</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('image_reference_09054aa6')}</ContextMenuLabel>
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Reference Type</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>{translateUi('reference_type_20a7ecd1')}</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-44">
               {Object.entries(REFERENCE_TYPE_LABELS).map(([value, label]) => (
                 <ContextMenuCheckboxItem
@@ -825,14 +866,12 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 <ContextMenuSubTrigger
                   disabled={quickReformat.unavailable || Boolean(quickReformat.running)}
                 >
-                  <Scaling className="mr-2 h-4 w-4" />
-                  Reformat image
+                  <Scaling className="mr-2 h-4 w-4" /> {translateUi('reformat_image_b86c06cf')}{' '}
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent className="w-52">
                   <ContextMenuSub>
                     <ContextMenuSubTrigger>
-                      <Crop className="mr-2 h-4 w-4" />
-                      Fast crop
+                      <Crop className="mr-2 h-4 w-4" /> {translateUi('fast_crop_6fae1d28')}{' '}
                     </ContextMenuSubTrigger>
                     <ContextMenuSubContent className="w-48">
                       {IMAGE_REFORMAT_PRESETS.map((preset) => (
@@ -847,8 +886,9 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                   </ContextMenuSub>
                   <ContextMenuSub>
                     <ContextMenuSubTrigger>
-                      <Expand className="mr-2 h-4 w-4" />
-                      Smart expand
+                      <Expand className="mr-2 h-4 w-4" /> {translateUi(
+                        'smart_expand_7ac343b0',
+                      )}{' '}
                     </ContextMenuSubTrigger>
                     <ContextMenuSubContent className="w-48">
                       {IMAGE_REFORMAT_PRESETS.map((preset) => (
@@ -864,40 +904,36 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 </ContextMenuSubContent>
               </ContextMenuSub>
               <ContextMenuItem onClick={() => setMarkupOpen(true)}>
-                <SquarePen className="mr-2 h-4 w-4" />
-                Markup Image
+                <SquarePen className="mr-2 h-4 w-4" /> {translateUi('markup_image_b4118435')}{' '}
               </ContextMenuItem>
               {data.hasMarkup && (data.originalImage ?? data.image) && (
                 <ContextMenuItem onClick={handleResetToOriginal}>
-                  <RotateCw className="mr-2 h-4 w-4" />
-                  Reset to Original
+                  <RotateCw className="mr-2 h-4 w-4" /> {translateUi(
+                    'reset_to_original_a00fce56',
+                  )}{' '}
                 </ContextMenuItem>
               )}
               <ContextMenuItem onClick={handleClearReference}>
-                <X className="mr-2 h-4 w-4" />
-                Clear Reference
+                <X className="mr-2 h-4 w-4" /> {translateUi('clear_reference_0f68291d')}{' '}
               </ContextMenuItem>
             </>
           )}
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <Unlink className="mr-2 h-4 w-4" />
-            Detach connections
+            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
           </ContextMenuItem>
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>
@@ -909,7 +945,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
           sourceBase64={parseDataUrl(data.originalImage ?? data.image)?.base64 ?? ''}
           sourceMime={parseDataUrl(data.originalImage ?? data.image)?.mimeType ?? 'image/png'}
           initialMarkup={data.markupLayer ? parseDataUrl(data.markupLayer)?.base64 : undefined}
-          title="Markup reference image"
+          title={translateUi('markup_reference_image_6df7fc2e')}
           onClose={() => setMarkupOpen(false)}
           onSave={handleMarkupSave}
         />

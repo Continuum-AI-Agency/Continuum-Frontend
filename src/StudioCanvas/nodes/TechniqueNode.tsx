@@ -14,6 +14,7 @@
 import type { CanvasTechniquePort } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
 import { Blocks, Maximize2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -66,6 +67,8 @@ function PortColumn({ ports, side }: { ports: CanvasTechniquePort[]; side: 'inpu
 }
 
 export function TechniqueNode({ data, selected }: NodeProps<ReactFlowNode<CollapsedModuleData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const expandModule = useModuleFoldStore((state) => state.expandModule);
   const rows = Math.max(data.inputPorts.length, data.outputPorts.length);
 
@@ -84,7 +87,7 @@ export function TechniqueNode({ data, selected }: NodeProps<ReactFlowNode<Collap
         <NodeTitleBar icon={Blocks} label={data.label} title={data.label}>
           <button
             type="button"
-            aria-label={`Expand ${data.label}`}
+            aria-label={translateUi('expand_value0_22459ade', { value0: String(data.label) })}
             data-testid="technique-node-expand"
             className="nodrag shrink-0 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             onClick={() => expandModule(data.moduleId)}
@@ -94,7 +97,7 @@ export function TechniqueNode({ data, selected }: NodeProps<ReactFlowNode<Collap
         </NodeTitleBar>
         <NodeContent className="px-1.5 py-1">
           <p className="text-2xs text-muted-foreground">
-            {data.memberCount} {data.memberCount === 1 ? 'node' : 'nodes'} folded
+            {translateUi('foldedNodes', { count: data.memberCount })}{' '}
           </p>
         </NodeContent>
       </CanvasNode>

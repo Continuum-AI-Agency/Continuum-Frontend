@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'bun:test';
+import { createTranslator } from 'next-intl';
+import es from '../../../../messages/organic/es.json';
+import pt from '../../../../messages/organic/pt-BR.json';
 import {
   DRAFT_READINESS_LEGEND_NOTE,
   DRAFT_STATUS_LEGEND_ORDER,
@@ -18,6 +21,27 @@ const ALL_STATUSES: OrganicDraftStatus[] = [
   'placeholder',
   'published',
 ];
+
+describe('localized lifecycle presentation', () => {
+  it.each([
+    ['pt-BR', pt, 'Agendado'],
+    ['es', es, 'Programado'],
+  ] as const)('localizes %s labels and hints while preserving lifecycle meaning and styles', (locale, messages, scheduledLabel) => {
+    const translate = createTranslator({ locale, messages });
+    expect(draftStatusPresentation('scheduled', translate).label).toBe(scheduledLabel);
+    for (const status of ALL_STATUSES) {
+      const original = draftStatusPresentation(status);
+      const localized = draftStatusPresentation(status, translate);
+      expect(localized.tone).toBe(original.tone);
+      expect(localized.strip).toBe(original.strip);
+      expect(localized.frame).toBe(original.frame);
+      expect(localized.hint.length).toBeGreaterThan(localized.label.length);
+    }
+    expect(draftStatusLegendEntries(translate).map((entry) => entry.label)).toEqual(
+      DRAFT_STATUS_LEGEND_ORDER.map((status) => draftStatusPresentation(status, translate).label),
+    );
+  });
+});
 
 describe('draft status presentation (the single source of truth)', () => {
   it('covers every draft status', () => {

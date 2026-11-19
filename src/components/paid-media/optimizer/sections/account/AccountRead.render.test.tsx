@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // CalmRule — the one element that moves — comes from motion/react. A passthrough keeps the
 // variant label readable ("calm" on the principal card, "still" on the rest) and the file free

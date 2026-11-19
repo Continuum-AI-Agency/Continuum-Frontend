@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -188,7 +189,9 @@ describe('MediaSelectPopover — one video per post', () => {
     expect(screen.queryByText('Only one video per post')).toBeNull();
     fireEvent.click(screen.getByText(/Attach/));
     expect((onAttachAssets.mock.calls[0][0] as Array<{ id: string }>).map((a) => a.id)).toEqual([
-      'v1', 'a1', 'v2',
+      'v1',
+      'a1',
+      'v2',
     ]);
   });
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // An opened dashboard is a REPORT — five modules of charts and tables — and this panel lands
 // inside hosts that bound their own height (the Dashboard tab is a flex column with

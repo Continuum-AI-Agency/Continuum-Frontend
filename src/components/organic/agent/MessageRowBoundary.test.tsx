@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { I18nTestProvider } from '@/i18n/__tests__/render';
 import { MessageRowBoundary } from './MessageRowBoundary';
 
 let shouldThrow = true;
@@ -33,17 +34,21 @@ const renderTranscript = () =>
   act(() => {
     root.render(
       createElement(
-        'div',
+        I18nTestProvider,
         null,
         createElement(
-          MessageRowBoundary,
-          { key: 'u1', messageId: 'u1' },
-          createElement(SteadyRow, { label: 'Plan my week' }),
-        ),
-        createElement(
-          MessageRowBoundary,
-          { key: 'a1', messageId: 'a1' },
-          createElement(FlakyRow, { label: 'Mon: reel.' }),
+          'div',
+          null,
+          createElement(
+            MessageRowBoundary,
+            { key: 'u1', messageId: 'u1' },
+            createElement(SteadyRow, { label: 'Plan my week' }),
+          ),
+          createElement(
+            MessageRowBoundary,
+            { key: 'a1', messageId: 'a1' },
+            createElement(FlakyRow, { label: 'Mon: reel.' }),
+          ),
         ),
       ),
     );

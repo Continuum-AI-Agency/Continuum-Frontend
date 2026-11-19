@@ -1,6 +1,7 @@
 'use client';
 
 import { InfoIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
 
@@ -12,6 +13,8 @@ interface ContextMenuItemInfoProps {
 }
 
 export function ContextMenuItemInfo({ description, className }: ContextMenuItemInfoProps) {
+  const tUi = useTranslations('common');
+
   return (
     <TooltipProvider delay={120}>
       <Tooltip>
@@ -19,7 +22,7 @@ export function ContextMenuItemInfo({ description, className }: ContextMenuItemI
           render={
             <button
               type="button"
-              aria-label="More information"
+              aria-label={tUi('m_f925f9bea3')}
               tabIndex={-1}
               onPointerDown={(event) => {
                 event.preventDefault();

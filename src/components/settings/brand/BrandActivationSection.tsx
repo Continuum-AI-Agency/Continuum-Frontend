@@ -8,6 +8,7 @@ import {
   Target,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { GlossaryTooltip } from '@/components/shared/glossary';
@@ -25,51 +26,54 @@ type ActivationTarget = {
   cta: string;
 };
 
-const ACTIVATION_TARGETS: readonly ActivationTarget[] = [
-  {
-    icon: Library,
-    title: 'Brand Book',
-    description:
-      'Teach Continuum your identity, voice, and guidelines so every output sounds like you.',
-    href: '/settings?section=brand-book',
-    cta: 'Open Brand Book',
-  },
-  {
-    icon: BookOpen,
-    title: 'Knowledge',
-    description: 'Upload the documents Jaina reads for app-wide brand intelligence.',
-    href: '/settings?section=knowledge',
-    cta: 'Add knowledge',
-  },
-  {
-    icon: Plug,
-    title: 'Integrations',
-    description: 'Assign the ad, social, and analytics accounts this brand runs on.',
-    href: '/settings?section=integrations',
-    cta: 'Assign accounts',
-  },
-  {
-    icon: Target,
-    title: 'Competitors',
-    description: 'Track competitor posts and ads in Brand Spy to benchmark and find white space.',
-    href: '/competitor-spy?tab=competitors',
-    cta: 'Track competitors',
-  },
-];
+function getActivationTargets(tUi: ReturnType<typeof useTranslations<'settings'>>) {
+  return [
+    {
+      icon: Library,
+      title: tUi('m_9b1de8ceed'),
+      description: tUi('m_8e1a745529'),
+      href: '/settings?section=brand-book',
+      cta: tUi('m_56e4cfea9d'),
+    },
+    {
+      icon: BookOpen,
+      title: tUi('m_dec1fccaba'),
+      description: tUi('m_86bf540bdc'),
+      href: '/settings?section=knowledge',
+      cta: tUi('m_24e9e92419'),
+    },
+    {
+      icon: Plug,
+      title: tUi('m_a7881cac6e'),
+      description: tUi('m_cd181c9038'),
+      href: '/settings?section=integrations',
+      cta: tUi('m_4abf45a49c'),
+    },
+    {
+      icon: Target,
+      title: tUi('m_855bd26cf4'),
+      description: tUi('m_ba8b7d5011'),
+      href: '/competitor-spy?tab=competitors',
+      cta: tUi('m_5174aa0324'),
+    },
+  ];
+}
 
 function ConnectionsCard() {
+  const tUi = useTranslations('settings');
+
   return (
     <ActivationCard
       icon={Link2}
-      title="Connections"
+      title={tUi('m_8f3509b64e')}
       description={
         <>
-          Link your own OAuth providers and the <GlossaryTooltip termKey="mcp">MCP</GlossaryTooltip>{' '}
-          connectors (like Claude) you authorize with your login.
+          {tUi('m_ce1f4c77aa')}
+          <GlossaryTooltip termKey="mcp">MCP</GlossaryTooltip> {tUi('m_c64b5c36a0')}
         </>
       }
       href="/settings?section=connections"
-      cta="Manage connections"
+      cta={tUi('m_223fb7fa49')}
     />
   );
 }
@@ -96,6 +100,9 @@ function ActivationCard({ icon: Icon, title, description, href, cta }: Activatio
 }
 
 export function BrandActivationSection() {
+  const tUi = useTranslations('settings');
+  const ACTIVATION_TARGETS = getActivationTargets(tUi);
+
   return (
     <div className="grid grid-cols-1 gap-3 @[32rem]/settings-section:grid-cols-2">
       {ACTIVATION_TARGETS.map((target) => (

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 /*
  * The inspector's control vocabulary.
@@ -214,6 +215,7 @@ export function SelectField<T extends string>({
   onChange: (value: T) => void;
   placeholder?: string;
 }) {
+  const uiText = useTranslations('scale');
   const known = options.some((option) => option.value === value);
   const all: readonly InspectorOption<string>[] =
     value && !known ? [...options, { value, label: humanizeEnum(value) }] : options;
@@ -222,7 +224,7 @@ export function SelectField<T extends string>({
   return (
     <Select<T> value={value ?? null} onValueChange={onChange}>
       <SelectTrigger id={id} data-testid={testId} className="h-8 w-full">
-        <SelectValue items={labels} placeholder={placeholder ?? 'Choose…'} />
+        <SelectValue items={labels} placeholder={placeholder ?? uiText('choose_7ca4161')} />
       </SelectTrigger>
       <SelectContent>
         {all.map((option) => (

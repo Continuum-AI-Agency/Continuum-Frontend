@@ -1,6 +1,6 @@
+import { useTranslations } from 'next-intl';
 import { useEffect } from 'react';
 import { toast } from '@/components/ui/toast-imperative';
-import { formatCredits } from './billingViewModel';
 import { creditsHref } from './productAccess';
 import type { SidebarBillingView } from './sidebarBilling';
 import { trackBillingEvent } from './telemetry';
@@ -55,6 +55,7 @@ export function useLowCreditsNudge(args: {
   section: string | null;
   navigate: (href: string) => void;
 }): void {
+  const uiText = useTranslations('common');
   const { view, brandId, owner, pathname, section, navigate } = args;
   const onBillingPage = pathname.startsWith('/settings') && section === 'billing';
   useEffect(() => {
@@ -68,15 +69,15 @@ export function useLowCreditsNudge(args: {
     if (decision !== 'show' || view?.kind !== 'metered') return;
     writeNudged(brandId, true);
     const from = `${window.location.pathname}${window.location.search}`;
-    toast.info('Canvas credits are running low', {
-      description: `${formatCredits(view.remainingCredits)} credits left on this brand.`,
+    toast.info(uiText('canvas_credits_are_running_low_0e9f9f4'), {
+      description: uiText('brandCreditsLeft', { count: view.remainingCredits }),
       durationMs: 8_000,
       dedupeKey: 'billing-low-credits',
       action: {
-        label: 'Top up',
+        label: uiText('top_up_79f52e0'),
         onClick: () => openTopUp('nudge', () => navigate(creditsHref(from))),
       },
     });
     trackBillingEvent('low_credits_nudge_shown', { remainingCredits: view.remainingCredits });
-  }, [view, brandId, owner, onBillingPage, navigate]);
+  }, [view, brandId, owner, onBillingPage, navigate, uiText]);
 }

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The number the portfolio read is anchored on (P1, "Lectura continua"): the cost per
 // result, very large, in the colour of where it sits against the target — green at or under
@@ -30,6 +31,7 @@ const STATE_TEXT: Record<AnchorModel['state'], string> = {
 };
 
 export function PortfolioAnchor({ anchor, currency, window, onEditSetting }: PortfolioAnchorProps) {
+  const uiText = useTranslations('scale');
   return (
     <section
       className="flex min-w-0 flex-col gap-2"
@@ -61,7 +63,7 @@ export function PortfolioAnchor({ anchor, currency, window, onEditSetting }: Por
             data-setting="target"
             data-testid="header-chip"
             onClick={() => onEditSetting('target')}
-            title="Edit the target in Manage"
+            title={uiText('edit_the_target_in_manage_4af30fc')}
             type="button"
           >
             {anchor.target}

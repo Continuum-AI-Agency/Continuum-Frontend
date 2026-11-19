@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // Pins the keyboard contract lifted verbatim out of StudioCanvas: modal scope stands
 // every key down, editable targets are never hijacked, and Delete snapshots before it

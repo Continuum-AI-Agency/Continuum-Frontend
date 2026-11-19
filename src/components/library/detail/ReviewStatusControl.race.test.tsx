@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { ListReviewEventsResponse, MediaAsset } from '@continuum/contracts';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ReviewStatusControl } from './ReviewStatusControl';
 
 // Reads that land out of order: the read started when v1 came on stage is still in

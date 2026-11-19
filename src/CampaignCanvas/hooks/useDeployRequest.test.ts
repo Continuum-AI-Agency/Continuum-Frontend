@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useDeployRequest } from './useDeployRequest';
 
 const DEPLOY = { versionId: 'v2', contentHash: 'a'.repeat(64), name: 'Summer', version: 2 };

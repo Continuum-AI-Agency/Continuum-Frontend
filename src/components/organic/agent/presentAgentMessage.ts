@@ -1,3 +1,4 @@
+import type { useTranslations } from 'next-intl';
 import { ORGANIC_ACTION_LABELS } from '@/lib/organic/organicActionCopy';
 
 const UUID_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -11,17 +12,24 @@ const JOB_REFERENCE = new RegExp(`\\bjob\\s+${UUID_SOURCE}\\b`, 'giu');
 export const buildPlannerDraftDeepLink = (draftId: string): string =>
   `/organic?tab=planner&draftId=${encodeURIComponent(draftId)}`;
 
-export function presentAgentMessage(content: string): string {
+export function presentAgentMessage(
+  content: string,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+): string {
   return content
     .replace(
       DRAFT_ID,
       (_match, draftId: string) =>
+        translate?.('draft_open_in_calendar_url_1a2e5b1', {
+          url: buildPlannerDraftDeepLink(draftId),
+        }) ??
         `Draft: [${ORGANIC_ACTION_LABELS.openInCalendar}](${buildPlannerDraftDeepLink(draftId)})`,
     )
     .replace(
       DRAFT_REFERENCE,
       (_match, draftId: string) =>
+        translate?.('open_in_calendar_url_1f7d7b0', { url: buildPlannerDraftDeepLink(draftId) }) ??
         `[${ORGANIC_ACTION_LABELS.openInCalendar}](${buildPlannerDraftDeepLink(draftId)})`,
     )
-    .replace(JOB_REFERENCE, 'the current generation');
+    .replace(JOB_REFERENCE, translate?.('messageCurrentGeneration') ?? 'the current generation');
 }

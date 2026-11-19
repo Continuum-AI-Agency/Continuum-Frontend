@@ -10,6 +10,7 @@
 // average, and the days without ads.
 
 import { motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,7 +22,6 @@ import {
   dayKeyLabel,
   MARKER_STACK,
   SOURCE_COLOR,
-  SOURCE_COPY,
   type SpendSeries,
 } from './activityModel';
 import type { ChartAccount, SpendState } from './useActivitySpend';
@@ -57,25 +57,31 @@ function columnX(column: number, columns: number): number {
 }
 
 function SpendFigure({ spend }: { spend: SpendState }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   if (spend.status !== 'ready') return null;
   const { series } = spend;
   const perDay = series.completeDays > 0 ? series.total / series.completeDays : null;
   return (
     <div className="shrink-0 sm:text-right" data-testid="activity-spend-figure">
       <p className="font-mono font-semibold text-foreground text-sm tabular-nums">
-        {formatCurrency(series.total, series.currency)}
+        {formatCurrency(series.total, series.currency, uiLocale)}
       </p>
       <p className="text-muted-foreground text-xs tabular-nums">
-        {perDay != null ? `${formatCurrency(perDay, series.currency)}/day` : null}
-        {series.darkDays > 0
-          ? ` · ${series.darkDays} ${series.darkDays === 1 ? 'day' : 'days'} without ads`
+        {perDay != null
+          ? uiText('amount_day_b6ffd42', {
+              amount: formatCurrency(perDay, series.currency, uiLocale),
+            })
           : null}
+        {series.darkDays > 0 ? uiText('activitySpendDarkDays', { count: series.darkDays }) : null}
       </p>
     </div>
   );
 }
 
 function SpendLine({ series, columns }: { series: SpendSeries; columns: number }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const reduce = useReducedMotion();
   const ceiling = series.max > 0 ? series.max : 1;
   const top = pct(LINE_TOP_PX);
@@ -100,7 +106,7 @@ function SpendLine({ series, columns }: { series: SpendSeries; columns: number }
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
       >
         <svg className="h-full w-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-          <title>Spend per day</title>
+          <title>{uiText('spend_per_day_59b8da8')}</title>
           <polygon className="text-foreground" fill="currentColor" opacity={0.05} points={area} />
           <polyline
             className="text-foreground/70"
@@ -130,7 +136,7 @@ function SpendLine({ series, columns }: { series: SpendSeries; columns: number }
             : { left: `${last.x}%`, top: `${last.y}%` }
         }
       >
-        {formatCurrency(last.day.spend, series.currency)}
+        {formatCurrency(last.day.spend, series.currency, uiLocale)}
       </span>
     </>
   );
@@ -145,6 +151,7 @@ function MarkerLabel({
   columns: number;
   dayKey: string;
 }) {
+  const uiText = useTranslations('scale');
   const x = columnX(marker.column, columns);
   const align = x < 28 ? 'start' : x > 72 ? 'end' : 'center';
   return (
@@ -162,7 +169,7 @@ function MarkerLabel({
       }}
     >
       <span className="text-muted-foreground">
-        {dayKeyLabel(dayKey)} · {SOURCE_COPY[marker.source].label}
+        {dayKeyLabel(dayKey)} · {uiText('activitySourceLabel', { source: marker.source })}
       </span>
       <span className="block text-foreground">{marker.label}</span>
     </div>
@@ -170,12 +177,15 @@ function MarkerLabel({
 }
 
 function SpendNote({ spend }: { spend: SpendState }) {
+  const uiText = useTranslations('scale');
   if (spend.status === 'error') {
     return (
       <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="activity-spend-error">
-        <span className="text-destructive">Daily spend could not be read: {spend.message}</span>
+        <span className="text-destructive">
+          {uiText('daily_spend_could_not_be_read_message_50add0e', { message: spend.message })}
+        </span>
         <Button className="h-6 px-2 text-xs" onClick={spend.retry} size="sm" variant="ghost">
-          Retry
+          {uiText('retry_942087c')}
         </Button>
       </div>
     );
@@ -183,14 +193,14 @@ function SpendNote({ spend }: { spend: SpendState }) {
   if (spend.status === 'unreadable') {
     return (
       <p className="text-muted-foreground text-xs" data-testid="activity-spend-unreadable">
-        The platform sent a total without its day-by-day series, so no line is drawn.
+        {uiText('the_platform_sent_a_total_without_its_day_by__c00ea6e')}
       </p>
     );
   }
   if (spend.status === 'none') {
     return (
       <p className="text-muted-foreground text-xs" data-testid="activity-spend-none">
-        No Meta or Google ad account is connected to this brand, so there is no spend to draw.
+        {uiText('no_meta_or_google_ad_account_is_connected_to__bedd68a')}
       </p>
     );
   }
@@ -210,6 +220,7 @@ export function ActivitySpendChart({
   onPick,
   notes = [],
 }: ActivitySpendChartProps) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const columns = days.length;
   const complete = days.filter((day) => day.complete);
@@ -223,13 +234,15 @@ export function ActivitySpendChart({
 
   return (
     <section
-      aria-label="Spend per day and what changed"
+      aria-label={uiText('spend_per_day_and_what_changed_55fbd93')}
       className="space-y-3 rounded-xl border bg-card p-4 text-card-foreground"
       data-testid="activity-chart"
     >
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
         <div className="min-w-0 space-y-0.5">
-          <h3 className="font-semibold text-sm tracking-tight">Spend per day</h3>
+          <h3 className="font-semibold text-sm tracking-tight">
+            {uiText('spend_per_day_59b8da8')}
+          </h3>
           <p className="text-muted-foreground text-xs">
             {dayKeyLabel(firstDay)} – {dayKeyLabel(lastDay)}
             {account
@@ -249,7 +262,11 @@ export function ActivitySpendChart({
 
       <div>
         <figure
-          aria-label={`Spend per day from ${dayKeyLabel(firstDay)} to ${dayKeyLabel(lastDay)}, with ${markers.length} ${markers.length === 1 ? 'event' : 'events'}`}
+          aria-label={uiText('activitySpendChartLabel', {
+            from: dayKeyLabel(firstDay),
+            to: dayKeyLabel(lastDay),
+            count: markers.length,
+          })}
           className="relative m-0"
           onPointerLeave={() => onHighlight(null)}
           style={{ height: PLOT_PX }}
@@ -307,7 +324,11 @@ export function ActivitySpendChart({
             const day = days[marker.column]?.key ?? '';
             return (
               <button
-                aria-label={`${dayKeyLabel(day)} · ${SOURCE_COPY[marker.source].label}: ${marker.label}`}
+                aria-label={uiText('activityMarkerLabel', {
+                  day: dayKeyLabel(day),
+                  source: uiText('activitySourceLabel', { source: marker.source }),
+                  label: marker.label,
+                })}
                 aria-pressed={on}
                 className="-translate-x-1/2 absolute z-10 flex size-4 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 data-event-id={marker.id}
@@ -379,7 +400,7 @@ export function ActivitySpendChart({
 
         <div className="mt-1 flex justify-between gap-2 font-mono text-muted-foreground text-xs tabular-nums">
           <span>{dayKeyLabel(days[0]?.key ?? '')}</span>
-          <span>Today</span>
+          <span>{uiText('today_2b065c7')}</span>
         </div>
       </div>
 
@@ -389,7 +410,7 @@ export function ActivitySpendChart({
             aria-hidden="true"
             className="inline-block h-2.5 w-3 rounded-[2px] bg-muted-foreground/25"
           />
-          No ads shown: nothing spent and no impression that day.
+          {uiText('no_ads_shown_nothing_spent_and_no_impression__2f24926')}
         </p>
       ) : null}
       <SpendNote spend={spend} />

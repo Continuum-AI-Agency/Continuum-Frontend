@@ -35,8 +35,14 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 mock.module('@/lib/documents/uploadBrandDocument', () => ({ uploadBrandDocument }));
 mock.module('@/lib/library/uploadMediaAsset', () => ({ uploadMediaAsset }));
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { AiDraftDialog, DraftWithAiButton } from './AiVariationsDialog';
 
 // Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file

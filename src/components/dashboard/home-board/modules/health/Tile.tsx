@@ -8,6 +8,7 @@
 // the reads behind each check are in doctorModel.ts's header (the bench anchor).
 
 import { type HomeAccountHygieneData, homeAccountHygieneReadSchema } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,6 +24,7 @@ const Module = lazy(() => import('./Module'));
 const FAILING_SHOWN: Record<HomeTileProps['tile']['size'], number> = { s: 1, m: 2, l: 4 };
 
 export default function HealthTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
   const reads = useDoctorReads(ctx.brandId, ctx.adAccounts);
   const hygiene = useHomeRead<HomeAccountHygieneData>({
     name: 'accountHygiene',
@@ -54,9 +56,11 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
     return (
       <HomeTileFrame state="error" tile={tile}>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-muted-foreground text-xs">The account checks could not be read.</p>
+          <p className="text-muted-foreground text-xs">
+            {uiText('the_account_checks_could_not_be_read_c57b5bc')}
+          </p>
           <Button onClick={reads.retry} size="sm" type="button" variant="outline">
-            Retry
+            {uiText('retry_942087c')}
           </Button>
         </div>
       </HomeTileFrame>
@@ -75,9 +79,13 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
   const passShare = view.total > 0 ? (view.passing / view.total) * 100 : 0;
   return (
     <HomeTileFrame
-      badge={view.failing === 0 ? 'Nothing to fix' : `${view.failing} to fix`}
+      badge={
+        view.failing === 0
+          ? uiText('nothing_to_fix_b4f3c1e')
+          : uiText('count_to_fix_a7a9915', { count: view.failing })
+      }
       expanded={<Module view={view} />}
-      expandedDescription="Every check Continuum can read for this brand, and where each one is fixed."
+      expandedDescription={uiText('every_check_continuum_can_read_for_this_brand_f63fe9c')}
       state="ready"
       tile={tile}
     >
@@ -89,11 +97,19 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
           data-total={view.total}
           data-value={view.passing}
         >
-          {view.passing} of {view.total}{' '}
-          <span className="font-normal text-muted-foreground text-xs">checks pass</span>
+          {uiText.rich('passing_of_total_muted_checks_pass_muted_c95638c', {
+            passing: view.passing,
+            total: view.total,
+            muted: (chunks) => (
+              <span className="font-normal text-muted-foreground text-xs">{chunks}</span>
+            ),
+          })}
         </p>
         <div
-          aria-label={`${view.passing} of ${view.total} checks pass`}
+          aria-label={uiText('passing_of_total_checks_pass_9db0c64', {
+            passing: view.passing,
+            total: view.total,
+          })}
           className="h-2 w-full overflow-hidden rounded-full bg-muted"
           role="img"
         >
@@ -113,7 +129,9 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
             ))}
           </ul>
         ) : (
-          <p className="text-muted-foreground text-xs">Every check that can be read passes.</p>
+          <p className="text-muted-foreground text-xs">
+            {uiText('every_check_that_can_be_read_passes_970bf11')}
+          </p>
         )}
       </div>
     </HomeTileFrame>

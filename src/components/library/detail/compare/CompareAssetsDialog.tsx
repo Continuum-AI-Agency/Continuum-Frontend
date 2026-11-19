@@ -7,8 +7,10 @@
 
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { listAssetVersions } from '@/lib/library/versions';
 import { resolveStageMedia } from '../stageMedia';
 import { CompareDialog, type CompareOption } from './CompareDialog';
@@ -83,6 +85,10 @@ async function loadComparison(brandId: string, assetIds: readonly string[]): Pro
 }
 
 export function CompareAssetsDialog({ brandId, assetIds, open, onOpenChange }: Props) {
+  const translateUi = useUiTranslations('library');
+
+  const uiErrorText = useUiErrorMessage();
+
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const key = assetIds.join(',');
@@ -98,12 +104,12 @@ export function CompareAssetsDialog({ brandId, assetIds, open, onOpenChange }: P
         if (!cancelled) setLoaded(result);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the assets');
+        if (!cancelled) setError(uiErrorText(err));
       });
     return () => {
       cancelled = true;
     };
-  }, [brandId, key, open]);
+  }, [brandId, key, open, uiErrorText]);
 
   if (loaded && open) {
     return (
@@ -121,13 +127,13 @@ export function CompareAssetsDialog({ brandId, assetIds, open, onOpenChange }: P
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="compare-assets-loading" className="max-w-sm">
-        <DialogTitle className="text-sm">Compare assets</DialogTitle>
+        <DialogTitle className="text-sm">{translateUi('compare_assets_038ecc3e')}</DialogTitle>
         {error ? (
           <p className="text-xs text-destructive">{error}</p>
         ) : (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" />
-            Loading both assets…
+            <Loader2 className="size-3.5 animate-spin" />{' '}
+            {translateUi('loading_both_assets_e88ebeba')}{' '}
           </p>
         )}
       </DialogContent>

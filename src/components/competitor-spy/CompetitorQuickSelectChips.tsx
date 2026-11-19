@@ -1,6 +1,7 @@
 'use client';
 
 import type { Competitor } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { initials, tileStyle } from './brandVisuals';
 
@@ -30,6 +31,7 @@ export function CompetitorQuickSelectChips({
   max?: number;
   className?: string;
 }) {
+  const uiText = useTranslations('competitor');
   if (competitors.length === 0) return null;
   const ranked = [...competitors]
     .sort((a, b) => (b.instagramFollowersCount ?? 0) - (a.instagramFollowersCount ?? 0))
@@ -43,7 +45,7 @@ export function CompetitorQuickSelectChips({
         aria-current={selectedId === undefined}
         className={chipClass(selectedId === undefined)}
       >
-        All
+        {uiText('all_a52ace4')}
       </button>
       {ranked.map((competitor) => {
         const active = competitor.id === selectedId;

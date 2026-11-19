@@ -1,4 +1,5 @@
 import type { BrandBookResponse } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 
 import { BrandBookEmptyState } from './BrandBookEmptyState';
 import { BrandBookView } from './BrandBookView';
@@ -21,6 +22,8 @@ export function BrandBookSection({
   brandBook: BrandBookResponse | null;
   generation?: BrandBookGeneration | null;
 }) {
+  const tUi = useTranslations('settings');
+
   if (!brandBook || !brandBook.present) {
     if (generation) {
       return (
@@ -31,19 +34,14 @@ export function BrandBookSection({
         />
       );
     }
-    return (
-      <p className="text-sm text-muted-foreground">
-        Your Brand Book is assembling from your onboarding, guidelines, and documents. Check back in
-        a moment.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">{tUi('m_e0af3ff633')}</p>;
   }
 
   const brandName =
     brandBook.brand_tokens?.brand_name ??
     brandBook.composite?.brand_profile?.brand_name ??
     generation?.brandName ??
-    'Your Brand Book';
+    tUi('m_cd3f1b0802');
 
   return <BrandBookView brandBook={brandBook} brandName={brandName} />;
 }

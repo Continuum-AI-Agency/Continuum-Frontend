@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // APP-SWEEP-organic-top-creatives-skeleton-forever: a brand with no Instagram or YouTube
 // account left the Home's organic "Top creatives" table on its loading skeleton for good

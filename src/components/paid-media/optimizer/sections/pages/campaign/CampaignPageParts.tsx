@@ -5,6 +5,7 @@
 // serves on Search, where its auctions went as one thin bar with every share written beside it.
 
 import { motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { HeroFigure } from '../../../components/HeroFigure';
 import { formatCurrency } from '../../../format';
@@ -48,7 +49,9 @@ export function CampaignHeader({
   campaign: CampaignView;
   currency: string | null;
 }) {
-  const status = statusWords(campaign.status);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const status = statusWords(campaign.status, uiText);
   const serving = campaign.status.value === 'ENABLED';
   return (
     <div className="space-y-2" data-testid="campaign-header">
@@ -75,7 +78,9 @@ export function CampaignHeader({
         <span className="ml-auto font-mono text-muted-foreground text-xs tabular-nums">
           <FigureText
             figure={campaign.budgetPerDay}
-            format={(value) => `${formatCurrency(value, currency)} / day`}
+            format={(value) =>
+              uiText('amount_day_bbf11b1', { amount: formatCurrency(value, currency, uiLocale) })
+            }
           />
         </span>
       </div>
@@ -86,7 +91,7 @@ export function CampaignHeader({
             <BandText band={campaign.band} />
           </>
         ) : (
-          <span data-testid="campaign-portfolio">In no portfolio</span>
+          <span data-testid="campaign-portfolio">{uiText('in_no_portfolio_9210f29')}</span>
         )}
       </p>
     </div>
@@ -123,10 +128,11 @@ export function CampaignKpiTiles({ tiles }: { tiles: readonly KpiTile[] }) {
 
 /** Where the Search auctions went, as one bar with each share written in the legend. */
 export function AuctionShareBar({ slices }: { slices: readonly AuctionSlice[] }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   return (
     <section className="space-y-1.5" data-testid="campaign-auction">
-      <h4 className="font-semibold text-foreground text-xs">Search auctions</h4>
+      <h4 className="font-semibold text-foreground text-xs">{uiText('search_auctions_994c8bd')}</h4>
       <div
         aria-label={slices.map((slice) => `${slice.label} ${shareText(slice.share)}`).join(', ')}
         className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted"

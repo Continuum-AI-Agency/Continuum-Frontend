@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { PortfolioListItem } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The apply-mode pill needs a TooltipProvider ancestor and is not what these tests are about.
 mock.module('../../ApplyModePill', () => ({
@@ -133,7 +134,11 @@ describe('AccountAutomations — the account-level ceilings', () => {
     accountReadData = withRead();
     familyFailure = new Error('Could not change what this family may do: function does not exist');
     const { getByTestId } = mount([portfolio({ id: 'a', name: 'Alpha' })]);
-    expect(getByTestId('family-error').textContent).toContain('function does not exist');
+    // The panel says the change failed in the UI language; the database's own prose stays a
+    // diagnostic and never becomes UI copy.
+    const shown = getByTestId('family-error').textContent ?? '';
+    expect(shown).toContain('An unexpected error occurred');
+    expect(shown).not.toContain('function does not exist');
   });
 
   // Without the read there are no defaults to show as "in force", and a panel that pressed

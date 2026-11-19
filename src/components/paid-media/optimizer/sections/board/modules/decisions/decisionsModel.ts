@@ -254,7 +254,7 @@ export function figureOf(candidate: AccountCandidate, card: PlatformCard | null)
       card.budget_per_day != null
         ? ` Budget ${formatCurrency(card.budget_per_day, card.currency)}/day.`
         : '';
-    return `Google says: ${card.reasons.map(googleReasonInWords).join('; ')}.${budget}`;
+    return `Google says: ${card.reasons.map((code) => googleReasonInWords(code)).join('; ')}.${budget}`;
   }
   const basis = candidate.impact_basis.trim();
   return basis.length > 0 ? basis : null;

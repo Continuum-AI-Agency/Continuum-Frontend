@@ -1,8 +1,9 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
-import * as actions from '@/app/onboarding/actions';
+import { act, cleanup, screen, waitFor } from '@testing-library/react';
+import * as actions from '@/app/[locale]/onboarding/actions';
 import { OnboardingProvider } from '@/components/onboarding/providers/OnboardingContext';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { render } from '@/i18n/__tests__/render';
 import type { ScreenIndex } from '@/lib/onboarding/resumeScreen';
 import { createDefaultOnboardingState, mergeOnboardingState } from '@/lib/onboarding/state';
 import * as client from '@/lib/supabase/client';

@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Small formatting helpers shared across the optimizer surface. Currency is the AD ACCOUNT's
 // real currency (AdAccount.currency from plugin_mcp.list_brand_ad_accounts — the same path the
 // MCP account_map tool uses), passed in so a JPY account never reads as USD. The engine already
@@ -25,6 +29,8 @@
 // grouping separator stays (a screen has room for "$2,000"; a 320px frame does not).
 
 import { type CandidateHeadline, perPeriod } from '@continuum/contracts';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import {
   currencyGlyph,
   joinMoney,
@@ -38,9 +44,10 @@ export { normalizeCurrency };
 export function formatCurrency(
   value: number | null | undefined,
   currency: string | null | undefined,
+  locale: UiLocale = 'en',
 ): string {
   if (value == null || !Number.isFinite(value)) return '—';
-  return joinMoney(moneyParts(value < 0, digitRuleBody(value), currency));
+  return joinMoney(moneyParts(value < 0, digitRuleBody(value, locale), currency));
 }
 
 /** A table cell under a header that names the code ("CPL · MXN" over "$99.57"): the symbol
@@ -48,9 +55,10 @@ export function formatCurrency(
 export function formatCurrencyInColumn(
   value: number | null | undefined,
   currency: string | null | undefined,
+  locale: UiLocale = 'en',
 ): string {
   if (value == null || !Number.isFinite(value)) return '—';
-  return joinMoneyInColumn(moneyParts(value < 0, digitRuleBody(value), currency));
+  return joinMoneyInColumn(moneyParts(value < 0, digitRuleBody(value, locale), currency));
 }
 
 /** A column header's code, " · MXN", or nothing when the code is unknown. */
@@ -59,9 +67,9 @@ export function currencyColumnSuffix(currency: string | null | undefined): strin
   return code ? ` · ${code}` : '';
 }
 
-function digitRuleBody(value: number): string {
+function digitRuleBody(value: number, locale: string): string {
   const digits = Math.abs(value) >= 100 ? 0 : 2;
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat(locale, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(Math.abs(value));
@@ -74,9 +82,10 @@ export function formatCurrencyExact(
   value: number | null | undefined,
   currency: string | null | undefined,
   fractionDigits: number,
+  locale: UiLocale = 'en',
 ): string {
   if (value == null || !Number.isFinite(value)) return '—';
-  const body = new Intl.NumberFormat('en-US', {
+  const body = new Intl.NumberFormat(locale, {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   }).format(Math.abs(value));
@@ -89,8 +98,9 @@ export function formatCurrencyExact(
 export function formatCpa(
   value: number | null | undefined,
   currency: string | null | undefined,
+  locale: UiLocale = 'en',
 ): string {
-  return formatCurrency(value, currency);
+  return formatCurrency(value, currency, locale);
 }
 
 /** The currency prefix for an input adornment ("$" for MXN and USD, "€"). EMPTY when the
@@ -128,12 +138,35 @@ export function deriveCpa(spend: number, conversions: number): number | null {
 }
 
 /** Title-case a loose DB string like "app_install" → "App install". */
-export function humanize(value: string | null | undefined): string {
+export function humanize(value: string | null | undefined, uiTranslate?: ScaleCopy): string {
   if (!value) return '—';
+  if (
+    uiTranslate &&
+    [
+      'purchase',
+      'lead',
+      'signup',
+      'app_install',
+      'traffic',
+      'awareness',
+      'conversations',
+      'link_clicks',
+      'thruplays',
+      'post_engagement',
+      'clicks',
+      'custom',
+      'efficiency',
+      'balanced',
+      'scale',
+    ].includes(value)
+  )
+    return uiTranslate('controlHumanized', { value });
   // Apply-mode tiers get product labels (observe is the no-write bottom tier).
-  if (value === 'observe') return 'Observe · no writes';
-  if (value === 'recommend') return 'Recommend';
-  if (value === 'autopilot') return 'Autopilot';
+  if (value === 'observe')
+    return uiTranslate ? uiTranslate('observe_no_writes_7dc7aaa') : 'Observe · no writes';
+  if (value === 'recommend')
+    return uiTranslate ? uiTranslate('optimizer_modeRecommend') : 'Recommend';
+  if (value === 'autopilot') return uiTranslate ? uiTranslate('autopilot_0c62cfc') : 'Autopilot';
   const spaced = value.replace(/_/g, ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
@@ -151,6 +184,7 @@ export function portfolioLevelLabel(level: string | null | undefined): string {
 export function nextCycleLabel(
   iso: string | null | undefined,
   now: Date = new Date(),
+  uiTranslate?: ScaleCopy,
 ): string | null {
   if (!iso) return null;
   const at = new Date(iso);
@@ -158,13 +192,21 @@ export function nextCycleLabel(
 
   const minutes = Math.round((at.getTime() - now.getTime()) / 60_000);
   if (minutes <= 1) return 'shortly';
-  if (minutes < 60) return `in ${minutes} minutes`;
+  if (minutes < 60)
+    return uiTranslate
+      ? uiTranslate('helper_27c639d19ee0', { v0: minutes })
+      : `in ${minutes} minutes`;
 
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `in about ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  if (hours < 24)
+    return uiTranslate
+      ? uiTranslate('helper_0d8dba8e4477', { v0: hours, v1: hours === 1 ? 'hour' : 'hours' })
+      : `in about ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
 
   const days = Math.round(hours / 24);
-  return `in about ${days} ${days === 1 ? 'day' : 'days'}`;
+  return uiTranslate
+    ? uiTranslate('helper_0d8dba8e4477', { v0: days, v1: days === 1 ? 'day' : 'days' })
+    : `in about ${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
 /** The soonest scheduled cycle across a set of portfolios, as an ISO string. */
@@ -195,10 +237,26 @@ export function soonestNextCycle(portfolios: { next_realloc_at: string | null }[
 export function formatPerPeriod(
   perDay: number | null | undefined,
   currency: string | null | undefined,
+  locale: UiLocale = 'en',
 ): string {
   if (perDay == null || Number.isNaN(perDay) || !Number.isFinite(perDay)) return '—';
   const { day, month } = perPeriod(perDay);
-  return `${formatCurrency(day, currency)}/day · ${formatCurrency(month, currency)}/mo`;
+  const units = periodUnits(locale);
+  return `${formatCurrency(day, currency, locale)}/${units.day} · ${formatCurrency(month, currency, locale)}/${units.month}`;
+}
+
+let periodUnitNames: Map<UiLocale, { day: string; month: string }> | undefined;
+
+function periodUnits(locale: UiLocale): { day: string; month: string } {
+  const cached = periodUnitNames?.get(locale);
+  if (cached) return cached;
+  const names = new Intl.DisplayNames([locale], { type: 'dateTimeField', style: 'long' });
+  const units = {
+    day: names.of('day') ?? 'day',
+    month: locale === 'en' ? 'mo' : (names.of('month') ?? 'mo'),
+  };
+  (periodUnitNames ??= new Map()).set(locale, units);
+  return units;
 }
 
 /**
@@ -211,9 +269,10 @@ export function formatPerPeriod(
 export function formatPercent(
   value: number | null | undefined,
   options: { signed?: boolean; fractionDigits?: number } = {},
+  locale: UiLocale = 'en',
 ): string {
   if (value == null || Number.isNaN(value) || !Number.isFinite(value)) return '—';
-  const body = value.toFixed(options.fractionDigits ?? 0);
+  const body = formatDecimal(value, options.fractionDigits ?? 0, locale);
   return options.signed && value > 0 ? `+${body}%` : `${body}%`;
 }
 
@@ -228,14 +287,15 @@ export function formatPercent(
 export function formatHeadline(
   headline: CandidateHeadline,
   currency: string | null | undefined,
+  locale: UiLocale = 'en',
 ): { figure: string; label: string } {
   switch (headline.unit) {
     case 'percent':
-      return { figure: formatPercent(headline.value), label: headline.label };
+      return { figure: formatPercent(headline.value, {}, locale), label: headline.label };
     case 'currency_per_day':
-      return { figure: formatCurrency(headline.value, currency), label: headline.label };
+      return { figure: formatCurrency(headline.value, currency, locale), label: headline.label };
     case 'count':
-      return { figure: headline.value.toLocaleString('en-US'), label: headline.label };
+      return { figure: headline.value.toLocaleString(locale), label: headline.label };
   }
 }
 

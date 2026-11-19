@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import * as React from 'react';
-
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+} from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { publishAccountsKey } from '@/lib/organic/publishTargets';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -246,7 +250,7 @@ describe('useApproveScheduleDraft', () => {
     expect(updateDraftMock).not.toHaveBeenCalled();
     expect(showMock.mock.calls[0][0]).toMatchObject({
       title: 'Approval blocked',
-      description: 'TikTok: Choose which TikTok account posts this: @acme_tt or @acme_tt2',
+      description: 'TikTok: Choose a TikTok account to publish this draft',
       variant: 'error',
     });
   });
@@ -332,7 +336,7 @@ describe('useApproveScheduleDraft', () => {
     expect(showMock).toHaveBeenCalledTimes(1);
     expect(showMock.mock.calls[0][0]).toMatchObject({
       title: 'Scheduling failed',
-      description: 'Nothing was scheduled. TikTok: Draft must be approved',
+      description: 'Nothing was scheduled. TikTok: Check the highlighted fields and try again.',
       variant: 'error',
     });
   });

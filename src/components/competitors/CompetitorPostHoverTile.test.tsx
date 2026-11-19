@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { CompetitorPostAnalysis, InstagramPost } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import type { CompetitorPostView } from './competitorPostView';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
@@ -199,7 +200,9 @@ describe('CompetitorPostHoverTile reel media', () => {
     expect(face.querySelector('img')?.getAttribute('src')).toBe(reel.coverUrl);
 
     fireEvent.pointerEnter(face);
-    expect(face.querySelector('video')?.getAttribute('src')).toBe('https://cdn.example.com/reel.mp4');
+    expect(face.querySelector('video')?.getAttribute('src')).toBe(
+      'https://cdn.example.com/reel.mp4',
+    );
 
     fireEvent.pointerLeave(face);
     expect(container.querySelector('video')).toBeNull();

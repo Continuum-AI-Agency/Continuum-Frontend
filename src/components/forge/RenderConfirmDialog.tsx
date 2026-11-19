@@ -19,10 +19,13 @@ import {
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Check, Loader2, Play } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { FORGE_APPROVAL_COPY } from '@/components/forge/ApprovalDestinationsField';
 import {
-  APPROVAL_COPY,
+  type useTranslations,
+  useLocale as useUiLocale,
+  useTranslations as useUiTranslations,
+} from 'next-intl';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import {
   adSetName,
   type MetaPickerState,
   metaDeliveryProblems,
@@ -33,7 +36,7 @@ import {
 } from '@/components/forge/DeliveryTargetPicker';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { useSetApprovalRooms } from '@/components/forge/RenderSetSettingsDialog';
-import { readinessLine } from '@/components/forge/readinessCopy';
+import { explainFinding, readinessLine } from '@/components/forge/readinessCopy';
 import {
   canRetry,
   clearHold,
@@ -56,14 +59,16 @@ import {
   sendingElsewhere,
 } from '@/components/forge/renderHold';
 import {
+  overridableFinding,
   overrideFor,
-  RENDER_OVERRIDES,
   type RenderOverride,
   renderedRatios,
+  renderOverrideCopy,
   rowFileCount,
 } from '@/components/forge/renderRequestRows';
 import { RatioChips } from '@/components/forge/requestCells';
 import type { SlackPickerState } from '@/components/forge/SlackDestinationPicker';
+import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -77,10 +82,12 @@ import {
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/toast-imperative';
+import type { UiLocale } from '@/i18n/config';
 import { ApiError } from '@/lib/api/errors';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
+import { describeEncodeSettingsUi } from './encodePresentation';
 
 // The one look before a batch is spent. Where it goes was decided earlier — on the set (its
 // default ad set, rooms, Proof or Final) and on each row (its own ad) — so this only reads it back:
@@ -111,12 +118,16 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
 /** A token this close to expiry is re-signed rather than spent. */
 const TOKEN_MARGIN_MS = 10_000;
 
-function describeFailure(error: unknown): {
+function describeFailure(
+  error: unknown,
+  translate?: ReturnType<typeof useTranslations<'forge'>>,
+  present?: (source: string) => string,
+): {
   message: string;
   details: string[];
   override: RenderOverride | null;
 } {
-  const message = describeRenderDiscoveryFailure(error);
+  const message = describeRenderDiscoveryFailure(error, present);
   const raw = error instanceof ApiError ? error.payload?.guardrails : undefined;
   const findings = Array.isArray(raw)
     ? raw.flatMap((item) =>
@@ -133,7 +144,15 @@ function describeFailure(error: unknown): {
     : [];
   return {
     message,
-    details: findings.map((finding) => finding.message).filter(Boolean),
+    details: findings
+      .map((finding) => {
+        if (!translate) return finding.message;
+        const override = overridableFinding(finding);
+        return override
+          ? renderOverrideCopy(override, translate).consequence
+          : explainFinding(finding, () => undefined, translate);
+      })
+      .filter(Boolean),
     override: error instanceof ApiError ? overrideFor(error.code ?? error.message, findings) : null,
   };
 }
@@ -143,10 +162,14 @@ function describeFailure(error: unknown): {
  * overrides. Anything else (an outage, a throttle, a set or revision that moved, a refusal a tick
  * lets through) says nothing about the row, and the row stays in the batch.
  */
-function rowRefusalOf(error: unknown): string | null {
+function rowRefusalOf(
+  error: unknown,
+  translate?: ReturnType<typeof useTranslations<'forge'>>,
+  present?: (source: string) => string,
+): string | null {
   if (!(error instanceof ApiError) || error.status !== 422) return null;
   if (/render_set|revision/.test(error.code ?? error.message)) return null;
-  const { message, details, override } = describeFailure(error);
+  const { message, details, override } = describeFailure(error, translate, present);
   if (override) return null;
   return details.length ? details.join(' ') : message;
 }
@@ -161,11 +184,24 @@ export function outputGroups(
   outputIds: string[],
   encode: ApiRenderEncodeOverride | undefined,
   ratios: string[],
+  t?: ReturnType<typeof useUiTranslations<'forge'>>,
+  locale: UiLocale = 'en',
 ): Array<{ summary: string; ratios: string[] }> {
   const video = contract.template.outputKinds.includes('video');
   // A template that publishes no outputs renders its source's ratios together, as they are.
   if (contract.outputs.length === 0) {
-    return [{ summary: video ? 'Template default' : 'Still image', ratios }];
+    return [
+      {
+        summary: video
+          ? t
+            ? t('encodeTemplateDefault')
+            : 'Template default'
+          : t
+            ? t('encodeStillImage')
+            : 'Still image',
+        ratios,
+      },
+    ];
   }
   const picked = outputIds.length
     ? contract.outputs.filter((output) => outputIds.includes(output.id))
@@ -177,11 +213,20 @@ export function outputGroups(
     const still =
       container === null && (Boolean(output.mediaType) || output.encode === null || !video);
     const summary = still
-      ? 'Still image'
-      : (describeEncodeSettings(
-          mergeEncodeSettings(encode?.default, encode?.outputs?.[output.id]),
-          container,
-        ) ?? 'Template default');
+      ? t
+        ? t('encodeStillImage')
+        : 'Still image'
+      : ((t
+          ? describeEncodeSettingsUi(
+              mergeEncodeSettings(encode?.default, encode?.outputs?.[output.id]),
+              container,
+              t,
+              locale,
+            )
+          : describeEncodeSettings(
+              mergeEncodeSettings(encode?.default, encode?.outputs?.[output.id]),
+              container,
+            )) ?? (t ? t('encodeTemplateDefault') : 'Template default'));
     groups.set(summary, [...(groups.get(summary) ?? []), output.ratio ?? output.label]);
   }
   return [...groups].map(([summary, ratios]) => ({ summary, ratios }));
@@ -269,6 +314,11 @@ export function RenderConfirmDialog({
   /** The set's unconfirmed batch: while it is held, this dialog is its view, never a new one. */
   held: HeldBatch | null;
 }) {
+  const presentForge = useForgePresentationText();
+
+  const translateUi = useUiTranslations('forge');
+  const displayLocale = useUiLocale();
+
   const queryClient = useQueryClient();
   const templateKey = contract.template.key;
   const web = isWebTemplateKey(templateKey);
@@ -400,7 +450,7 @@ export function RenderConfirmDialog({
             { retry: false },
           );
         } catch (error) {
-          const message = rowRefusalOf(error);
+          const message = rowRefusalOf(error, translateUi, presentForge);
           if (message) found.push({ rowId, message });
         }
       }
@@ -408,7 +458,7 @@ export function RenderConfirmDialog({
     await Promise.all([ask(), ask(), ask()]);
     if (found.length) reportRefused.current?.(found);
     return found.length;
-  }, [signed]);
+  }, [signed, presentForge, translateUi]);
   const runCheck = useCallback(async (): Promise<ApiRenderBatchPreflightResponse | null> => {
     const mine = ++latest.current;
     setCheck({ state: 'loading' });
@@ -418,7 +468,7 @@ export function RenderConfirmDialog({
       return preflight;
     } catch (error) {
       if (mine !== latest.current) return null;
-      const failure = describeFailure(error);
+      const failure = describeFailure(error, translateUi, presentForge);
       // A 429 is a wait, not a refusal: it is retried, never something to fix in the grid.
       if (!(error instanceof ApiError) || error.status >= 500 || error.status === 429) {
         setCheck({ state: 'failed', message: failure.message });
@@ -434,7 +484,7 @@ export function RenderConfirmDialog({
       });
       return null;
     }
-  }, [signed, findRefusedRows]);
+  }, [signed, findRefusedRows, presentForge, translateUi]);
 
   // A fresh look every time it opens: nothing ticked, the set's own Final, the newest rows.
   // biome-ignore lint/correctness/useExhaustiveDependencies: opening resets; the next effect checks.
@@ -484,7 +534,7 @@ export function RenderConfirmDialog({
 
   const fire = async () => {
     if (check.state !== 'ready') return;
-    if (!holdScope) return setProblem(SIGNED_OUT);
+    if (!holdScope) return setProblem(presentForge(SIGNED_OUT));
     setFiring(true);
     setProblem(null);
     let batch: ApiRenderBatch;
@@ -508,7 +558,7 @@ export function RenderConfirmDialog({
           batchId: preflight.batchId,
         },
         () => apiRendersApi.createBatch({ confirmationToken: token }),
-        { onNotSaved: () => toast.warning(NOT_SAVED) },
+        { onNotSaved: () => toast.warning(presentForge(NOT_SAVED)) },
       );
     } catch (error) {
       setFiring(false);
@@ -516,19 +566,19 @@ export function RenderConfirmDialog({
       if (madeNothing(error))
         return setProblem(
           isSessionRefusal(error)
-            ? SESSION_EXPIRED
+            ? presentForge(SESSION_EXPIRED)
             : isPermissionRefusal(error)
-              ? permissionCopy(error)
+              ? permissionCopy(error, presentForge)
               : isSetChanged(error)
-                ? SET_CHANGED
-                : describeRenderDiscoveryFailure(error),
+                ? presentForge(SET_CHANGED)
+                : describeRenderDiscoveryFailure(error, presentForge),
         );
       // Held (by this failure, or by another tab since the check): the dialog becomes its view.
       if (holdScope && isHeld(holdScope)) {
         void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
         return;
       }
-      const { message, details } = describeFailure(error);
+      const { message, details } = describeFailure(error, translateUi, presentForge);
       return setProblem([message, ...details].join(' '));
     }
     // Answered: the dialog closes first, and nothing after it is a failed render.
@@ -547,18 +597,29 @@ export function RenderConfirmDialog({
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.approvals(brandId) });
       const refused = batch.jobs.filter((job) => job.status === 'failed' && !job.taskUid).length;
-      if (refused > 0) toast.warning(`${batch.jobs.length - refused} queued · ${refused} not sent`);
+      if (refused > 0)
+        toast.warning(
+          translateUi('value0_queued_value1_not_sent_896c6e9a', {
+            value0: String(batch.jobs.length - refused),
+            value1: String(refused),
+          }),
+        );
       else
-        toast.success(`${plural(batch.jobs.length, 'render')} queued`, {
-          ...(onOpenLedger
-            ? {
-                action: {
-                  label: 'Open ledger',
-                  onClick: () => onOpenLedger(batch.jobs.map((job) => job.id)),
-                },
-              }
-            : {}),
-        });
+        toast.success(
+          translateUi('value0_queued_3dddf693', {
+            value0: String(plural(batch.jobs.length, 'render')),
+          }),
+          {
+            ...(onOpenLedger
+              ? {
+                  action: {
+                    label: translateUi('open_ledger_f4e1cb36'),
+                    onClick: () => onOpenLedger(batch.jobs.map((job) => job.id)),
+                  },
+                }
+              : {}),
+          },
+        );
       if (preflight.approval?.warning) toast.warning(preflight.approval.warning);
     } catch (error) {
       console.error('[forge] after a confirmed render', error);
@@ -573,9 +634,9 @@ export function RenderConfirmDialog({
           overlayClassName={CONFIRM_OVERLAY}
         >
           <DialogHeader>
-            <DialogTitle>Unconfirmed render</DialogTitle>
+            <DialogTitle>{translateUi('unconfirmed_render_c4a6f394')}</DialogTitle>
             <DialogDescription>
-              {templateName} · this set’s last Render didn’t confirm.
+              {templateName} {translateUi('this_set_s_last_render_didn_t_confi_86a28e3c')}{' '}
             </DialogDescription>
           </DialogHeader>
           <HeldBatchView
@@ -612,14 +673,23 @@ export function RenderConfirmDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            Render {plural(rows.length, 'row')} · {plural(fileCount, 'file')}
+            {' '}
+            {translateUi('render_6d89eb7d')} {plural(rows.length, 'row')} ·{' '}
+            {plural(fileCount, 'file')}
           </DialogTitle>
           <DialogDescription>{templateName}</DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto text-xs">
           {skippedRows.length ? (
-            <Section title={`Not in this batch · ${plural(skippedRows.length, 'row')}`}>
-              <ul aria-label="Rows skipped from this batch" className="flex flex-col gap-0.5">
+            <Section
+              title={translateUi('not_in_this_batch_value0_6ab417e1', {
+                value0: String(plural(skippedRows.length, 'row')),
+              })}
+            >
+              <ul
+                aria-label={translateUi('rows_skipped_from_this_batch_4f51b061')}
+                className="flex flex-col gap-0.5"
+              >
                 {skippedRows.map((row, index) => (
                   <li key={`${index}:${row.label}`} className="text-warning">
                     {row.label}: {row.message}
@@ -629,7 +699,7 @@ export function RenderConfirmDialog({
             </Section>
           ) : null}
           <Section
-            title="Goes to"
+            title={translateUi('goes_to_c485e60e')}
             action={
               <Button
                 type="button"
@@ -638,25 +708,36 @@ export function RenderConfirmDialog({
                 className="h-auto px-0 normal-case tracking-normal"
                 onClick={onChangeSettings}
               >
-                Change
+                {' '}
+                {translateUi('change_c0bf75bd')}{' '}
               </Button>
             }
           >
             <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="flex items-center gap-1">
-                <Check className="size-3.5 text-success" aria-hidden /> Library
+                <Check className="size-3.5 text-success" aria-hidden />{' '}
+                {translateUi('library_dc20b3d5')}{' '}
               </span>
               {slackName ? <span>· #{slackName}</span> : null}
               {roomNames.map((name) => (
-                <span key={name}>· {name} approval</span>
+                <span key={name}>
+                  · {name} {translateUi('approval_9deb65b8')}
+                </span>
               ))}
-              {approvesInForge ? <span>· Approval in Forge</span> : null}
+              {approvesInForge ? <span>{translateUi('approval_in_forge_9ac99878')}</span> : null}
             </p>
           </Section>
 
           {goesToMeta ? (
-            <Section title={`Meta ads · ${plural(targeted.length, 'row')}`}>
-              <ul aria-label="Meta ads" className="divide-y divide-border rounded-md border">
+            <Section
+              title={translateUi('meta_ads_value0_1bef03d6', {
+                value0: String(plural(targeted.length, 'row')),
+              })}
+            >
+              <ul
+                aria-label={translateUi('meta_ads_7899eeae')}
+                className="divide-y divide-border rounded-md border"
+              >
                 {targeted.map(({ row, delivery, own }) => (
                   <li key={row.rowId} className="flex flex-wrap gap-x-2 px-2 py-1.5">
                     <span className="font-medium">
@@ -664,31 +745,37 @@ export function RenderConfirmDialog({
                     </span>
                     <span className="text-muted-foreground">
                       {delivery.action === 'replace'
-                        ? `replaces ${delivery.adName ?? delivery.adId}`
-                        : `new paused ad${
-                            rowFileCount(contract, { ...row, outputIds: rowOutputIds(row) }) === 1
-                              ? ''
-                              : 's'
-                          } in ${adSetName(delivery)}${own ? '' : ' (set default)'}`}
+                        ? translateUi('replaces_value0_46faa69b', {
+                            value0: String(delivery.adName ?? delivery.adId),
+                          })
+                        : translateUi('new_paused_ad_value0_in_value1_valu_b3d9452d', {
+                            value0: String(
+                              rowFileCount(contract, { ...row, outputIds: rowOutputIds(row) }) === 1
+                                ? ''
+                                : 's',
+                            ),
+                            value1: String(adSetName(delivery)),
+                            value2: String(own ? '' : translateUi('set_default_a1296964')),
+                          })}
                     </span>
                   </li>
                 ))}
               </ul>
-              <p className="text-muted-foreground">{APPROVAL_COPY}</p>
+              <p className="text-muted-foreground">{translateUi('adApprovalExplanation')}</p>
               {approvesInForge ? (
-                <p className="text-muted-foreground">{FORGE_APPROVAL_COPY}</p>
+                <p className="text-muted-foreground">{translateUi('approvalRoomFallback')}</p>
               ) : null}
               {metaWritesAllowed === false ? (
                 <p role="status" className="text-warning">
-                  Meta writes are off for this brand: approved ads are previewed and recorded, not
-                  published.
+                  {' '}
+                  {translateUi('meta_writes_are_off_for_this_brand__791f2ff2')}{' '}
                 </p>
               ) : null}
             </Section>
           ) : null}
 
           {callKinds.size ? (
-            <Section title="Needs your call">
+            <Section title={translateUi('needs_your_call_a33293c8')}>
               <ul className="flex flex-col gap-2">
                 {[...callKinds].map(([flag, messages]) => (
                   <li
@@ -702,7 +789,9 @@ export function RenderConfirmDialog({
                     />
                     <div className="flex min-w-0 flex-col gap-0.5">
                       <Label htmlFor={`override-${flag}`} className="text-xs font-medium">
-                        Render anyway — {RENDER_OVERRIDES[flag].title.toLowerCase()}
+                        {' '}
+                        {translateUi('render_anyway_34a5c500')}{' '}
+                        {renderOverrideCopy(flag, translateUi).title.toLowerCase()}
                       </Label>
                       {[...new Set(messages)].slice(0, 3).map((message) => (
                         <p key={message} className="text-muted-foreground">
@@ -710,8 +799,8 @@ export function RenderConfirmDialog({
                         </p>
                       ))}
                       <p className="text-muted-foreground">
-                        {RENDER_OVERRIDES[flag].consequence} Applies to this batch only and is
-                        recorded in the render ledger.
+                        {renderOverrideCopy(flag, translateUi).consequence}{' '}
+                        {translateUi('applies_to_this_batch_only_and_is_r_ca6e3af8')}{' '}
                       </p>
                     </div>
                   </li>
@@ -720,36 +809,37 @@ export function RenderConfirmDialog({
             </Section>
           ) : null}
 
-          <Section title="Render as">
+          <Section title={translateUi('render_as_b696ffa7')}>
             <RadioGroup
-              aria-label="Render as"
+              aria-label={translateUi('render_as_b696ffa7')}
               value={final ? 'final' : 'proof'}
               onValueChange={(value) => setFinal(value === 'final')}
               className="flex flex-wrap gap-x-6 gap-y-1.5"
             >
               <div className="flex flex-col gap-0.5">
                 <Label className="text-xs">
-                  <RadioGroupItem value="proof" />
-                  Proof
+                  <RadioGroupItem value="proof" /> {translateUi('proof_7fbb3ccf')}{' '}
                 </Label>
-                <span className="pl-6 text-muted-foreground">For review. Recorded as a proof.</span>
+                <span className="pl-6 text-muted-foreground">
+                  {translateUi('for_review_recorded_as_a_proof_be78783b')}
+                </span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <Label className="text-xs">
-                  <RadioGroupItem value="final" disabled={finalBlocked !== null} />
-                  Final
+                  <RadioGroupItem value="final" disabled={finalBlocked !== null} />{' '}
+                  {translateUi('final_f4ed8fa6')}{' '}
                 </Label>
                 <span className="pl-6 text-muted-foreground">
-                  {finalBlocked ?? 'Ready to go. Recorded as final.'}
+                  {finalBlocked ?? translateUi('ready_to_go_recorded_as_final_b4448611')}
                 </span>
               </div>
             </RadioGroup>
           </Section>
 
           {web ? null : (
-            <Section title="Renderer">
+            <Section title={translateUi('renderer_9deb780b')}>
               <RadioGroup
-                aria-label="Renderer"
+                aria-label={translateUi('renderer_9deb780b')}
                 value={renderer}
                 onValueChange={(value) =>
                   setRenderer(value === 'experimental' ? 'experimental' : 'after_effects')
@@ -761,24 +851,27 @@ export function RenderConfirmDialog({
                     <RadioGroupItem value="after_effects" />
                     After Effects
                   </Label>
-                  <span className="pl-6 text-muted-foreground">The render farm.</span>
+                  <span className="pl-6 text-muted-foreground">
+                    {translateUi('the_render_farm_0ccdc2c1')}
+                  </span>
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <Label className="text-xs">
-                    <RadioGroupItem value="experimental" />
-                    Continuum&apos;s New Renderer
+                    <RadioGroupItem value="experimental" />{' '}
+                    {translateUi('continuum_s_new_renderer_2f2c51f3')}{' '}
                   </Label>
                   <span className="pl-6 text-muted-foreground">
-                    Anything it can&apos;t render goes to After Effects automatically.
+                    {' '}
+                    {translateUi('anything_it_can_t_render_goes_to_af_d9b6b46b')}{' '}
                   </span>
                 </div>
               </RadioGroup>
             </Section>
           )}
 
-          <Section title="Files per row">
+          <Section title={translateUi('files_per_row_5036e2ab')}>
             <ul
-              aria-label="Output per row"
+              aria-label={translateUi('output_per_row_e528d7d0')}
               // Its own scroll: a long batch keeps Goes to, Render as and the footer in view.
               className="max-h-[min(16rem,35vh)] divide-y divide-border overflow-y-auto border-y border-border"
             >
@@ -796,6 +889,8 @@ export function RenderConfirmDialog({
                       rowOutputIds(row),
                       records[index]?.encode,
                       renderedRatios(contract, rowOutputIds(row)),
+                      translateUi,
+                      displayLocale,
                     ).map((group) => (
                       <span key={group.summary} className="flex items-center gap-1.5">
                         <RatioChips ratios={group.ratios} />
@@ -815,7 +910,11 @@ export function RenderConfirmDialog({
               <>
                 <Loader2 className="size-3 animate-spin text-muted-foreground" aria-hidden />
                 <span className="text-muted-foreground">
-                  {resolving ? 'Looking up ad IDs…' : `Checking ${plural(rows.length, 'row')}…`}
+                  {resolving
+                    ? translateUi('looking_up_ad_ids_7a0e5ca6')
+                    : translateUi('checking_value0_60666583', {
+                        value0: String(plural(rows.length, 'row')),
+                      })}
                 </span>
               </>
             ) : blockers.length ? (
@@ -826,26 +925,31 @@ export function RenderConfirmDialog({
               <span className={cn(check.override ? 'text-warning' : 'text-destructive')}>
                 <AlertTriangle className="mr-1 inline size-3.5" aria-hidden />
                 {check.override
-                  ? 'Tick “Render anyway” above, or fix the row in the grid.'
+                  ? translateUi('tick_render_anyway_above_or_fix_the_bf6ed098')
                   : `${check.message}${check.details.length ? ` ${check.details.join(' ')}` : ''}${
                       check.wholeBatch
-                        ? ' No row is refused on its own, so none was skipped.'
-                        : ' Fix the row in the grid, then render again.'
+                        ? translateUi('no_row_is_refused_on_its_own_so_non_8dfdcc25')
+                        : translateUi('fix_the_row_in_the_grid_then_render_07f4780d')
                     }`}
               </span>
             ) : check.state === 'failed' ? (
               <span className="flex items-center gap-2 text-destructive">
                 {check.message}
                 <Button type="button" size="xs" variant="outline" onClick={() => void runCheck()}>
-                  Retry
+                  {' '}
+                  {translateUi('retry_942087cc')}{' '}
                 </Button>
               </span>
             ) : (
               <span className="truncate text-muted-foreground">
-                {readinessLine(check.preflight.readiness, (key) => {
-                  const label = contract.variables.find((item) => item.key === key)?.label;
-                  return label ?? key;
-                })}
+                {readinessLine(
+                  check.preflight.readiness,
+                  (key) => {
+                    const label = contract.variables.find((item) => item.key === key)?.label;
+                    return label ?? key;
+                  },
+                  translateUi,
+                )}
               </span>
             )}
           </div>
@@ -855,15 +959,16 @@ export function RenderConfirmDialog({
             disabled={firing}
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            {' '}
+            {translateUi('cancel_19766ed6')}{' '}
           </Button>
           <Button type="button" disabled={!canRender} onClick={() => void fire()}>
             {firing ? (
               <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
             ) : (
               <Play data-icon="inline-start" aria-hidden />
-            )}
-            Render {plural(fileCount, 'file')}
+            )}{' '}
+            {translateUi('render_6d89eb7d')} {plural(fileCount, 'file')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -896,6 +1001,12 @@ export function HeldBatchView({
   /** Retry landed: the jobs, for the same result a normal confirm shows. */
   onLanded: (jobs: ApiRenderJob[]) => void;
 }) {
+  const presentForge = useForgePresentationText();
+
+  const displayLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   const [retrying, setRetrying] = useState(false);
   const [, setNow] = useState(0);
@@ -924,7 +1035,7 @@ export function HeldBatchView({
       records.map((record) => [record.renderSetRowId, record.label, record.variables]),
     );
   const differs = request !== undefined && rowsOf(request.records) !== rowsOf(current);
-  const heldTime = new Date(held.heldAt).toLocaleTimeString([], {
+  const heldTime = new Date(held.heldAt).toLocaleTimeString(displayLocale, {
     hour: '2-digit',
     minute: '2-digit',
   });
@@ -958,7 +1069,11 @@ export function HeldBatchView({
         onLanded(batch.jobs);
         for (const job of batch.jobs)
           queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
-        toast.success(`${plural(batch.jobs.length, 'render')} queued`);
+        toast.success(
+          translateUi('value0_queued_3dddf693', {
+            value0: String(plural(batch.jobs.length, 'render')),
+          }),
+        );
       } catch (error) {
         // Landed: showing it may fail, the render did not.
         console.error('[forge] after a retried render', error);
@@ -972,29 +1087,35 @@ export function HeldBatchView({
   };
   return (
     <section
-      aria-label="Held batch"
+      aria-label={translateUi('held_batch_100e694a')}
       className="flex h-full min-h-0 flex-col gap-1.5 px-[var(--card-pad)] py-2 text-xs"
     >
       <p role="alert" className="font-medium text-destructive">
-        {heldCopy(held)}
+        {heldCopy(held, Date.now(), translateUi)}
       </p>
       <p className="text-muted-foreground">
-        {facts ? `What was sent: ${facts.join(' · ')}` : 'What was sent isn’t known on this page.'}
+        {facts
+          ? translateUi('what_was_sent_value0_ef7e224f', { value0: String(facts.join(' · ')) })
+          : translateUi('what_was_sent_isn_t_known_on_this_p_290acef2')}
       </p>
       {differs ? (
-        <p className="text-muted-foreground">Your edits and selection aren’t part of this batch.</p>
+        <p className="text-muted-foreground">
+          {translateUi('your_edits_and_selection_aren_t_par_6a94a2ab')}
+        </p>
       ) : null}
       {request &&
       templateNow &&
       (request.contractHash !== templateNow.contractHash ||
         (request.templateRef ?? null) !== templateNow.templateRef) ? (
         <p className="text-muted-foreground">
-          This set’s template changed since this batch was sent. Retry sends the earlier version.
+          {' '}
+          {translateUi('this_set_s_template_changed_since_t_79321060')}{' '}
         </p>
       ) : null}
-      {held.saved ? null : <p className="text-muted-foreground">{NOT_SAVED}</p>}
+      {held.saved ? null : <p className="text-muted-foreground">{presentForge(NOT_SAVED)}</p>}
       <p className="text-muted-foreground">
-        In the Render ledger, look for the batch from {heldTime}.
+        {' '}
+        {translateUi('in_the_render_ledger_look_for_the_b_eacdf676')} {heldTime}.
       </p>
       <div className="flex flex-wrap gap-2 pt-1">
         {canRetry(held) || held.sending ? (
@@ -1006,8 +1127,8 @@ export function HeldBatchView({
           >
             {retrying || held.sending ? (
               <Loader2 className="size-3 animate-spin" aria-hidden />
-            ) : null}
-            Retry this batch
+            ) : null}{' '}
+            {translateUi('retry_this_batch_17603985')}{' '}
           </Button>
         ) : null}
         <Button
@@ -1021,7 +1142,8 @@ export function HeldBatchView({
             onOpenLedger(held.batchId);
           }}
         >
-          Open Render ledger
+          {' '}
+          {translateUi('open_render_ledger_ff0b52b9')}{' '}
         </Button>
       </div>
     </section>

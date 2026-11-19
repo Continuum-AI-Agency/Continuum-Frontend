@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { OptimizerActionFeedRow } from '../../useOptimizerData';
 import { HISTORY, NOW } from './__fixtures__/googleTab';
 import type { HistoryRead } from './campaignExplorerModel';

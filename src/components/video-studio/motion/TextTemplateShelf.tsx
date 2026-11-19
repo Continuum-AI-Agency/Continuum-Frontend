@@ -6,6 +6,7 @@ import {
   type TextTemplateId,
   textTemplateIdSchema,
 } from '@continuum/contracts';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useId, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { Input } from '@/components/ui/input';
@@ -47,6 +48,8 @@ function TemplateCard({
   aspect: number;
   onPlace: (placement: TemplatePlacement) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const [playing, setPlaying] = useState(false);
   const template = TEXT_TEMPLATES[templateId];
   const { text, secondaryText } = templateLines(templateId, lines);
@@ -67,7 +70,7 @@ function TemplateCard({
             type="button"
             draggable
             data-text-template={templateId}
-            aria-label={`Add ${template.label}`}
+            aria-label={translateUi('add_value0_641cf336', { value0: String(template.label) })}
             className="flex min-w-0 flex-col gap-1 rounded-lg border border-border/60 p-1 text-left transition-colors hover:border-primary/60 focus-visible:border-primary focus-visible:outline-none active:scale-[0.98]"
             onClick={() => onPlace(placement)}
             onDragStart={(event) => {
@@ -87,7 +90,7 @@ function TemplateCard({
           aspect={aspect}
           playing={playing}
           restSec={template.defaultDurationSec * 0.6}
-          label={`${template.label} preview`}
+          label={translateUi('value0_preview_1fd3bf3c', { value0: String(template.label) })}
         />
         <span className="truncate px-0.5 text-2xs font-medium">{template.label}</span>
       </TooltipTrigger>
@@ -110,6 +113,9 @@ export function TextTemplateShelf({
   aspect: number;
   onPlace: (placement: TemplatePlacement) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const uiText = useTranslations('common');
   const ids = useId();
   const [text, setText] = useState('');
   const [secondaryText, setSecondaryText] = useState('');
@@ -121,27 +127,28 @@ export function TextTemplateShelf({
     >
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${ids}-line`} className="text-2xs">
-          Line
+          {uiText('line_d7852cd')}
         </Label>
         <Input
           id={`${ids}-line`}
           value={text}
-          placeholder="Type your line — every card previews it"
+          placeholder={translateUi('type_your_line_every_card_previews__c9178891')}
           className="h-8 text-xs"
           maxLength={500}
           onChange={(event) => setText(event.target.value)}
         />
         <Input
-          aria-label="Second line"
+          aria-label={translateUi('second_line_c8b588f7')}
           value={secondaryText}
-          placeholder="Second line: a name, a label, a source"
+          placeholder={translateUi('second_line_a_name_a_label_a_source_b5d768b2')}
           className="h-8 text-xs"
           maxLength={300}
           onChange={(event) => setSecondaryText(event.target.value)}
         />
       </div>
       <p className="text-2xs text-muted-foreground">
-        Click to add at the playhead, or drag onto the timeline.
+        {' '}
+        {translateUi('click_to_add_at_the_playhead_or_dra_2d9a1530')}{' '}
       </p>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-2">
         {TEXT_TEMPLATE_IDS.map((templateId) => (

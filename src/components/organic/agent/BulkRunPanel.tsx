@@ -2,6 +2,7 @@
 
 import { resolveOrganicLifecycle } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import { type ParsedRunEvent, useRunEventStream } from '@/hooks/useRunEventStream';
@@ -127,6 +128,7 @@ export function BulkRunPanel({
   expectsBatch?: boolean;
   onOpenDraft?: (draftId: string) => void;
 }) {
+  const uiText = useTranslations('organic');
   // The run-event stream still drives the by-platform / by-format breakdowns (the
   // summaries carry platform but not format), but the completion TALLY is derived
   // from the real post_generation_jobs rows for this plan.
@@ -181,12 +183,15 @@ export function BulkRunPanel({
       >
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Bulk Generation Run
+            {uiText('bulk_generation_run_1cd0487')}
           </p>
           {/* The same pill words and tones as every other generation card, never the raw
               run status ("running" / "completed" read like log output). */}
-          <StatusLabel tone={statusTone} title={lifecycle.hint}>
-            {lifecycle.pill}
+          <StatusLabel
+            tone={statusTone}
+            title={uiText('lifecycleHint', { phase: lifecycle.phase })}
+          >
+            {uiText('lifecyclePill', { phase: lifecycle.phase })}
           </StatusLabel>
         </div>
 
@@ -195,14 +200,13 @@ export function BulkRunPanel({
             <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
           </div>
           <span className="text-xs tabular-nums text-muted-foreground">
-            {done}/{displayTotal}
-            {failed > 0 ? ` · ${failed} failed` : ''}
+            {uiText('bulkRunProgress', { done, total: displayTotal, failed })}
           </span>
         </div>
 
         <div className="space-y-1.5">
-          <CountRow label="By platform" counts={run.byPlatform} />
-          <CountRow label="By format" counts={run.byFormat} />
+          <CountRow label={uiText('by_platform_64eb24a')} counts={run.byPlatform} />
+          <CountRow label={uiText('by_format_ed7449b')} counts={run.byFormat} />
         </div>
       </div>
       {batch && onOpenDraft ? (

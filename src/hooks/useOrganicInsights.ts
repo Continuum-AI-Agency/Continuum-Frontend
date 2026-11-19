@@ -6,6 +6,8 @@ import type {
   OrganicMetricPlatform,
 } from '@continuum/contracts';
 import * as React from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { markFetchFailure, toApiError } from '@/lib/api/errors';
 import type {
   OrganicComputedInsight,
   OrganicInsightsResponse,
@@ -32,11 +34,12 @@ type UseOrganicInsightsReturn = {
 };
 
 export function useOrganicInsights(params: UseOrganicInsightsParams): UseOrganicInsightsReturn {
+  const formatUiError = useUiErrorMessage();
   const { brandId, integrationAccountId, platform, rangePreset, enabled = true } = params;
 
   const [data, setData] = React.useState<OrganicInsightsResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [errorCause, setError] = React.useState<{ error: unknown } | null>(null);
   const [refreshTick, setRefreshTick] = React.useState(0);
 
   const requestIdRef = React.useRef(0);
@@ -76,13 +79,12 @@ export function useOrganicInsights(params: UseOrganicInsightsParams): UseOrganic
       }),
       signal: controller.signal,
     })
+      .catch((cause) => {
+        throw markFetchFailure(cause);
+      })
       .then(async (response) => {
         if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(
-            (body as Record<string, string>).error ??
-              `Request failed with status ${response.status}`,
-          );
+          throw await toApiError(response);
         }
         return response.json();
       })
@@ -105,7 +107,7 @@ export function useOrganicInsights(params: UseOrganicInsightsParams): UseOrganic
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Failed to load organic insights');
+        setError({ error: err });
       })
       .finally(() => {
         if (requestId === requestIdRef.current) {
@@ -131,7 +133,7 @@ export function useOrganicInsights(params: UseOrganicInsightsParams): UseOrganic
     generatedAt: data?.generated_at ?? null,
     expiresAt: data?.expires_at ?? null,
     isLoading,
-    error,
+    error: errorCause ? formatUiError(errorCause.error) : null,
     refresh,
   };
 }

@@ -6,7 +6,8 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { OrganicJobRetryResponse } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { requestOrganicJobRetry } from '@/lib/organic/agent-retry';
 import { ConceptCard } from './ConceptCard';
 import { resolvePlanItemStatus } from './conceptStatus';

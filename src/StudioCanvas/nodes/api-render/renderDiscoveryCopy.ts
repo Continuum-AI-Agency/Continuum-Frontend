@@ -92,7 +92,7 @@ const TEMPLATE_REPAIR_CODES: ReadonlySet<string> = new Set<TemplateRevisionError
 ]);
 
 const serverCode = (failure: unknown): string | null => {
-  const code = failure instanceof ApiError ? failure.payload?.error : undefined;
+  const code = failure instanceof ApiError ? (failure.code ?? failure.payload?.error) : undefined;
   return typeof code === 'string' ? code : null;
 };
 
@@ -110,16 +110,19 @@ const humanDetail = (error: unknown): string | null => {
 };
 
 /** Accepts the thrown error itself, or its message. Known codes first, then the server's detail. */
-export function describeRenderDiscoveryFailure(failure: unknown): string {
+export function describeRenderDiscoveryFailure(
+  failure: unknown,
+  present?: (source: string) => string,
+): string {
   // A server code is matched exactly. Substrings are only for bare messages: a code such as
   // `render_template_revision_source_changed` contains a shorter one that means something else.
   const exact = serverCode(failure);
-  if (exact && exact in MESSAGES) return MESSAGES[exact]!;
+  if (exact && exact in MESSAGES) return present ? present(MESSAGES[exact]!) : MESSAGES[exact]!;
   const message =
     typeof failure === 'string' ? failure : failure instanceof Error ? failure.message : '';
   if (!exact)
     for (const [code, copy] of Object.entries(MESSAGES)) {
-      if (message.includes(code)) return copy;
+      if (message.includes(code)) return present ? present(copy) : copy;
     }
   // A 5xx or 429 that names no code is a gateway or a deploy, never words to show: errors.ts
   // falls back to the bare status line ("503 Service Unavailable").
@@ -128,18 +131,27 @@ export function describeRenderDiscoveryFailure(failure: unknown): string {
       ? (failure.status === 429 || failure.status >= 500) && !hasBackendError(failure)
       : /^(429|5\d\d)\b/.test(message)
   )
-    return 'The render service is busy or restarting. Check again in a moment.';
+    return present
+      ? present('The render service is busy or restarting. Check again in a moment.')
+      : 'The render service is busy or restarting. Check again in a moment.';
   // fetch's own words for no answer at all ("Failed to fetch", Safari's "Load failed").
   if (isFetchFailure(failure) || /^(Failed to fetch|Load failed|NetworkError\b)/.test(message))
-    return 'Couldn’t reach the render service. Check again.';
+    return present
+      ? present('Couldn’t reach the render service. Check again.')
+      : 'Couldn’t reach the render service. Check again.';
   const detail = humanDetail(failure);
-  if (detail) return detail;
+  if (detail && !present) return detail;
   // The session or the brand's access, thrown or handed over as its status line.
   const status =
     failure instanceof ApiError ? failure.status : Number(/^(\d{3})\b/.exec(message)?.[1]);
-  if (status === 401) return 'Your session expired. Sign in again, then try again.';
+  if (status === 401)
+    return present
+      ? present('Your session expired. Sign in again, then try again.')
+      : 'Your session expired. Sign in again, then try again.';
   if (status === 403)
-    return 'You don’t have permission to do this here. Ask a brand owner for access.';
+    return present
+      ? present('You don’t have permission to do this here. Ask a brand owner for access.')
+      : 'You don’t have permission to do this here. Ask a brand owner for access.';
   // A 4xx that said nothing but its status line ("400 Bad Request"), whether thrown or handed over
   // as its message, and a code this build has no words for: a refusal with no words, never the
   // status line or the code.
@@ -147,6 +159,8 @@ export function describeRenderDiscoveryFailure(failure: unknown): string {
     (/^\d{3}\b/.test(message) && !(failure instanceof ApiError && failure.status >= 500)) ||
     /^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(message)
   )
-    return 'The render service refused this.';
-  return message || 'Render discovery failed';
+    return present
+      ? present('The render service refused this.')
+      : 'The render service refused this.';
+  return present ? present('Render discovery failed') : message || 'Render discovery failed';
 }

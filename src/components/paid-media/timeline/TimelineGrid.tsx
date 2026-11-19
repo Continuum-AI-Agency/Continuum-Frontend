@@ -1,3 +1,4 @@
+import { useLocale, useTranslations } from 'next-intl';
 import React, { useMemo } from 'react';
 import type { TimelineCampaign, TimelineEvent } from '@/types/timeline';
 import { CampaignRow } from './CampaignRow';
@@ -17,6 +18,8 @@ export function TimelineGrid({
   onEventClick,
   selectedEventId,
 }: TimelineGridProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const totalDurationMs = endDateMs - startDateMs;
   const DAY_MS = 24 * 60 * 60 * 1000;
   const days = Math.ceil(totalDurationMs / DAY_MS);
@@ -35,7 +38,7 @@ export function TimelineGrid({
       {/* Header / Axis */}
       <div className="flex h-10 border-b border-border bg-muted/50 sticky top-0 z-30">
         <div className="w-64 shrink-0 px-4 py-2 font-semibold text-sm border-r border-border flex items-center bg-muted/50 sticky left-0 z-40">
-          Campaign / Ad Set / Ad
+          {uiText('campaign_ad_set_ad_08c1141')}
         </div>
         <div className="flex-grow relative min-w-[500px]">
           {ticks.map((tick, i) => {
@@ -43,7 +46,7 @@ export function TimelineGrid({
             if (leftPct < 0 || leftPct > 100) return null;
 
             const dateObj = new Date(tick);
-            const label = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            const label = dateObj.toLocaleDateString(uiLocale, { month: 'short', day: 'numeric' });
 
             return (
               <div
@@ -79,7 +82,7 @@ export function TimelineGrid({
         <div className="z-10 w-full relative">
           {campaigns.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground w-full">
-              No campaigns found in this time range.
+              {uiText('no_campaigns_found_in_this_time_range_3fc65b7')}
             </div>
           ) : (
             campaigns.map((camp) => (

@@ -3,6 +3,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
 import { Scissors } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
@@ -68,6 +69,8 @@ export function TimelineTrack({
   // and zoom with the clips. Only the Library host supplies one.
   commentLane?: ReactNode;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const { setNodeRef } = useDroppable({ id: TIMELINE_DROP_ID });
   const laneRef = useRef<HTMLDivElement>(null);
 
@@ -133,7 +136,9 @@ export function TimelineTrack({
   return (
     <div className="flex h-full flex-col gap-1.5">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-muted-foreground">Timeline</span>
+        <span className="text-xs font-semibold text-muted-foreground">
+          {translateUi('timeline_9dcff98e')}
+        </span>
         <Button
           variant="ghost"
           size="sm"
@@ -141,15 +146,14 @@ export function TimelineTrack({
           onClick={handleSplit}
           disabled={layout.clips.length === 0}
         >
-          <Scissors className="h-3.5 w-3.5" />
-          Split at playhead
+          <Scissors className="h-3.5 w-3.5" /> {translateUi('split_at_playhead_c4a4b9c3')}{' '}
         </Button>
         {onZoomChange ? (
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-2xs text-muted-foreground">Zoom</span>
+            <span className="text-2xs text-muted-foreground">{translateUi('zoom_509c517e')}</span>
             <Slider
               className="w-28"
-              aria-label="Timeline zoom"
+              aria-label={translateUi('timeline_zoom_23878e62')}
               min={MIN_PX_PER_SEC}
               max={MAX_PX_PER_SEC}
               step={5}
@@ -214,7 +218,8 @@ export function TimelineTrack({
 
             {layout.clips.length === 0 ? (
               <div className="pointer-events-none flex h-14 flex-1 items-center justify-center rounded-md border border-dashed border-border/50 text-2xs text-muted-foreground">
-                Drop clips here
+                {' '}
+                {translateUi('drop_clips_here_2dedd3e8')}{' '}
               </div>
             ) : null}
           </div>
@@ -238,7 +243,7 @@ export function TimelineTrack({
             <div
               onPointerDown={startPlayheadDrag}
               className="absolute -left-1.5 -top-1 h-3 w-3 cursor-ew-resize rounded-sm bg-primary shadow"
-              aria-label="Playhead"
+              aria-label={translateUi('playhead_b3bb7ec9')}
               role="slider"
               tabIndex={0}
               aria-valuenow={Math.round(playheadSec)}

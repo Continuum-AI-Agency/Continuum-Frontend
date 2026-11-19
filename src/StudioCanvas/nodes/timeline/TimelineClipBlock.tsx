@@ -3,6 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Copy, Image, Scissors, Trash2, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback } from 'react';
 import {
@@ -13,6 +14,7 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { formatDecimal } from '@/lib/format/decimal';
 import { cn } from '@/lib/utils';
 import { speedFor } from '../../utils/render/effectSpec';
 import { ClipWaveform } from './ClipWaveform';
@@ -56,6 +58,10 @@ export function TimelineClipBlock({
   onDuplicate?: () => void;
   onToggleMute?: () => void;
 }) {
+  const decimalLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `${CLIP_DRAG_PREFIX}${clip.item.id}`,
   });
@@ -160,7 +166,7 @@ export function TimelineClipBlock({
         )}
         <span className="truncate text-2xs font-medium">{label}</span>
         <span className="ml-auto shrink-0 text-2xs tabular-nums text-muted-foreground">
-          {clip.durationSec.toFixed(1)}s
+          {formatDecimal(clip.durationSec, 1, decimalLocale)}s
         </span>
       </div>
 
@@ -168,13 +174,13 @@ export function TimelineClipBlock({
         <>
           {/* biome-ignore lint/a11y/noStaticElementInteractions: pointer-drag trim handle; keyboard trim is via numeric edit */}
           <div
-            title="Trim clip start"
+            title={translateUi('trim_clip_start_2b59a825')}
             onPointerDown={startTrim('start')}
             className="absolute left-0 top-0 h-full w-2 cursor-ew-resize bg-primary/0 transition-colors hover:bg-primary/60 group-hover/clip:bg-primary/30"
           />
           {/* biome-ignore lint/a11y/noStaticElementInteractions: pointer-drag trim handle; keyboard trim is via numeric edit */}
           <div
-            title="Trim clip end"
+            title={translateUi('trim_clip_end_c748dc80')}
             onPointerDown={startTrim('end')}
             className="absolute right-0 top-0 h-full w-2 cursor-ew-resize bg-primary/0 transition-colors hover:bg-primary/60 group-hover/clip:bg-primary/30"
           />
@@ -183,7 +189,7 @@ export function TimelineClipBlock({
 
       <button
         type="button"
-        aria-label="Remove clip"
+        aria-label={translateUi('remove_clip_47f8b7d8')}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.stopPropagation();
@@ -201,28 +207,24 @@ export function TimelineClipBlock({
       <ContextMenuTrigger className="contents">{clipBlock}</ContextMenuTrigger>
       <ContextMenuContent className="w-52">
         <ContextMenuItem disabled={!onSplitAtPlayhead} onClick={() => onSplitAtPlayhead?.()}>
-          <Scissors />
-          Split at playhead
+          <Scissors /> {translateUi('split_at_playhead_c4a4b9c3')}{' '}
           <ContextMenuShortcut>S</ContextMenuShortcut>
         </ContextMenuItem>
         {onDuplicate ? (
           <ContextMenuItem onClick={onDuplicate}>
-            <Copy />
-            Duplicate
+            <Copy /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>D</ContextMenuShortcut>
           </ContextMenuItem>
         ) : null}
         {onToggleMute && isVideo ? (
           <ContextMenuItem onClick={onToggleMute}>
             {muted ? <Volume2 /> : <VolumeX />}
-            {muted ? 'Unmute' : 'Mute'}
+            {muted ? translateUi('unmute_ce4ee4ef') : translateUi('mute_8dd6857b')}
           </ContextMenuItem>
         ) : null}
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onClick={onRemove}>
-          <Trash2 />
-          Remove
-          <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          <Trash2 /> {translateUi('remove_c3812fc4')} <ContextMenuShortcut>⌫</ContextMenuShortcut>
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

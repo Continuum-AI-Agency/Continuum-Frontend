@@ -1,5 +1,11 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
+
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatAutomationRunTime } from './workspace/runs/runPresentation';
+
 // Detail Sheet for one automation: overview, run history with live polling,
 // expandable report body (markdown), and Run now / Edit / Delete actions.
 // Mounted once per chat surface; only responds when the automation belongs to
@@ -56,8 +62,11 @@ function RunRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const uiLocale = useLocale();
+  const getUiErrorMessage = useUiErrorMessage();
+  const uiText = useTranslations('automations');
   const status = RUN_STATUS_PILL[run.status];
-  const duration = formatDuration(run);
+  const duration = formatDuration(run, uiLocale);
   // The runs list omits report bodies; fetch the full run lazily on expand.
   const { data: runDetail, isLoading: isReportLoading } = useAutomationRun(run.runId, expanded);
   const reportText = runDetail?.output?.text ?? run.output?.text ?? '';
@@ -68,17 +77,17 @@ function RunRow({
         <div className="flex min-w-0 items-center gap-2">
           <Pill className="gap-1.5">
             <PillIndicator variant={status.variant} pulse={status.pulse} />
-            {status.label}
+            {localizeAutomationsCopy(status.label, uiText)}
           </Pill>
           <span className="truncate text-xs text-muted-foreground">
-            {new Date(run.enqueuedAt).toLocaleString()}
+            {formatAutomationRunTime(run.enqueuedAt, uiLocale, uiText)}
             {duration ? ` · ${duration}` : ''}
-            {run.trigger === 'manual' ? ' · manual' : ''}
+            {run.trigger === 'manual' ? uiText('manual_c79d3fa') : ''}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="text-xs text-muted-foreground">
-            {EMAIL_STATUS_LABEL[run.emailStatus]}
+            {localizeAutomationsCopy(EMAIL_STATUS_LABEL[run.emailStatus], uiText)}
           </span>
           {run.status === 'completed' && (
             <Button
@@ -88,14 +97,14 @@ function RunRow({
               className="h-6 px-2 text-xs"
               onClick={onToggle}
             >
-              {expanded ? 'Hide report' : 'View report'}
+              {expanded ? uiText('hide_report_a198131') : uiText('view_report_45e1eb0')}
             </Button>
           )}
         </div>
       </div>
       {run.status === 'failed' && run.errorMessage && (
         <p className="border-t border-border/60 px-3 py-2 text-xs text-destructive">
-          {run.errorMessage}
+          {getUiErrorMessage({ code: run.errorMessage })}
         </p>
       )}
       {expanded && (
@@ -109,7 +118,9 @@ function RunRow({
           ) : reportText.trim() ? (
             <SafeMarkdown content={reportText} className="text-sm leading-6 text-foreground" />
           ) : (
-            <p className="text-xs text-muted-foreground">This run has no report body.</p>
+            <p className="text-xs text-muted-foreground">
+              {uiText('this_run_has_no_report_body_f8e8bb2')}
+            </p>
           )}
         </div>
       )}
@@ -123,6 +134,9 @@ type AutomationDetailSheetProps = {
 };
 
 export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('automations');
+  const uiLocale = useLocale();
   const { show } = useToast();
   const detailAutomationId = useAutomationSheetStore((state) => state.detailAutomationId);
   const detailRunId = useAutomationSheetStore((state) => state.detailRunId);
@@ -149,11 +163,11 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
   const handleRunNow = () => {
     if (!detailAutomationId) return;
     runNowMutation.mutate(detailAutomationId, {
-      onSuccess: () => show({ title: 'Run started', variant: 'success' }),
+      onSuccess: () => show({ title: uiText('run_started_0bb43be'), variant: 'success' }),
       onError: (error) =>
         show({
-          title: 'Could not start run',
-          description: error instanceof Error ? error.message : 'Unknown error',
+          title: uiText('could_not_start_run_6c72533'),
+          description: formatUiError(error),
           variant: 'error',
         }),
     });
@@ -163,13 +177,13 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
     if (!detailAutomationId) return;
     deleteMutation.mutate(detailAutomationId, {
       onSuccess: () => {
-        show({ title: 'Automation deleted', variant: 'success' });
+        show({ title: uiText('automation_deleted_ca8e1bb'), variant: 'success' });
         close();
       },
       onError: (error) =>
         show({
-          title: 'Could not delete automation',
-          description: error instanceof Error ? error.message : 'Unknown error',
+          title: uiText('could_not_delete_automation_a110a2f'),
+          description: formatUiError(error),
           variant: 'error',
         }),
     });
@@ -189,9 +203,13 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
             <SheetHeader>
               <div className="flex items-center gap-2">
                 <SheetTitle className="truncate">{automation.name}</SheetTitle>
-                {!automation.enabled && <Pill className="text-2xs">Paused</Pill>}
+                {!automation.enabled && (
+                  <Pill className="text-2xs">{uiText('paused_e159b06')}</Pill>
+                )}
               </div>
-              <SheetDescription>{describeSchedule(automation.schedule)}</SheetDescription>
+              <SheetDescription>
+                {describeSchedule(automation.schedule, uiLocale, uiText)}
+              </SheetDescription>
             </SheetHeader>
 
             <div className="flex flex-col gap-4 px-4 pb-4">
@@ -203,7 +221,9 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
                   disabled={runNowMutation.isPending}
                 >
                   <PlayIcon className="size-3.5" />
-                  {runNowMutation.isPending ? 'Starting…' : 'Run now'}
+                  {runNowMutation.isPending
+                    ? uiText('starting_bbe5fc3')
+                    : uiText('run_now_0991397')}
                 </Button>
                 {/* The builder that openEditor targets is this surface's sibling, so an
                     automation belonging to another agent has nowhere to open and would
@@ -218,7 +238,7 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
                     onClick={() => openEditor(automation.id)}
                   >
                     <SquarePenIcon className="size-3.5" />
-                    Edit
+                    {uiText('edit_464c4ff')}
                   </Button>
                 )}
                 <AlertDialog>
@@ -226,58 +246,62 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
                     render={
                       <Button type="button" size="sm" variant="ghost" className="text-destructive">
                         <Trash2Icon className="size-3.5" />
-                        Delete
+                        {uiText('delete_e2d0a54')}
                       </Button>
                     }
                   />
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete this automation?</AlertDialogTitle>
+                      <AlertDialogTitle>
+                        {uiText('delete_this_automation_0f393e0')}
+                      </AlertDialogTitle>
                       <AlertDialogDescription>
-                        “{automation.name}” and its run history will be permanently removed. Future
-                        scheduled emails stop immediately.
+                        {uiText.rich('sentence_11dbe2caa80e', { v0: () => automation.name })}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+                      <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete}>
+                        {uiText('delete_e2d0a54')}
+                      </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
               </div>
 
               <div className="rounded-md border border-border/60 p-3">
-                <p className="text-xs font-medium text-muted-foreground">Prompt</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {uiText('prompt_5c39123')}
+                </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm">{automation.prompt}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-muted-foreground">Next run</p>
+                  <p className="text-xs text-muted-foreground">{uiText('next_run_b3c0ab9')}</p>
                   <p>
                     {automation.enabled
                       ? formatInTimezone(
                           new Date(automation.nextRunAt),
                           automation.schedule.timezone,
+                          uiLocale,
                         )
-                      : 'Paused'}
+                      : uiText('paused_e159b06')}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Recipients</p>
-                  <p>
-                    {recipientCount} recipient{recipientCount === 1 ? '' : 's'}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{uiText('recipients_1e8568a')}</p>
+                  <p>{uiText.rich('sentence_e8cefc0e5400', { count: recipientCount })}</p>
                 </div>
               </div>
 
               <Separator />
 
               <div>
-                <h3 className="mb-2 text-sm font-medium">Run history</h3>
+                <h3 className="mb-2 text-sm font-medium">{uiText('run_history_addf321')}</h3>
                 {!runs || runs.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    No runs yet — use “Run now” or wait for the schedule.
+                    {uiText('no_runs_yet_use_run_now_or_wait_for_the_sched_8467c48')}
                   </p>
                 ) : (
                   <ul className="space-y-2">

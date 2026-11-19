@@ -1,4 +1,6 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // Email the on-demand Continuum Report (comprehensive dashboard distillation) OR
 // set up a recurring weekly/monthly send. One-off uses the send_now edge action;
@@ -75,6 +77,11 @@ export function SendContinuumReportDialog({
   open,
   onOpenChange,
 }: SendContinuumReportDialogProps) {
+  const uiLocale = useLocale();
+
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('dashboard');
   const { show } = useToast();
   const { data: candidates, isLoading } = useRecipientCandidates(open ? brandId : undefined);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -120,8 +127,8 @@ export function SendContinuumReportDialog({
       .catch((error) => {
         if (cancelled) return;
         show({
-          title: 'Could not load report schedule',
-          description: error instanceof Error ? error.message : 'Unknown error.',
+          title: uiText('could_not_load_report_schedule_6c63202'),
+          description: getUiErrorMessage(error),
           variant: 'error',
         });
       });
@@ -129,7 +136,7 @@ export function SendContinuumReportDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, brandId, show]);
+  }, [open, brandId, show, uiText, getUiErrorMessage]);
 
   // Fresh open with no schedule: pre-select every member with an email so the user
   // only deselects. A schedule prefill owns the selection, so skip then.
@@ -169,8 +176,8 @@ export function SendContinuumReportDialog({
       if (status === 'partial') {
         setRetryReceiptId(receiptId);
         show({
-          title: 'Some recipients still need delivery',
-          description: 'Retry to send only to recipients whose delivery failed.',
+          title: uiText('some_recipients_still_need_delivery_e1851e7'),
+          description: uiText('retry_to_send_only_to_recipients_whose_delive_05fbb83'),
           variant: 'error',
         });
         return;
@@ -178,23 +185,23 @@ export function SendContinuumReportDialog({
       if (status === 'suppressed') {
         setRetryReceiptId(null);
         show({
-          title: 'No report email was sent',
-          description: 'The selected recipients have opted out of this report email.',
+          title: uiText('no_report_email_was_sent_32997f6'),
+          description: uiText('the_selected_recipients_have_opted_out_of_thi_55709a7'),
           variant: 'error',
         });
         return;
       }
       setRetryReceiptId(null);
       show({
-        title: 'Continuum Report sent',
+        title: uiText('continuum_report_sent_115183c'),
         description: summarizeReportRecipients(recipients.length > 0 ? recipients : selectedEmails),
         variant: 'success',
       });
       onOpenChange(false);
     } catch (error) {
       show({
-        title: 'Could not send the Continuum Report',
-        description: error instanceof Error ? error.message : 'Unknown error.',
+        title: uiText('could_not_send_the_continuum_report_de03065'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -217,15 +224,17 @@ export function SendContinuumReportDialog({
         externalEmails,
       });
       show({
-        title: 'Recurring report scheduled',
-        description: `Next send ${new Date(schedule.nextRunAt).toLocaleString()}.`,
+        title: uiText('recurring_report_scheduled_9bc35fc'),
+        description: uiText('m_0cf19f37bf', {
+          v0: String(new Date(schedule.nextRunAt).toLocaleString(uiLocale)),
+        }),
         variant: 'success',
       });
       onOpenChange(false);
     } catch (error) {
       show({
-        title: 'Could not save the schedule',
-        description: error instanceof Error ? error.message : 'Unknown error.',
+        title: uiText('could_not_save_the_schedule_c4ea60d'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -237,12 +246,12 @@ export function SendContinuumReportDialog({
     setIsBusy(true);
     try {
       await cancelReportSchedule(brandId);
-      show({ title: 'Recurring report turned off', variant: 'success' });
+      show({ title: uiText('recurring_report_turned_off_7bee2da'), variant: 'success' });
       onOpenChange(false);
     } catch (error) {
       show({
-        title: 'Could not turn off the schedule',
-        description: error instanceof Error ? error.message : 'Unknown error.',
+        title: uiText('could_not_turn_off_the_schedule_ec0cf85'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -254,10 +263,9 @@ export function SendContinuumReportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Email Continuum Report</DialogTitle>
+          <DialogTitle>{uiText('email_continuum_report_fed107b')}</DialogTitle>
           <DialogDescription>
-            Send now, or schedule a recurring dashboard readout — KPIs with period changes,
-            audience, organic and paid performance, and insights.
+            {uiText('send_now_or_schedule_a_recurring_dashboard_re_fd0c53c')}
           </DialogDescription>
         </DialogHeader>
 
@@ -269,11 +277,11 @@ export function SendContinuumReportDialog({
           }}
           className={`grid gap-1 ${canManageSchedule ? 'grid-cols-3' : 'grid-cols-1'}`}
         >
-          <ToggleGroupItem value="one_off">One-off</ToggleGroupItem>
+          <ToggleGroupItem value="one_off">{uiText('one_off_6fbbd35')}</ToggleGroupItem>
           {canManageSchedule ? (
             <>
-              <ToggleGroupItem value="weekly">Weekly</ToggleGroupItem>
-              <ToggleGroupItem value="monthly">Monthly</ToggleGroupItem>
+              <ToggleGroupItem value="weekly">{uiText('weekly_2975132')}</ToggleGroupItem>
+              <ToggleGroupItem value="monthly">{uiText('monthly_9b11f6b')}</ToggleGroupItem>
             </>
           ) : null}
         </ToggleGroup>
@@ -282,7 +290,7 @@ export function SendContinuumReportDialog({
           <div className="grid grid-cols-2 gap-3">
             {mode === 'weekly' ? (
               <div className="space-y-1.5">
-                <Label htmlFor="report-day-of-week">Day of week</Label>
+                <Label htmlFor="report-day-of-week">{uiText('day_of_week_a757b22')}</Label>
                 <Select value={String(dayOfWeek)} onValueChange={(v) => setDayOfWeek(Number(v))}>
                   <SelectTrigger id="report-day-of-week">
                     <SelectValue />
@@ -290,7 +298,10 @@ export function SendContinuumReportDialog({
                   <SelectContent>
                     {WEEKDAY_LABELS.map((label, index) => (
                       <SelectItem key={label} value={String(index)}>
-                        {label}
+                        {new Intl.DateTimeFormat(uiLocale, {
+                          weekday: 'long',
+                          timeZone: 'UTC',
+                        }).format(new Date(Date.UTC(2023, 0, 1 + index)))}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -298,7 +309,7 @@ export function SendContinuumReportDialog({
               </div>
             ) : (
               <div className="space-y-1.5">
-                <Label htmlFor="report-day-of-month">Day of month</Label>
+                <Label htmlFor="report-day-of-month">{uiText('day_of_month_d15f472')}</Label>
                 <Input
                   id="report-day-of-month"
                   type="number"
@@ -310,7 +321,7 @@ export function SendContinuumReportDialog({
               </div>
             )}
             <div className="space-y-1.5">
-              <Label htmlFor="report-hour">Hour</Label>
+              <Label htmlFor="report-hour">{uiText('hour_f0063b8')}</Label>
               <Select value={String(hour)} onValueChange={(v) => setHour(Number(v))}>
                 <SelectTrigger id="report-hour">
                   <SelectValue />
@@ -325,19 +336,21 @@ export function SendContinuumReportDialog({
               </Select>
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="report-timezone">Timezone</Label>
+              <Label htmlFor="report-timezone">{uiText('timezone_4ceca1d')}</Label>
               <Input
                 id="report-timezone"
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
-                placeholder="UTC"
+                placeholder={uiText('m_bdfd4d8d69')}
               />
             </div>
           </div>
         )}
 
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Brand members</p>
+          <p className="text-xs font-medium text-muted-foreground">
+            {uiText('brand_members_ab30f14')}
+          </p>
           <div className="max-h-56 space-y-1 overflow-y-auto py-1">
             {isLoading ? (
               <div className="space-y-2">
@@ -346,7 +359,7 @@ export function SendContinuumReportDialog({
               </div>
             ) : !candidates || candidates.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No members with an email on this brand.
+                {uiText('no_members_with_an_email_on_this_brand_c3eb0b6')}
               </p>
             ) : (
               candidates.map((candidate) => {
@@ -362,7 +375,7 @@ export function SendContinuumReportDialog({
                     </div>
                     <Switch
                       checked={checked}
-                      aria-label={`Email Continuum Report to ${candidate.email}`}
+                      aria-label={uiText('m_58672d66db', { v0: String(candidate.email) })}
                       onCheckedChange={(next) => toggle(candidate.userId, next)}
                     />
                   </div>
@@ -374,7 +387,7 @@ export function SendContinuumReportDialog({
 
         {isRecurring && (
           <div className="space-y-1.5">
-            <Label>External recipients</Label>
+            <Label>{uiText('external_recipients_195426f')}</Label>
             <ExternalEmailChipsInput value={externalEmails} onChange={setExternalEmails} />
           </div>
         )}
@@ -382,25 +395,29 @@ export function SendContinuumReportDialog({
         <DialogFooter className="gap-2 sm:gap-0">
           {isRecurring && hasEnabledSchedule && (
             <Button variant="outline" onClick={() => void handleTurnOff()} disabled={isBusy}>
-              Turn off
+              {uiText('turn_off_06f0e21')}
             </Button>
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
-            Cancel
+            {uiText('cancel_19766ed')}
           </Button>
           {isRecurring ? (
             <Button onClick={() => void handleSave()} disabled={!canSave}>
-              {isBusy ? 'Saving…' : !hasAnyRecipient ? 'Add a recipient' : 'Save schedule'}
+              {isBusy
+                ? uiText('saving_23e3929')
+                : !hasAnyRecipient
+                  ? uiText('add_a_recipient_e9462ab')
+                  : uiText('save_schedule_387f355')}
             </Button>
           ) : (
             <Button onClick={() => void handleSend()} disabled={!canSend}>
               {isBusy
-                ? 'Sending…'
+                ? uiText('sending_b8ed527')
                 : selectedCount === 0
-                  ? 'Select recipients'
+                  ? uiText('select_recipients_d713866')
                   : retryReceiptId
-                    ? 'Retry failed recipients'
-                    : `Send to ${selectedCount}`}
+                    ? uiText('retry_failed_recipients_e860175')
+                    : uiText('m_672c2403e9', { v0: String(selectedCount) })}
             </Button>
           )}
         </DialogFooter>

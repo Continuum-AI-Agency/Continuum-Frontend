@@ -33,6 +33,7 @@ import {
   Variable,
   Wrench,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
 import { ApplyDesignSystemButton } from '@/components/forge/ApplyDesignSystemButton';
@@ -44,17 +45,17 @@ import {
 } from '@/components/forge/FontSubstitutions';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
+import type { LayerDraftChange } from '@/components/forge/layerDraft';
 import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
 import { FORGE_STALE_MS, forgeQueryKeys, invalidateForgeBrand } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
 import { TemplateAuthoringEditor } from '@/components/forge/TemplateAuthoringEditor';
-import type { LayerDraftChange } from '@/components/forge/layerDraft';
-import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
@@ -90,6 +91,8 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import {
   advanceTemplateForgeBundle,
@@ -132,7 +135,8 @@ import {
   useLatestRenderFrame,
   wireframeFrames,
 } from './TemplateWireframe';
-import { templateChecks } from './templateChecks';
+import { templateCheckPresentation } from './templateCheckPresentation';
+import { useForgePresentationText } from './useForgePresentationText';
 
 // One template, opened, read like a deployment: its picture beside the facts, then the checks it
 // has been through — each saying what it looks at and what it found, with the step to take on the
@@ -215,8 +219,8 @@ const DESIGN_SOURCE: Partial<Record<TemplateRevisionVariant['sourceKind'], strin
 // The font picker's "no override" item: a Select item needs a non-empty value.
 const KEEP_FONT = '__current__';
 
-const formatDate = (value: string | null) =>
-  value ? new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—';
+const formatDate = (value: string | null, locale: UiLocale = 'en') =>
+  value ? new Date(value).toLocaleDateString(locale, { dateStyle: 'medium' }) : '—';
 
 const JOB_TICK: Record<ApiRenderJob['status'], CheckTick> = {
   finished: 'pass',
@@ -261,6 +265,13 @@ export function TemplateDetail({
   /** Private HyperFrames composition revision carried in from AI Studio. */
   hyperframesRevisionId?: string;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+  const presentForge = useForgePresentationText();
+
   const { assetId, templateKey } = source;
   const queryClient = useQueryClient();
   // The undo for an auto-published template: render access off, the Library file kept.
@@ -272,9 +283,11 @@ export function TemplateDetail({
       if (!result.granted) throw new Error(result.reason ?? 'Render access stayed on.');
       await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) });
       await onChanged();
-      toast.success('Removed from the render workspace');
+      toast.success(translateUi('removed_from_the_render_workspace_53d7c334'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not remove it');
+      toast.error(
+        error instanceof Error ? error.message : translateUi('could_not_remove_it_abd53821'),
+      );
     } finally {
       setRemovingFromWorkspace(false);
     }
@@ -404,7 +417,7 @@ export function TemplateDetail({
   const saveTextMoves = async () => {
     if (selectedRevisionVariant) {
       setTab('layers');
-      toast.info('Use Edit layers to save text changes in a new revision.');
+      toast.info(translateUi('use_edit_layers_to_save_text_change_621d3061'));
       return;
     }
     const moves = Object.values(textMoves).filter(
@@ -459,13 +472,13 @@ export function TemplateDetail({
       setEditingText(false);
       setSavedTextRepair(null);
       await onChanged();
-      toast.success(
-        'Text changes saved as a new version of your file. Set it up and test render it before publishing.',
-      );
+      toast.success(translateUi('text_changes_saved_as_a_new_version_3c7874d5'));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not save text layout';
+      const message = uiErrorText(error);
       if (applied) {
-        toast.error(`Text changes are applied, but this view didn't refresh: ${message}`);
+        toast.error(
+          translateUi('text_changes_are_applied_but_this_v_b50a7e09', { value0: String(message) }),
+        );
       } else if (uploaded) {
         setSavedTextRepair({ versionId: savedVersionId, error: message });
         setEditingText(false);
@@ -526,9 +539,13 @@ export function TemplateDetail({
         Object.fromEntries(result.edits.map((edit) => [edit.slotKey, edit.binding ?? null])),
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not read the variables');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_read_the_variables_ea70990c'),
+      );
     }
-  }, [assetId, brandId, queryClient, variablesKey]);
+  }, [assetId, brandId, queryClient, variablesKey, translateUi]);
 
   useEffect(() => {
     void loadVariables();
@@ -632,7 +649,7 @@ export function TemplateDetail({
         selected.id !== selectedRevisionVariant.draftHeadRevisionId
       ) {
         setTab('layers');
-        toast.info('Create a named variant in Edit layers before changing this revision.');
+        toast.info(translateUi('create_a_named_variant_in_edit_laye_822c7172'));
         return false;
       }
       setSaving(true);
@@ -652,10 +669,12 @@ export function TemplateDetail({
         await invalidateForgeBrand(queryClient, brandId);
         await onChanged();
         await onOpenVariant?.(saved.sourceAssetId, 'variables');
-        toast.success('Saved template revision');
+        toast.success(translateUi('saved_template_revision_4e8c385b'));
         return true;
       } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : 'Could not save revision');
+        toast.error(
+          cause instanceof Error ? cause.message : translateUi('could_not_save_revision_53e3ddc9'),
+        );
         return false;
       } finally {
         setSaving(false);
@@ -667,10 +686,10 @@ export function TemplateDetail({
       await queryClient.invalidateQueries({ queryKey: variablesKey, exact: true });
       await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.contracts(brandId) });
       await loadVariables();
-      toast.success('Saved');
+      toast.success(translateUi('saved_b5c120b3'));
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save');
+      toast.error(error instanceof Error ? error.message : translateUi('could_not_save_16efcd21'));
       return false;
     } finally {
       setSaving(false);
@@ -680,7 +699,7 @@ export function TemplateDetail({
   const onSubmit = async () => {
     const problem = templateNameProblem(templateName);
     if (problem) {
-      toast.error(`Template name: ${problem}`);
+      toast.error(translateUi('template_name_value0_fc034d1d', { value0: String(problem) }));
       return;
     }
     setBusy('submit');
@@ -690,9 +709,11 @@ export function TemplateDetail({
       // naming a template.
       await sendTemplateToForge(brandId, assetId, templateName.trim());
       await Promise.all([onChanged(), refreshRun(), refreshBundle()]);
-      toast.success('Started');
+      toast.success(translateUi('started_ecbc89cd'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Couldn't start setup");
+      toast.error(
+        error instanceof Error ? error.message : translateUi('couldn_t_start_setup_afa41ad7'),
+      );
     } finally {
       setBusy(null);
     }
@@ -708,7 +729,11 @@ export function TemplateDetail({
           queryKey: forgeQueryKeys.contract(brandId, null, templateKey),
         });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Could not ${action}`);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_value0_f03141e9', { value0: String(action) }),
+      );
     } finally {
       setBusy(null);
       void refreshEvents();
@@ -724,7 +749,11 @@ export function TemplateDetail({
       await advanceTemplateForgeBundle(brandId, assetId, action, options);
       await Promise.all([refreshBundle(), onChanged()]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Could not ${action}`);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_value0_f03141e9', { value0: String(action) }),
+      );
     } finally {
       setBundleBusy(null);
     }
@@ -740,7 +769,11 @@ export function TemplateDetail({
       const plan = await pushTemplateFonts(brandId, assetId, false, heldFamilies);
       if (!plan.fired) setFontPlan(plan);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not review the font install');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_review_the_font_install_9d9d907f'),
+      );
     } finally {
       setFontBusy(false);
     }
@@ -755,7 +788,11 @@ export function TemplateDetail({
       await queryClient.invalidateQueries({ queryKey: fontsKey, exact: true });
       await loadFonts();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not install the fonts');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_install_the_fonts_b351f465'),
+      );
     } finally {
       setFontBusy(false);
     }
@@ -843,8 +880,8 @@ export function TemplateDetail({
         className="gap-1"
         title={
           action === 'promote' && mappingBlocked
-            ? 'Review the unconnected layers before publishing.'
-            : step.hint
+            ? translateUi('review_the_unconnected_layers_befor_c2384575')
+            : presentForge(step.hint)
         }
         disabled={busy !== null || (action === 'promote' && mappingBlocked)}
         onClick={() => void onAdvance(step.action)}
@@ -854,7 +891,7 @@ export function TemplateDetail({
         ) : (
           <Icon className="size-3" aria-hidden />
         )}
-        {step.label}
+        {presentForge(step.label)}
       </Button>
     );
   };
@@ -864,14 +901,24 @@ export function TemplateDetail({
     setFontBusy(true);
     try {
       const { stored, refused } = await uploadTemplateFontFiles(brandId, files);
-      if (stored.length) toast.success(`Fonts added: ${stored.join(', ')}`);
-      if (refused.length) toast.error(`Fonts not added: ${refused.join('; ')}`);
+      if (stored.length)
+        toast.success(
+          translateUi('fonts_added_value0_664da924', { value0: String(stored.join(', ')) }),
+        );
+      if (refused.length)
+        toast.error(
+          translateUi('fonts_not_added_value0_aec8462a', { value0: String(refused.join('; ')) }),
+        );
       // The file is read again with the faces just added, so its text is measured now rather
       // than after someone finds a Fix button that nothing else is asking them to press.
       if (stored.length && !selectedRevisionVariant) {
         await healTemplateFonts(brandId, assetId).catch((error: unknown) =>
           toast.error(
-            `Fonts are stored, but the file was not read again: ${error instanceof Error ? error.message : 'unknown error'}. Press Fix to retry.`,
+            translateUi('fonts_are_stored_but_the_file_was_n_8b4b0652', {
+              value0: String(
+                error instanceof Error ? error.message : translateUi('unknown_error_3e4443e5'),
+              ),
+            }),
           ),
         );
         void refreshEvents();
@@ -879,7 +926,9 @@ export function TemplateDetail({
       }
       await Promise.all([reloadFonts(), onChanged()]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not add font files');
+      toast.error(
+        error instanceof Error ? error.message : translateUi('could_not_add_font_files_a61e6ea0'),
+      );
     } finally {
       setFontBusy(false);
     }
@@ -888,7 +937,7 @@ export function TemplateDetail({
   const applyFontSubstitutions = async (choices: FontSubstitutionChoice[]) => {
     if (selectedRevisionVariant) {
       setTab('layers');
-      toast.info('Choose a font face in Edit layers, then save a revision.');
+      toast.info(translateUi('choose_a_font_face_in_edit_layers_t_4c9aefc5'));
       return;
     }
     setFontBusy(true);
@@ -905,7 +954,9 @@ export function TemplateDetail({
       await Promise.all([reloadFonts(), onChanged()]);
       void refreshEvents();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not use those fonts');
+      toast.error(
+        error instanceof Error ? error.message : translateUi('could_not_use_those_fonts_c45038b1'),
+      );
     } finally {
       setFontBusy(false);
     }
@@ -928,7 +979,7 @@ export function TemplateDetail({
   const onFix = async () => {
     if (selectedRevisionVariant) {
       setTab('layers');
-      toast.info('This revision is preserved. Save repairs as a new revision or variant.');
+      toast.info(translateUi('this_revision_is_preserved_save_rep_b883981d'));
       return;
     }
     setFixing(true);
@@ -937,10 +988,15 @@ export function TemplateDetail({
       // brand holds — the formats the forge now ships and text it can now measure.
       const healed = await healTemplateFonts(brandId, assetId);
       const found = [...healed.fromPackage, ...healed.fromGoogle];
-      if (found.length) toast.success(`Fonts found: ${found.join(', ')}`);
+      if (found.length)
+        toast.success(
+          translateUi('fonts_found_value0_9cfdd11c', { value0: String(found.join(', ')) }),
+        );
       if (healed.stillMissing.length) {
         toast.error(
-          `Still missing: ${healed.stillMissing.join(', ')}. Add the font files on the Fonts check.`,
+          translateUi('still_missing_value0_add_the_font_f_944ca3d8', {
+            value0: String(healed.stillMissing.join(', ')),
+          }),
         );
       }
       await Promise.all([reloadFonts(), onChanged()]);
@@ -949,7 +1005,11 @@ export function TemplateDetail({
         await refreshRun();
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not fix this template');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_fix_this_template_45b6849e'),
+      );
     } finally {
       setFixing(false);
       void refreshEvents();
@@ -962,7 +1022,11 @@ export function TemplateDetail({
       await advanceTemplateForgeRun(brandId, assetId, 'decisions', { decisions });
       await Promise.all([refreshRun(), onChanged()]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not apply the answers');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_apply_the_answers_d7d0f051'),
+      );
     } finally {
       setBusy(null);
       void refreshEvents();
@@ -973,38 +1037,45 @@ export function TemplateDetail({
     (fontReadiness?.parseState === 'parsed' && fontReadiness.fonts.length > 0) || fontResult ? (
       <div className="flex flex-col gap-2">
         {fontReadiness?.fonts.length ? (
-          <ul className="flex flex-wrap gap-1" aria-label="Typefaces">
+          <ul className="flex flex-wrap gap-1" aria-label={translateUi('typefaces_a6abd3ff')}>
             {fontReadiness.fonts.map((font) => (
               <li key={font.family}>
                 <Pill
                   variant={font.held ? 'success' : 'warning'}
                   title={
                     font.via === 'substitute'
-                      ? `We don't have ${font.family}. It will render with ${font.substitutedBy?.family ?? 'the font you chose'}.`
+                      ? translateUi('we_don_t_have_value0_it_will_render_94b7179c', {
+                          value0: String(font.family),
+                          value1: String(
+                            font.substitutedBy?.family ??
+                              translateUi('the_font_you_chose_7084c19e'),
+                          ),
+                        })
                       : font.held
                         ? font.scope === 'house'
-                          ? 'From Continuum\u2019s shared font library'
-                          : "In this brand's fonts"
-                        : 'Not in your upload, your brand fonts, our shared library or Google Fonts'
+                          ? translateUi('from_continuum_s_shared_font_librar_8f1a6e0d')
+                          : translateUi('in_this_brand_s_fonts_cf30420f')
+                        : translateUi('not_in_your_upload_your_brand_fonts_dfe97e23')
                   }
                 >
                   {/* A substitution never reads as a plain "uploaded". A green tick over a
                       typeface somebody quietly swapped is the 2026-09-15 failure exactly. */}
                   {font.family} ·{' '}
                   {font.via === 'substitute'
-                    ? `${font.substitutedBy?.family ?? 'substituted'} (substituted)`
+                    ? translateUi('value0_substituted_64afc5e6', {
+                        value0: String(font.substitutedBy?.family ?? 'substituted'),
+                      })
                     : font.held
-                      ? 'found'
-                      : 'missing'}
+                      ? translateUi('found_bcc649cf')
+                      : translateUi('missing_ffa63583')}
                 </Pill>
               </li>
             ))}
           </ul>
         ) : null}
         <p className="text-muted-foreground">
-          We look for missing fonts in your upload first, then on Google Fonts. For any still
-          missing, add the font file or swap in one you already have. Installed means it&apos;s linked
-          to this template after you confirm.
+          {' '}
+          {translateUi('we_look_for_missing_fonts_in_your_u_948e8eb5')}{' '}
         </p>
         {/* Always mounted, not gated on `missingFonts`: once a face is substituted the count is
             zero while the panel still offers "Add the real files", and a button wired to an
@@ -1018,8 +1089,8 @@ export function TemplateDetail({
             disabled={fontBusy}
             onClick={() => fontInput.current?.click()}
           >
-            {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-            Add font files
+            {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+            {translateUi('add_font_files_7ad2d46a')}{' '}
           </Button>
         ) : null}
         {!editingText && fontCandidates && fontCandidates.missing.length > 0 ? (
@@ -1039,26 +1110,30 @@ export function TemplateDetail({
             disabled={fontBusy}
             onClick={() => void reviewFontInstall()}
           >
-            {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-            Review font install
+            {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+            {translateUi('review_font_install_8b99a35e')}{' '}
           </Button>
         ) : null}
         {fontResult ? (
           <div role="status" className="flex flex-col gap-1">
             {fontResult.linked.length > 0 ? (
               <p className="text-success">
-                Installed: {fontResult.linked.map((font) => font.postScriptName).join(', ')}
+                {' '}
+                {translateUi('installed_b92fd7f8')}{' '}
+                {fontResult.linked.map((font) => font.postScriptName).join(', ')}
               </p>
             ) : null}
             {fontResult.alreadyLinked.length > 0 ? (
               <p className="text-muted-foreground">
-                Already installed:{' '}
+                {' '}
+                {translateUi('already_installed_cb70e72b')}{' '}
                 {fontResult.alreadyLinked.map((font) => font.postScriptName).join(', ')}
               </p>
             ) : null}
             {fontResult.refused.map((font) => (
               <p key={font.filename} className="text-destructive">
-                Refused {font.filename}: {font.reason}
+                {' '}
+                {translateUi('refused_66b87354')} {font.filename}: {font.reason}
               </p>
             ))}
           </div>
@@ -1074,8 +1149,8 @@ export function TemplateDetail({
             <Input
               value={templateName}
               onChange={(event) => setTemplateName(event.target.value)}
-              placeholder="Name this template"
-              aria-label="Template name"
+              placeholder={translateUi('name_this_template_53fc63a0')}
+              aria-label={translateUi('template_name_7b905ed0')}
               aria-invalid={nameProblem !== null && templateName.length > 0}
               inputSize="sm"
               className="w-64"
@@ -1097,8 +1172,8 @@ export function TemplateDetail({
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />
               ) : (
                 <Send className="size-3.5" aria-hidden />
-              )}
-              Set up template
+              )}{' '}
+              {translateUi('set_up_template_6e4e62fb')}{' '}
             </Button>
           </div>
           <p
@@ -1108,15 +1183,16 @@ export function TemplateDetail({
           >
             {templateName.length > 0 && nameProblem
               ? nameProblem
-              : 'This name is permanent once set up. You can change the display name anytime.'}
+              : translateUi('this_name_is_permanent_once_set_up__644fc854')}
           </p>
         </div>
       ) : null}
       {bundle ? (
         <div className="rounded-md border p-3 space-y-3">
-          <p className="font-medium">Delivery templates</p>
+          <p className="font-medium">{translateUi('delivery_templates_554fed86')}</p>
           <p className="text-sm text-muted-foreground">
-            Each format has its own fields and render selection.
+            {' '}
+            {translateUi('each_format_has_its_own_fields_and__265f075f')}{' '}
           </p>
           {bundle.children.map((child) => (
             <div
@@ -1127,7 +1203,9 @@ export function TemplateDetail({
               <span className="text-muted-foreground">
                 {child.state.replaceAll('_', ' ')}
                 {child.smoke && typeof child.smoke === 'object' && 'state' in child.smoke
-                  ? ` · test ${String(child.smoke.state)}`
+                  ? translateUi('test_value0_1a6be770', {
+                      value0: String(String(child.smoke.state)),
+                    })
                   : ''}
               </span>
               {child.smokeFiles?.map((url, index) => (
@@ -1138,7 +1216,8 @@ export function TemplateDetail({
                   rel="noopener noreferrer"
                   className="text-primary underline"
                 >
-                  View test {index + 1}
+                  {' '}
+                  {translateUi('view_test_198c1873')} {index + 1}
                 </a>
               ))}
               {child.state === 'needs_input' || child.state === 'failed' ? (
@@ -1149,7 +1228,8 @@ export function TemplateDetail({
                   disabled={bundleBusy !== null}
                   onClick={() => void onBundleAdvance('resume', { runId: child.runId })}
                 >
-                  Retry setup
+                  {' '}
+                  {translateUi('retry_setup_8e087204')}{' '}
                 </Button>
               ) : null}
             </div>
@@ -1162,7 +1242,8 @@ export function TemplateDetail({
                 disabled={bundleBusy !== null}
                 onClick={() => void onBundleAdvance('smoke')}
               >
-                Test all formats
+                {' '}
+                {translateUi('test_all_formats_16c048fd')}{' '}
               </Button>
             ) : null}
             {bundle.children.every((child) => child.state === 'review_ready') &&
@@ -1173,7 +1254,8 @@ export function TemplateDetail({
                 disabled={bundleBusy !== null}
                 onClick={() => void onBundleAdvance('promotion-plan')}
               >
-                Review publication
+                {' '}
+                {translateUi('review_publication_03b9d524')}{' '}
               </Button>
             ) : null}
             {bundle.approval && bundle.activation?.state !== 'published' ? (
@@ -1185,11 +1267,14 @@ export function TemplateDetail({
                   void onBundleAdvance('approve', { confirmation: bundle.approval?.confirmation })
                 }
               >
-                Publish all formats
+                {' '}
+                {translateUi('publish_all_formats_d9f2bf1e')}{' '}
               </Button>
             ) : null}
             {bundle.activation?.state === 'published' ? (
-              <span className="text-sm text-success">All formats published</span>
+              <span className="text-sm text-success">
+                {translateUi('all_formats_published_bbc6963f')}
+              </span>
             ) : null}
           </div>
         </div>
@@ -1230,7 +1315,8 @@ export function TemplateDetail({
     <p className="text-destructive">{source.parseError}</p>
   ) : parseState === 'pending' && parseSlow ? (
     <p className="text-muted-foreground">
-      Opening the file is taking longer than it should. Activity below says what happened.
+      {' '}
+      {translateUi('opening_the_file_is_taking_longer_t_87ad6546')}{' '}
     </p>
   ) : undefined;
   const detailOf: Record<string, CheckRow['detail']> = {
@@ -1246,17 +1332,26 @@ export function TemplateDetail({
             ))}
           </ul>
         ) : (
-          <p>Everything matches what you see here.</p>
+          <p>{translateUi('everything_matches_what_you_see_her_7ea8c62e')}</p>
         )}
         {publishVerification.media.length ? (
-          <ul className="flex flex-col gap-1" aria-label="Media placement measurements">
+          <ul
+            className="flex flex-col gap-1"
+            aria-label={translateUi('media_placement_measurements_af527138')}
+          >
             {publishVerification.media.map((slot) => (
               <li key={slot.key}>
                 {slot.label}:{' '}
                 {slot.box && slot.source
-                  ? `${slot.source[0]} × ${slot.source[1]} px image → ${Math.round(slot.box[2] - slot.box[0])} × ${Math.round(slot.box[3] - slot.box[1])} px space in ${slot.comp}`
-                  : 'size not measured yet'}
-                {slot.rigged ? ' · placed at render time' : ''}
+                  ? translateUi('value0_value1_px_image_value2_value_ba16fdfa', {
+                      value0: String(slot.source[0]),
+                      value1: String(slot.source[1]),
+                      value2: String(Math.round(slot.box[2] - slot.box[0])),
+                      value3: String(Math.round(slot.box[3] - slot.box[1])),
+                      value4: String(slot.comp),
+                    })
+                  : translateUi('size_not_measured_yet_c8c5a70c')}
+                {slot.rigged ? translateUi('placed_at_render_time_4bfe5bed') : ''}
               </li>
             ))}
           </ul>
@@ -1264,21 +1359,25 @@ export function TemplateDetail({
       </div>
     ) : undefined,
   };
-  const checks: CheckRow[] = templateChecks({
-    parseState,
-    parseError: source.parseError ?? null,
-    variableCount,
-    formatCount: ratios.length,
-    fontReadiness,
-    fontCheckFailed,
-    run,
-    forgeState: source.forgeState,
-    templateKey,
-    publishVerification,
-    publishCheckFailed,
-    mappingReview,
-    mappingCheckFailed,
-  }).map((check) => ({
+  const checks: CheckRow[] = templateCheckPresentation(
+    {
+      parseState,
+      parseError: source.parseError ?? null,
+      variableCount,
+      formatCount: ratios.length,
+      fontReadiness,
+      fontCheckFailed,
+      run,
+      forgeState: source.forgeState,
+      templateKey,
+      publishVerification,
+      publishCheckFailed,
+      mappingReview,
+      mappingCheckFailed,
+    },
+    translateUi,
+    currentUiLocale,
+  ).map((check) => ({
     name: check.name,
     what: check.what,
     state: check.state,
@@ -1293,7 +1392,8 @@ export function TemplateDetail({
     action:
       check.id === 'mapping' && mappingReview?.state === 'needs_review' ? (
         <Button type="button" size="xs" variant="outline" onClick={() => setTab('mapping')}>
-          Review layers
+          {' '}
+          {translateUi('review_layers_f02e6d38')}{' '}
         </Button>
       ) : (
         ladderButton(check.action)
@@ -1309,7 +1409,7 @@ export function TemplateDetail({
       size="xs"
       variant="outline"
       className="gap-1"
-      title="Opens your file again, looks for missing fonts and media, and re-plans setup."
+      title={translateUi('opens_your_file_again_looks_for_mis_bacbf4e1')}
       disabled={fixing || busy !== null}
       onClick={() => void onFix()}
     >
@@ -1317,8 +1417,8 @@ export function TemplateDetail({
         <Loader2 className="size-3 animate-spin" aria-hidden />
       ) : (
         <Wrench className="size-3" aria-hidden />
-      )}
-      Fix problems
+      )}{' '}
+      {translateUi('fix_problems_80195a4c')}{' '}
     </Button>
   ) : hasProblem ? (
     <Button
@@ -1331,7 +1431,8 @@ export function TemplateDetail({
         activityTrigger.current?.focus();
       }}
     >
-      Investigate
+      {' '}
+      {translateUi('investigate_e2641093')}{' '}
     </Button>
   ) : undefined;
 
@@ -1340,8 +1441,7 @@ export function TemplateDetail({
       <header className="flex flex-wrap items-center justify-between gap-2 px-[var(--card-pad)] py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={onBack}>
-            <ArrowLeft className="size-3.5" aria-hidden />
-            Templates
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}{' '}
           </Button>
           <h2 className="min-w-0 text-base font-semibold">
             <InlineRename value={name} onRename={onRename} />
@@ -1354,18 +1454,19 @@ export function TemplateDetail({
             */}
             {templateKey
               ? publishVerification?.state === 'pass'
-                ? 'Ready to render'
-                : 'Published · review the layout'
-              : 'Not ready to render yet'}
-            {run && !run.done && !pushed ? ' · not updating live' : null}
+                ? translateUi('ready_to_render_6f40bb00')
+                : translateUi('published_review_the_layout_8b57a46e')
+              : translateUi('not_ready_to_render_yet_229f2f60')}
+            {run && !run.done && !pushed ? translateUi('not_updating_live_d3b2957f') : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {onOpenVariant && revisionCatalog?.length ? (
             <label className="flex items-center gap-2 text-xs">
-              Variant
+              {' '}
+              {translateUi('variant_3f19fe84')}{' '}
               <select
-                aria-label="Inspect template variant"
+                aria-label={translateUi('inspect_template_variant_d7a42b8a')}
                 className="h-8 max-w-56 rounded-md border bg-background px-2 text-xs"
                 value={selectedRevisionVariant?.variantId ?? ''}
                 onChange={(event) => {
@@ -1380,9 +1481,13 @@ export function TemplateDetail({
               >
                 {revisionCatalog.map((variant) => (
                   <option key={variant.variantId} value={variant.variantId}>
-                    {variant.original ? 'Original' : variant.name} ·{' '}
-                    {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
-                    {variant.tags.includes('brand_aligned') ? ' · Brand-aligned' : ''}
+                    {variant.original ? translateUi('original_88d759ea') : variant.name} ·{' '}
+                    {variant.publishedHeadRevisionId
+                      ? translateUi('published_2ef42ec2')
+                      : translateUi('draft_ebf12ef4')}
+                    {variant.tags.includes('brand_aligned')
+                      ? translateUi('brand_aligned_59119b32')
+                      : ''}
                   </option>
                 ))}
               </select>
@@ -1394,7 +1499,9 @@ export function TemplateDetail({
                 <CommentCount count={library.commentCount} />
                 <span className="tabular-nums text-muted-foreground">
                   {library.versionCount}{' '}
-                  {library.versionCount === 1 ? 'file version' : 'file versions'}
+                  {library.versionCount === 1
+                    ? translateUi('file_version_0fd9ee74')
+                    : translateUi('file_versions_c4fdb7cc')}
                 </span>
               </>
             ) : null}
@@ -1408,7 +1515,7 @@ export function TemplateDetail({
               className="gap-1.5 text-destructive"
               onClick={onRemove}
             >
-              <Trash2 className="size-3.5" aria-hidden /> Remove
+              <Trash2 className="size-3.5" aria-hidden /> {translateUi('remove_c3812fc4')}{' '}
             </Button>
           ) : null}
           {onOpenVariant && inspectedRevision && parseState === 'parsed' ? (
@@ -1436,7 +1543,8 @@ export function TemplateDetail({
                 disabled={removingFromWorkspace}
                 onClick={() => void removeFromWorkspace(templateKey)}
               >
-                Remove from workspace
+                {' '}
+                {translateUi('remove_from_workspace_bf720619')}{' '}
               </Button>
               <Button
                 type="button"
@@ -1444,8 +1552,9 @@ export function TemplateDetail({
                 className="gap-1.5"
                 onClick={() => onOpenRender?.({ templateKey })}
               >
-                <Play className="size-3.5" aria-hidden />
-                Render with this
+                <Play className="size-3.5" aria-hidden /> {translateUi(
+                  'render_with_this_c249855a',
+                )}{' '}
               </Button>
             </>
           ) : null}
@@ -1459,7 +1568,7 @@ export function TemplateDetail({
         accept=".ttf,.otf"
         className="sr-only"
         tabIndex={-1}
-        aria-label="Font files"
+        aria-label={translateUi('font_files_5870d625')}
         onChange={(event) => {
           void addFontFiles(Array.from(event.target.files ?? []));
           event.target.value = '';
@@ -1474,7 +1583,7 @@ export function TemplateDetail({
           <TemplateMorph id={assetId}>
             {format ? (
               <FormatPreview
-                label="Template preview"
+                label={translateUi('template_preview_df89bd92')}
                 formats={formats}
                 value={format.id}
                 onValueChange={setFormatId}
@@ -1547,18 +1656,20 @@ export function TemplateDetail({
               />
             ) : (
               <div className="flex h-[min(60vh,40rem)] items-center justify-center bg-muted/40 text-xs text-muted-foreground">
-                No formats read from this file yet
+                {' '}
+                {translateUi('no_formats_read_from_this_file_yet_b1657b14')}{' '}
               </div>
             )}
           </TemplateMorph>
           {missingFootage.length > 0 ? (
             <section
               className="rounded-md border border-destructive/50 p-3 text-xs"
-              aria-label="Missing media repair"
+              aria-label={translateUi('missing_media_repair_e135544e')}
             >
               <p className="mb-2 font-semibold">
-                {missingFootage.length} missing media file{missingFootage.length === 1 ? '' : 's'} —
-                drop each replacement onto its named row.
+                {missingFootage.length} {translateUi('missing_media_file_fc1331e6')}
+                {missingFootage.length === 1 ? '' : 's'}{' '}
+                {translateUi('drop_each_replacement_onto_its_name_d19f50c6')}{' '}
               </p>
               <SourceRebindPanel
                 repairOnly
@@ -1594,8 +1705,8 @@ export function TemplateDetail({
                     }
                     onClick={() => void saveTextMoves()}
                   >
-                    {savingText ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-                    Save text layout
+                    {savingText ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+                    {translateUi('save_text_layout_1434bf4c')}{' '}
                   </Button>
                   <Button
                     type="button"
@@ -1607,7 +1718,8 @@ export function TemplateDetail({
                       setTextMoves({});
                     }}
                   >
-                    Cancel
+                    {' '}
+                    {translateUi('cancel_19766ed6')}{' '}
                   </Button>
                 </>
               ) : (
@@ -1621,10 +1733,11 @@ export function TemplateDetail({
                       frame.boxes.some((box) => box.kind === 'text' && box.instance),
                     )
                   }
-                  title="Move and resize text in your After Effects file"
+                  title={translateUi('move_and_resize_text_in_your_after__4dae78b8')}
                   onClick={() => setEditingText(true)}
                 >
-                  Repair text
+                  {' '}
+                  {translateUi('repair_text_81e7778d')}{' '}
                 </Button>
               )}
             </div>
@@ -1632,7 +1745,8 @@ export function TemplateDetail({
           {editingText ? (
             <div className="flex flex-col gap-2 text-xs">
               <p className="text-muted-foreground">
-                Select text on the preview, then click a font here or drag it onto any text box.
+                {' '}
+                {translateUi('select_text_on_the_preview_then_cli_bf730046')}{' '}
               </p>
               {selectedTextBox ? (
                 <div className="flex items-center gap-2">
@@ -1644,7 +1758,9 @@ export function TemplateDetail({
                     <SelectTrigger
                       size="sm"
                       className="min-w-0 flex-1 text-xs"
-                      aria-label={`Font for ${selectedTextBox.label}`}
+                      aria-label={translateUi('font_for_value0_01fc221c', {
+                        value0: String(selectedTextBox.label),
+                      })}
                     >
                       <SelectValue
                         items={Object.fromEntries([
@@ -1658,7 +1774,9 @@ export function TemplateDetail({
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={KEEP_FONT}>Keep current font</SelectItem>
+                      <SelectItem value={KEEP_FONT}>
+                        {translateUi('keep_current_font_9fd078f9')}
+                      </SelectItem>
                       {editableFonts.map((font) =>
                         font.postScriptName ? (
                           <SelectItem key={font.id} value={font.postScriptName}>
@@ -1672,7 +1790,7 @@ export function TemplateDetail({
               ) : null}
               <fieldset
                 className="flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded-md border border-dashed border-input p-2"
-                aria-label="Fonts available to drag onto text; drop font files here to add them"
+                aria-label={translateUi('fonts_available_to_drag_onto_text_d_63f078a5')}
                 onDragOver={(event) => {
                   if (event.dataTransfer.types.includes('Files')) event.preventDefault();
                 }}
@@ -1690,7 +1808,9 @@ export function TemplateDetail({
                     size="xs"
                     draggable
                     className="h-auto cursor-grab px-2 py-1 text-left font-normal active:cursor-grabbing"
-                    title={`Drag onto text or click to apply to ${selectedTextBox?.label ?? 'selected text'}`}
+                    title={translateUi('drag_onto_text_or_click_to_apply_to_86f00a58', {
+                      value0: String(selectedTextBox?.label ?? 'selected text'),
+                    })}
                     onDragStart={(event) => {
                       event.dataTransfer.setData(TEXT_REPAIR_FONT_MIME, font.postScriptName ?? '');
                       event.dataTransfer.effectAllowed = 'copy';
@@ -1702,7 +1822,8 @@ export function TemplateDetail({
                 ))}
                 {editableFonts.length === 0 ? (
                   <span className="text-muted-foreground">
-                    Drop .ttf or .otf files here, or use Add font files.
+                    {' '}
+                    {translateUi('drop_ttf_or_otf_files_here_or_use_a_b51d3aa8')}{' '}
                   </span>
                 ) : null}
               </fieldset>
@@ -1714,7 +1835,8 @@ export function TemplateDetail({
                 disabled={fontBusy}
                 onClick={() => fontInput.current?.click()}
               >
-                Add font files
+                {' '}
+                {translateUi('add_font_files_7ad2d46a')}{' '}
               </Button>
               {fontCandidates && fontCandidates.missing.length > 0 ? (
                 <FontSubstitutions
@@ -1731,8 +1853,8 @@ export function TemplateDetail({
               role="alert"
               className="rounded border border-warning/40 bg-warning/10 p-3 text-xs"
             >
-              <strong>Your text changes are saved but not live yet.</strong> The template still uses
-              the previous file.
+              <strong>{translateUi('your_text_changes_are_saved_but_not_eb0f1d86')}</strong>{' '}
+              {translateUi('the_template_still_uses_the_previou_c548978b')}{' '}
               <p className="mt-1">{savedTextRepair.error}</p>
               <Button
                 type="button"
@@ -1741,14 +1863,15 @@ export function TemplateDetail({
                 className="mt-2"
                 onClick={() => setTab('source')}
               >
-                Review saved version
+                {' '}
+                {translateUi('review_saved_version_ac1e6d7c')}{' '}
               </Button>
             </div>
           ) : null}
           {!rendered && source.parse && drawnRatios.size > 0 ? (
             <p className="text-xs text-muted-foreground">
-              This preview is a quick layout check. Run a test render to see motion and effects
-              before publishing.
+              {' '}
+              {translateUi('this_preview_is_a_quick_layout_chec_3e0fbe85')}{' '}
             </p>
           ) : null}
         </div>
@@ -1758,40 +1881,53 @@ export function TemplateDetail({
             variant="line"
             className="h-auto min-h-9 w-full flex-wrap justify-start gap-x-3 gap-y-1 border-b px-[var(--card-pad)] py-2"
           >
-            <TabsTrigger value="checks">Checks</TabsTrigger>
-            <TabsTrigger value="layers">Edit layers</TabsTrigger>
-            <TabsTrigger value="author">Author</TabsTrigger>
+            <TabsTrigger value="checks">{translateUi('checks_de07d072')}</TabsTrigger>
+            <TabsTrigger value="layers">{translateUi('edit_layers_589e52a5')}</TabsTrigger>
+            <TabsTrigger value="author">{translateUi('author_d95082a2')}</TabsTrigger>
             <TabsTrigger value="variants" className="flex-none px-0 text-xs">
-              Variants {revisionCatalog?.length ? `(${revisionCatalog.length})` : ''}
+              {' '}
+              {translateUi('variants_63d2643b')}{' '}
+              {revisionCatalog?.length ? `(${revisionCatalog.length})` : ''}
             </TabsTrigger>
             <TabsTrigger value="variables" className="flex-none px-0 text-xs">
-              Variables
+              {' '}
+              {translateUi('variables_02db55ba')}{' '}
             </TabsTrigger>
             <TabsTrigger value="mapping" className="flex-none px-0 text-xs">
-              Connected layers
+              {' '}
+              {translateUi('connected_layers_b5bc1739')}{' '}
             </TabsTrigger>
             {templateKey ? (
               <TabsTrigger value="output" className="flex-none px-0 text-xs">
-                Output
+                {' '}
+                {translateUi('output_b2439bcb')}{' '}
               </TabsTrigger>
             ) : null}
             <TabsTrigger value="source" className="flex-none px-0 text-xs">
-              Replace file
+              {' '}
+              {translateUi('replace_file_68ec54a9')}{' '}
             </TabsTrigger>
             <TabsTrigger value="details" className="flex-none px-0 text-xs">
-              Details
+              {' '}
+              {translateUi('details_45989de4')}{' '}
             </TabsTrigger>
 
-            {templateKey ? <TabsTrigger value="renders">Render ledger</TabsTrigger> : null}
+            {templateKey ? (
+              <TabsTrigger value="renders">{translateUi('render_ledger_8068f2c7')}</TabsTrigger>
+            ) : null}
           </TabsList>
           <TabsContent value="checks" keepMounted>
             <FactList
               className="p-[var(--card-pad)]"
               facts={[
-                { icon: CircleDot, label: 'Status', value: <TemplateStatusPill status={status} /> },
+                {
+                  icon: CircleDot,
+                  label: translateUi('status_920e413c'),
+                  value: <TemplateStatusPill status={status} />,
+                },
                 {
                   icon: RectangleHorizontal,
-                  label: 'Formats',
+                  label: translateUi('formats_9f01769a'),
                   value: ratios.length ? (
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       {ratios.map((ratio) => (
@@ -1810,20 +1946,30 @@ export function TemplateDetail({
                 },
                 {
                   icon: Variable,
-                  label: 'Variables',
+                  label: translateUi('variables_02db55ba'),
                   numeric: true,
                   value: unassigned ? `${variableCount} · ${unassigned} unassigned` : variableCount,
                 },
-                { icon: Type, label: 'Fonts', numeric: true, value: fontsFact, ruleBefore: true },
+                {
+                  icon: Type,
+                  label: translateUi('fonts_3680fcad'),
+                  numeric: true,
+                  value: fontsFact,
+                  ruleBefore: true,
+                },
                 {
                   icon: History,
-                  label: 'Last render',
+                  label: translateUi('last_render_8b8dc7d8'),
                   value: jobs.length ? (
                     <span className="flex items-center gap-2">
                       <span className="font-mono tabular-nums">
                         {lastFinished
-                          ? formatRelativeTime(lastFinished.finishedAt ?? lastFinished.updatedAt)
-                          : 'None finished'}
+                          ? formatRelativeTime(
+                              lastFinished.finishedAt ?? lastFinished.updatedAt,
+                              undefined,
+                              currentUiLocale,
+                            )
+                          : translateUi('none_finished_b5034cf3')}
                       </span>
                       <TickBar ticks={jobs.map((job) => JOB_TICK[job.status]).reverse()} />
                     </span>
@@ -1831,16 +1977,21 @@ export function TemplateDetail({
                     'Never'
                   ),
                 },
-                { icon: Layers, label: 'Sets', numeric: true, value: setCount ?? '—' },
+                {
+                  icon: Layers,
+                  label: translateUi('sets_fbb0f1b4'),
+                  numeric: true,
+                  value: setCount ?? '—',
+                },
                 {
                   icon: CalendarClock,
-                  label: 'Updated',
-                  value: formatDate(source.updatedAt ?? source.createdAt),
+                  label: translateUi('updated_3a5ecca1'),
+                  value: formatDate(source.updatedAt ?? source.createdAt, currentUiLocale),
                 },
               ]}
             />
 
-            <Panel title="Checks" bodyClassName="p-0">
+            <Panel title={translateUi('checks_de07d072')} bodyClassName="p-0">
               <CheckTable
                 rows={checks}
                 action={footerAction}
@@ -1922,16 +2073,20 @@ export function TemplateDetail({
               <div className="space-y-2 text-xs">
                 <p>
                   {DESIGN_SOURCE[selectedRevisionVariant.sourceKind]
-                    ? `This template is built from ${DESIGN_SOURCE[selectedRevisionVariant.sourceKind]} file, kept as an immutable revision. To change the design, edit its layers and save them as a new variant.`
-                    : 'This source belongs to an immutable template revision. To replace an After Effects project, upload an authored variant.'}
+                    ? translateUi('this_template_is_built_from_value0__9d2947ba', {
+                        value0: String(DESIGN_SOURCE[selectedRevisionVariant.sourceKind]),
+                      })
+                    : translateUi('this_source_belongs_to_an_immutable_a9b3a9ee')}
                 </p>
                 {DESIGN_SOURCE[selectedRevisionVariant.sourceKind] ? (
                   <Button size="xs" variant="outline" onClick={() => setTab('layers')}>
-                    Edit layers
+                    {' '}
+                    {translateUi('edit_layers_589e52a5')}{' '}
                   </Button>
                 ) : (
                   <Button size="xs" variant="outline" onClick={() => setTab('variants')}>
-                    Open variants
+                    {' '}
+                    {translateUi('open_variants_489f83e0')}{' '}
                   </Button>
                 )}
               </div>
@@ -1939,11 +2094,11 @@ export function TemplateDetail({
               <SourceRebindPanel
                 brandId={brandId}
                 assetId={assetId}
-              expectedVersionId={source.versionId}
-              suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
-              aepName={source.parse?.filename}
-              sourceFamily={source.family === 'presentation' ? 'presentation' : undefined}
-              missingFootage={missingFootage}
+                expectedVersionId={source.versionId}
+                suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
+                aepName={source.parse?.filename}
+                sourceFamily={source.family === 'presentation' ? 'presentation' : undefined}
+                missingFootage={missingFootage}
                 initialFile={revisionFile}
                 onInitialFileTaken={onRevisionTaken}
                 onConfirmed={async () => {
@@ -1967,17 +2122,17 @@ export function TemplateDetail({
           </TabsContent>
           <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">
-              <dt className="text-muted-foreground">Template ID</dt>
+              <dt className="text-muted-foreground">{translateUi('template_id_ef4b6c0a')}</dt>
               <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
               {/* Where the build actually RAN, read off the run. Not a choice and not a control:
                 the Details tab is operator plumbing, and a build has exactly one home. */}
-              <dt className="text-muted-foreground">Rendered in</dt>
+              <dt className="text-muted-foreground">{translateUi('rendered_in_19741cbb')}</dt>
               <dd className="break-all font-mono">{run?.application ?? '—'}</dd>
-              <dt className="text-muted-foreground">Data table</dt>
+              <dt className="text-muted-foreground">{translateUi('data_table_22c75109')}</dt>
               <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
-              <dt className="text-muted-foreground">File ID</dt>
+              <dt className="text-muted-foreground">{translateUi('file_id_2b27ef60')}</dt>
               <dd className="break-all font-mono">{assetId}</dd>
-              <dt className="text-muted-foreground">Original file</dt>
+              <dt className="text-muted-foreground">{translateUi('original_file_0ee08b32')}</dt>
               <dd>
                 {(() => {
                   const original = variantCatalog?.find((variant) => variant.assetId === assetId);
@@ -2002,11 +2157,11 @@ export function TemplateDetail({
                   );
                 })()}
               </dd>
-              <dt className="text-muted-foreground">Uploaded</dt>
-              <dd>{new Date(source.createdAt).toLocaleString()}</dd>
-              <dt className="text-muted-foreground">File version</dt>
+              <dt className="text-muted-foreground">{translateUi('uploaded_3cc3767e')}</dt>
+              <dd>{new Date(source.createdAt).toLocaleString(currentUiLocale)}</dd>
+              <dt className="text-muted-foreground">{translateUi('file_version_c8df14a9')}</dt>
               <dd className="break-all font-mono">{source.versionId}</dd>
-              <dt className="text-muted-foreground">Source file</dt>
+              <dt className="text-muted-foreground">{translateUi('source_file_8cfe49e4')}</dt>
               <dd className="break-all font-mono">{source.parse?.filename ?? '—'}</dd>
             </dl>
           </TabsContent>
@@ -2022,23 +2177,29 @@ export function TemplateDetail({
       <AlertDialog open={fontPlan !== null} onOpenChange={(open) => !open && setFontPlan(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Install fonts on this template?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {translateUi('install_fonts_on_this_template_22ae3fd4')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              We&apos;ll upload these files privately, check them, and link them to this template.
-              Future renders will use these fonts.
+              {' '}
+              {translateUi('we_ll_upload_these_files_privately__dadd16f9')}{' '}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ul className="flex flex-col gap-1 text-xs">
             {fontPlan?.files.map((file) => (
               <li key={file.filename} className="break-all">
-                {file.filename} · {file.bytes.toLocaleString()} bytes
+                {file.filename} · {file.bytes.toLocaleString(currentUiLocale)}{' '}
+                {translateUi('bytes_277089d9')}{' '}
               </li>
             ))}
           </ul>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={fontBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={fontBusy}>
+              {translateUi('cancel_19766ed6')}
+            </AlertDialogCancel>
             <AlertDialogAction disabled={fontBusy} onClick={() => void installFonts()}>
-              Install fonts
+              {' '}
+              {translateUi('install_fonts_9de0db7c')}{' '}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

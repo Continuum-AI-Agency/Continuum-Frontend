@@ -1,8 +1,9 @@
 'use client';
 
-import { resolveOrganicAgentLabel, resolveOrganicGenerationDisplay } from '@continuum/contracts';
+import { resolveOrganicGenerationDisplay } from '@continuum/contracts';
 import { AlertCircle, Check, Clock, Loader2, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import type { ChatMedia } from '@/components/chat/media/media';
@@ -16,6 +17,10 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCalendarStore } from '@/lib/organic/store';
+import {
+  localizeOrganicAgentLabel,
+  translateOrganicControlLabel,
+} from '@/lib/ui/organicLifecycleLabels';
 import { cn } from '@/lib/utils';
 import { rankCardMedia, useDraftChatMedia } from '../hooks/useDraftStoryboard';
 import { resolveConceptPreviewUrls } from './conceptPreview';
@@ -26,8 +31,14 @@ import type { CheckpointState, PipelineCardState, PipelineStage, PipelineStageNo
 
 // One vocabulary across surfaces: the stepper labels each stage with the SAME canonical
 // resolver the generations widget uses, instead of a divergent local map.
-const stageLabel = (stage: PipelineStage): string =>
-  resolveOrganicGenerationDisplay({ status: 'running', stage }).label;
+const stageLabel = (
+  stage: PipelineStage,
+  translate: Parameters<typeof translateOrganicControlLabel>[1],
+): string =>
+  translateOrganicControlLabel(
+    resolveOrganicGenerationDisplay({ status: 'running', stage }).label,
+    translate,
+  );
 
 const IMAGE_OUTLINE = 'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10';
 
@@ -64,6 +75,7 @@ function PreviewImages({
 }
 
 function StageNode({ node, index }: { node: PipelineStageNode; index: number }) {
+  const commonText = useTranslations('common');
   const dot =
     node.status === 'active' ? (
       <motion.div
@@ -95,7 +107,7 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
           node.status === 'pending' ? 'text-muted-foreground/50' : 'text-muted-foreground',
         )}
       >
-        {stageLabel(node.stage)}
+        {stageLabel(node.stage, commonText)}
       </span>
     </motion.div>
   );
@@ -103,10 +115,10 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
 
 // Four experiential enrichment checkpoints shown once copy is received.
 const CHECKPOINT_STEPS = [
-  { key: 'concept' as const, label: 'Concept' },
-  { key: 'copy' as const, label: 'Copy' },
-  { key: 'preview' as const, label: 'Preview' },
-  { key: 'realized' as const, label: 'Fully fleshed out' },
+  { key: 'concept' as const, label: 'checkpointConcept' },
+  { key: 'copy' as const, label: 'checkpointCopy' },
+  { key: 'preview' as const, label: 'checkpointPreview' },
+  { key: 'realized' as const, label: 'checkpointRealized' },
 ] as const;
 
 type CheckpointStepKey = (typeof CHECKPOINT_STEPS)[number]['key'];
@@ -138,6 +150,7 @@ function CheckpointStepNode({
   label: string;
   checkpoint: CheckpointState;
 }) {
+  const uiText = useTranslations('organic');
   const status = checkpointStepStatus(stepKey, checkpoint);
 
   const dot =
@@ -155,13 +168,13 @@ function CheckpointStepNode({
 
   const sublabel =
     status === 'awaiting'
-      ? 'Awaiting your choice'
+      ? uiText('checkpointWaitingChoice')
       : status === 'generating'
-        ? 'Fleshing out…'
+        ? uiText('checkpointRealizing')
         : status === 'user_supplied'
-          ? 'Your creative'
+          ? uiText('checkpointYourCreative')
           : status === 'ready'
-            ? 'Ready'
+            ? uiText('checkpointReady')
             : null;
 
   return (
@@ -185,11 +198,17 @@ function CheckpointStepNode({
 }
 
 function CheckpointStepper({ checkpoint }: { checkpoint: CheckpointState }) {
+  const uiText = useTranslations('organic');
   return (
     <div className="grid gap-2 rounded-lg bg-muted/25 px-2.5 py-2">
       <div className="flex items-start gap-1">
         {CHECKPOINT_STEPS.map(({ key, label }) => (
-          <CheckpointStepNode key={key} stepKey={key} label={label} checkpoint={checkpoint} />
+          <CheckpointStepNode
+            key={key}
+            stepKey={key}
+            label={uiText(label)}
+            checkpoint={checkpoint}
+          />
         ))}
       </div>
       <div className="grid grid-cols-4 gap-1">
@@ -230,6 +249,8 @@ export function PipelineCard({
   onRetryJob,
   onOpenDraft,
 }: PipelineCardProps) {
+  const uiText = useTranslations('organic');
+  const commonText = useTranslations('common');
   const quality = qualityPercent(card.quality?.overallScore);
   // WHY a flagged draft was flagged. A passing draft's reviewer notes are not the user's
   // problem; a failed one's are, and a bare percentage names none of them.
@@ -240,12 +261,15 @@ export function PipelineCard({
   // ONE status presentation with the plan row: the resolver owns the vocabulary,
   // conceptStatus adds the `kind` that separates real progress from a run we have
   // lost sight of, and media failure from a job that died with nothing to show.
-  const state: ConceptStatus = resolveConceptStatus({
-    status: card.status,
-    stage: card.currentStage ?? null,
-    checkpoint: card.checkpoint ?? null,
-    draftMissing: card.draftMissing ?? null,
-  });
+  const state: ConceptStatus = resolveConceptStatus(
+    {
+      status: card.status,
+      stage: card.currentStage ?? null,
+      checkpoint: card.checkpoint ?? null,
+      draftMissing: card.draftMissing ?? null,
+    },
+    (label) => translateOrganicControlLabel(label, commonText),
+  );
   // A missing draft's old id points at nothing: no media lookup, no link, no action on it.
   const draftId = card.draftMissing ? null : (card.draftId ?? null);
 
@@ -255,7 +279,10 @@ export function PipelineCard({
   const activeNode = card.stages.find((node) => node.status === 'active');
   const liveLabel =
     state.advancing && activeNode
-      ? [resolveOrganicAgentLabel(activeNode.agentName), stageLabel(activeNode.stage)]
+      ? [
+          localizeOrganicAgentLabel(activeNode.agentName, commonText),
+          stageLabel(activeNode.stage, commonText),
+        ]
           .filter(Boolean)
           .join(' · ')
       : null;
@@ -274,6 +301,7 @@ export function PipelineCard({
   const { media: previewMedia } = useMemo(
     () =>
       rankCardMedia({
+        translate: uiText,
         idPrefix: `preview:${card.jobId}`,
         realized: draftMedia.realized,
         preview: previewUrls,
@@ -283,6 +311,7 @@ export function PipelineCard({
         format: card.preview?.format,
       }),
     [
+      uiText,
       card.jobId,
       draftMedia.realized,
       draftMedia.storyboard,
@@ -340,7 +369,7 @@ export function PipelineCard({
               diagnostic={state.diagnostic}
               error={card.error?.message ?? null}
               pct={card.pct ?? null}
-              stageLabel={activeNode ? stageLabel(activeNode.stage) : state.label}
+              stageLabel={activeNode ? stageLabel(activeNode.stage, commonText) : state.label}
             />
           }
           title={state.diagnostic ?? undefined}
@@ -417,7 +446,7 @@ export function PipelineCard({
           onIndexChange={setLightboxIndex}
           onOpenChange={(open) => setLightboxIndex(open ? (lightboxIndex ?? 0) : null)}
           open={lightboxIndex !== null}
-          title={card.preview?.format ?? 'Preview'}
+          title={card.preview?.format ?? uiText('preview_324b134')}
         />
       )}
     </AgentArtifactCard>

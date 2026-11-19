@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AccountCandidate, AdAccount, PlatformCard } from '@continuum/contracts';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { platformCardOf } from '../../../platformCards/platformCardModel';
 import { buildGoogleOverview } from '../../../platforms/googleAdsOverviewModel';
 import type { GoogleAdsOverviewState } from '../../../platforms/useGoogleAdsOverview';

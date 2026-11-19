@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import type { SessionSearchFailure } from './useSessionSearch';
 
 /**
@@ -14,17 +15,22 @@ export function SessionSearchFailureNotice({
   failure: SessionSearchFailure;
   onRetry: () => void;
 }) {
+  const uiText = useTranslations('common');
   const here =
     typeof window === 'undefined' ? '/' : `${window.location.pathname}${window.location.search}`;
   return (
     <span className="px-2 py-3 text-destructive-ink text-xs" role="alert">
-      {failure.message}{' '}
+      {failure.sessionEnded
+        ? uiText('your_session_ended_sign_in_again_to_see_your__7aa0c61')
+        : uiText('couldn_t_search_conversations_cause_select_ti_ac37525', {
+            cause: failure.cause,
+          })}{' '}
       {failure.sessionEnded ? (
         <a
           className="hit-area font-medium underline underline-offset-4"
           href={`/login?redirectTo=${encodeURIComponent(here)}`}
         >
-          Sign in again
+          {uiText('sign_in_again_51fbe1d')}
         </a>
       ) : (
         <button
@@ -32,7 +38,7 @@ export function SessionSearchFailureNotice({
           onClick={onRetry}
           type="button"
         >
-          Retry
+          {uiText('retry_942087c')}
         </button>
       )}
     </span>

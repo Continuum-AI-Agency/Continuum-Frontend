@@ -24,7 +24,6 @@ import {
 } from './chart-child-passthrough';
 import { ChartProvider, type LineConfig, type Margin } from './chart-context';
 import { isGradientDefComponent, isPatternDefComponent } from './chart-defs';
-import { shortDateFmt } from './chart-formatters';
 import {
   type ChartPhase,
   type ChartStatus,
@@ -49,6 +48,7 @@ import { ReferenceAreaRegistrationContext } from './reference-area-registration-
 import { computeSeriesBarRevealClipPadding, computeSeriesBarWidth } from './series-bar-layout';
 import { useStaticChartPreview } from './static-chart-preview-context';
 import { useAnimatedYDomains } from './use-animated-y-domains';
+import { useChartFormatters } from './use-chart-formatters';
 import { useChartInteraction } from './use-chart-interaction';
 import { useChartPhaseOrchestrator } from './use-chart-phase-orchestrator';
 import {
@@ -192,6 +192,8 @@ const TimeSeriesChartCore = memo(function TimeSeriesChartCore({
   tweenYDomainOnXDomainChange = false,
   onPhaseChange,
 }: TimeSeriesChartInnerProps) {
+  const { shortDateFmt } = useChartFormatters();
+
   const staticPreview = useStaticChartPreview();
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;

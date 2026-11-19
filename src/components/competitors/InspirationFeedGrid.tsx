@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // The combined "All" view: organic Instagram posts and paid ad snapshots in one
 // recency-ordered grid. Each item renders with its existing surface — the paid
 // AdSnapshotCard or the organic hover tile — and carries a Save-to-board action
@@ -49,6 +51,7 @@ export function InspirationFeedGrid({
   isError?: boolean;
   gridClassName?: string;
 }) {
+  const uiText = useTranslations('competitor');
   if (isLoading) {
     return (
       <div className={cn(gridClassName)}>
@@ -62,7 +65,7 @@ export function InspirationFeedGrid({
   if (isError) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground">
-        Inspiration is unavailable right now.
+        {uiText('inspiration_is_unavailable_right_now_5ddb3b0')}
       </p>
     );
   }
@@ -71,7 +74,7 @@ export function InspirationFeedGrid({
     return (
       <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 p-8 text-center">
         <p className="text-sm text-muted-foreground">
-          No inspiration yet — tag competitors and run a sync to pull their posts and ads.
+          {uiText('no_inspiration_yet_tag_competitors_and_run_a__5b23ece')}
         </p>
       </div>
     );
@@ -81,11 +84,11 @@ export function InspirationFeedGrid({
     <div className={cn(gridClassName)}>
       {items.map((item) =>
         item.source === 'paid' ? (
-          <Cell key={item.key} label="Paid">
+          <Cell key={item.key} label={uiText('paid_fb81b96')}>
             <AdSnapshotCard entry={item.entry} brandId={brandId} />
           </Cell>
         ) : (
-          <Cell key={item.key} label="Organic">
+          <Cell key={item.key} label={uiText('organic_89b8cb6')}>
             <CompetitorPostHoverTile
               brandId={brandId}
               view={item.view}

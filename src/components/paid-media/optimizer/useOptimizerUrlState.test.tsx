@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
-import { cleanup, renderHook } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 const navigation = {
   pathname: '/scale',

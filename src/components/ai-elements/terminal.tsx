@@ -2,6 +2,7 @@
 
 import Ansi from 'ansi-to-react';
 import { CheckIcon, CopyIcon, TerminalIcon, Trash2Icon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps, HTMLAttributes } from 'react';
 import {
   createContext,
@@ -96,16 +97,21 @@ export const TerminalHeader = ({ className, children, ...props }: TerminalHeader
 
 export type TerminalTitleProps = HTMLAttributes<HTMLDivElement>;
 
-export const TerminalTitle = ({ className, children, ...props }: TerminalTitleProps) => (
-  <div className={cn('flex items-center gap-2 text-sm text-zinc-400', className)} {...props}>
-    <TerminalIcon className="size-4" />
-    {children ?? 'Terminal'}
-  </div>
-);
+export const TerminalTitle = ({ className, children, ...props }: TerminalTitleProps) => {
+  const tUi = useTranslations('common');
+  return (
+    <div className={cn('flex items-center gap-2 text-sm text-zinc-400', className)} {...props}>
+      <TerminalIcon className="size-4" />
+      {children ?? tUi('m_a1f52cdcb3')}
+    </div>
+  );
+};
 
 export type TerminalStatusProps = HTMLAttributes<HTMLDivElement>;
 
 export const TerminalStatus = ({ className, children, ...props }: TerminalStatusProps) => {
+  const tUi = useTranslations('common');
+
   const { isStreaming } = useContext(TerminalContext);
 
   if (!isStreaming) {
@@ -114,7 +120,7 @@ export const TerminalStatus = ({ className, children, ...props }: TerminalStatus
 
   return (
     <div className={cn('flex items-center gap-2 text-xs text-zinc-400', className)} {...props}>
-      {children ?? <Shimmer className="w-16">Running...</Shimmer>}
+      {children ?? <Shimmer className="w-16">{tUi('m_126eda8b21')}</Shimmer>}
     </div>
   );
 };

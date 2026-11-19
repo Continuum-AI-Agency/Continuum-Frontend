@@ -1,4 +1,5 @@
 'use client';
+import { useAnswerLanguage } from '../answerLanguageContext';
 
 // How to do something, in the order it is done (Ramiro, 2026-10-13: "cuando le pregunto cómo
 // aprovechar una oportunidad, no me da pasos").
@@ -25,7 +26,9 @@ type StepsBlockProps = { block: StepsBlockV2; isStreaming: boolean };
 type StepFigure = NonNullable<StepsBlockV2['items'][number]['figure']>;
 
 function StepFigureLine({ figure }: { figure: StepFigure }) {
+  const reportLocale = useAnswerLanguage();
   const text = formatValue(figure.value, figure.format, {
+    locale: reportLocale,
     currency: figure.currency ?? undefined,
     percentBasis: figure.percent_basis ?? null,
   });

@@ -7,12 +7,9 @@
 import { hasApprovablePreview } from '@continuum/contracts';
 import type { LucideIcon } from 'lucide-react';
 import { CalendarDays, PencilRuler, RefreshCw, Wand2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { type ButtonHTMLAttributes, type ReactNode, useEffect, useState } from 'react';
-import {
-  describeOrganicFailure,
-  ORGANIC_ACTION_LABELS,
-  shortDraftId,
-} from '@/lib/organic/organicActionCopy';
+import { describeOrganicFailure } from '@/lib/organic/organicActionCopy';
 import { cn } from '@/lib/utils';
 import { type ConceptStatus, isFailureKind } from './conceptStatus';
 import type { CheckpointState } from './types';
@@ -101,17 +98,18 @@ export function FailureNotice({
 
 /** "Draft 7f95…" — the link from a card to its row in the logs. Click copies the full id. */
 export function DraftIdTag({ draftId }: { draftId: string | null | undefined }) {
+  const uiText = useTranslations('organic');
   if (!draftId) return null;
   return (
     <button
       type="button"
       data-slot="draft-id"
       title={draftId}
-      aria-label={`Copy draft id ${draftId}`}
+      aria-label={uiText('copy_draft_id_draftid_df1506e', { draftId })}
       onClick={() => void navigator.clipboard?.writeText(draftId)}
       className="shrink-0 rounded px-1 font-mono text-3xs text-muted-foreground/70 transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      {shortDraftId(draftId)}
+      {uiText('draft_id_be41ec3', { id: draftId.slice(0, 4) })}
     </button>
   );
 }
@@ -162,6 +160,7 @@ export function DraftCardActions({
   onGenerateMedia,
   leading,
 }: DraftCardActionsProps) {
+  const uiText = useTranslations('organic');
   const [mediaActionSent, setMediaActionSent] = useState(false);
   const [retrySent, setRetrySent] = useState(false);
   // A retry that landed moves the card to a new kind; let the next failure retry again.
@@ -215,21 +214,25 @@ export function DraftCardActions({
           disabled={retrySent}
           title={
             missing
-              ? 'Write this post again into a new draft'
-              : 'Run this generation again from where it stopped'
+              ? uiText('write_this_post_again_into_a_new_draft_86dfe02')
+              : uiText('run_this_generation_again_from_where_it_stopp_e538507')
           }
           onClick={retry}
         >
-          {missing ? ORGANIC_ACTION_LABELS.recreateDraft : ORGANIC_ACTION_LABELS.retry}
+          {missing ? uiText('recreate_draft_96eb4ef') : uiText('retry_942087c')}
         </Action>
       )}
       {showOpen && (
         <Action
           icon={CalendarDays}
           onClick={() => onOpenDraft?.(liveDraftId)}
-          title={missing ? 'Open the planner' : 'Open this draft in the planner'}
+          title={
+            missing
+              ? uiText('open_the_planner_0feb601')
+              : uiText('open_this_draft_in_the_planner_29cb8e1')
+          }
         >
-          {missing ? ORGANIC_ACTION_LABELS.openCalendar : ORGANIC_ACTION_LABELS.openInCalendar}
+          {missing ? uiText('open_calendar_35cdec8') : uiText('open_in_calendar_7c61a62')}
         </Action>
       )}
       {showEnrich && liveDraftId && (
@@ -239,17 +242,17 @@ export function DraftCardActions({
           disabled={mediaActionSent}
           title={
             status.kind === 'media_failed'
-              ? 'Re-sketch the blueprint and try the media again'
+              ? uiText('re_sketch_the_blueprint_and_try_the_media_aga_d541ad2')
               : checkpoint?.blueprintReady
-                ? 'Rebuild the blueprint to refresh its preview approval'
-                : 'Sketch a low-cost blueprint before final media'
+                ? uiText('rebuild_the_blueprint_to_refresh_its_preview__10aa30c')
+                : uiText('sketch_a_low_cost_blueprint_before_final_medi_031ca7f')
           }
           onClick={() => {
             setMediaActionSent(true);
             onEnrichDraft?.(liveDraftId);
           }}
         >
-          {mediaActionSent ? 'Enriching…' : ORGANIC_ACTION_LABELS.enrich}
+          {mediaActionSent ? uiText('enriching_52ba1a1') : uiText('enrich_2d85f77')}
         </Action>
       )}
       {showGenerateMedia && liveDraftId && (
@@ -257,7 +260,7 @@ export function DraftCardActions({
           icon={Wand2}
           emphasis="primary"
           disabled={mediaActionSent}
-          title="Render the final media from the approved blueprint"
+          title={uiText('render_the_final_media_from_the_approved_blue_f6b3cc2')}
           onClick={() => {
             setMediaActionSent(true);
             if (checkpoint?.previewRevision) {
@@ -265,7 +268,7 @@ export function DraftCardActions({
             }
           }}
         >
-          {mediaActionSent ? 'Generating…' : ORGANIC_ACTION_LABELS.generateMedia}
+          {mediaActionSent ? uiText('generating_d20a447') : uiText('generate_media_279349a')}
         </Action>
       )}
     </>

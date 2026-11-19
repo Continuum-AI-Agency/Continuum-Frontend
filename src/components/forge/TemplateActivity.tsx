@@ -2,6 +2,7 @@
 
 import { isAutoTemplateEvent, type TemplateSourceEvent } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type { Ref } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { fetchTemplateEvents } from '@/lib/library/templateSources';
@@ -34,6 +35,10 @@ export function TemplateActivity({
   onOpenChange: (open: boolean) => void;
   ref?: Ref<HTMLButtonElement>;
 }) {
+  const translateUi = useUiTranslations('forge');
+
+  const currentUiLocale = useUiLocale();
+
   const { data: events, isError } = useQuery({
     queryKey: templateEventsKey(brandId, assetId),
     queryFn: () => fetchTemplateEvents(brandId, assetId),
@@ -48,30 +53,38 @@ export function TemplateActivity({
         className="flex w-full items-center justify-between gap-2 px-[var(--card-pad)] py-2 text-left hover:bg-muted/30"
       >
         <span className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">
-          Activity
+          {' '}
+          {translateUi('activity_38da1505')}{' '}
         </span>
         <span
           className={cn('truncate', latest ? LEVEL_TONE[latest.level] : 'text-muted-foreground')}
         >
-          {isError ? "Couldn't load" : latest ? latest.message : events ? 'Nothing yet' : '…'}
+          {isError
+            ? translateUi('couldn_t_load_2c1cff23')
+            : latest
+              ? latest.message
+              : events
+                ? translateUi('nothing_yet_5beceebd')
+                : '…'}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ol
           className="flex flex-col gap-1 px-[var(--card-pad)] pb-3"
-          aria-label="Template activity"
+          aria-label={translateUi('template_activity_710cc723')}
         >
           {(events ?? []).map((event) => (
             <li key={event.id} className="grid grid-cols-[5.5rem_4rem_minmax(0,1fr)] gap-2">
               <time dateTime={event.at} className="font-mono tabular-nums text-muted-foreground">
-                {formatRelativeTime(event.at)}
+                {formatRelativeTime(event.at, undefined, currentUiLocale)}
               </time>
               <span className="font-mono uppercase text-muted-foreground">{event.stage}</span>
               <span className={LEVEL_TONE[event.level]}>
                 {event.message}
                 {isAutoTemplateEvent(event) ? (
                   <span className="ml-1.5 rounded border px-1 font-mono text-2xs uppercase text-muted-foreground">
-                    auto
+                    {' '}
+                    {translateUi('auto_929260ad')}{' '}
                   </span>
                 ) : null}
               </span>

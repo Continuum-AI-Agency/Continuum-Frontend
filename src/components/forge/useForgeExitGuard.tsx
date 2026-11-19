@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LayerDraftChange, LayerDraftState } from '@/components/forge/layerDraft';
 import {
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import { useRouter } from '@/i18n/navigation';
 
 let requestExternalExit: (() => Promise<boolean>) | null = null;
 
@@ -24,6 +25,8 @@ export function confirmForgeExit(): Promise<boolean> {
 }
 
 export function useForgeExitGuard() {
+  const translateUi = useUiTranslations('forge');
+
   const router = useRouter();
   const [draft, setDraft] = useState<LayerDraftState | null>(null);
   const [open, setOpen] = useState(false);
@@ -136,7 +139,7 @@ export function useForgeExitGuard() {
       setSaving(false);
     }
     if (!saved) {
-      toast.error('Could not save this layer draft. Your changes are still here.');
+      toast.error(translateUi('could_not_save_this_layer_draft_you_30c95989'));
       return;
     }
     resolvePending(true);
@@ -155,15 +158,16 @@ export function useForgeExitGuard() {
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Unsaved layer changes</AlertDialogTitle>
+          <AlertDialogTitle>{translateUi('unsaved_layer_changes_f1acb0cf')}</AlertDialogTitle>
           <AlertDialogDescription>
-            These layer edits have not been saved. Save them before leaving, discard them, or stay
-            to continue editing.
+            {' '}
+            {translateUi('these_layer_edits_have_not_been_sav_cd48b2b1')}{' '}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={saving} onClick={() => resolvePending(false)}>
-            Stay
+            {' '}
+            {translateUi('stay_08fd1de4')}{' '}
           </AlertDialogCancel>
           <Button
             type="button"
@@ -171,7 +175,8 @@ export function useForgeExitGuard() {
             disabled={saving || draft?.busy}
             onClick={discardAndExit}
           >
-            Discard
+            {' '}
+            {translateUi('discard_eb1a70e3')}{' '}
           </Button>
           <AlertDialogAction
             disabled={saving || draft?.busy}
@@ -180,7 +185,9 @@ export function useForgeExitGuard() {
               void saveAndExit();
             }}
           >
-            {saving ? 'Saving…' : draft?.saveLabel || 'Save draft'}
+            {saving
+              ? translateUi('saving_23e39291')
+              : draft?.saveLabel || translateUi('save_draft_3de10010')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

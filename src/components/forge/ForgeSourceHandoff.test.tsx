@@ -1,5 +1,11 @@
 import { afterEach, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The agent's upload link: a template project rides the same handoff as a brief's documents and
 // media, uploaded the way the gallery uploads it, and comes back to the agent as a `template` ref.
@@ -23,7 +29,9 @@ const importDesignTemplate = mock(async () => ({
   parseState: 'pending',
   status: 'created' as const,
 }));
-const fetchTemplateSources = mock(async () => [{ assetId: 'authored-asset', versionId: 'authored-version' }]);
+const fetchTemplateSources = mock(async () => [
+  { assetId: 'authored-asset', versionId: 'authored-version' },
+]);
 
 mock.module('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('mcpSourceIntent=intent-1'),
@@ -45,7 +53,13 @@ const { ForgeSourceHandoff } = await import('./ForgeSourceHandoff');
 afterEach(() => {
   cleanup();
   order.length = 0;
-  for (const fn of [invoke, uploadMediaAsset, uploadTemplateFontFiles, importDesignTemplate, fetchTemplateSources])
+  for (const fn of [
+    invoke,
+    uploadMediaAsset,
+    uploadTemplateFontFiles,
+    importDesignTemplate,
+    fetchTemplateSources,
+  ])
     fn.mockClear();
 });
 
@@ -65,7 +79,9 @@ test('an After Effects project and a Photoshop design reach the agent as templat
   expect(order).toEqual(['fonts Brand.ttf', 'upload promo.aep', 'upload poster.psd']);
   // The PSD becomes its own authored package, and that package is what the agent publishes.
   expect(importDesignTemplate.mock.calls).toEqual([['brand-1', 'poster.psd-asset']]);
-  const completion = invoke.mock.calls.find(([, options]) => options.body.action === 'complete_forge_source_intent');
+  const completion = invoke.mock.calls.find(
+    ([, options]) => options.body.action === 'complete_forge_source_intent',
+  );
   expect(completion?.[1].body).toEqual({
     action: 'complete_forge_source_intent',
     brandId: 'brand-1',
@@ -79,8 +95,12 @@ test('an After Effects project and a Photoshop design reach the agent as templat
 
 test('a fourth template project is refused before the handoff completes', async () => {
   await choose(['a', 'b', 'c', 'd'].map((name) => file(`${name}.aep`)));
-  await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Use at most three template projects.'));
-  expect(invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent')).toBe(false);
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe('Use at most three template projects.'),
+  );
+  expect(
+    invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent'),
+  ).toBe(false);
 });
 
 test('fonts alone are stored and the handoff waits for the project they belong to', async () => {
@@ -88,7 +108,9 @@ test('fonts alone are stored and the handoff waits for the project they belong t
   await screen.findByText('Fonts added. Now choose the template project that uses them.');
 
   expect(order).toEqual(['fonts Neusa-Regular.otf']);
-  expect(invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent')).toBe(false);
+  expect(
+    invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent'),
+  ).toBe(false);
   expect(screen.getByLabelText('Choose Forge source files')).toBeTruthy();
 });
 
@@ -99,7 +121,11 @@ test('fonts that were all refused say so instead of asking for the project', asy
   }));
   await choose([file('Neusa-Regular.otf')]);
   await waitFor(() =>
-    expect(screen.getByRole('alert').textContent).toBe('No fonts were added. Choose valid .ttf or .otf files and try again.'),
+    expect(screen.getByRole('alert').textContent).toBe(
+      'No fonts were added. Choose valid .ttf or .otf files and try again.',
+    ),
   );
-  expect(invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent')).toBe(false);
+  expect(
+    invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent'),
+  ).toBe(false);
 });

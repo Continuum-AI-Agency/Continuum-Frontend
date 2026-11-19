@@ -1,5 +1,5 @@
 import { expect, it, spyOn } from 'bun:test';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { OverlayPreviewLayer } from './overlayPreview';
 import { TimelineOverlayPreviewLayers } from './TimelineOverlayPreviewLayers';
 

@@ -11,6 +11,7 @@ import {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Lock, Unlock } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { useValidationErrorMap } from '@/i18n/validation';
 import { readPresentationImage } from './presentationImageFile';
 
 const editSchema = z.object({
@@ -84,6 +86,10 @@ export function PresentationInspector({
   onCommands: (commands: PresentationCommand[]) => Promise<boolean>;
   onError: (message: string) => void;
 }) {
+  const validationErrorMap = useValidationErrorMap();
+
+  const translateUi = useUiTranslations('forge');
+
   const imageInput = useRef<HTMLInputElement>(null);
   const table = presentationTableDataSchema.safeParse(object.data);
   const chart = presentationChartDataSchema.safeParse(object.data);
@@ -92,7 +98,7 @@ export function PresentationInspector({
     (item) => item.slideId === slideId && item.objectId === object.id,
   );
   const form = useForm<z.infer<typeof editSchema>>({
-    resolver: zodResolver(editSchema),
+    resolver: zodResolver(editSchema, { error: validationErrorMap }),
     defaultValues: {
       text: object.text ?? '',
       ...object.bounds,
@@ -116,7 +122,7 @@ export function PresentationInspector({
   });
   const dirtyFields = form.formState.dirtyFields;
   const fields = useForm<z.infer<typeof fieldSchema>>({
-    resolver: zodResolver(fieldSchema),
+    resolver: zodResolver(fieldSchema, { error: validationErrorMap }),
     defaultValues: {
       name: field?.name ?? object.name ?? '',
       property: field?.property ?? '',
@@ -222,19 +228,20 @@ export function PresentationInspector({
           onClick={() => void onCommands([{ type: 'lock.set', ...target, locked: !locked }])}
         >
           {locked ? <Unlock data-icon="inline-start" /> : <Lock data-icon="inline-start" />}
-          {locked ? 'Unlock' : 'Lock'}
+          {locked ? translateUi('unlock_4ac709aa') : translateUi('lock_db44b8db')}
         </Button>
       </div>
       {locked ? (
         <p className="text-xs text-muted-foreground">
-          This object is locked. Unlock it to change its content or placement.
+          {' '}
+          {translateUi('this_object_is_locked_unlock_it_to__adfc2184')}{' '}
         </p>
       ) : null}
       <form onSubmit={update}>
         <FieldGroup>
           {editableText ? (
             <Field>
-              <FieldLabel htmlFor={`${prefix}-text`}>Text</FieldLabel>
+              <FieldLabel htmlFor={`${prefix}-text`}>{translateUi('text_71988c4d')}</FieldLabel>
               <Textarea
                 id={`${prefix}-text`}
                 disabled={busy || locked || fieldLocked('text')}
@@ -245,13 +252,13 @@ export function PresentationInspector({
           ) : null}
           {object.kind === 'image' ? (
             <Field>
-              <FieldLabel htmlFor={`${prefix}-image`}>Image</FieldLabel>
+              <FieldLabel htmlFor={`${prefix}-image`}>{translateUi('image_1aa4cb0b')}</FieldLabel>
               <input
                 id={`${prefix}-image`}
                 ref={imageInput}
                 className="sr-only"
                 type="file"
-                aria-label="Replacement image"
+                aria-label={translateUi('replacement_image_da1013f1')}
                 accept="image/png,image/jpeg,image/webp,image/svg+xml"
                 disabled={busy || locked || fieldLocked('data')}
                 onChange={(event) => {
@@ -266,7 +273,8 @@ export function PresentationInspector({
                 disabled={busy || locked || fieldLocked('data')}
                 onClick={() => imageInput.current?.click()}
               >
-                Replace image
+                {' '}
+                {translateUi('replace_image_fcedcb5e')}{' '}
               </Button>
             </Field>
           ) : null}
@@ -275,7 +283,8 @@ export function PresentationInspector({
               {(['cropLeft', 'cropTop', 'cropRight', 'cropBottom'] as const).map((name) => (
                 <Field key={name}>
                   <FieldLabel htmlFor={`${prefix}-${name}`}>
-                    Crop {name.slice(4).toLowerCase()} (%)
+                    {' '}
+                    {translateUi('crop_98caf7c4')} {name.slice(4).toLowerCase()} (%)
                   </FieldLabel>
                   <Input
                     id={`${prefix}-${name}`}
@@ -296,12 +305,12 @@ export function PresentationInspector({
                 <FieldLabel htmlFor={`${prefix}-${name}`}>
                   {name === 'x'
                     ? insideGroup
-                      ? 'Left inside group'
-                      : 'Left'
+                      ? translateUi('left_inside_group_f119801c')
+                      : translateUi('left_58eb9032')
                     : name === 'y'
                       ? insideGroup
-                        ? 'Top inside group'
-                        : 'Top'
+                        ? translateUi('top_inside_group_986442f0')
+                        : translateUi('top_d5cdfcf7')
                       : name[0].toUpperCase() + name.slice(1)}
                 </FieldLabel>
                 <Input
@@ -318,7 +327,9 @@ export function PresentationInspector({
           {editableText ? (
             <>
               <Field>
-                <FieldLabel htmlFor={`${prefix}-font`}>Typeface</FieldLabel>
+                <FieldLabel htmlFor={`${prefix}-font`}>
+                  {translateUi('typeface_3a8c1076')}
+                </FieldLabel>
                 <Input
                   id={`${prefix}-font`}
                   disabled={busy || locked || fieldLocked('style') || fieldLocked('fontFamily')}
@@ -327,7 +338,9 @@ export function PresentationInspector({
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field>
-                  <FieldLabel htmlFor={`${prefix}-font-size`}>Size</FieldLabel>
+                  <FieldLabel htmlFor={`${prefix}-font-size`}>
+                    {translateUi('size_1af85190')}
+                  </FieldLabel>
                   <Input
                     id={`${prefix}-font-size`}
                     type="number"
@@ -338,7 +351,9 @@ export function PresentationInspector({
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor={`${prefix}-color`}>Color</FieldLabel>
+                  <FieldLabel htmlFor={`${prefix}-color`}>
+                    {translateUi('color_6b73191a')}
+                  </FieldLabel>
                   <Input
                     id={`${prefix}-color`}
                     disabled={busy || locked || fieldLocked('style') || fieldLocked('color')}
@@ -367,7 +382,7 @@ export function PresentationInspector({
           ) : null}
           {object.kind === 'shape' ? (
             <Field>
-              <FieldLabel htmlFor={`${prefix}-fill`}>Fill</FieldLabel>
+              <FieldLabel htmlFor={`${prefix}-fill`}>{translateUi('fill_033955d4')}</FieldLabel>
               <Input
                 id={`${prefix}-fill`}
                 disabled={busy || locked || fieldLocked('style') || fieldLocked('fill')}
@@ -377,7 +392,7 @@ export function PresentationInspector({
           ) : null}
           {table.success ? (
             <Field>
-              <FieldLabel>Table cells</FieldLabel>
+              <FieldLabel>{translateUi('table_cells_01402d6d')}</FieldLabel>
               <div className="overflow-auto">
                 <table className="w-full border-collapse">
                   <tbody>
@@ -386,7 +401,10 @@ export function PresentationInspector({
                         {row.map((_cell, columnIndex) => (
                           <td key={`cell-${columnIndex}`} className="p-0.5">
                             <Input
-                              aria-label={`Row ${rowIndex + 1}, column ${columnIndex + 1}`}
+                              aria-label={translateUi('row_value0_column_value1_73d9b4a9', {
+                                value0: String(rowIndex + 1),
+                                value1: String(columnIndex + 1),
+                              })}
                               disabled={busy || locked || fieldLocked('data')}
                               {...form.register(`cells.${rowIndex}.${columnIndex}`)}
                             />
@@ -402,7 +420,9 @@ export function PresentationInspector({
           {chart.success ? (
             <>
               <Field>
-                <FieldLabel htmlFor={`${prefix}-chart-type`}>Chart type</FieldLabel>
+                <FieldLabel htmlFor={`${prefix}-chart-type`}>
+                  {translateUi('chart_type_30e43125')}
+                </FieldLabel>
                 <Select
                   value={form.watch('chartType')}
                   onValueChange={(value) => form.setValue('chartType', value)}
@@ -424,7 +444,8 @@ export function PresentationInspector({
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${prefix}-categories`}>
-                  Categories, separated by commas
+                  {' '}
+                  {translateUi('categories_separated_by_commas_f6b4ca54')}{' '}
                 </FieldLabel>
                 <Input
                   id={`${prefix}-categories`}
@@ -436,7 +457,10 @@ export function PresentationInspector({
                 <FieldGroup key={`series-${index}`}>
                   <Field>
                     <FieldLabel htmlFor={`${prefix}-series-${index}`}>
-                      Series {index + 1} name
+                      {' '}
+                      {translateUi('series_a8295e08')} {index + 1} {translateUi(
+                        'name_82a3537f',
+                      )}{' '}
                     </FieldLabel>
                     <Input
                       id={`${prefix}-series-${index}`}
@@ -446,7 +470,8 @@ export function PresentationInspector({
                   </Field>
                   <Field>
                     <FieldLabel htmlFor={`${prefix}-values-${index}`}>
-                      Values, separated by commas
+                      {' '}
+                      {translateUi('values_separated_by_commas_ae23403e')}{' '}
                     </FieldLabel>
                     <Input
                       id={`${prefix}-values-${index}`}
@@ -459,7 +484,8 @@ export function PresentationInspector({
             </>
           ) : null}
           <Button type="submit" disabled={busy || locked}>
-            Apply changes
+            {' '}
+            {translateUi('apply_changes_85045ccc')}{' '}
           </Button>
         </FieldGroup>
       </form>
@@ -484,12 +510,16 @@ export function PresentationInspector({
       >
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor={`${prefix}-field`}>Reusable field name</FieldLabel>
+            <FieldLabel htmlFor={`${prefix}-field`}>
+              {translateUi('reusable_field_name_4244e7ae')}
+            </FieldLabel>
             <Input id={`${prefix}-field`} disabled={busy} {...fields.register('name')} />
             <FieldError errors={[fields.formState.errors.name]} />
           </Field>
           <Field>
-            <FieldLabel htmlFor={`${prefix}-property`}>Protected property</FieldLabel>
+            <FieldLabel htmlFor={`${prefix}-property`}>
+              {translateUi('protected_property_516e7602')}
+            </FieldLabel>
             <Select
               value={fields.watch('property') || 'all'}
               onValueChange={(value) => fields.setValue('property', value === 'all' ? '' : value)}
@@ -498,7 +528,7 @@ export function PresentationInspector({
                 <SelectValue
                   items={{
                     all: 'Entire object',
-                    text: 'Text',
+                    text: translateUi('text_71988c4d'),
                     bounds: 'Position and size',
                     style: 'Style',
                     data: 'Data and image',
@@ -507,11 +537,13 @@ export function PresentationInspector({
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="all">Entire object</SelectItem>
-                  <SelectItem value="text">Text</SelectItem>
-                  <SelectItem value="bounds">Position and size</SelectItem>
-                  <SelectItem value="style">Style</SelectItem>
-                  <SelectItem value="data">Data and image</SelectItem>
+                  <SelectItem value="all">{translateUi('entire_object_66174dec')}</SelectItem>
+                  <SelectItem value="text">{translateUi('text_71988c4d')}</SelectItem>
+                  <SelectItem value="bounds">
+                    {translateUi('position_and_size_274bbcde')}
+                  </SelectItem>
+                  <SelectItem value="style">{translateUi('style_7e744141')}</SelectItem>
+                  <SelectItem value="data">{translateUi('data_and_image_7bdf4e56')}</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
@@ -524,7 +556,8 @@ export function PresentationInspector({
               onCheckedChange={(value) => fields.setValue('locked', value === true)}
             />
             <FieldLabel htmlFor={`${prefix}-field-lock`}>
-              Lock this property for people and agents
+              {' '}
+              {translateUi('lock_this_property_for_people_and_a_16d4522a')}{' '}
             </FieldLabel>
           </Field>
           <Field orientation="horizontal">
@@ -534,10 +567,12 @@ export function PresentationInspector({
               disabled={busy}
               onCheckedChange={(value) => fields.setValue('required', value === true)}
             />
-            <FieldLabel htmlFor={`${prefix}-field-required`}>Require a value</FieldLabel>
+            <FieldLabel htmlFor={`${prefix}-field-required`}>
+              {translateUi('require_a_value_2af1b2df')}
+            </FieldLabel>
           </Field>
           <Button type="submit" variant="outline" disabled={busy}>
-            {field ? 'Update field' : 'Define field'}
+            {field ? translateUi('update_field_69be9513') : translateUi('define_field_59add31e')}
           </Button>
         </FieldGroup>
       </form>

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The row of platform tabs above the Overview's headline: All · Meta · Google · TikTok. The
 // active tab is underlined in its platform's colour ("All" in the foreground colour, it is no
@@ -37,9 +38,10 @@ type PlatformTabsProps = {
 };
 
 export function PlatformTabs({ value, onChange, connected }: PlatformTabsProps) {
+  const uiText = useTranslations('scale');
   return (
     <div
-      aria-label="Ad platform"
+      aria-label={uiText('ad_platform_f325480')}
       className="flex items-end gap-1 overflow-x-auto border-border/70 border-b px-1"
       data-testid="platform-tabs"
       onKeyDown={platformTabKeyHandler(onChange)}
@@ -72,9 +74,11 @@ export function PlatformTabs({ value, onChange, connected }: PlatformTabsProps) 
             type="button"
           >
             {platform ? <PlatformIcon platform={platform} /> : null}
-            {platformTabLabel(tab)}
+            {tab === 'all' ? uiText('all_a52ace4') : platformTabLabel(tab)}
             {disconnected ? (
-              <span className="font-normal text-muted-foreground text-xs">· Connect</span>
+              <span className="font-normal text-muted-foreground text-xs">
+                {uiText('platformConnect')}
+              </span>
             ) : null}
           </button>
         );

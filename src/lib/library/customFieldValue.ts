@@ -1,3 +1,10 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+export type CustomFieldDisplay = {
+  locale: UiLocale;
+  translate: ReturnType<typeof useTranslations<'library'>>;
+};
+
 // Presentation logic for custom-field values: read a stored value under its
 // field's declared type, format it for display, and shape a validation failure
 // into something an editor can show.
@@ -19,6 +26,10 @@ import {
   type CustomFieldOption,
   type CustomFieldValue,
   customFieldChoiceOptions,
+  MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH,
+  MAX_CUSTOM_FIELD_TEXT_LENGTH,
+  MAX_CUSTOM_FIELD_URL_LENGTH,
+  MAX_CUSTOM_FIELD_USERS,
 } from '@continuum/contracts';
 import { isEmptyFieldValue, ratingMax, validateFieldValue } from './customFields';
 
@@ -27,7 +38,9 @@ export const ORPHANED_USER_LABEL = 'Former member';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export type ValueValidation = { ok: true; value: CustomFieldValue } | { ok: false; error: string };
+export type ValueValidation =
+  | { ok: true; value: CustomFieldValue }
+  | { ok: false; error: string; diagnosticReason?: string };
 
 /** Index an asset's stored values by field id. A later row for the same field wins. */
 export function valuesByFieldId(values: readonly AssetFieldValue[]): Map<string, CustomFieldValue> {
@@ -66,15 +79,13 @@ function optionLabel(field: CustomField, optionId: string): string {
 }
 
 // Dates are stored as a calendar day (yyyy-mm-dd), which carries no time zone.
-// Both the parse and the format are pinned to UTC so a viewer west of Greenwich
-// is never shown the day before the one that was picked. The locale is pinned
-// for the same reason the zone is: the day must read the same everywhere it
-// appears (sidebar, filter chip, board lane).
-export function formatDateValue(iso: string): string {
+// Parse and format in UTC so a viewer west of Greenwich sees the stored calendar day.
+// The display language follows the active UI locale.
+export function formatDateValue(iso: string, locale: UiLocale = 'en'): string {
   if (!ISO_DATE.test(iso)) return iso;
   const parsed = new Date(`${iso}T00:00:00.000Z`);
   if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString('en-US', {
+  return parsed.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -91,39 +102,53 @@ export function formatCustomFieldValue(
   field: CustomField,
   value: CustomFieldValue,
   userLabel?: (userId: string) => string | undefined,
+  display?: CustomFieldDisplay,
 ): string {
   if (value === null || value === undefined) return '';
+  const displayOption = (id: string) =>
+    findOption(field, id)?.label ??
+    display?.translate('fieldRemovedOption') ??
+    ORPHANED_OPTION_LABEL;
   switch (field.type) {
     case 'single_select':
     case 'status': {
       const optionId = singleSelectOptionId(value);
-      return optionId ? optionLabel(field, optionId) : '';
+      return optionId ? displayOption(optionId) : '';
     }
     case 'multi_select': {
       // Stored order, not field order: it is the order the editor showed the
       // person who set it, and re-ordering a field's options later must not
       // silently re-order an asset's answer.
       return multiSelectOptionIds(value)
-        .map((id) => optionLabel(field, id))
+        .map((id) => displayOption(id))
         .join(', ');
     }
     case 'date': {
       const iso = literalValue(value).trim();
-      return iso ? formatDateValue(iso) : '';
+      return iso ? formatDateValue(iso, display?.locale) : '';
     }
     case 'number':
-      return typeof value === 'number' ? value.toLocaleString('en-US') : '';
+      return typeof value === 'number' ? value.toLocaleString(display?.locale ?? 'en-US') : '';
     case 'checkbox':
-      return value === true ? 'Yes' : value === false ? 'No' : '';
+      return value === true
+        ? (display?.translate('fieldFilterYes') ?? 'Yes')
+        : value === false
+          ? (display?.translate('fieldFilterNo') ?? 'No')
+          : '';
     case 'rating':
       return typeof value === 'number' ? `${'★'.repeat(value)} ${value}/${ratingMax(field)}` : '';
     case 'user': {
       const userId = literalValue(value);
-      return userId ? (userLabel?.(userId) ?? ORPHANED_USER_LABEL) : '';
+      return userId
+        ? (userLabel?.(userId) ?? display?.translate('fieldFormerMember') ?? ORPHANED_USER_LABEL)
+        : '';
     }
     case 'user_multi':
       return multiSelectOptionIds(value)
-        .map((userId) => userLabel?.(userId) ?? ORPHANED_USER_LABEL)
+        .map(
+          (userId) =>
+            userLabel?.(userId) ?? display?.translate('fieldFormerMember') ?? ORPHANED_USER_LABEL,
+        )
         .join(', ');
     default:
       return literalValue(value).trim();
@@ -146,9 +171,40 @@ export function statusColor(field: CustomField, value: CustomFieldValue): string
 export function validateCustomFieldValue(
   field: CustomField,
   value: CustomFieldValue,
+  display?: CustomFieldDisplay,
 ): ValueValidation {
   const checked = validateFieldValue(field, value);
-  return checked.ok
-    ? { ok: true, value: checked.value }
-    : { ok: false, error: `${field.name} · ${checked.reason}` };
+  if (checked.ok) return { ok: true, value: checked.value };
+  if (!display) return { ok: false, error: `${field.name} · ${checked.reason}` };
+  const key = FIELD_VALIDATION_KEYS[field.type] ?? 'fieldInvalidValue';
+  const max =
+    field.type === 'rating'
+      ? ratingMax(field)
+      : field.type === 'text'
+        ? MAX_CUSTOM_FIELD_TEXT_LENGTH
+        : field.type === 'long_text'
+          ? MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH
+          : field.type === 'user_multi'
+            ? MAX_CUSTOM_FIELD_USERS
+            : MAX_CUSTOM_FIELD_URL_LENGTH;
+  return {
+    ok: false,
+    error: display.translate(key, { field: field.name, max }),
+    diagnosticReason: checked.reason,
+  };
 }
+
+const FIELD_VALIDATION_KEYS = {
+  single_select: 'fieldInvalidChoice',
+  multi_select: 'fieldInvalidChoices',
+  status: 'fieldInvalidChoice',
+  text: 'fieldInvalidText',
+  long_text: 'fieldInvalidText',
+  date: 'fieldInvalidDate',
+  number: 'fieldInvalidNumber',
+  checkbox: 'fieldInvalidCheckbox',
+  rating: 'fieldInvalidRating',
+  user: 'fieldInvalidMember',
+  user_multi: 'fieldInvalidMembers',
+  url: 'fieldInvalidUrl',
+} as const satisfies Record<CustomField['type'], string>;

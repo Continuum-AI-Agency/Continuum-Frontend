@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
 import { CapiDeliveriesTable } from './CapiDeliveriesTable';
@@ -10,13 +11,14 @@ import { CapiSourcesPanel } from './CapiSourcesPanel';
 // sources), and what reached Meta. The first 403 from any write latches the whole section
 // read-only, because the Backend's permission is per brand, not per panel.
 export function ConversionsApiSection({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('scale');
   const [readOnly, setReadOnly] = useState(false);
   const panel = { brandId, readOnly, onForbidden: () => setReadOnly(true) };
   return (
     <div className="space-y-4">
       {readOnly ? (
         <p className="text-xs text-amber-600 dark:text-amber-400">
-          Read-only: your role on this brand cannot change Conversions API settings or send events.
+          {uiText('read_only_your_role_on_this_brand_cannot_chan_fafdc57')}
         </p>
       ) : null}
       <CapiPixelPanel {...panel} />

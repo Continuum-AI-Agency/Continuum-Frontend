@@ -4,7 +4,8 @@
 // skeletons for good. Every read reachable by URL ends in a defined state, in words.
 
 import { afterEach, describe, expect, it, jest, mock } from 'bun:test';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useAccountInsights } from './useAccountInsights';
 import { useCampaignInsights } from './useCampaignInsights';
 

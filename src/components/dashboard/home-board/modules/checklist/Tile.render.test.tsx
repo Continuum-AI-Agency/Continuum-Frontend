@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { PortfolioListItem, RecommendationRow } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { homeContext, tileOf } from '../opps/__fixtures__/homeContext';
 import {
   EASY_FIT_PORTFOLIOS,

@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { CalendarPlacement } from '@/lib/organic/calendar-generation';
 import { PlacementNotificationCard } from './PlacementNotificationCard';
 

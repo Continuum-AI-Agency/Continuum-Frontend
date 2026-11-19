@@ -102,27 +102,41 @@ export function headlessBatchRefreshDelayMs(unchangedRefreshes: number, active: 
 
 // An allowlist, never the Backend's text: a reason is a code or an internal sentence, and only
 // what is listed here reaches a brand user.
-const FAILED_REASONS: ReadonlyArray<readonly [prefix: string, words: string]> = [
-  ['nothing_planned', 'The director found nothing to make from this brief.'],
-  ['run_failed:run_blocked', 'The run was blocked before it started.'],
-  ['run_failed:', 'The run failed before it finished.'],
-  ['guided_refused:over_item_cap', 'It would have cost more than its cap.'],
-  ['guided_refused:', 'The director turned this brief down.'],
-];
+const FAILED_REASONS = [
+  [
+    'nothing_planned',
+    'batchReasonNothingPlanned',
+    'The director found nothing to make from this brief.',
+  ],
+  ['run_failed:run_blocked', 'batchReasonBlocked', 'The run was blocked before it started.'],
+  ['run_failed:', 'batchReasonRunFailed', 'The run failed before it finished.'],
+  ['guided_refused:over_item_cap', 'batchReasonOverCap', 'It would have cost more than its cap.'],
+  ['guided_refused:', 'batchReasonRefused', 'The director turned this brief down.'],
+] as const;
+
+export type BatchReasonKey =
+  | (typeof FAILED_REASONS)[number][1]
+  | 'batchReasonFailed'
+  | 'batchReasonWaitingCast';
 
 /**
  * Why a piece failed, or the one wait worth naming, in words a brand user reads. A waiting piece
  * never repeats its state label, so the other waits say nothing.
  */
-export function plainBatchReason(state: string, reason: string | null): string | null {
+export function plainBatchReason(
+  state: string,
+  reason: string | null,
+  translate?: (key: BatchReasonKey) => string,
+): string | null {
   const text = reason?.trim() ?? '';
   if (state === 'failed') {
     if (!text) return null;
-    return (
-      FAILED_REASONS.find(([prefix]) => text.startsWith(prefix))?.[1] ?? 'It could not be made.'
-    );
+    const match = FAILED_REASONS.find(([prefix]) => text.startsWith(prefix));
+    return translate
+      ? translate(match?.[1] ?? 'batchReasonFailed')
+      : (match?.[2] ?? 'It could not be made.');
   }
   return text.startsWith("waiting on the first piece's cast")
-    ? "Starts once the first piece's cast is approved."
+    ? (translate?.('batchReasonWaitingCast') ?? "Starts once the first piece's cast is approved.")
     : null;
 }

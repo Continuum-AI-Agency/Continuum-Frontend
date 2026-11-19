@@ -23,6 +23,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { ChevronLeft, ChevronRight, MoveHorizontal } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Controls } from '@/components/ai-elements/controls';
@@ -32,9 +33,7 @@ import {
   type ColumnMapModel,
   type ColumnPlacement,
   cardsById,
-  changeCounterLabel,
   changeOrder,
-  collapsedGroupLabel,
   collapseUnchangedBranches,
   EDGE_ANCHOR_TOP,
   focusViewport,
@@ -48,6 +47,7 @@ import {
 import type { LecturaMark } from '@/lib/campaign-canvas/lectura';
 import { type PlatformLabels, platformLabelsOf } from '@/lib/campaign-canvas/platformLabels';
 import { cn } from '@/lib/utils';
+import { levelNounOf } from '../lectura/LecturaView';
 
 const MARK_CLASS: Record<LecturaMark, string> = {
   changed: 'border-[color:var(--warning)] ring-2 ring-[color:var(--warning)]/20',
@@ -57,16 +57,16 @@ const MARK_CLASS: Record<LecturaMark, string> = {
   unchanged: 'border-border',
 };
 
-const MARK_TAG: Record<LecturaMark, { label: string; className: string } | null> = {
+const MARK_TAG = {
   changed: {
-    label: 'Changes',
+    labelKey: 'changes_bbd4b6a',
     className: 'bg-[color:var(--warning)]/15 text-[color:var(--warning)]',
   },
-  added: { label: 'New · paused', className: 'bg-[color:var(--success)] text-white' },
-  paused: { label: 'Pauses', className: 'bg-[color:var(--destructive)] text-white' },
-  removed: { label: 'Removed', className: 'bg-muted text-muted-foreground' },
+  added: { labelKey: 'new_paused_d92c248', className: 'bg-[color:var(--success)] text-white' },
+  paused: { labelKey: 'pauses_395dbf5', className: 'bg-[color:var(--destructive)] text-white' },
+  removed: { labelKey: 'removed_4118fb4', className: 'bg-muted text-muted-foreground' },
   unchanged: null,
-};
+} as const satisfies Record<LecturaMark, { labelKey: string; className: string } | null>;
 
 /** The minimap's fill per mark: a change is findable at a glance, the rest recedes. */
 const MARK_MINIMAP_FILL: Record<LecturaMark | 'collapsed', string> = {
@@ -143,6 +143,7 @@ export function MapCardBox({
   selected,
   children,
 }: CardNodeData & { selected: boolean; children?: React.ReactNode }) {
+  const uiText = useTranslations('scale');
   const tag = MARK_TAG[card.mark];
   const { audienceLine } = card;
   return (
@@ -167,7 +168,7 @@ export function MapCardBox({
             className="nodrag size-10 shrink-0 overflow-hidden rounded-md bg-muted"
             onClick={() => card.folded.creativeId && onSelectFolded?.(card.folded.creativeId)}
             disabled={!onSelectFolded || !card.folded.creativeId}
-            aria-label="Open the creative"
+            aria-label={uiText('open_the_creative_25aae82')}
           >
             <img src={card.thumbnailUrl} alt="" className="size-full object-cover" />
           </button>
@@ -185,7 +186,7 @@ export function MapCardBox({
             </span>
             {tag ? (
               <span className={cn('shrink-0 rounded-full px-1.5 normal-case', tag.className)}>
-                {tag.label}
+                {uiText(tag.labelKey)}
               </span>
             ) : null}
           </div>
@@ -225,7 +226,7 @@ export function MapCardBox({
             type="button"
             className="nodrag truncate text-left text-[11px] leading-[15px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
             onClick={() => card.folded.audienceId && onSelectFolded(card.folded.audienceId)}
-            title="Open the audience"
+            title={uiText('open_the_audience_edc0eca')}
           >
             {audienceLine}
           </button>
@@ -250,6 +251,8 @@ export function MapCardBox({
 }
 
 function CollapsedGroupNode({ data }: NodeProps<CollapsedFlowNode>) {
+  const uiText = useTranslations('scale');
+  const noun = levelNounOf(data.labels, 'adset');
   return (
     <button
       type="button"
@@ -264,7 +267,15 @@ function CollapsedGroupNode({ data }: NodeProps<CollapsedFlowNode>) {
         isConnectable={false}
         className={handleClass}
       />
-      {collapsedGroupLabel(data.group, data.labels)}
+      {data.group.expanded
+        ? uiText('noun_select_adgroup_count_plural_one_hide_unc_d60fd3b', {
+            noun,
+            count: data.group.count,
+          })
+        : uiText('noun_select_adgroup_count_plural_one_unchange_7a2efb4', {
+            noun,
+            count: data.group.count,
+          })}
     </button>
   );
 }
@@ -302,11 +313,12 @@ function NextChangeControl({
   total: number;
   onStep: (direction: 1 | -1) => void;
 }) {
+  const uiText = useTranslations('scale');
   if (total === 0) return null;
   const label =
     index === null
-      ? `${total} ${total === 1 ? 'change' : 'changes'}`
-      : changeCounterLabel(index, total);
+      ? uiText('total_plural_one_change_other_changes_2c7ce12', { total })
+      : uiText('change_position_of_total_a1eb46b', { position: index + 1, total });
   return (
     <div
       className="flex shrink-0 items-center gap-0.5 rounded-full border border-border bg-card p-0.5 text-xs"
@@ -316,7 +328,7 @@ function NextChangeControl({
         type="button"
         className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
         onClick={() => onStep(-1)}
-        aria-label="Previous change"
+        aria-label={uiText('previous_change_55b2c32')}
       >
         <ChevronLeft className="size-3.5" aria-hidden />
       </button>
@@ -327,9 +339,9 @@ function NextChangeControl({
         type="button"
         className="flex h-7 items-center gap-1 rounded-full bg-primary px-2.5 font-medium text-primary-foreground hover:bg-primary/90"
         onClick={() => onStep(1)}
-        aria-label="Next change"
+        aria-label={uiText('next_change_d7b5e6c')}
       >
-        Next
+        {uiText('next_1ff57a2')}
         <ChevronRight className="size-3.5" aria-hidden />
       </button>
     </div>
@@ -380,6 +392,7 @@ export function ColumnMapFlow({
   initialFocusIndex = null,
   header,
 }: ColumnMapFlowProps) {
+  const uiText = useTranslations('scale');
   const [expanded, setExpanded] = React.useState<ReadonlySet<string>>(() => new Set());
   const toggleGroup = React.useCallback((id: string) => {
     setExpanded((current) => {
@@ -439,7 +452,9 @@ export function ColumnMapFlow({
           selectable: Boolean(onNodesChange),
           data: {
             card,
-            levelLabel: labels.level[card.level],
+            levelLabel: uiText('noun_select_campaign_campaign_adset_ad_set_ad_52714c8', {
+              noun: levelNounOf(labels, card.level),
+            }),
             height: placement.height,
             dimmed: proposal && card.mark === 'unchanged',
             focused: placement.id === focusedId,
@@ -460,6 +475,7 @@ export function ColumnMapFlow({
       selectedIds,
       testIdPrefix,
       toggleGroup,
+      uiText,
       views,
     ],
   );
@@ -573,8 +589,8 @@ export function ColumnMapFlow({
           <Controls position="bottom-left" showInteractive={false} showFitView={false}>
             <ControlButton
               onClick={fitWidth}
-              title="Fit to width"
-              aria-label="Fit to width"
+              title={uiText('fit_to_width_953eba6')}
+              aria-label={uiText('fit_to_width_953eba6')}
               data-testid="map-fit-width"
             >
               <MoveHorizontal aria-hidden />
@@ -589,7 +605,7 @@ export function ColumnMapFlow({
               nodeStrokeWidth={0}
               maskColor="color-mix(in srgb, var(--background) 70%, transparent)"
               className="!m-2 !h-[112px] !w-[64px] overflow-hidden rounded-md border !bg-card shadow-sm [&>svg]:!h-full [&>svg]:!w-full"
-              ariaLabel="Map overview: changes are coloured"
+              ariaLabel={uiText('map_overview_changes_are_coloured_de72097')}
             />
           ) : null}
           {children}

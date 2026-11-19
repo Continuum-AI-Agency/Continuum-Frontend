@@ -1,6 +1,7 @@
 'use client';
 
 import { curveNatural } from '@visx/curve';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import type { Margin } from './chart-context';
 import type { LoadingStyle } from './chart-phase';
@@ -61,10 +62,13 @@ export function LineChartLoading({
   gridShimmerSpeed,
   gridShimmerSync = false,
   loadingStyle = 'pulse',
-  label = 'Loading',
+  label: uiProvidedLabel,
   aspectRatio = '2 / 1',
   className = '',
 }: LineChartLoadingProps) {
+  const defaultUiText = useTranslations('common');
+  const label = uiProvidedLabel ?? defaultUiText('loading_dc38088');
+
   const data = useMemo(
     () =>
       generateChartSkeletonData({

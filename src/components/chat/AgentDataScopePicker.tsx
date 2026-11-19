@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useId, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +29,8 @@ export function AgentDataScopePicker({
   maxSelected = 10,
   disabled = false,
 }: AgentDataScopePickerProps) {
+  const tUi = useTranslations('common');
+
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const required = useMemo(() => new Set(requiredIds), [requiredIds]);
@@ -48,7 +51,11 @@ export function AgentDataScopePicker({
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={`${label}: ${count} of ${options.length} included`}
+        aria-label={tUi('m_0bffdda11e', {
+          v0: String(label),
+          v1: String(count),
+          v2: String(options.length),
+        })}
         disabled={disabled || options.length === 0}
         onClick={() => setOpen((value) => !value)}
         className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
@@ -67,7 +74,10 @@ export function AgentDataScopePicker({
         >
           <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
             <span className="text-xs font-medium">
-              {count} of {options.length} included
+              {count}
+              {tUi('of_a4282e4')}
+              {options.length}
+              {tUi('m_f44aea1d4e')}
             </span>
             <button
               type="button"
@@ -75,7 +85,8 @@ export function AgentDataScopePicker({
               onClick={() => commit(new Set(options.slice(0, limit).map(({ id }) => id)))}
               className="text-xs text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Include up to {limit}
+              {tUi('m_62678a43bb')}
+              {limit}
             </button>
           </div>
           <fieldset className="max-h-56 space-y-0.5 overflow-y-auto">
@@ -105,7 +116,9 @@ export function AgentDataScopePicker({
                   />
                   <span className="min-w-0 truncate">{option.label}</span>
                   {isRequired ? (
-                    <span className="ml-auto text-2xs text-muted-foreground">Primary</span>
+                    <span className="ml-auto text-2xs text-muted-foreground">
+                      {tUi('m_a9a96ec019')}
+                    </span>
                   ) : null}
                 </label>
               );

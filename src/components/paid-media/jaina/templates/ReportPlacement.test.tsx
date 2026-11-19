@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import {
   type CheckpointBlockV2,
   type CheckpointReportV2,

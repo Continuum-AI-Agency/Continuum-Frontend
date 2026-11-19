@@ -17,7 +17,12 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useTranslations,
+  useLocale as useUiLocale,
+  useTranslations as useUiTranslations,
+} from 'next-intl';
+import { useEffect, useMemo, useRef, useState, useMemo as useUiConfigMemo } from 'react';
 import {
   Conversation,
   ConversationContent,
@@ -42,6 +47,7 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/compon
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { streamVideoEditorAgent } from '@/lib/api/videoEditorAgent.client';
 import { cn } from '@/lib/utils';
 import { hasFootage } from '../brief/briefGoals';
@@ -57,18 +63,33 @@ import {
   withMentionContext,
 } from './turnState';
 
-const SUGGESTIONS = [
-  { label: 'Cut pauses', prompt: 'Cut the pauses and dead air.' },
-  { label: 'Captions', prompt: 'Add word-timed captions.' },
-  { label: 'Cut on beat', prompt: 'Cut the picture to the beat of the music.' },
-  { label: 'Make it TikTok', prompt: 'Make it TikTok.' },
-] as const;
+function useLocalSuggestionsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value = [
+      { label: translateConfig('cut_pauses_ded96bea'), prompt: 'Cut the pauses and dead air.' },
+      { label: translateConfig('captions_43bf6af8'), prompt: 'Add word-timed captions.' },
+      {
+        label: translateConfig('cut_on_beat_0c5a4cf7'),
+        prompt: 'Cut the picture to the beat of the music.',
+      },
+      { label: 'Make it TikTok', prompt: 'Make it TikTok.' },
+    ] as const;
+    return value;
+  }, [translateConfig]);
+}
 
 /** Offered while the timeline has footage and no brief — the fastest way to a first cut. */
-const FIRST_CUT_SUGGESTION = {
-  label: 'First cut: 3 variants',
-  prompt: 'Draft a first cut from this footage: 3 variants, 30 s each, with captions.',
-} as const;
+function useLocalFirstCutSuggestionMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value = {
+      label: translateConfig('first_cut_3_variants_16402d5e'),
+      prompt: 'Draft a first cut from this footage: 3 variants, 30 s each, with captions.',
+    } as const;
+    return value;
+  }, [translateConfig]);
+}
 
 const HISTORY_TURNS = 10;
 const humanize = (op: string) => op.replaceAll('_', ' ');
@@ -111,6 +132,15 @@ export function EditorAgentPanel({
   /** Told when a turn starts and ends (and false on unmount, which aborts the turn). */
   onRunningChange?: (running: boolean) => void;
 }): React.ReactNode {
+  const SUGGESTIONS = useLocalSuggestionsMessages();
+  const FIRST_CUT_SUGGESTION = useLocalFirstCutSuggestionMessages();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+  const displayLocale = useUiLocale();
+
+  const uiText = useTranslations('common');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
   const [mentions, setMentions] = useState<Mention[]>([]);
@@ -157,8 +187,14 @@ export function EditorAgentPanel({
       .catch(() => setPool([]));
   }, [mentionOpen, pool, studio]);
 
-  const clips = useMemo(() => clipMentions(studio.project), [studio.project]);
-  const assets = useMemo(() => (pool ?? []).map(assetMention), [pool]);
+  const clips = useMemo(
+    () => clipMentions(studio.project, displayLocale),
+    [studio.project, displayLocale],
+  );
+  const assets = useMemo(
+    () => (pool ?? []).map((asset) => assetMention(asset, translateUi)),
+    [pool, translateUi],
+  );
 
   const send = async (raw: string) => {
     const prompt = raw.trim();
@@ -214,7 +250,7 @@ export function EditorAgentPanel({
           : {
               ...current,
               status: 'error',
-              error: error instanceof Error ? error.message : 'The editor agent failed.',
+              error: uiErrorText(error),
             },
       );
     } finally {
@@ -231,9 +267,7 @@ export function EditorAgentPanel({
     } catch (error) {
       setTurns((all) =>
         all.map((entry) =>
-          entry.id === turn.id
-            ? { ...entry, error: error instanceof Error ? error.message : 'Undo failed.' }
-            : entry,
+          entry.id === turn.id ? { ...entry, error: uiErrorText(error) } : entry,
         ),
       );
     }
@@ -291,8 +325,8 @@ export function EditorAgentPanel({
           {turns.length === 0 ? (
             <ConversationEmptyState
               icon={<Sparkles className="size-6" />}
-              title="Edit by asking"
-              description="Cut pauses, add captions, cut to the beat, reformat — every change is one undo away."
+              title={translateUi('edit_by_asking_e4fb7bf0')}
+              description={translateUi('cut_pauses_add_captions_cut_to_the__63f34bb9')}
             />
           ) : (
             turns.map((turn) => (
@@ -311,12 +345,16 @@ export function EditorAgentPanel({
                       <span className="flex items-center gap-2 text-muted-foreground">
                         <Spinner className="size-3" />
                         {effectNames(turn.prompt).length
-                          ? `Editing with ${effectNames(turn.prompt).join(', ')}…`
-                          : 'Working…'}
+                          ? translateUi('editing_with_value0_67b28889', {
+                              value0: String(effectNames(turn.prompt).join(', ')),
+                            })
+                          : uiText('working_5474eef')}
                       </span>
                     ) : null}
                     {turn.status === 'stopped' ? (
-                      <span className="text-xs text-muted-foreground">Stopped.</span>
+                      <span className="text-xs text-muted-foreground">
+                        {translateUi('stopped_f8ec77e7')}
+                      </span>
                     ) : null}
                     {turn.error ? (
                       <span className="flex items-start gap-2 text-destructive">
@@ -332,13 +370,14 @@ export function EditorAgentPanel({
                         onClick={() => void undoTurn(turn)}
                         data-testid="editor-agent-undo-turn"
                       >
-                        <CornerUpLeft data-icon="inline-start" />
-                        Undo this turn
+                        <CornerUpLeft data-icon="inline-start" />{' '}
+                        {translateUi('undo_this_turn_e2cd98c6')}{' '}
                       </Button>
                     ) : null}
                     {turn.undone ? (
                       <span className="text-xs text-muted-foreground">
-                        Undone — restored revision {turn.baseRevision}.
+                        {' '}
+                        {translateUi('undone_restored_revision_6e48b105')} {turn.baseRevision}.
                       </span>
                     ) : null}
                   </div>
@@ -361,17 +400,21 @@ export function EditorAgentPanel({
               />
             }
           >
-            Saved workflows
+            {' '}
+            {translateUi('saved_workflows_c30cdde1')}{' '}
           </PopoverTrigger>
           <PopoverContent side="top" align="start" className="flex w-80 flex-col gap-3">
             <p className="text-xs text-muted-foreground">
-              Reusable instructions for the current edit. Choose one, then send it to the agent.
+              {' '}
+              {translateUi('reusable_instructions_for_the_curre_9496d555')}{' '}
             </p>
             <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
               {workflowBusy ? (
                 <Spinner className="size-4" />
               ) : workflows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No saved workflows yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  {translateUi('no_saved_workflows_yet_7bebdd02')}
+                </p>
               ) : (
                 workflows.map((workflow) => (
                   <Button
@@ -398,8 +441,8 @@ export function EditorAgentPanel({
             </div>
             <div className="flex gap-2">
               <Input
-                aria-label="Workflow name"
-                placeholder="Name this prompt"
+                aria-label={translateUi('workflow_name_43d40c5c')}
+                placeholder={translateUi('name_this_prompt_d6666c98')}
                 maxLength={100}
                 value={workflowName}
                 onChange={(event) => setWorkflowName(event.target.value)}
@@ -414,7 +457,8 @@ export function EditorAgentPanel({
                 }
                 onClick={() => void saveWorkflow()}
               >
-                Save prompt
+                {' '}
+                {translateUi('save_prompt_7462a09b')}{' '}
               </Button>
             </div>
             {workflowError ? (
@@ -447,7 +491,7 @@ export function EditorAgentPanel({
             <Textarea
               ref={textareaRef}
               value={draft}
-              placeholder="Ask the editor… (@ to mention, / for effects)"
+              placeholder={translateUi('ask_the_editor_to_mention_for_effec_bcb1b21f')}
               className="min-h-16 resize-none pr-28 text-sm"
               onChange={(event) => {
                 const { value, selectionStart } = event.target;
@@ -475,7 +519,7 @@ export function EditorAgentPanel({
                 size="icon"
                 variant="ghost"
                 className="size-7"
-                aria-label="Mention a clip or asset"
+                aria-label={translateUi('mention_a_clip_or_asset_f1110b75')}
                 onClick={() => setMentionOpen(true)}
               >
                 <AtSign />
@@ -485,7 +529,7 @@ export function EditorAgentPanel({
                   size="icon"
                   variant="outline"
                   className="size-7"
-                  aria-label="Stop"
+                  aria-label={uiText('stop_cae7d57')}
                   onClick={() => abortRef.current?.abort()}
                   data-testid="editor-agent-stop"
                 >
@@ -495,7 +539,7 @@ export function EditorAgentPanel({
                 <Button
                   size="icon"
                   className="size-7"
-                  aria-label="Send"
+                  aria-label={uiText('send_f6f4688')}
                   disabled={!draft.trim()}
                   onClick={() => void send(draft)}
                 >
@@ -506,11 +550,11 @@ export function EditorAgentPanel({
           </PopoverAnchor>
           <PopoverContent side="top" align="start" className="w-72 p-0">
             <Command>
-              <CommandInput placeholder="Clips and assets…" autoFocus />
+              <CommandInput placeholder={translateUi('clips_and_assets_8e2b8674')} autoFocus />
               <CommandList>
-                <CommandEmpty>Nothing to mention.</CommandEmpty>
+                <CommandEmpty>{translateUi('nothing_to_mention_4c4455b2')}</CommandEmpty>
                 {clips.length > 0 ? (
-                  <CommandGroup heading="Clips">
+                  <CommandGroup heading={translateUi('clips_4b782ddc')}>
                     {clips.map((mention) => (
                       <CommandItem
                         key={mention.id}
@@ -526,7 +570,7 @@ export function EditorAgentPanel({
                   </CommandGroup>
                 ) : null}
                 {assets.length > 0 ? (
-                  <CommandGroup heading="Assets">
+                  <CommandGroup heading={translateUi('assets_bd12731d')}>
                     {assets.map((mention) => (
                       <CommandItem
                         key={mention.id}

@@ -1,4 +1,6 @@
 'use client';
+import { useLocale } from 'next-intl';
+
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -16,6 +18,7 @@ export const EditableAmount = ({
   onSave,
   className,
 }: EditableAmountProps) => {
+  const uiLocale = useLocale();
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(value.toString());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +76,7 @@ export const EditableAmount = ({
 
   return (
     <h3 onDoubleClick={handleDoubleClick} className={className}>
-      {new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value)}
+      {new Intl.NumberFormat(uiLocale, { style: 'currency', currency }).format(value)}
     </h3>
   );
 };

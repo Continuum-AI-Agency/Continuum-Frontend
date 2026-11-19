@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Task, TaskContent, TaskTrigger } from '@/components/ai-elements/task';
 import { Pill } from '@/components/kibo-ui/pill';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
@@ -14,11 +16,14 @@ export function JainaReportRecommendations({
   recommendations,
   isStreaming,
 }: JainaReportRecommendationsProps) {
+  const uiText = useTranslations('scale');
   if (!recommendations || recommendations.length === 0) return null;
 
   return (
     <div id="recommendations" className="space-y-4">
-      <h3 className="text-lg font-semibold text-primary/80">Priority Recommendations</h3>
+      <h3 className="text-lg font-semibold text-primary/80">
+        {uiText('priority_recommendations_a3fb3d8')}
+      </h3>
       <div className="space-y-3">
         {recommendations.map((item, index) => (
           <Task
@@ -26,7 +31,7 @@ export function JainaReportRecommendations({
             status="pending"
             className="overflow-hidden rounded-xl border-0 bg-primary/10"
           >
-            <TaskTrigger title={item.title || 'Recommendation'} />
+            <TaskTrigger title={item.title || uiText('recommendation_bc92e0e')} />
             <TaskContent>
               <div className="space-y-3 py-2">
                 <div className="prose prose-invert max-w-none">
@@ -39,12 +44,12 @@ export function JainaReportRecommendations({
                 <div className="flex items-center gap-3 flex-wrap">
                   {item.expected_impact && (
                     <Pill variant="violet" className="text-xs uppercase">
-                      Impact: {item.expected_impact}
+                      {uiText.rich('sentence_46bdc3b60a78', { v0: item.expected_impact })}
                     </Pill>
                   )}
                   {item.priority && (
                     <Pill variant="teal" className="text-xs uppercase">
-                      Priority: {item.priority}
+                      {uiText.rich('sentence_bf435fdc4933', { v0: item.priority })}
                     </Pill>
                   )}
                 </div>

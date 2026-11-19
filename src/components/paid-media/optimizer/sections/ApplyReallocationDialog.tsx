@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // "Apply proposed budgets" for a recommend-mode portfolio — the manual, one-time apply
 // of a scored run's reallocation. Opens with a dry-run preview (zero Meta writes), then
 // the operator confirms with a real apply (dryRun:false → optimizer-apply-run → service).
@@ -39,6 +42,8 @@ export function ApplyReallocationDialog({
   runId,
   currency,
 }: ApplyReallocationDialogProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const apply = useApplyRun();
   const enrolled = useOptimizerEnrolledAdsets(portfolioId);
   const nameById = React.useMemo(
@@ -76,36 +81,40 @@ export function ApplyReallocationDialog({
         onSuccess: (data) => {
           if (!data) {
             setPhase('error');
-            setResultNote('Could not parse the apply response.');
+            setResultNote(uiText('queueApplyParseFailed'));
             return;
           }
           if (data.reason === 'observe_mode') {
             setPhase('error');
-            setResultNote(
-              'This portfolio is in Observe mode — Meta writes are blocked. Switch to Recommend in Manage.',
-            );
+            setResultNote(uiText('this_portfolio_is_in_observe_mode_meta_writes_893c9db'));
             return;
           }
           if (data.reason === 'stale_run') {
             setPhase('error');
-            setResultNote('A newer cycle landed — reopen to apply the latest proposals.');
+            setResultNote(uiText('queueNewCycle'));
             return;
           }
           if (!data.ok) {
             setPhase('error');
-            setResultNote(data.error?.trim() || data.reason || 'Apply failed.');
+            setResultNote(uiText('queueApplyFailed'));
             return;
           }
           setPhase('done');
           setResultNote(
-            `Applied ${data.applied ?? 0}` +
-              (data.failed ? ` · ${data.failed} failed` : '') +
-              (data.deduped ? ` · ${data.deduped} already applied` : ''),
+            uiText('queueApplyResult', {
+              verb: 'apply',
+              applied: data.applied ?? 0,
+              failed: data.failed ?? 0,
+              deduped: data.deduped ?? 0,
+              hasFailed: data.failed ? 'yes' : 'no',
+              hasDeduped: data.deduped ? 'yes' : 'no',
+              already: 'applied',
+            }),
           );
         },
         onError: (err) => {
           setPhase('error');
-          setResultNote(err instanceof Error ? err.message : 'Apply failed.');
+          setResultNote(formatUiError(err));
         },
       },
     );
@@ -132,23 +141,22 @@ export function ApplyReallocationDialog({
             className="h-7 shrink-0 gap-1.5 px-2 text-xs"
           >
             <WandSparklesIcon className="size-3.5" />
-            Apply budgets
+            {uiText('apply_budgets_5dcf3c1')}
           </Button>
         }
       />
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Apply the proposed budgets</AlertDialogTitle>
+          <AlertDialogTitle>{uiText('apply_the_proposed_budgets_fda6863')}</AlertDialogTitle>
           <AlertDialogDescription>
-            Review the current → proposed daily budgets, then apply them to Meta. This writes real
-            ad-set budgets for this portfolio. Observe mode will refuse the write.
+            {uiText('review_the_current_proposed_daily_budgets_the_a5f8824')}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         {phase === 'applying' ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-            Writing budgets to Meta…
+            {uiText('writing_budgets_to_meta_1938e4f')}
           </p>
         ) : phase === 'done' || phase === 'error' ? (
           <p
@@ -173,13 +181,18 @@ export function ApplyReallocationDialog({
         )}
 
         <AlertDialogFooter>
-          <AlertDialogCancel>{phase === 'done' ? 'Close' : 'Cancel'}</AlertDialogCancel>
+          <AlertDialogCancel>
+            {phase === 'done' ? uiText('close_7d9eb7a') : uiText('cancel_19766ed')}
+          </AlertDialogCancel>
           {phase !== 'done' ? (
             <Button type="button" className="gap-1.5" disabled={!canApply} onClick={handleApply}>
-              {phase === 'applying' ? (
-                <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-              ) : null}
-              Apply {would.length > 0 ? `${would.length} moves` : ''}
+              {uiText.rich('sentence_c3a808da5d6d', {
+                icon: () =>
+                  phase === 'applying' ? (
+                    <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+                  ) : null,
+                count: would.length,
+              })}
             </Button>
           ) : null}
         </AlertDialogFooter>
@@ -203,18 +216,20 @@ function ApplyPreviewBody({
   currency: string | null;
   nameById: Map<string, string>;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   if (isPending) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
         <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-        Computing the budget moves…
+        {uiText('computing_the_budget_moves_3203b0b')}
       </p>
     );
   }
 
   if (isError || preview == null) {
     return (
-      <InlineError>Couldn&rsquo;t compute the apply preview. Try again in a moment.</InlineError>
+      <InlineError>{uiText('couldn_t_compute_the_apply_preview_try_again__7e8279d')}</InlineError>
     );
   }
 
@@ -222,23 +237,29 @@ function ApplyPreviewBody({
     return (
       <InlineError>
         {preview.reason === 'stale_run'
-          ? 'This portfolio has a newer cycle — reopen to see the latest moves.'
+          ? uiText('this_portfolio_has_a_newer_cycle_reopen_to_se_5396b46')
           : preview.reason === 'no_cycle'
-            ? 'No cycle has scored this portfolio yet — run one first.'
+            ? uiText('no_cycle_has_scored_this_portfolio_yet_run_on_4d385be')
             : preview.reason === 'observe_mode'
-              ? 'Observe mode blocks Meta writes. Switch to Recommend in Manage first.'
-              : (preview.error?.trim() ?? "Couldn't compute the apply preview.")}
+              ? uiText('observe_mode_blocks_meta_writes_switch_to_rec_bb552d5')
+              : (preview.error?.trim() ?? uiText('couldn_t_compute_the_apply_preview_ab0a557'))}
       </InlineError>
     );
   }
 
   if (would.length === 0) {
-    return <p className="text-sm text-muted-foreground">No budget moves in the latest cycle.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        {uiText('no_budget_moves_in_the_latest_cycle_bbfa4c7')}
+      </p>
+    );
   }
 
   return (
     <div className="space-y-1">
-      <p className="text-xs font-medium text-muted-foreground">Current → proposed daily budget</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        {uiText('current_proposed_daily_budget_b9ad740')}
+      </p>
       <ul className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/70">
         {would.map((move) => (
           <li
@@ -251,9 +272,15 @@ function ApplyPreviewBody({
               name={resolveAdsetName({ adset_id: move.adset_id }, nameById) ?? undefined}
             />
             <span className="shrink-0 tabular-nums">
-              {formatCurrency(move.current, currency)}{' '}
-              <span className="text-muted-foreground">→</span>{' '}
-              <span className="font-medium">{formatCurrency(move.proposed, currency)}</span>/d
+              {uiText.rich('sentence_2af30ac04d46', {
+                v0: formatCurrency(move.current, currency, uiLocale),
+                v1: () => <span className="text-muted-foreground">→</span>,
+                v2: () => (
+                  <span className="font-medium">
+                    {formatCurrency(move.proposed, currency, uiLocale)}
+                  </span>
+                ),
+              })}
             </span>
           </li>
         ))}

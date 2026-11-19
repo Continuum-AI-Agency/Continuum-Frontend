@@ -26,6 +26,7 @@ import {
   Type,
   Video,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   type ClipboardEventHandler,
   type ComponentProps,
@@ -157,37 +158,43 @@ export function selectColumn<T>(): ColumnDef<T> {
     size: 32,
     meta: STICKY_LEFT,
     enableSorting: false,
-    header: ({ table }) => (
-      <Checkbox
-        aria-label="Select all"
-        checked={
-          table.getIsAllPageRowsSelected()
-            ? true
-            : table.getIsSomePageRowsSelected()
-              ? 'indeterminate'
-              : false
-        }
-        onCheckedChange={(checked) => table.toggleAllPageRowsSelected(checked === true)}
-      />
-    ),
-    cell: ({ row, table }) => (
-      <Checkbox
-        aria-label="Select row"
-        checked={row.getIsSelected()}
-        onClick={(event) => {
-          event.stopPropagation();
-          // The click lands before the change it causes; only the change knows the new state.
-          shiftTicks.set(table as TanTable<unknown>, event.shiftKey);
-        }}
-        onCheckedChange={(checked) => {
-          const key = table as TanTable<unknown>;
-          if (shiftTicks.get(key)) selectRange(table, row, checked === true);
-          else row.toggleSelected(checked === true);
-          shiftTicks.delete(key);
-          rangeAnchor.set(key, row.id);
-        }}
-      />
-    ),
+    header: function SelectAllHeader({ table }) {
+      const t = useUiTranslations('forge');
+      return (
+        <Checkbox
+          aria-label={t('selectAllRows')}
+          checked={
+            table.getIsAllPageRowsSelected()
+              ? true
+              : table.getIsSomePageRowsSelected()
+                ? 'indeterminate'
+                : false
+          }
+          onCheckedChange={(checked) => table.toggleAllPageRowsSelected(checked === true)}
+        />
+      );
+    },
+    cell: function SelectRowCell({ row, table }) {
+      const t = useUiTranslations('forge');
+      return (
+        <Checkbox
+          aria-label={t('selectRow')}
+          checked={row.getIsSelected()}
+          onClick={(event) => {
+            event.stopPropagation();
+            // The click lands before the change it causes; only the change knows the new state.
+            shiftTicks.set(table as TanTable<unknown>, event.shiftKey);
+          }}
+          onCheckedChange={(checked) => {
+            const key = table as TanTable<unknown>;
+            if (shiftTicks.get(key)) selectRange(table, row, checked === true);
+            else row.toggleSelected(checked === true);
+            shiftTicks.delete(key);
+            rangeAnchor.set(key, row.id);
+          }}
+        />
+      );
+    },
   };
 }
 
@@ -220,13 +227,15 @@ function SortableHeader<T>({ header }: { header: Header<T, unknown> }) {
 }
 
 function ColumnVisibilityMenu<T>({ table }: { table: TanTable<T> }) {
+  const translateUi = useUiTranslations('forge');
+
   const hideable = table.getAllLeafColumns().filter((column) => column.getCanHide());
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
           <Button type="button" size="sm" variant="ghost" className="h-7 gap-1.5 text-xs">
-            <Columns3 className="size-3.5" aria-hidden /> Columns
+            <Columns3 className="size-3.5" aria-hidden /> {translateUi('columns_53aade77')}{' '}
           </Button>
         }
       />

@@ -1,5 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { googleCopy } from './googlePresentation';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+
 // Idea 3, the campaign explorer: every campaign that spent, as a scatter of spend against cost
 // per conversion with the portfolio CPA goal as a dashed line, and the same campaigns as a
 // table (the chart's data, reachable). A campaign's name opens its detail. Read-only: a change
@@ -35,8 +43,14 @@ const STATUS_WORDS: Readonly<Record<string, string>> = {
   REMOVED: 'Removed',
 };
 
-export function statusWords(status: Figure<string>): string | null {
-  return status.value ? (STATUS_WORDS[status.value] ?? status.value.toLowerCase()) : null;
+export function statusWords(status: Figure<string>, uiTranslate?: ScaleCopy): string | null {
+  return status.value
+    ? STATUS_WORDS[status.value]
+      ? googleCopy(STATUS_WORDS[status.value], uiTranslate)
+      : uiTranslate
+        ? uiTranslate('googleControlCode', { code: status.value })
+        : status.value.toLowerCase()
+    : null;
 }
 
 const W = 320;
@@ -50,6 +64,8 @@ const DOT_TONE: Record<string, string> = {
 };
 
 function Scatter({ rows, currency }: { rows: readonly CampaignView[]; currency: string | null }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const points = rows.filter((row) => row.cost != null);
   if (points.length === 0) return null;
   const goal = sharedGoal(rows)?.goal ?? null;
@@ -60,7 +76,7 @@ function Scatter({ rows, currency }: { rows: readonly CampaignView[]; currency: 
   return (
     <figure className="space-y-1">
       <svg
-        aria-label="Spend against cost per conversion, one dot per campaign"
+        aria-label={uiText('spend_against_cost_per_conversion_one_dot_per_1a2e53d')}
         className="h-40 w-full max-w-xl"
         data-testid="google-explorer-scatter"
         role="img"
@@ -93,41 +109,69 @@ function Scatter({ rows, currency }: { rows: readonly CampaignView[]; currency: 
             key={row.id}
             r={4}
           >
-            <title>{`${row.name}: ${formatCurrency(row.spend, currency)} spent, ${formatCurrency(row.cost, currency)} per conversion`}</title>
+            <title>
+              {uiText('template_c8785ed70bdc', {
+                v0: row.name,
+                v1: formatCurrency(row.spend, currency, uiLocale),
+                v2: formatCurrency(row.cost, currency, uiLocale),
+              })}
+            </title>
           </circle>
         ))}
       </svg>
       <figcaption className="text-muted-foreground text-xs">
-        One dot per campaign with a conversion: further right spends more, higher pays more per
-        conversion.
-        {goal != null
-          ? ` Dashed line: the portfolio CPA goal, ${formatCurrency(goal, currency)}.`
-          : ''}
+        {uiText.rich('sentence_8e5fbe101662', {
+          hasGoal: goal != null ? 'yes' : 'no',
+          goal: goal != null ? formatCurrency(goal, currency, uiLocale) : '',
+        })}
       </figcaption>
     </figure>
   );
 }
 
 /** "3 of 7 campaigns pay over their goal, with 62% of the spend": the pattern the scatter shows. */
-export function explorerSummary(rows: readonly CampaignView[], currency: string | null): string {
+export function explorerSummary(
+  rows: readonly CampaignView[],
+  currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
   const spending = rows.filter((row) => row.spend > 0);
-  if (spending.length === 0) return 'No campaign spent in the window.';
+  if (spending.length === 0)
+    return uiTranslate
+      ? uiTranslate('no_campaign_spent_in_the_window_c21127f')
+      : 'No campaign spent in the window.';
   const total = spending.reduce((sum, row) => sum + row.spend, 0);
   const over = spending.filter((row) => row.band.kind === 'over');
   const held = spending.filter((row) => row.goal);
   const noun = spending.length === 1 ? 'campaign' : 'campaigns';
-  if (held.length === 0) {
-    return `${spending.length} ${noun} spent ${formatCurrency(total, currency)}; no portfolio holds them, so none has a target.`;
-  }
-  if (over.length === 0) {
-    return `${spending.length} ${noun} spent ${formatCurrency(total, currency)}; none pays over its goal.`;
-  }
+  if (held.length === 0)
+    return uiTranslate
+      ? uiTranslate('googleExplorerNoPortfolio', {
+          count: spending.length,
+          spend: formatCurrency(total, currency, uiLocale),
+        })
+      : `${spending.length} ${noun} spent ${formatCurrency(total, currency, uiLocale)}; no portfolio holds them, so none has a target.`;
+  if (over.length === 0)
+    return uiTranslate
+      ? uiTranslate('googleExplorerOnGoal', {
+          count: spending.length,
+          spend: formatCurrency(total, currency, uiLocale),
+        })
+      : `${spending.length} ${noun} spent ${formatCurrency(total, currency, uiLocale)}; none pays over its goal.`;
   const overSpend = over.reduce((sum, row) => sum + row.spend, 0);
   const share = Math.round((overSpend / total) * 100);
-  return `${over.length} of ${spending.length} ${noun} pay over their goal, with ${share}% of the ${formatCurrency(total, currency)} spent.`;
+  return uiTranslate
+    ? uiTranslate('googleExplorerOverGoal', {
+        over: over.length,
+        total: spending.length,
+        share: percentLabel(share / 100, uiLocale),
+        spend: formatCurrency(total, currency, uiLocale),
+      })
+    : `${over.length} of ${spending.length} ${noun} pay over their goal, with ${share}% of the ${formatCurrency(total, currency, uiLocale)} spent.`;
 }
 
-const share = (value: number) => percentLabel(value);
+const share = (value: number, locale: UiLocale = 'en') => percentLabel(value, locale);
 
 export const EXPLORER_TITLE = 'Campaigns';
 
@@ -140,14 +184,16 @@ export function CampaignExplorer({
   currency: string | null;
   onOpenCampaign: (campaignId: string) => void;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const shown = rows.slice(0, MAX_ROWS);
   const code = currencyColumnSuffix(currency);
   return (
     <GoogleSection
-      showLabel="Show the campaigns"
-      summary={explorerSummary(rows, currency)}
+      showLabel={googleCopy('Show the campaigns', uiText)}
+      summary={explorerSummary(rows, currency, uiText, uiLocale)}
       testId="google-campaign-explorer"
-      title={EXPLORER_TITLE}
+      title={googleCopy(EXPLORER_TITLE, uiText)}
     >
       {rows.length === 0 ? null : (
         <>
@@ -156,25 +202,25 @@ export function CampaignExplorer({
             <thead>
               <tr>
                 <th className={TH} scope="col">
-                  Campaign
+                  {uiText('campaign_268286d')}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Spend{code}
+                  {uiText('helper_ffca96014e32', { v0: code })}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Conv.
+                  {uiText('conv_d3875d6')}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Cost / conv.{code}
+                  {uiText.rich('sentence_1376b7fc3ded', { v0: code })}
                 </th>
                 <th className={TH} scope="col">
-                  vs goal
+                  {uiText('vs_goal_597a6ce')}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Lost to budget
+                  {uiText('lost_to_budget_d856931')}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Lost to rank
+                  {uiText('lost_to_rank_3029ccc')}
                 </th>
               </tr>
             </thead>
@@ -196,20 +242,24 @@ export function CampaignExplorer({
                     </button>
                     <span className="block text-muted-foreground text-xs">
                       {row.typeLabel ? `${row.typeLabel} · ` : ''}
-                      {statusWords(row.status) ?? (
+                      {statusWords(row.status, uiText) ?? (
                         <Missing reason={row.status.reason ?? 'Google did not report it'} />
                       )}
                     </span>
                   </td>
-                  <td className={TD_NUM}>{formatCurrencyInColumn(row.spend, currency)}</td>
+                  <td className={TD_NUM}>
+                    {formatCurrencyInColumn(row.spend, currency, uiLocale)}
+                  </td>
                   <td className={TD_NUM}>
                     {row.conversions == null
-                      ? (ownResultsLabel(row.byResult) ?? <Missing reason={NO_SINGLE_RESULT} />)
-                      : formatConversions(row.conversions)}
+                      ? (ownResultsLabel(row.byResult, uiLocale, uiText) ?? (
+                          <Missing reason={NO_SINGLE_RESULT} />
+                        ))
+                      : formatConversions(row.conversions, uiLocale)}
                   </td>
                   <td className={TD_NUM}>
                     {row.cost != null ? (
-                      formatCurrencyInColumn(row.cost, currency)
+                      formatCurrencyInColumn(row.cost, currency, uiLocale)
                     ) : (
                       <Missing
                         reason={
@@ -224,10 +274,13 @@ export function CampaignExplorer({
                     <BandText band={row.band} />
                   </td>
                   <td className={TD_NUM}>
-                    <FigureText figure={row.budgetLost} format={share} />
+                    <FigureText
+                      figure={row.budgetLost}
+                      format={(value) => share(value, uiLocale)}
+                    />
                   </td>
                   <td className={TD_NUM}>
-                    <FigureText figure={row.rankLost} format={share} />
+                    <FigureText figure={row.rankLost} format={(value) => share(value, uiLocale)} />
                   </td>
                 </tr>
               ))}
@@ -235,7 +288,7 @@ export function CampaignExplorer({
           </ScrollTable>
           {rows.length > shown.length ? (
             <p className="text-muted-foreground text-xs" data-testid="google-explorer-truncated">
-              {rows.length - shown.length} smaller campaigns are not listed.
+              {uiText.rich('sentence_a32c06d9194c', { count: rows.length - shown.length })}
             </p>
           ) : null}
           <ReasonNotes

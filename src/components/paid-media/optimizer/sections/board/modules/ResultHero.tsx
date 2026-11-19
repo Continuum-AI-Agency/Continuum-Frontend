@@ -15,6 +15,7 @@
 
 import { getOptimizationMetricDefinition, type PortfolioListItem } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useId, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -99,6 +100,7 @@ function countingOf(
 }
 
 function MetaResultHero({ ctx, slot }: BoardModuleProps) {
+  const uiText = useTranslations('scale');
   const ids = useMemo(() => ctx.portfolios.map((portfolio) => portfolio.id), [ctx.portfolios]);
   const efficiency = useOptimizerPortfolioEfficiency(ids);
   const { figures, pending } = usePortfolioFigures({
@@ -118,8 +120,8 @@ function MetaResultHero({ ctx, slot }: BoardModuleProps) {
   );
   const missing =
     ctx.portfolios.length === 0
-      ? 'No portfolio on this account yet, so no result is counted against a goal.'
-      : 'No portfolio buying this result has a measured week yet.';
+      ? uiText('no_portfolio_on_this_account_yet_so_no_result_48b7be1')
+      : uiText('no_portfolio_buying_this_result_has_a_measure_abe293d');
   return (
     <ResultHeroView
       counted={counted}
@@ -138,9 +140,12 @@ function MetaResultHero({ ctx, slot }: BoardModuleProps) {
           : points.some((point) => point.value != null)
             ? 'ready'
             : 'missing',
-        caption: `${RESULT_ROLLING_DAYS}-day cost per result as each cycle measured it · last ${RESULT_TREND_DAYS} days`,
-        note: 'No cycle has priced this result yet.',
-        lastLabel: (day) => `cycle of ${dayLabel(day)}`,
+        caption: uiText('rolling_day_cost_per_result_as_each_cycle_mea_c96e008', {
+          rolling: RESULT_ROLLING_DAYS,
+          days: RESULT_TREND_DAYS,
+        }),
+        note: uiText('no_cycle_has_priced_this_result_yet_9e71388'),
+        lastLabel: (day) => uiText('cycle_of_day_a2c8721', { day: dayLabel(day) }),
       }}
       windowLabel={
         counted ? resultWindowLabel(counted, { portfolios: counting.figures, google: null }) : ''
@@ -177,6 +182,7 @@ export function googleReadMissing(state: GoogleAdsOverviewState): {
 }
 
 function GoogleResultHero({ ctx, slot }: BoardModuleProps) {
+  const uiText = useTranslations('scale');
   const reading = ctx.reading.result;
   // The reading counts the real results of the V1 card: that count stands, over its own days. No
   // daily read counts those, and Google's own daily count is another result, so no trend either.
@@ -248,7 +254,10 @@ function GoogleResultHero({ ctx, slot }: BoardModuleProps) {
   });
   const failure = googleReadMissing(state);
   const points = daily.data && window ? trendFromDaily(daily.data.trends ?? [], window) : [];
-  const caption = `${RESULT_ROLLING_DAYS}-day cost per result across the whole account · last ${RESULT_TREND_DAYS} days`;
+  const caption = uiText('rolling_day_cost_per_result_across_the_whole__cdc717e', {
+    rolling: RESULT_ROLLING_DAYS,
+    days: RESULT_TREND_DAYS,
+  });
   const trend: TrendView = realCount
     ? { points, state: 'missing', caption, note: REAL_COUNT_NO_TREND }
     : !bucket
@@ -256,17 +265,25 @@ function GoogleResultHero({ ctx, slot }: BoardModuleProps) {
           points,
           state: ready ? 'missing' : 'loading',
           caption,
-          note: 'Google counts no single result here: no portfolio names one, so there is no cost to follow.',
+          note: uiText('google_counts_no_single_result_here_no_portfo_3b3ecc6'),
         }
       : daily.isError
-        ? { points, state: 'missing', caption, note: "Google's daily read did not answer." }
+        ? {
+            points,
+            state: 'missing',
+            caption,
+            note: uiText('google_s_daily_read_did_not_answer_02701f9'),
+          }
         : daily.isPending
           ? { points, state: 'loading', caption, note: '' }
           : {
               points,
               state: points.some((point) => point.value != null) ? 'ready' : 'missing',
               caption,
-              note: `No ${RESULT_ROLLING_DAYS}-day window in the last ${RESULT_TREND_DAYS} days counted a result.`,
+              note: uiText('no_rolling_day_window_in_the_last_days_days_c_d0ea2b9', {
+                rolling: RESULT_ROLLING_DAYS,
+                days: RESULT_TREND_DAYS,
+              }),
             };
   return (
     <ResultHeroView
@@ -276,7 +293,11 @@ function GoogleResultHero({ ctx, slot }: BoardModuleProps) {
       // The portfolios' figures land before any is drawn, and Google's own read only stands in
       // once none of them has one.
       loading={!realCount && (portfoliosPending || (!fromPortfolios && state.status === 'loading'))}
-      missing={counted ? null : (failure?.line ?? 'Google has not answered for this account yet.')}
+      missing={
+        counted
+          ? null
+          : (failure?.line ?? uiText('google_has_not_answered_for_this_account_yet_0367fcc'))
+      }
       platform="google_ads"
       readingSource={reading.source ?? null}
       slot={slot}
@@ -319,6 +340,7 @@ function ResultHeroView({
   missing: string | null;
   error?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const [showReported, setShowReported] = useState(false);
   const reportedLabelId = useId();
   const frame = (state: ModuleFrameState, body: ReactNode) => (
@@ -385,32 +407,48 @@ function ResultHeroView({
           {ring && figure ? (
             <RingMark
               color={ring.basis === 'goal' ? tone : BOARD_COLOR.search}
-              label={`${formatResultCount(ring.part)} ${unit} of ${formatResultCount(ring.whole)} ${
-                ring.basis === 'goal' ? 'the spend buys at the goal' : `${reportedBy} reports`
-              }`}
+              label={
+                ring.basis === 'goal'
+                  ? uiText('part_unit_of_whole_the_spend_buys_at_the_goal_0eb50b4', {
+                      part: formatResultCount(ring.part),
+                      unit,
+                      whole: formatResultCount(ring.whole),
+                    })
+                  : uiText('part_unit_of_whole_platform_reports_d5e487d', {
+                      part: formatResultCount(ring.part),
+                      unit,
+                      whole: formatResultCount(ring.whole),
+                      platform: reportedBy,
+                    })
+              }
               part={ring.part}
               whole={ring.whole}
             >
               {figure}
               <span className="max-w-[6.5rem] text-muted-foreground text-xs leading-snug">
-                of {formatResultCount(ring.whole)}{' '}
                 {ring.basis === 'goal'
-                  ? `at the ${formatCpa(goal, currency)} goal`
-                  : `${reportedBy} counts`}
+                  ? uiText('of_whole_at_the_goal_goal_eaf4b99', {
+                      whole: formatResultCount(ring.whole),
+                      goal: formatCpa(goal, currency),
+                    })
+                  : uiText('of_whole_platform_counts_44bcefa', {
+                      whole: formatResultCount(ring.whole),
+                      platform: reportedBy,
+                    })}
               </span>
             </RingMark>
           ) : figure ? (
             <div className="flex flex-col items-center gap-0.5 py-2 text-center">{figure}</div>
           ) : (
             <p className="text-muted-foreground text-xs" data-testid="board-result-uncounted">
-              {reportedBy} counts no single result here.
+              {uiText('platform_counts_no_single_result_here_570573f', { platform: reportedBy })}
             </p>
           )}
         </div>
         <div className="min-w-0 space-y-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
-              <span className="text-muted-foreground">Cost per result</span>
+              <span className="text-muted-foreground">{uiText('cost_per_result_a664c01')}</span>
               <span
                 className="font-semibold tabular-nums"
                 {...figureProps('board.result.cost', cost, currency, window)}
@@ -422,17 +460,20 @@ function ResultHeroView({
               <BulletMark
                 color={tone}
                 goal={goal}
-                label={`${formatCpa(cost, currency)} against a goal of ${formatCpa(goal, currency)}`}
+                label={uiText('cost_against_a_goal_of_goal_4e99f4a', {
+                  cost: formatCpa(cost, currency),
+                  goal: formatCpa(goal, currency),
+                })}
                 testId="board-result-bullet"
                 value={cost}
               />
             ) : null}
             <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
               {goal != null ? (
-                <span>goal {formatCpa(goal, currency)}</span>
+                <span>{uiText('goal_goal_118e036', { goal: formatCpa(goal, currency) })}</span>
               ) : (
                 <span data-testid="board-result-no-goal">
-                  No portfolio sets a goal for this result.
+                  {uiText('no_portfolio_sets_a_goal_for_this_result_9eb1290')}
                 </span>
               )}
               {side !== 'none' ? (
@@ -453,7 +494,7 @@ function ResultHeroView({
             </div>
           </div>
           <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
-            <span className="text-muted-foreground">Spend</span>
+            <span className="text-muted-foreground">{uiText('spend_85f3d55')}</span>
             <span
               className="font-semibold tabular-nums"
               {...figureProps('board.result.spend', pricedSpend, currency, window)}
@@ -471,36 +512,52 @@ function ResultHeroView({
                   onCheckedChange={(checked) => setShowReported(checked)}
                   size="sm"
                 />
-                <span id={reportedLabelId}>{reportedBy} reports</span>
+                <span id={reportedLabelId}>
+                  {uiText('platform_reports_5137d3e', { platform: reportedBy })}
+                </span>
               </div>
               {showReported ? (
                 <p className="text-xs" data-testid="board-result-reported">
-                  <span
-                    className="font-semibold tabular-nums"
-                    {...figureProps('board.result.reported', reported, null, window, 'count')}
-                  >
-                    {formatResultCount(reported)}
-                  </span>{' '}
-                  <span className="text-muted-foreground">
-                    as {reportedBy} counts them
-                    {pricedSpend != null && reported > 0
-                      ? `, ${formatCpa(pricedSpend / reported, currency)} each`
-                      : ''}
-                    , against {count != null ? formatResultCount(count) : '—'} counted
-                  </span>
+                  {uiText.rich(
+                    pricedSpend != null && reported > 0
+                      ? 'fig_reported_fig_muted_as_platform_counts_the_04c2a9b'
+                      : 'fig_reported_fig_muted_as_platform_counts_the_9f22474',
+                    {
+                      reported: formatResultCount(reported),
+                      platform: reportedBy,
+                      each:
+                        pricedSpend != null && reported > 0
+                          ? formatCpa(pricedSpend / reported, currency)
+                          : '',
+                      count: count != null ? formatResultCount(count) : '—',
+                      fig: (chunks) => (
+                        <span
+                          className="font-semibold tabular-nums"
+                          {...figureProps('board.result.reported', reported, null, window, 'count')}
+                        >
+                          {chunks}
+                        </span>
+                      ),
+                      muted: (chunks) => <span className="text-muted-foreground">{chunks}</span>,
+                    },
+                  )}
                 </p>
               ) : null}
             </div>
           ) : null}
           {counted.others.length > 0 ? (
             <p className="text-muted-foreground text-xs" data-testid="board-result-others">
-              Also bought:{' '}
-              {counted.others
-                .map(
-                  (other) =>
-                    `${formatResultCount(other.count)} ${other.count === 1 ? other.words.one : other.words.many} for ${formatCurrency(other.spend, currency)}`,
-                )
-                .join(' · ')}
+              {uiText('also_bought_list_5a385a2', {
+                list: counted.others
+                  .map((other) =>
+                    uiText('count_unit_for_spend_78534e1', {
+                      count: formatResultCount(other.count),
+                      unit: other.count === 1 ? other.words.one : other.words.many,
+                      spend: formatCurrency(other.spend, currency),
+                    }),
+                  )
+                  .join(' · '),
+              })}
             </p>
           ) : null}
         </div>
@@ -513,8 +570,19 @@ function ResultHeroView({
           <TrendLine
             formatValue={(value) => formatCpa(value, currency)}
             goal={goal}
-            goalLabel={goal != null ? `goal ${formatCpa(goal, currency)}` : undefined}
-            label={`${trend.caption}${goal != null ? `, against a goal of ${formatCpa(goal, currency)}` : ''}`}
+            goalLabel={
+              goal != null
+                ? uiText('goal_goal_118e036', { goal: formatCpa(goal, currency) })
+                : undefined
+            }
+            label={
+              goal != null
+                ? uiText('caption_against_a_goal_of_goal_3d566e2', {
+                    caption: trend.caption,
+                    goal: formatCpa(goal, currency),
+                  })
+                : trend.caption
+            }
             lastLabel={trend.lastLabel}
             points={trend.points}
           />

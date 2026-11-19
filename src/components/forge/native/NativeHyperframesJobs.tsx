@@ -7,7 +7,7 @@ import type {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -20,6 +20,8 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Link } from '@/i18n/navigation';
+import { useValidationErrorMap } from '@/i18n/validation';
 import {
   cancelNativeHyperframesRender,
   fetchNativeHyperframesRender,
@@ -43,6 +45,10 @@ export function NativeHyperframesJobs({
   dirty: boolean;
   initialJobId?: string;
 }) {
+  const validationErrorMap = useValidationErrorMap();
+
+  const translateUi = useUiTranslations('forge');
+
   const client = useQueryClient();
   const { brandId, assetId } = view;
   const [jobId, setJobId] = useState(initialJobId);
@@ -58,7 +64,7 @@ export function NativeHyperframesJobs({
       .max(view.clock.frameCount - 1),
   });
   const form = useForm<{ frame: number }>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema, { error: validationErrorMap }),
     defaultValues: { frame: 0 },
   });
   const history = useQuery({
@@ -132,18 +138,19 @@ export function NativeHyperframesJobs({
 
   return (
     <Panel
-      title="Preview and renders"
+      title={translateUi('preview_and_renders_4624e4b6')}
       className="min-h-0"
       bodyClassName="flex flex-col gap-3 overflow-y-auto"
     >
       <p className="text-xs text-muted-foreground">
         {dirty
-          ? 'Save your changes before previewing or rendering.'
-          : 'Preview and render use this saved revision.'}
+          ? translateUi('save_your_changes_before_previewing_fb6d8f8f')
+          : translateUi('preview_and_render_use_this_saved_r_ab6ee9f2')}
       </p>
       {!view.renderer ? (
         <p role="status" className="text-xs text-muted-foreground">
-          Native rendering is unavailable in this environment.
+          {' '}
+          {translateUi('native_rendering_is_unavailable_in__467b04ba')}{' '}
         </p>
       ) : null}
       <form
@@ -156,7 +163,9 @@ export function NativeHyperframesJobs({
         <FieldGroup>
           <Field data-invalid={!!form.formState.errors.frame}>
             <FieldLabel htmlFor="native-preview-frame">
-              Preview frame (0–{view.clock.frameCount - 1})
+              {' '}
+              {translateUi('preview_frame_0_523675cc')}
+              {view.clock.frameCount - 1})
             </FieldLabel>
             <Input
               id="native-preview-frame"
@@ -170,7 +179,8 @@ export function NativeHyperframesJobs({
           </Field>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="outline" disabled={busy || dirty || !view.renderer}>
-              Preview frame
+              {' '}
+              {translateUi('preview_frame_49bc3a3e')}{' '}
             </Button>
             <Button
               type="button"
@@ -183,27 +193,31 @@ export function NativeHyperframesJobs({
               }
               onClick={() => void submit(false)}
             >
-              Render MP4
+              {' '}
+              {translateUi('render_mp4_dbf320c3')}{' '}
             </Button>
           </div>
         </FieldGroup>
       </form>
       {view.viewport.width % 2 !== 0 || view.viewport.height % 2 !== 0 ? (
-        <p className="text-xs text-muted-foreground">MP4 requires an even width and height.</p>
+        <p className="text-xs text-muted-foreground">
+          {translateUi('mp4_requires_an_even_width_and_heig_32806c11')}
+        </p>
       ) : null}
       {error ? (
         <Alert variant="destructive">
-          <AlertTitle>Render request failed</AlertTitle>
+          <AlertTitle>{translateUi('render_request_failed_ee550bec')}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
       {job.isError ? (
         <Alert variant="destructive">
-          <AlertTitle>Could not read this job</AlertTitle>
+          <AlertTitle>{translateUi('could_not_read_this_job_27bbc5cb')}</AlertTitle>
           <AlertDescription>
             {message(job.error)}{' '}
             <Button variant="outline" size="sm" onClick={() => void job.refetch()}>
-              Retry job
+              {' '}
+              {translateUi('retry_job_61d9e1d5')}{' '}
             </Button>
           </AlertDescription>
         </Alert>
@@ -211,7 +225,9 @@ export function NativeHyperframesJobs({
       {job.data ? (
         <div className="flex flex-col gap-3" aria-live="polite">
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span>Job: {job.data.state}</span>
+            <span>
+              {translateUi('job_34b0e24b')} {job.data.state}
+            </span>
             <Link
               className="text-primary hover:underline"
               href={nativeEditorHref(
@@ -221,17 +237,20 @@ export function NativeHyperframesJobs({
                 job.data.jobId,
               )}
             >
-              Saved job link
+              {' '}
+              {translateUi('saved_job_link_0a251aea')}{' '}
             </Link>
             {!terminal(job.data.state) ? (
               <Button variant="outline" size="sm" disabled={busy} onClick={() => void cancel()}>
-                Cancel render
+                {' '}
+                {translateUi('cancel_render_cec72286')}{' '}
               </Button>
             ) : null}
           </div>
           {job.data.revision.revisionId !== view.revision.revisionId ? (
             <p className="text-xs text-muted-foreground">
-              This job uses another saved revision. Open its link to inspect the source.
+              {' '}
+              {translateUi('this_job_uses_another_saved_revisio_d11ad8a0')}{' '}
             </p>
           ) : null}
           {job.data.error ? (
@@ -246,7 +265,7 @@ export function NativeHyperframesJobs({
                 brandId={brandId}
                 pin={output}
                 mediaType={output.file === 'mp4' ? 'video' : 'image'}
-                label="saved Hyperframes revision"
+                label={translateUi('saved_hyperframes_revision_4fa4da24')}
               />
               <figcaption className="text-xs">
                 <OpenInLibrary brandId={brandId} assetId={output.assetId} />
@@ -257,28 +276,34 @@ export function NativeHyperframesJobs({
       ) : null}
       {history.isError ? (
         <Alert variant="destructive">
-          <AlertTitle>Could not load render history</AlertTitle>
+          <AlertTitle>{translateUi('could_not_load_render_history_1ead5738')}</AlertTitle>
           <AlertDescription>
             {message(history.error)}{' '}
             <Button variant="outline" size="sm" onClick={() => void history.refetch()}>
-              Retry history
+              {' '}
+              {translateUi('retry_history_5663075c')}{' '}
             </Button>
           </AlertDescription>
         </Alert>
       ) : null}
       {history.data?.jobs.length ? (
-        <ul className="divide-y divide-border text-xs" aria-label="Native render history">
+        <ul
+          className="divide-y divide-border text-xs"
+          aria-label={translateUi('native_render_history_6960f101')}
+        >
           {history.data.jobs.map((item) => (
             <li key={item.jobId} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <Link
                 className="text-primary hover:underline"
                 href={nativeEditorHref(brandId, assetId, item.revision.revisionId, item.jobId)}
               >
-                Job {item.jobId.slice(0, 8)}
+                {' '}
+                {translateUi('job_ad617a0f')} {item.jobId.slice(0, 8)}
               </Link>
               <span>{item.state}</span>
               <Button size="xs" variant="ghost" onClick={() => setJobId(item.jobId)}>
-                View output
+                {' '}
+                {translateUi('view_output_d01c6d1f')}{' '}
               </Button>
             </li>
           ))}
@@ -286,8 +311,10 @@ export function NativeHyperframesJobs({
       ) : history.isSuccess ? (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>No renders yet</EmptyTitle>
-            <EmptyDescription>Preview a frame or render this saved revision.</EmptyDescription>
+            <EmptyTitle>{translateUi('no_renders_yet_f809c605')}</EmptyTitle>
+            <EmptyDescription>
+              {translateUi('preview_a_frame_or_render_this_save_5c3b45fc')}
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : null}

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useState } from 'react';
 import {
   AgentButton,
@@ -18,6 +20,7 @@ type Props = {
 // Confirm/edit card for an agent-proposed brand skill. Persistence is user-gated:
 // the agent only proposes (ui.skill_proposal); the skill is saved here on Save.
 export function SkillProposalCard({ proposal, onSavedAction }: Props) {
+  const uiText = useTranslations('organic');
   const [name, setName] = useState(proposal.name);
   const [directives, setDirectives] = useState(proposal.directives);
   const [editing, setEditing] = useState(false);
@@ -25,12 +28,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const surfaceLabel =
-    proposal.surface === 'visual'
-      ? 'Visual'
-      : proposal.surface === 'both'
-        ? 'Copy + Visual'
-        : 'Copy';
+  const surfaceLabel = uiText('skillSurface', { surface: proposal.surface });
 
   async function save() {
     if (saving || saved) return;
@@ -49,7 +47,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
       setSaved(true);
       onSavedAction?.();
     } catch {
-      setError('Could not save the skill. Try again.');
+      setError(uiText('could_not_save_the_skill_try_again_25398f1'));
     } finally {
       setSaving(false);
     }
@@ -58,7 +56,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
   return (
     <AgentDecisionCard className="p-4">
       <AgentCardEyebrow
-        label="New skill"
+        label={uiText('new_skill_9bf06a8')}
         right={<span className="shrink-0 text-xs text-muted-foreground">{surfaceLabel}</span>}
       />
       {editing ? (
@@ -66,7 +64,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-medium"
-          aria-label="Skill name"
+          aria-label={uiText('skill_name_0fbb6f4')}
         />
       ) : (
         <AgentCardTitle>{name}</AgentCardTitle>
@@ -81,7 +79,7 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
           onChange={(e) => setDirectives(e.target.value)}
           rows={6}
           className="mt-2 w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm leading-relaxed"
-          aria-label="Skill directives"
+          aria-label={uiText('skill_directives_39e7b80')}
         />
       ) : (
         <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 px-3 py-2 text-sm leading-relaxed text-foreground">
@@ -93,7 +91,9 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
 
       <div className="mt-3 flex items-center gap-2">
         {saved ? (
-          <span className="text-sm font-medium text-emerald-600">Saved to your brand skills</span>
+          <span className="text-sm font-medium text-emerald-600">
+            {uiText('saved_to_your_brand_skills_2879705')}
+          </span>
         ) : (
           <>
             <AgentButton
@@ -102,10 +102,10 @@ export function SkillProposalCard({ proposal, onSavedAction }: Props) {
               disabled={!name.trim() || !directives.trim()}
               onClick={save}
             >
-              Save skill
+              {uiText('save_skill_1d92b78')}
             </AgentButton>
             <AgentButton variant="ghost" onClick={() => setEditing((v) => !v)}>
-              {editing ? 'Done editing' : 'Edit'}
+              {editing ? uiText('done_editing_058f24e') : uiText('edit_464c4ff')}
             </AgentButton>
           </>
         )}

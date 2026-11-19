@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Live view of a brand's design system.
 //
@@ -51,6 +52,8 @@ const readString = (row: Record<string, unknown>, key: string): string | null =>
 const STALE_PARSE_MS = 180_000;
 
 export function useDesignSystem(brandId: string | null): DesignSystemState {
+  const tUi = useTranslations('common');
+
   const [snapshot, setSnapshot] = useState<DesignSystemSnapshot | null>(null);
   const [fontsInStore, setFontsInStore] = useState<DesignSystemFontFace[] | null>(null);
   const [phase, setPhase] = useState<DesignSystemPhase>('idle');

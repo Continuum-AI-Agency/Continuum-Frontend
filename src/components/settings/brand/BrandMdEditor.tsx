@@ -2,12 +2,14 @@
 
 import { parseBrandMd } from '@continuum/contracts';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdown';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { resetBrandMd, saveBrandMd } from '@/lib/api/brandBook.client';
 import { BrandBrainSections } from './BrandBrain/BrandBrainSections';
 import { readBrainDoc, writeBrainDoc } from './BrandBrain/brandBrain';
@@ -31,6 +33,9 @@ export function canSaveBrandMd(draft: string): boolean {
 // Save/reset write through saveBrandMd / resetBrandMd and then router.refresh() so
 // the parent RSC re-fetches the updated envelope.
 export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
+  const tUi = useTranslations('settings');
+  const uiErrorMessage = useUiErrorMessage();
+
   const router = useRouter();
   const { show } = useToast();
   const { setDirty } = useBrandMdDirty();
@@ -72,12 +77,12 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
         savedRef.current = saved;
         setDraft(saved);
         setDirty(false);
-        show({ title: 'Brand document saved', variant: 'success' });
+        show({ title: tUi('m_1a48a3ee2e'), variant: 'success' });
         router.refresh();
       } catch (e) {
         show({
-          title: 'Save failed',
-          description: e instanceof Error ? e.message : 'Please try again.',
+          title: tUi('m_0a44446762'),
+          description: uiErrorMessage(e),
           variant: 'error',
         });
       }
@@ -92,12 +97,12 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
         savedRef.current = next;
         setDraft(next);
         setDirty(false);
-        show({ title: 'Reverted to generated document', variant: 'success' });
+        show({ title: tUi('m_97edb9fa66'), variant: 'success' });
         router.refresh();
       } catch (e) {
         show({
-          title: 'Revert failed',
-          description: e instanceof Error ? e.message : 'Please try again.',
+          title: tUi('m_f644fbc626'),
+          description: uiErrorMessage(e),
           variant: 'error',
         });
       }
@@ -107,10 +112,8 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
   if (initialBrandMd === null) {
     return (
       <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-6 text-center">
-        <p className="text-sm text-muted-foreground">No brand document generated yet.</p>
-        <p className="text-xs text-muted-foreground">
-          Run "Deepen analysis" to generate your brand.md, then return here to edit.
-        </p>
+        <p className="text-sm text-muted-foreground">{tUi('m_fd3ae2ec75')}</p>
+        <p className="text-xs text-muted-foreground">{tUi('m_bc6ffd536a')}</p>
       </div>
     );
   }
@@ -122,12 +125,13 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
       {/* Header row: title + badges + actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">Brand Brain</span>
-          {isEdited && !dirty ? <Pill variant="warning">Edited</Pill> : null}
-          {dirty ? <Pill variant="teal">Unsaved changes</Pill> : null}
+          <span className="text-sm font-medium text-foreground">{tUi('m_885a3bba72')}</span>
+          {isEdited && !dirty ? <Pill variant="warning">{tUi('m_978e8c3322')}</Pill> : null}
+          {dirty ? <Pill variant="teal">{tUi('m_29267269c0')}</Pill> : null}
           {hasFrontMatter ? (
             <Pill variant={frontMatterValid ? 'success' : 'destructive'}>
-              front matter: {frontMatterValid ? 'valid' : 'invalid'}
+              {tUi('m_d6133dbd6a')}
+              {frontMatterValid ? tUi('m_bec262808f') : tUi('m_81f344a768')}
             </Pill>
           ) : null}
         </div>
@@ -140,7 +144,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
               size="sm"
               className="text-muted-foreground"
             >
-              {isResetting ? 'Reverting…' : 'Revert to generated'}
+              {isResetting ? tUi('m_a4eeb16eef') : tUi('m_61b9bbd0a9')}
             </Button>
           ) : null}
           <Button
@@ -148,22 +152,21 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
             disabled={isBusy || !dirty || !saveIsValid}
             variant="secondary"
           >
-            {isPending ? 'Saving…' : 'Save'}
+            {isPending ? tUi('m_56a2285c5b') : tUi('m_efc007a393')}
           </Button>
         </div>
       </div>
       {!saveIsValid ? (
         <p className="text-xs text-destructive" role="alert">
-          Fix the front matter before saving so structured brand colors, voice, and audience remain
-          usable across Continuum.
+          {tUi('m_ab8debeb7c')}
         </p>
       ) : null}
 
       <Tabs defaultValue={initialTab}>
         <TabsList>
-          <TabsTrigger value="sections">Sections</TabsTrigger>
-          <TabsTrigger value="raw">Raw brand.md</TabsTrigger>
-          <TabsTrigger value="preview">Preview</TabsTrigger>
+          <TabsTrigger value="sections">{tUi('m_7ff5a6dafd')}</TabsTrigger>
+          <TabsTrigger value="raw">{tUi('m_719e6c377a')}</TabsTrigger>
+          <TabsTrigger value="preview">{tUi('m_f1fbb2b43d')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sections" className="pt-3">
@@ -175,8 +178,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
             />
           ) : (
             <p className="rounded-md border border-border/60 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
-              The sections read the document's front matter, which is missing or invalid. Fix it
-              under Raw brand.md, or revert to the generated document.
+              {tUi('m_2f350849ac')}
             </p>
           )}
         </TabsContent>
@@ -188,7 +190,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
             rows={24}
             spellCheck={false}
             className="w-full resize-y rounded-md border border-border/60 bg-muted/30 px-3 py-2 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            aria-label="brand.md editor"
+            aria-label={tUi('m_f2cdbcb7bd')}
           />
         </TabsContent>
 
@@ -201,7 +203,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
                 className="prose prose-invert prose-sm max-w-none"
               />
             ) : (
-              <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
+              <p className="text-sm text-muted-foreground">{tUi('m_3b7f7df57c')}</p>
             )}
           </div>
         </TabsContent>

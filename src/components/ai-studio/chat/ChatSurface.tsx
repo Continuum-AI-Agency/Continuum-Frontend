@@ -2,6 +2,7 @@
 
 import type { ImageSize } from '@continuum/contracts';
 import Image from 'next/image';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { ImageMarkupDialog } from '@/components/ai-studio/markup/ImageMarkupDialog';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -75,6 +76,8 @@ export function ChatSurface({
   onUpdatePromptTemplate,
   onDeletePromptTemplate,
 }: ChatSurfaceProps) {
+  const translateUi = useUiTranslations('studio');
+
   const { show } = useToast();
   const { state: streamState, start, cancel, reset } = useImageSseStream();
   const supabase = createSupabaseBrowserClient();
@@ -179,17 +182,21 @@ export function ChatSurface({
         }
 
         show({
-          title: 'Aligned to brand',
-          description: 'Your prompt has been enhanced with brand context.',
+          title: translateUi('aligned_to_brand_69595f5f'),
+          description: translateUi('your_prompt_has_been_enhanced_with__c5b36edc'),
           variant: 'success',
         });
       } catch (err) {
-        show({ title: 'Enrichment failed', description: String(err), variant: 'error' });
+        show({
+          title: translateUi('enrichment_failed_8396f34c'),
+          description: String(err),
+          variant: 'error',
+        });
       } finally {
         setIsEnriching(false);
       }
     },
-    [isEnriching, show, supabaseAuth],
+    [isEnriching, show, supabaseAuth, translateUi],
   );
 
   // Compute if any references are attached
@@ -204,18 +211,16 @@ export function ChatSurface({
       const isNano = form.model === 'nano-banana';
       if (isNano && (firstFrame || lastFrame)) {
         show({
-          title: 'Video inputs not supported',
-          description:
-            'Nano Banana only generates images. Remove first/last frame, or pick a video model.',
+          title: translateUi('video_inputs_not_supported_169fc319'),
+          description: translateUi('nano_banana_only_generates_images_r_83e009b6'),
           variant: 'error',
         });
         return;
       }
       if (medium === 'video' && refs.length > 0 && (firstFrame || lastFrame)) {
         show({
-          title: 'Pick one reference mode',
-          description:
-            'Veo takes either reference images or a first/last frame — not both in one shot. Clear one of them.',
+          title: translateUi('pick_one_reference_mode_5bc56b5e'),
+          description: translateUi('veo_takes_either_reference_images_o_b901aca1'),
           variant: 'error',
         });
         return;
@@ -337,7 +342,7 @@ export function ChatSurface({
 
       if (attachmentIssues.length > 0) {
         show({
-          title: 'Attachment too large',
+          title: translateUi('attachment_too_large_db1b98a5'),
           description: attachmentIssues.slice(0, 2).join(' • '),
           variant: 'error',
         });
@@ -346,8 +351,12 @@ export function ChatSurface({
 
       const parsed = chatImageRequestSchema.safeParse({ ...payload });
       if (!parsed.success) {
-        const message = parsed.error.message ?? 'Invalid input';
-        show({ title: 'Fix form issues', description: message, variant: 'error' });
+        const message = parsed.error.message ?? translateUi('invalid_input_c9bbbe83');
+        show({
+          title: translateUi('fix_form_issues_08f0ef07'),
+          description: message,
+          variant: 'error',
+        });
         return;
       }
 
@@ -364,8 +373,12 @@ export function ChatSurface({
       setHistory((prev) => [optimistic, ...prev]);
 
       show({
-        title: 'Generating',
-        description: `${medium === 'video' ? 'Video' : 'Image'} request started`,
+        title: translateUi('generating_3607d4f4'),
+        description: translateUi('value0_request_started_575fc603', {
+          value0: String(
+            medium === 'video' ? translateUi('video_d534be82') : translateUi('image_1aa4cb0b'),
+          ),
+        }),
         variant: 'warning',
       });
       const result = await start(apiPayload, {
@@ -377,7 +390,11 @@ export function ChatSurface({
       });
       if (result.error) {
         reset();
-        show({ title: 'Generation failed', description: result.error, variant: 'error' });
+        show({
+          title: translateUi('generation_failed_78257562'),
+          description: result.error,
+          variant: 'error',
+        });
         return;
       }
       setResetNext(false);
@@ -407,6 +424,7 @@ export function ChatSurface({
       resetNext,
       reset,
       conversationTurns,
+      translateUi,
     ],
   );
 
@@ -435,8 +453,8 @@ export function ChatSurface({
     if (streamState.currentBase64) {
       setContinueFrom([{ data: streamState.currentBase64, mime_type: 'image/png' }]);
     }
-    show({ title: 'Generation complete', variant: 'success' });
-  }, [streamState.status, streamState.currentBase64, streamState.posterBase64, show]);
+    show({ title: translateUi('generation_complete_7e3208ef'), variant: 'success' });
+  }, [streamState.status, streamState.currentBase64, streamState.posterBase64, show, translateUi]);
 
   const handleReset = React.useCallback(() => {
     reset();
@@ -445,14 +463,18 @@ export function ChatSurface({
       setResetNext(true);
       setConversationTurns([]);
     }
-    show({ title: 'Stream reset', variant: 'warning' });
-  }, [reset, show, activeModel]);
+    show({ title: translateUi('stream_reset_b60cfb58'), variant: 'warning' });
+  }, [reset, show, activeModel, translateUi]);
 
   React.useEffect(() => {
     if (streamState.status === 'error' && streamState.error) {
-      show({ title: 'Stream error', description: streamState.error, variant: 'error' });
+      show({
+        title: translateUi('stream_error_38f63d7c'),
+        description: streamState.error,
+        variant: 'error',
+      });
     }
-  }, [streamState.status, streamState.error, show]);
+  }, [streamState.status, streamState.error, show, translateUi]);
 
   React.useEffect(() => {
     const lastEvent = streamState.lastEvent as
@@ -554,15 +576,17 @@ export function ChatSurface({
           open={Boolean(previewMarkup)}
           sourceBase64={previewMarkup.base64}
           sourceMime={previewMarkup.mime}
-          title="Markup preview"
+          title={translateUi('markup_preview_88ca959b')}
           maxBytes={IMAGE_REFERENCE_MAX_BYTES}
           onClose={() => setPreviewMarkup(null)}
           onSave={(result) => {
             const maxRefs = getMediumForModel(activeModel) === 'video' ? 3 : 14;
             if (refs.length >= maxRefs) {
               show({
-                title: 'Reference limit',
-                description: `Max ${maxRefs} reference images`,
+                title: translateUi('reference_limit_e3955b4e'),
+                description: translateUi('max_value0_reference_images_70c7a0c0', {
+                  value0: String(maxRefs),
+                }),
                 variant: 'error',
               });
               return;
@@ -578,8 +602,8 @@ export function ChatSurface({
             };
             setRefs((prev) => prev.concat(nextRef));
             show({
-              title: 'Markup saved',
-              description: 'Added to reference images.',
+              title: translateUi('markup_saved_854648a0'),
+              description: translateUi('added_to_reference_images_de1f352c'),
               variant: 'success',
             });
             setPreviewMarkup(null);
@@ -597,18 +621,22 @@ function HistoryPanel({
   history: ChatImageHistoryItem[];
   onSelectHistory: (item: ChatImageHistoryItem) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div
       className="rounded-xl p-6 shadow-xl"
       style={{ backgroundColor: 'var(--color-panel)', border: '1px solid var(--gray-6)' }}
     >
       <div className="flex items-center justify-between pb-2">
-        <span className="font-medium">History (this session)</span>
+        <span className="font-medium">{translateUi('history_this_session_6f65bc32')}</span>
         <Pill variant="muted">{history.length}</Pill>
       </div>
       <ScrollArea className="max-h-[220px] pr-1">
         {history.length === 0 ? (
-          <span className="text-xs text-gray-400">No generations yet.</span>
+          <span className="text-xs text-gray-400">
+            {translateUi('no_generations_yet_b1a5de0d')}
+          </span>
         ) : (
           <div className="flex flex-wrap gap-2">
             {history.map((item) => (
@@ -674,13 +702,14 @@ function HistoryPanel({
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-gray-400">
-                    No thumb
+                    {' '}
+                    {translateUi('no_thumb_c61d6540')}{' '}
                   </div>
                 )}
                 <span className="absolute left-1 top-1 rounded bg-slate-900/70 px-1 text-2xs uppercase text-gray-200">
                   {item.model === 'nano-banana' || item.model === 'gemini-3-pro-image'
-                    ? 'Image'
-                    : 'Video'}
+                    ? translateUi('image_1aa4cb0b')
+                    : translateUi('video_d534be82')}
                 </span>
               </button>
             ))}

@@ -18,6 +18,7 @@
 // each side zooms and plays on its own, with its own controls.
 
 import { Link2, Pause, Play, Unlink } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -29,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
+import { formatDecimal } from '@/lib/format/decimal';
 import { cn } from '@/lib/utils';
 import { fitContentRect, formatTimecode } from '../annotationGeometry';
 import { useWaveform } from '../audio/useWaveform';
@@ -123,12 +125,14 @@ function SidePicker({
   options: CompareOption[];
   onChange: (id: string) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <Select value={value} onValueChange={(next) => next && onChange(next)}>
       <SelectTrigger
         size="sm"
         className="h-7 max-w-56 text-xs"
-        aria-label={`Compare side ${side}`}
+        aria-label={translateUi('compare_side_value0_608d30af', { value0: String(side) })}
         data-testid={testId}
       >
         <span className="text-muted-foreground">{side}</span>
@@ -241,6 +245,8 @@ function SideMedia({
   onReady: () => void;
   events: MediaEvents;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const { media } = side;
   const attach = (element: MediaElement | null) => {
     mediaRef.current = element;
@@ -303,7 +309,8 @@ function SideMedia({
   }
   return (
     <div className="flex size-full items-center justify-center text-xs text-muted-foreground">
-      No visual preview for {media.label}
+      {' '}
+      {translateUi('no_visual_preview_for_7f41017e')} {media.label}
     </div>
   );
 }
@@ -325,6 +332,9 @@ export function CompareDialog({
   initialBId,
   title,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+  const driftLocale = useUiLocale();
+
   const mediaA = useRef<MediaElement | null>(null);
   const mediaB = useRef<MediaElement | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -377,7 +387,7 @@ export function CompareDialog({
     if (!master || !follower) return;
     const drift = follower.currentTime - master.currentTime;
     if (driftLabel.current)
-      driftLabel.current.textContent = `${(Math.abs(drift) * 1000).toFixed(1)} ms`;
+      driftLabel.current.textContent = `${formatDecimal(Math.abs(drift) * 1000, 1, driftLocale)} ms`;
     if (follower.seeking) return;
     const correction = followerCorrection({ drift, frameSec: frameSec() });
     if ('seek' in correction) follower.currentTime = master.currentTime;
@@ -419,7 +429,11 @@ export function CompareDialog({
     } catch (err) {
       // A SecurityError here means a source was served without CORS headers.
       setHighlight(false);
-      toast.error(`Highlight unavailable · ${(err as Error).message}`);
+      toast.error(
+        translateUi('highlight_unavailable_value0_ffad18ca', {
+          value0: String((err as Error).message),
+        }),
+      );
     }
   };
 
@@ -436,7 +450,7 @@ export function CompareDialog({
   // timeupdate fires only ~4x/second — too coarse to hold a frame. Each rendered
   // frame of a video master is the moment to measure the frame rate and repaint
   // the highlight; the follower is steered on every display frame.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: correctFollower reads refs only; re-subscribe when the players change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: correctFollower reads player refs and the display locale; re-subscribe when either changes
   useEffect(() => {
     const master = playableOf(mediaA.current);
     if (!synced || !playing || !master) return;
@@ -470,7 +484,7 @@ export function CompareDialog({
       if (video && handle) video.cancelVideoFrameCallback(handle);
       cancelAnimationFrame(steer);
     };
-  }, [synced, playing, a.media.key, b.media.key]);
+  }, [synced, playing, a.media.key, b.media.key, driftLocale]);
 
   const togglePlay = () => {
     const master = playableOf(mediaA.current);
@@ -568,7 +582,11 @@ export function CompareDialog({
         className="max-w-5xl sm:max-w-5xl"
       >
         <DialogTitle className="text-sm">
-          {title ?? `Compare ${a.label} and ${b.label}`}
+          {title ??
+            translateUi('compare_value0_and_value1_ce4441ad', {
+              value0: String(a.label),
+              value1: String(b.label),
+            })}
         </DialogTitle>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -599,7 +617,8 @@ export function CompareDialog({
                 data-testid="compare-overlay-toggle"
                 onClick={() => setMode((value) => (value === 'overlay' ? 'side' : 'overlay'))}
               >
-                Overlay
+                {' '}
+                {translateUi('overlay_2af93aeb')}{' '}
               </Button>
               <Button
                 type="button"
@@ -610,7 +629,8 @@ export function CompareDialog({
                 data-testid="compare-diff-toggle"
                 onClick={() => setMode((value) => (value === 'difference' ? 'side' : 'difference'))}
               >
-                Difference
+                {' '}
+                {translateUi('difference_4d280a45')}{' '}
               </Button>
             </>
           ) : null}
@@ -624,12 +644,14 @@ export function CompareDialog({
               data-testid="compare-highlight-toggle"
               onClick={() => setHighlight((value) => !value)}
             >
-              Highlight changes
+              {' '}
+              {translateUi('highlight_changes_5566a129')}{' '}
             </Button>
           ) : null}
           {difference && highlight && canStack ? (
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Threshold
+              {' '}
+              {translateUi('threshold_0da627ad')}{' '}
               <input
                 type="range"
                 min={0}
@@ -645,14 +667,15 @@ export function CompareDialog({
           ) : null}
           {mode === 'overlay' && canStack ? (
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Wipe
+              {' '}
+              {translateUi('wipe_3404644e')}{' '}
               <input
                 type="range"
                 min={0}
                 max={100}
                 step={1}
                 value={wipe}
-                aria-label="Overlay wipe position"
+                aria-label={translateUi('overlay_wipe_position_f1fe52f5')}
                 data-testid="compare-overlay-slider"
                 onChange={(event) => setWipe(Number(event.target.value))}
                 className="w-28 accent-primary"
@@ -668,18 +691,18 @@ export function CompareDialog({
             data-testid="compare-link-toggle"
             title={
               linked
-                ? 'Linked: one zoom and one transport drive both sides'
-                : 'Unlinked: each side zooms and plays on its own'
+                ? translateUi('linked_one_zoom_and_one_transport_d_e04d4b4f')
+                : translateUi('unlinked_each_side_zooms_and_plays__587c1f8c')
             }
             onClick={toggleLinked}
           >
             {linked ? <Link2 className="size-3.5" /> : <Unlink className="size-3.5" />}
-            {linked ? 'Linked' : 'Unlinked'}
+            {linked ? translateUi('linked_bfda026e') : translateUi('unlinked_1e690b58')}
           </Button>
           {synced ? (
             <fieldset className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-              <legend className="sr-only">Audible side</legend>
-              <span aria-hidden="true">Audio:</span>
+              <legend className="sr-only">{translateUi('audible_side_bf641706')}</legend>
+              <span aria-hidden="true">{translateUi('audio_8a2b9bff')}</span>
               {(
                 [
                   ['a', a.label, 'compare-audio-a'],
@@ -781,7 +804,7 @@ export function CompareDialog({
           {mode === 'overlay' && canStack ? (
             <button
               type="button"
-              aria-label="Drag the overlay wipe"
+              aria-label={translateUi('drag_the_overlay_wipe_eea99688')}
               data-testid="compare-wipe-handle"
               onPointerDown={dragWipe}
               className="absolute inset-y-0 z-40 w-4 -translate-x-1/2 cursor-ew-resize"
@@ -795,7 +818,7 @@ export function CompareDialog({
             <canvas
               ref={highlightCanvas}
               data-testid="compare-highlight-canvas"
-              aria-label="Changed pixels"
+              aria-label={translateUi('changed_pixels_6459cd91')}
               className="pointer-events-none absolute inset-0 size-full [image-rendering:pixelated]"
             />
           ) : null}
@@ -808,7 +831,11 @@ export function CompareDialog({
               size="icon"
               variant="outline"
               className="size-8"
-              aria-label={playing ? 'Pause both sides' : 'Play both sides'}
+              aria-label={
+                playing
+                  ? translateUi('pause_both_sides_62374eb3')
+                  : translateUi('play_both_sides_c143501a')
+              }
               data-testid="compare-play"
               onClick={togglePlay}
             >
@@ -816,7 +843,7 @@ export function CompareDialog({
             </Button>
             <input
               type="range"
-              aria-label="Seek both sides"
+              aria-label={translateUi('seek_both_sides_49b04bf1')}
               min={0}
               max={durationSec || 0}
               step={0.01}
@@ -830,10 +857,10 @@ export function CompareDialog({
             <span
               ref={driftLabel}
               data-testid="compare-drift-ms"
-              title="Drift between the two players"
+              title={translateUi('drift_between_the_two_players_4a3fcf28')}
               className="w-16 text-right text-2xs tabular-nums text-muted-foreground"
             >
-              0.0 ms
+              {translateUi('compareZeroDrift', { milliseconds: formatDecimal(0, 1, driftLocale) })}
             </span>
           </div>
         ) : null}

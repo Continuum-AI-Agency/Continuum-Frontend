@@ -7,6 +7,7 @@
 
 import { ReactFlowProvider } from '@xyflow/react';
 import { Check, GitCompareArrows } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { CanvasView } from '@/lib/campaign-canvas/canvasView';
 import { columnMapFromView } from '@/lib/campaign-canvas/columnMap';
@@ -24,13 +25,13 @@ import { cn } from '@/lib/utils';
 import { ColumnMapFlow } from '../columnMap/ColumnMapFlow';
 import { LecturaView } from '../lectura/LecturaView';
 
-const STATUS_WORD: Record<VersionStatus, string | null> = {
+const STATUS_WORD_KEY = {
   proposed: null,
-  approved: 'approved',
-  applied: 'applied',
-  denied: 'denied',
-  failed: 'failed',
-};
+  approved: 'approved_2687f86',
+  applied: 'applied_b4267ce',
+  denied: 'denied_62d6c23',
+  failed: 'failed_5d28a90',
+} as const satisfies Record<VersionStatus, string | null>;
 
 export type VersionLineState = {
   line: VersionLine | null;
@@ -86,6 +87,7 @@ export function useVersionLine(
 
 /** The line itself: one pill per version, the applied step, and Compare. */
 export function VersionLineBar({ state }: { state: VersionLineState }) {
+  const uiText = useTranslations('scale');
   const { line, view } = state;
   if (!line || !view) return null;
   const applied = line.appliedId;
@@ -93,12 +95,15 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
     <div className="grid w-full min-w-0 gap-1" data-testid="version-line">
       <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-1.5 text-[12px]">
         <span className="mr-1 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-          Versions
+          {uiText('versions_f89ea27')}
         </span>
-        <ol className="flex min-w-0 flex-wrap items-center gap-1" aria-label="Versions">
+        <ol
+          className="flex min-w-0 flex-wrap items-center gap-1"
+          aria-label={uiText('versions_f89ea27')}
+        >
           {line.versions.map((version, index) => {
             const selected = version.id === view.version.id;
-            const word = STATUS_WORD[version.status];
+            const wordKey = STATUS_WORD_KEY[version.status];
             return (
               <li key={version.id} className="flex items-center gap-1">
                 {index > 0 ? (
@@ -121,7 +126,9 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
                   data-status={version.status}
                 >
                   {version.label}
-                  {word ? <span className="font-sans font-normal"> · {word}</span> : null}
+                  {wordKey ? (
+                    <span className="font-sans font-normal"> · {uiText(wordKey)}</span>
+                  ) : null}
                 </button>
               </li>
             );
@@ -144,7 +151,7 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
               data-applied={applied ? 'true' : 'false'}
             >
               {applied ? <Check className="size-3" aria-hidden /> : null}
-              {applied ? appliedLabelOf(view.model) : 'Not applied yet'}
+              {applied ? appliedLabelOf(view.model) : uiText('not_applied_yet_72470b1')}
             </button>
           </li>
         </ol>
@@ -153,7 +160,9 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
           aria-pressed={state.compare}
           disabled={!view.previous}
           onClick={() => state.setCompare(!state.compare)}
-          title={view.previous ? undefined : 'The first version has nothing before it'}
+          title={
+            view.previous ? undefined : uiText('the_first_version_has_nothing_before_it_6ba2af1')
+          }
           className={cn(
             'ml-auto inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 font-medium focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40',
             state.compare
@@ -163,19 +172,21 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
           data-testid="version-compare"
         >
           <GitCompareArrows className="size-3.5" aria-hidden />
-          Compare with previous
+          {uiText('compare_with_previous_26a87c2')}
         </button>
       </div>
       {view.comparison && view.previous ? (
         <p className="text-[12px] text-muted-foreground" data-testid="version-compare-summary">
-          {view.version.label} against {view.previous.label}:{' '}
-          <span className="font-medium text-foreground">
-            {comparisonSummaryOf(view.comparison)}
-          </span>
+          {uiText.rich('version_against_previous_strong_summary_stron_18ab93d', {
+            version: view.version.label,
+            previous: view.previous.label,
+            summary: comparisonSummaryOf(view.comparison),
+            strong: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+          })}
         </p>
       ) : state.active ? (
         <p className="text-[12px] text-muted-foreground">
-          Viewing {view.version.label} · read-only
+          {uiText('viewing_version_read_only_ef6a8c0', { version: view.version.label })}
         </p>
       ) : null}
     </div>

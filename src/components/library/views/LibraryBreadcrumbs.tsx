@@ -2,6 +2,7 @@
 
 import type { MediaCollection } from '@continuum/contracts';
 import { ChevronRight } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { DragEvent } from 'react';
 import { cn } from '@/lib/utils';
 import { collectionTrail } from './collectionTrail';
@@ -26,12 +27,14 @@ export function LibraryBreadcrumbs({
   onSelectCollection: (id: string | null) => void;
   drop: DropHandlers;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const trail = collectionTrail(collections, collectionId);
   if (trail.length === 0) return null;
 
   return (
     <nav
-      aria-label="Collection path"
+      aria-label={translateUi('collection_path_b214ccd0')}
       data-testid="library-breadcrumbs"
       className="flex min-w-0 flex-wrap items-center gap-1 text-sm text-muted-foreground"
     >
@@ -40,7 +43,8 @@ export function LibraryBreadcrumbs({
         onClick={() => onSelectCollection(null)}
         className="rounded px-1 py-0.5 hover:text-foreground"
       >
-        Library
+        {' '}
+        {translateUi('library_dc20b3d5')}{' '}
       </button>
       {trail.map((segment, index) => {
         const current = index === trail.length - 1;

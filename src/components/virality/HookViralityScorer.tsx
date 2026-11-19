@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,8 @@ export function HookViralityScorer({
   initialHook?: string;
   className?: string;
 }) {
+  const tUi = useTranslations('common');
+
   const [hook, setHook] = useState(initialHook);
   const { score, loading, error, scoreHook } = useViralityScore(brandId);
 
@@ -27,13 +30,13 @@ export function HookViralityScorer({
         htmlFor="virality-hook-input"
         className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground"
       >
-        Score a hook
+        {tUi('m_43e1782eab')}
       </label>
       <Textarea
         id="virality-hook-input"
         value={hook}
         onChange={(event) => setHook(event.target.value)}
-        placeholder="Paste the opening line of a post or clip…"
+        placeholder={tUi('m_6aa3bce0fe')}
         rows={3}
         className="resize-none"
       />
@@ -44,7 +47,7 @@ export function HookViralityScorer({
           disabled={loading || hook.trim().length === 0}
           onClick={() => void scoreHook(hook)}
         >
-          {loading ? 'Scoring…' : 'Score hook'}
+          {loading ? tUi('m_4ba189b588') : tUi('m_c8cb4b82e3')}
         </Button>
         {error ? <span className="text-sm text-destructive">{error}</span> : null}
       </div>

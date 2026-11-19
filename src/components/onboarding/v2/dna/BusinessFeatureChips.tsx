@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { AgentPreviewBuckets } from '../state/agentPreview';
 import { ChipRow } from './listprimitives';
@@ -7,6 +8,8 @@ type Props = {
 };
 
 export function BusinessFeatureChips({ business }: Props) {
+  const tUi = useTranslations('onboarding');
+
   const competitors = business.competitor_names ?? [];
   const features = business.business_features ?? [];
   const benefits = business.business_benefits ?? [];
@@ -15,12 +18,14 @@ export function BusinessFeatureChips({ business }: Props) {
     <ScrollArea className="h-28">
       <div className="space-y-2 pr-3 pt-2">
         {competitors.length > 0 ? (
-          <ChipRow label="Competitors" values={competitors} variant="violet" />
+          <ChipRow label={tUi('m_855bd26cf4')} values={competitors} variant="violet" />
         ) : null}
         {features.length > 0 ? (
-          <ChipRow label="Features" values={features} variant="violet" />
+          <ChipRow label={tUi('m_fc338f87a0')} values={features} variant="violet" />
         ) : null}
-        {benefits.length > 0 ? <ChipRow label="Benefits" values={benefits} variant="teal" /> : null}
+        {benefits.length > 0 ? (
+          <ChipRow label={tUi('m_927f406737')} values={benefits} variant="teal" />
+        ) : null}
       </div>
     </ScrollArea>
   );

@@ -7,8 +7,9 @@
 
 import { Loader2Icon, LockIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
-import { AUTONOMY_LEVELS, type AutonomyLevel, LEVEL_COPY } from './autonomyModel';
+import { AUTONOMY_LEVELS, type AutonomyLevel } from './autonomyModel';
 
 export function AutonomyDial({
   portfolioId,
@@ -26,6 +27,7 @@ export function AutonomyDial({
   disabled?: boolean;
   onSelect: (level: AutonomyLevel) => void;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const at = AUTONOMY_LEVELS.indexOf(value);
   return (
@@ -34,7 +36,9 @@ export function AutonomyDial({
       data-level={value}
       data-testid="autonomy-dial"
     >
-      <legend className="sr-only">How much this portfolio may do on its own</legend>
+      <legend className="sr-only">
+        {uiText('how_much_this_portfolio_may_do_on_its_own_161abbf')}
+      </legend>
       {AUTONOMY_LEVELS.map((level, index) => {
         const selected = level === value;
         const lock = selected ? undefined : locks[level];
@@ -54,7 +58,7 @@ export function AutonomyDial({
             onClick={() => {
               if (!selected) onSelect(level);
             }}
-            title={lock ?? LEVEL_COPY[level].hint}
+            title={lock ?? uiText('autonomyLevelHint', { level })}
             type="button"
           >
             {selected ? (
@@ -80,7 +84,7 @@ export function AutonomyDial({
               {lock ? (
                 <LockIcon aria-hidden="true" className="hidden size-3 shrink-0 sm:block" />
               ) : null}
-              <span className="truncate">{LEVEL_COPY[level].label}</span>
+              <span className="truncate">{uiText('autonomyLevelLabel', { level })}</span>
             </span>
             {pending === level ? (
               <Loader2Icon

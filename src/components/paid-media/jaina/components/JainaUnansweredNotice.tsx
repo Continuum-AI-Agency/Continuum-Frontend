@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 
 type JainaUnansweredNoticeProps = {
@@ -12,6 +13,7 @@ type JainaUnansweredNoticeProps = {
  * instead of a bubble over a blank transcript (PP-DT-C-jaina-unanswered-run-blank-transcript).
  */
 export function JainaUnansweredNotice({ onAskAgain }: JainaUnansweredNoticeProps) {
+  const uiText = useTranslations('scale');
   return (
     <div
       role="status"
@@ -19,10 +21,10 @@ export function JainaUnansweredNotice({ onAskAgain }: JainaUnansweredNoticeProps
       className="mx-auto my-3 flex w-full max-w-3xl flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border/70 bg-card/70 px-4 py-3 text-sm"
     >
       <span className="text-foreground">
-        This question has no answer — the run that should have answered it did not finish.
+        {uiText('this_question_has_no_answer_the_run_that_shou_ac3d09e')}
       </span>
       <Button type="button" size="xs" variant="secondary" onClick={onAskAgain}>
-        Ask again
+        {uiText('ask_again_0d9ad5e')}
       </Button>
     </div>
   );

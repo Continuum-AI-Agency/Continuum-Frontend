@@ -12,6 +12,7 @@ import type {
   TemplateEditableLayer,
   TemplateLayerEdit,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { z } from 'zod';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -71,7 +72,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export const rgbToHex = (rgb: readonly number[]) =>
   `#${rgb
     .slice(0, 3)
-    .map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0'))
+    .map((v) =>
+      Math.round(Math.max(0, Math.min(1, v)) * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
     .join('')}`;
 export const hexToRgb = (hex: string): [number, number, number] => {
   const n = Number.parseInt(hex.slice(1, 7), 16);
@@ -109,6 +114,8 @@ export function TemplateLayerInspector({
   /** Keeps DOM ids unique when the same layer is inspected twice (panel + canvas popover). */
   idPrefix?: string;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const locks = layer.transformLocks ?? {};
   const positionLock = disabled || !!locks.position;
   const x = edit?.x ?? layer.x;
@@ -137,7 +144,7 @@ export function TemplateLayerInspector({
   };
   return (
     <div className="flex flex-col gap-5">
-      <Section title="Layer">
+      <Section title={translateUi('layer_ac9ffcb2')}>
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{layer.text || layer.name}</p>
           <p className="truncate text-2xs text-muted-foreground">
@@ -149,7 +156,8 @@ export function TemplateLayerInspector({
             htmlFor={`${idPrefix}-visible-${layer.compId}-${layer.layerId}`}
             className="text-xs"
           >
-            Visible in template
+            {' '}
+            {translateUi('visible_in_template_105b588a')}{' '}
           </label>
           <Switch
             id={`${idPrefix}-visible-${layer.compId}-${layer.layerId}`}
@@ -161,8 +169,13 @@ export function TemplateLayerInspector({
         </div>
         {layer.fillColor ? (
           <div className="flex items-center justify-between gap-3">
-            <label htmlFor={`${idPrefix}-fill-${layer.compId}-${layer.layerId}`} className="text-xs">
-              {layer.kind === 'text' ? 'Text colour' : 'Fill'}
+            <label
+              htmlFor={`${idPrefix}-fill-${layer.compId}-${layer.layerId}`}
+              className="text-xs"
+            >
+              {layer.kind === 'text'
+                ? translateUi('text_colour_25e9c809')
+                : translateUi('fill_033955d4')}
             </label>
             <input
               id={`${idPrefix}-fill-${layer.compId}-${layer.layerId}`}
@@ -171,23 +184,29 @@ export function TemplateLayerInspector({
               value={rgbToHex(edit?.fillColor ?? layer.fillColor)}
               disabled={disabled || layer.fillReason !== null}
               title={layer.fillReason ?? undefined}
-              onChange={(event) => onEdit({ fillColor: hexToRgb(event.target.value) }, editGroup('fill'))}
+              onChange={(event) =>
+                onEdit({ fillColor: hexToRgb(event.target.value) }, editGroup('fill'))
+              }
               onBlur={() => commitGroup('fill')}
             />
           </div>
         ) : null}
-        {layer.fillColor && layer.fillReason ? <Note>Fill: {layer.fillReason.replaceAll('_', ' ')}</Note> : null}
+        {layer.fillColor && layer.fillReason ? (
+          <Note>
+            {translateUi('fill_c4c3a7a5')} {layer.fillReason.replaceAll('_', ' ')}
+          </Note>
+        ) : null}
         {layer.visibilitySlotKeys.length ? (
-          <Note>Visibility follows this layer’s shared Show field across formats.</Note>
+          <Note>{translateUi('visibility_follows_this_layer_s_sha_3bcde801')}</Note>
         ) : null}
         {layer.visibilityReason ? <Note>{layer.visibilityReason}</Note> : null}
       </Section>
 
-      <Section title="Transform">
+      <Section title={translateUi('transform_d2d68041')}>
         <div className="grid grid-cols-2 gap-2">
           <NumberScrubField
             label="X"
-            ariaLabel="Position X"
+            ariaLabel={translateUi('positionXLabel')}
             suffix="px"
             min={-100_000}
             max={100_000}
@@ -198,7 +217,7 @@ export function TemplateLayerInspector({
           />
           <NumberScrubField
             label="Y"
-            ariaLabel="Position Y"
+            ariaLabel={translateUi('positionYLabel')}
             suffix="px"
             min={-100_000}
             max={100_000}
@@ -208,7 +227,7 @@ export function TemplateLayerInspector({
             onCommit={() => commitGroup('y')}
           />
           <NumberScrubField
-            label="Rotation"
+            label={translateUi('rotation_57b5e2fc')}
             suffix="°"
             min={-36_000}
             max={36_000}
@@ -218,7 +237,7 @@ export function TemplateLayerInspector({
             onCommit={() => commitGroup('rotation')}
           />
           <NumberScrubField
-            label="Opacity"
+            label={translateUi('opacity_6062652e')}
             suffix="%"
             min={0}
             max={100}
@@ -228,7 +247,7 @@ export function TemplateLayerInspector({
             onCommit={() => commitGroup('opacity')}
           />
           <NumberScrubField
-            label="Scale X"
+            label={translateUi('scale_x_9e894f3e')}
             suffix="%"
             min={-10_000}
             max={10_000}
@@ -238,7 +257,7 @@ export function TemplateLayerInspector({
             onCommit={() => commitGroup('scale-x')}
           />
           <NumberScrubField
-            label="Scale Y"
+            label={translateUi('scale_y_5001e575')}
             suffix="%"
             min={-10_000}
             max={10_000}
@@ -248,22 +267,27 @@ export function TemplateLayerInspector({
             onCommit={() => commitGroup('scale-y')}
           />
         </div>
-        {layer.parentName ? <Note>X and Y are relative to {layer.parentName}.</Note> : null}
+        {layer.parentName ? (
+          <Note>
+            {translateUi('x_and_y_are_relative_to_fa334ca1')} {layer.parentName}.
+          </Note>
+        ) : null}
         {reasons.map((reason) => (
           <Note key={reason}>{reason}</Note>
         ))}
       </Section>
 
       {layer.kind === 'text' ? (
-        <Section title="Text">
+        <Section title={translateUi('text_71988c4d')}>
           <label
             htmlFor={`${idPrefix}-text-${layer.compId}-${layer.layerId}`}
             className="flex flex-col gap-1 text-xs"
           >
-            Text
+            {' '}
+            {translateUi('text_71988c4d')}{' '}
             <Input
               id={`${idPrefix}-text-${layer.compId}-${layer.layerId}`}
-              aria-label="Layer text"
+              aria-label={translateUi('layer_text_ac7a392d')}
               className="h-8 text-xs"
               value={edit?.text ?? layer.text ?? ''}
               disabled={textLocked}
@@ -272,16 +296,17 @@ export function TemplateLayerInspector({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            Font face
+            {' '}
+            {translateUi('font_face_565a166e')}{' '}
             <select
-              aria-label="Font face"
+              aria-label={translateUi('font_face_565a166e')}
               className="h-8 w-full rounded-md border bg-background px-2"
               value={font ?? ''}
               disabled={fontLocked}
               onChange={(event) => onEdit({ font: event.target.value }, editGroup('font'))}
               onBlur={() => commitGroup('font')}
             >
-              <option value={font ?? ''}>{font || 'Source font'}</option>
+              <option value={font ?? ''}>{font || translateUi('source_font_1b360834')}</option>
               {fonts
                 .filter((face) => face.postScriptName && face.postScriptName !== font)
                 .map((face) => (
@@ -296,7 +321,8 @@ export function TemplateLayerInspector({
               htmlFor={`${idPrefix}-size-${layer.compId}-${layer.layerId}`}
               className="flex flex-col gap-1 text-xs"
             >
-              Text size (pt)
+              {' '}
+              {translateUi('text_size_pt_e978300b')}{' '}
               <Input
                 id={`${idPrefix}-size-${layer.compId}-${layer.layerId}`}
                 type="number"
@@ -322,18 +348,23 @@ export function TemplateLayerInspector({
                 onCheckedChange={() => {
                   if (weight.target?.postScriptName) onEdit({ font: weight.target.postScriptName });
                 }}
-              />
-              Bold
+              />{' '}
+              {translateUi('bold_94fee62e')}{' '}
             </label>
           </div>
           {invalidFields.includes('size') ? (
             <p role="alert" className="text-xs text-destructive">
-              Enter a size from 1 to 1000.
+              {' '}
+              {translateUi('enter_a_size_from_1_to_1000_5d9bb0da')}{' '}
             </p>
           ) : null}
           {font ? <Note>{font}</Note> : null}
           {!layer.textReason && !weight.target ? (
-            <Note>Upload this font’s {weight.bold ? 'regular' : 'bold'} face to change bold.</Note>
+            <Note>
+              {translateUi('upload_this_font_s_5e0f94e7')}{' '}
+              {weight.bold ? translateUi('regular_667937c3') : translateUi('bold_e0007a5b')}{' '}
+              {translateUi('face_to_change_bold_d0eca551')}
+            </Note>
           ) : null}
           {layer.textReason ? <Note>{layer.textReason}</Note> : null}
           <div className="grid grid-cols-2 gap-2">
@@ -343,7 +374,9 @@ export function TemplateLayerInspector({
                 htmlFor={`${idPrefix}-${property}-${layer.compId}-${layer.layerId}`}
                 className="flex flex-col gap-1 text-xs"
               >
-                {property === 'width' ? 'Text box width' : 'Text box height'}
+                {property === 'width'
+                  ? translateUi('text_box_width_f5c6038c')
+                  : translateUi('text_box_height_c1cee723')}
                 <Input
                   id={`${idPrefix}-${property}-${layer.compId}-${layer.layerId}`}
                   type="number"
@@ -360,7 +393,9 @@ export function TemplateLayerInspector({
           </div>
           {boxErrors.length ? (
             <p role="alert" className="text-xs text-destructive">
-              Enter valid values for {boxErrors.join(', ')}. Text box dimensions must be positive.
+              {' '}
+              {translateUi('enter_valid_values_for_64758329')} {boxErrors.join(', ')}
+              {translateUi('text_box_dimensions_must_be_positiv_85d70dcd')}{' '}
             </p>
           ) : null}
           {layer.geometryReason ? <Note>{layer.geometryReason}</Note> : null}

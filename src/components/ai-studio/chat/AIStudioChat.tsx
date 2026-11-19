@@ -1,5 +1,6 @@
 'use client';
 import { MessageCircle, Send, X } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -29,6 +30,10 @@ export function AIStudioChat({
   className,
   onOpenChange,
 }: AIStudioChatProps) {
+  const displayLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const { messages, sendMessage, isLoading } = useAIStudioChatRealtime(brandProfileId, roomId);
   const { user } = useSession();
   const [inputValue, setInputValue] = useState('');
@@ -88,7 +93,7 @@ export function AIStudioChat({
           size="icon"
           variant="default"
           onClick={() => setOpen(true)}
-          aria-label="Open team chat"
+          aria-label={translateUi('open_team_chat_664c54e2')}
           className="size-11 rounded-full shadow-md transition-colors"
         >
           <MessageCircle width="24" height="24" />
@@ -117,17 +122,18 @@ export function AIStudioChat({
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <MessageCircle />
-              <span className="font-medium text-sm">Team chat</span>
+              <span className="font-medium text-sm">{translateUi('team_chat_87ba4c56')}</span>
             </div>
             <span className="text-2xs text-muted-foreground">
-              Talk to your teammates on this canvas
+              {' '}
+              {translateUi('talk_to_your_teammates_on_this_canv_42704115')}{' '}
             </span>
           </div>
           <Button
             size="icon-sm"
             variant="ghost"
             onClick={() => setOpen(false)}
-            aria-label="Close team chat"
+            aria-label={translateUi('close_team_chat_11148b8e')}
           >
             <X />
           </Button>
@@ -138,13 +144,17 @@ export function AIStudioChat({
           <div className="flex min-h-full flex-col justify-end gap-3">
             {isLoading && (
               <div className="flex justify-center p-4">
-                <span className="text-xs text-gray-400">Loading history...</span>
+                <span className="text-xs text-gray-400">
+                  {translateUi('loading_history_9a0b6655')}
+                </span>
               </div>
             )}
 
             {!isLoading && messages.length === 0 && (
               <div className="flex justify-center p-4 text-center opacity-50">
-                <span className="text-xs">No messages yet. Start the conversation!</span>
+                <span className="text-xs">
+                  {translateUi('no_messages_yet_start_the_conversat_4767bf40')}
+                </span>
               </div>
             )}
 
@@ -160,7 +170,7 @@ export function AIStudioChat({
                 >
                   {!isMe && (
                     <span className="ml-1 text-2xs text-gray-400">
-                      {msg.user_name || 'Unknown'}
+                      {msg.user_name || translateUi('unknown_b764cdc0')}
                     </span>
                   )}
                   <div
@@ -174,7 +184,7 @@ export function AIStudioChat({
                     {msg.content}
                   </div>
                   <span className={cn('text-3xs opacity-40 text-gray-400', isMe ? 'mr-1' : 'ml-1')}>
-                    {new Date(msg.created_at).toLocaleTimeString([], {
+                    {new Date(msg.created_at).toLocaleTimeString(displayLocale, {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
@@ -191,7 +201,7 @@ export function AIStudioChat({
             <Input
               className="flex-1"
               inputSize="md"
-              placeholder="Message your team…"
+              placeholder={translateUi('message_your_team_6406c1d0')}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -202,7 +212,7 @@ export function AIStudioChat({
               disabled={!inputValue.trim() || isSending}
               size="icon"
               variant="default"
-              aria-label="Send message"
+              aria-label={translateUi('send_message_93a26b1e')}
             >
               <Send />
             </Button>

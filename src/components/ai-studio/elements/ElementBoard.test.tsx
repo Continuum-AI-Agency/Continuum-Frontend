@@ -32,8 +32,15 @@ mock.module('@/components/ui/select', () => ({
 
 import type { ElementRecord, Skill } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApiError } from '@/lib/api/errors';
 import { ElementBoard } from './ElementBoard';
 
@@ -210,11 +217,15 @@ describe('ElementBoard', () => {
     expect(screen.queryByRole('button', { name: 'Remove /nobrand' })).toBeNull();
   });
 
-  it('says what a 422 style conflict means, with the Backend’s own message', async () => {
+  it('localizes a 422 style conflict and preserves its structured style identities', async () => {
     requestMock.mockImplementation((options) =>
       options.method === 'PATCH'
         ? Promise.reject(
-            new ApiError('/noir conflicts with /golden-hour', 422, 'element_style_conflict'),
+            new ApiError('/noir conflicts with /golden-hour', 422, 'element_style_conflict', {
+              error: 'element_style_conflict',
+              message: '/noir conflicts with /golden-hour',
+              styleSlugs: ['noir', 'golden-hour'],
+            }),
           )
         : Promise.resolve(respond(options)),
     );
@@ -224,6 +235,8 @@ describe('ElementBoard', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Two of these styles contradict each other');
-    expect(alert.textContent).toContain('/noir conflicts with /golden-hour');
+    expect(alert.textContent).toContain('/noir');
+    expect(alert.textContent).toContain('/golden-hour');
+    expect(alert.textContent).not.toContain('conflicts with');
   });
 });

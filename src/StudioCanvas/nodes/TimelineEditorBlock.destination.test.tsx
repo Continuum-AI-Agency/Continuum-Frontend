@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
+import { cleanup, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
-mock.module('@/app/(post-auth)/settings/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/settings/actions', () => ({
   switchActiveBrandAction: mock(async () => undefined),
 }));
 

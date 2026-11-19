@@ -6,6 +6,7 @@
 // existing report email as is; there is no public share link, so none is offered.
 
 import { ChevronLeftIcon, ChevronRightIcon, SendIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,7 @@ function SlideBody({ slide }: { slide: StorySlide }) {
 }
 
 export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
+  const uiText = useTranslations('dashboard');
   const today = new Date();
   const { reads } = useBriefReads(ctx.brandId, ctx.adAccounts);
   const brief = briefView(reads, today);
@@ -81,7 +83,7 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
       </article>
       <div className="flex items-center justify-between gap-2">
         <Button
-          aria-label="Previous slide"
+          aria-label={uiText('previous_slide_bfb5492')}
           disabled={current === 0}
           onClick={() => setIndex(current - 1)}
           size="icon-sm"
@@ -91,10 +93,10 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
           <ChevronLeftIcon className="size-4" />
         </Button>
         <span className="text-muted-foreground text-xs">
-          {current + 1} of {slides.length}
+          {uiText('current_of_total_35d9001', { current: current + 1, total: slides.length })}
         </span>
         <Button
-          aria-label="Next slide"
+          aria-label={uiText('next_slide_cdc93d1')}
           disabled={current === slides.length - 1}
           onClick={() => setIndex(current + 1)}
           size="icon-sm"
@@ -104,7 +106,7 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
           <ChevronRightIcon className="size-4" />
         </Button>
       </div>
-      <ol aria-label="Slides" className="flex flex-col gap-0.5">
+      <ol aria-label={uiText('slides_a0ffe38')} className="flex flex-col gap-0.5">
         {slides.map((item, position) => (
           <li key={item.key}>
             <button
@@ -128,10 +130,10 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
       </ol>
       <div className="flex flex-col gap-1.5 border-t pt-4">
         <Button className="self-start" onClick={() => setReportOpen(true)} size="sm" type="button">
-          <SendIcon aria-hidden className="size-3.5" /> Send as Continuum Report
+          <SendIcon aria-hidden className="size-3.5" /> {uiText('send_as_continuum_report_fc89617')}
         </Button>
         <p className="text-muted-foreground text-xs">
-          Emails the brand’s Continuum Report, built from the same accounts, now or on a schedule.
+          {uiText('emails_the_brand_s_continuum_report_built_fro_5a1f69e')}
         </p>
       </div>
       <SendContinuumReportDialog

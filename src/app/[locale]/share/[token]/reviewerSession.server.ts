@@ -1,0 +1,74 @@
+import 'server-only';
+
+import { createHash } from 'node:crypto';
+import { apiErrorPayloadSchema } from '@continuum/contracts';
+import { publicFailureCode } from '@/i18n/publicErrors';
+
+export function reviewerSessionCookieName(shareToken: string): string {
+  const suffix = createHash('sha256').update(shareToken).digest('hex').slice(0, 20);
+  return `continuum_share_${suffix}`;
+}
+
+export function hashReviewerSessionToken(sessionToken: string): string {
+  return createHash('sha256').update(sessionToken).digest('base64url');
+}
+
+export async function invokePublicCreativeOperation(
+  body: Record<string, unknown>,
+): Promise<
+  { ok: true; data: unknown } | { ok: false; message: string; code?: string; status?: number }
+> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key)
+    return {
+      ok: false,
+      message: 'Review service is not configured.',
+      code: 'service_unavailable',
+      status: 503,
+    };
+  try {
+    // LIBRARY_CREATIVE_OPERATIONS_FUNCTION_URL points at a locally served copy of the
+    // function (a bench proving an undeployed change), as LIBRARY_SHARE_FUNCTION_URL does.
+    const endpoint =
+      process.env.LIBRARY_CREATIVE_OPERATIONS_FUNCTION_URL ??
+      `${url}/functions/v1/library-creative-operations`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    });
+    const data: unknown = await response.json();
+    const parsed = apiErrorPayloadSchema.safeParse(data);
+    const failure = parsed.success ? parsed.data : {};
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        code: publicFailureCode(failure),
+        status: response.status,
+        message:
+          typeof failure.message === 'string'
+            ? failure.message
+            : typeof failure.error === 'string'
+              ? failure.error
+              : 'The review link could not be unlocked.',
+      };
+    }
+    return { ok: true, data };
+  } catch {
+    return {
+      ok: false,
+      message: 'The review service is temporarily unavailable.',
+      code: 'service_unavailable',
+      status: 503,
+    };
+  }
+}

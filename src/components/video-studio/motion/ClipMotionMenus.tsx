@@ -10,6 +10,7 @@ import {
   type LookEffectId,
 } from '@continuum/contracts';
 import { Blend, Palette, Sparkles } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -17,6 +18,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
 } from '@/components/ui/context-menu';
+import { useStudioMetadata } from '@/StudioCanvas/hooks/useStudioMetadata';
 import { animates, takesLook } from './motionActions';
 import { SEAM_TRANSITIONS, TRANSITION_LABELS, type TransitionType } from './TransitionSeam';
 
@@ -42,18 +44,22 @@ export function ClipMotionMenus({
   transitionsToNext: boolean;
   actions: MotionMenuActions;
 }) {
+  const registryText = useStudioMetadata();
+
+  const translateUi = useUiTranslations('studio');
+
   if (!animates(clip)) return null;
   return (
     <>
       <ContextMenuSeparator />
       <ContextMenuSub>
         <ContextMenuSubTrigger>
-          <Sparkles /> Animate
+          <Sparkles /> {translateUi('animate_fd4a5f3d')}{' '}
         </ContextMenuSubTrigger>
         <ContextMenuSubContent className={SUB}>
           {CLIP_MOTION_PRESET_IDS.map((preset) => (
             <ContextMenuItem key={preset} onClick={() => actions.animate(clip.id, preset)}>
-              {CLIP_MOTION_PRESETS[preset].label}
+              {registryText(CLIP_MOTION_PRESETS[preset].label)}
             </ContextMenuItem>
           ))}
         </ContextMenuSubContent>
@@ -61,12 +67,12 @@ export function ClipMotionMenus({
       {takesLook(clip) ? (
         <ContextMenuSub>
           <ContextMenuSubTrigger>
-            <Palette /> Look
+            <Palette /> {translateUi('look_a0de5719')}{' '}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className={SUB}>
             {LOOK_EFFECT_IDS.map((effect) => (
               <ContextMenuItem key={effect} onClick={() => actions.look(clip.id, effect)}>
-                {LOOK_EFFECTS[effect].label}
+                {registryText(LOOK_EFFECTS[effect].label)}
               </ContextMenuItem>
             ))}
           </ContextMenuSubContent>
@@ -75,17 +81,18 @@ export function ClipMotionMenus({
       {transitionsToNext ? (
         <ContextMenuSub>
           <ContextMenuSubTrigger>
-            <Blend /> Transition
+            <Blend /> {translateUi('transition_2fe70464')}{' '}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className={SUB}>
             {SEAM_TRANSITIONS.map((type) => (
               <ContextMenuItem key={type} onClick={() => actions.transition(clip.id, type)}>
-                {TRANSITION_LABELS[type]} into next
+                {registryText(TRANSITION_LABELS[type])} {translateUi('into_next_a4f503b3')}{' '}
               </ContextMenuItem>
             ))}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => actions.transition(clip.id, 'cut')}>
-              Remove transition
+              {' '}
+              {translateUi('remove_transition_cd609bcd')}{' '}
             </ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>

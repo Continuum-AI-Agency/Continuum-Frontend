@@ -2,6 +2,7 @@
 
 import { format } from 'date-fns';
 import { Check, Image, SlidersHorizontal, Sparkles, Trash2, Video, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -41,6 +42,7 @@ export function BulkActionToolbar({
   isGeneratingMedia = false,
   className,
 }: BulkActionToolbarProps) {
+  const uiText = useTranslations('organic');
   const [moveOpen, setMoveOpen] = React.useState(false);
 
   if (selectedCount === 0) return null;
@@ -57,11 +59,11 @@ export function BulkActionToolbar({
           <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold">
             {selectedCount}
           </span>
-          <span className="text-sm font-medium text-foreground">Selected</span>
+          <span className="text-sm font-medium text-foreground">{uiText('selected_57fd7a0')}</span>
           <button
             type="button"
             onClick={onClear}
-            aria-label="Clear selection"
+            aria-label={uiText('clear_selection_cea4d2e')}
             className="p-1 hover:bg-subtle rounded-full transition-colors"
           >
             <X className="w-4 h-4 text-secondary" />
@@ -77,7 +79,7 @@ export function BulkActionToolbar({
               className="h-8 gap-2 text-secondary hover:text-primary"
             >
               <Image className="w-4 h-4" />
-              Attach creative…
+              {uiText('attach_creative_20bedb6')}
             </Button>
           ) : null}
           {onGenerateMedia ? (
@@ -89,7 +91,7 @@ export function BulkActionToolbar({
               className="h-8 gap-2 text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary"
             >
               <Sparkles className="w-4 h-4" />
-              {isGeneratingMedia ? 'Generating…' : 'Generate media'}
+              {isGeneratingMedia ? uiText('generating_d20a447') : uiText('generate_media_279349a')}
             </Button>
           ) : null}
           {onGenerateReels && reelCount > 0 ? (
@@ -102,8 +104,8 @@ export function BulkActionToolbar({
             >
               <Video className="w-4 h-4" />
               {isGeneratingReels
-                ? 'Generating…'
-                : `Prepare ${reelCount} reel${reelCount === 1 ? '' : 's'}`}
+                ? uiText('generating_d20a447')
+                : uiText('prepareReels', { count: reelCount })}
             </Button>
           ) : null}
           {onApprove ? (
@@ -114,7 +116,7 @@ export function BulkActionToolbar({
               className="h-8 gap-2 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"
             >
               <Check className="w-4 h-4" />
-              Approve
+              {uiText('approve_6007acb')}
             </Button>
           ) : null}
           <Popover open={moveOpen} onOpenChange={setMoveOpen}>
@@ -126,7 +128,7 @@ export function BulkActionToolbar({
                   className="h-8 gap-2 text-secondary hover:text-primary"
                 >
                   <SlidersHorizontal className="w-4 h-4" />
-                  Move
+                  {uiText('move_6ecc3df')}
                 </Button>
               }
             />
@@ -149,7 +151,7 @@ export function BulkActionToolbar({
             className="h-8 gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="w-4 h-4" />
-            Delete
+            {uiText('delete_e2d0a54')}
           </Button>
         </div>
       </div>

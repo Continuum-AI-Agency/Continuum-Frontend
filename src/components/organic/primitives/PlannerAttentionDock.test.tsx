@@ -1,5 +1,6 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { UNSCHEDULED_DAY_ID } from './calendar-utils';
 import type { CreatePostOptions, PlannerPlatform } from './planner-platforms';
 import { derivePlannerDock } from './plannerIntelligence';
@@ -198,9 +199,9 @@ describe('PlannerAttentionDock — overdue', () => {
     ]);
     const lists = section(dock, 'attention')?.querySelectorAll('ul');
     expect(lists?.[0]?.getAttribute('aria-label')).toBe('Overdue');
-    expect(lists?.[0]?.querySelector('[data-dock-draft-id]')?.getAttribute('data-dock-draft-id')).toBe(
-      'late',
-    );
+    expect(
+      lists?.[0]?.querySelector('[data-dock-draft-id]')?.getAttribute('data-dock-draft-id'),
+    ).toBe('late');
     fireEvent.click(screen.getByRole('button', { name: /Missed launch/ }));
     expect(onSelectDraft).toHaveBeenCalledWith('late');
   });
@@ -237,7 +238,9 @@ describe('PlannerAttentionDock — lookahead', () => {
     );
     expect(thursday?.textContent).toBe('151');
     // The glyphs are decoration; the label already names the open platforms.
-    expect(thursday?.querySelector('[data-brand-icon="facebook"]')?.closest('[aria-hidden]')).not.toBeNull();
+    expect(
+      thursday?.querySelector('[data-brand-icon="facebook"]')?.closest('[aria-hidden]'),
+    ).not.toBeNull();
     expect(dock.querySelector('[data-dock-day="2026-10-16"]')?.getAttribute('aria-label')).toBe(
       'Plan a post for Fri, Oct 16 · 0 planned · open: Instagram, Facebook',
     );
@@ -279,10 +282,11 @@ describe('PlannerAttentionDock — lookahead', () => {
   it('sits beside the attention list from 48rem wide and stacks under it below', () => {
     const { dock } = renderDock([day('2026-10-14', [draft('broken', { status: 'failed' })])]);
     const sections = section(dock, 'attention')?.parentElement;
-    expect(sections?.className).toContain('[@container(width>=48rem)]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]');
-    expect(Array.from(sections?.children ?? []).map((child) => child.getAttribute('data-dock-section'))).toEqual([
-      'attention',
-      'lookahead',
-    ]);
+    expect(sections?.className).toContain(
+      '[@container(width>=48rem)]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
+    );
+    expect(
+      Array.from(sections?.children ?? []).map((child) => child.getAttribute('data-dock-section')),
+    ).toEqual(['attention', 'lookahead']);
   });
 });

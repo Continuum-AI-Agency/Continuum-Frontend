@@ -1,4 +1,11 @@
 'use client';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { uiDateFormat } from '@/lib/paid-media/uiDateFormat';
 
 // Saved dashboards, above the chat: a collapsed strip that opens into each saved report's
 // blocks, rendered by the same block renderer. "Refresh" is a prepared question back to
@@ -18,8 +25,6 @@ import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { checkpointBlockV2Schema, degradeToNarrativeBlockV2 } from '@/lib/jaina/schemas';
 import { BlockRenderer } from '../blocks/BlockRenderer';
 
-const DATE_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-
 const DERIVED_NOTE: Record<
   NonNullable<NonNullable<DashboardBlockSpec['spec']>['derived']>,
   string
@@ -29,15 +34,62 @@ const DERIVED_NOTE: Record<
   comparison: 'its comparison is recomputed, not re-fetched',
 };
 
+const SPEC_REASON_IDS: Record<string, string> = {
+  'the scope frame is composed from the other blocks, not fetched': 'scope',
+  'a survey is a question to the reader, not a fetch': 'survey',
+  'a templated answer is composed from every read of its turn, not one fetch': 'template',
+  'no tool recorded': 'tool',
+  'no entity recorded': 'entity',
+  'no window recorded': 'window',
+};
+function specReason(reason: string | null, t: ScaleCopy): string {
+  if (!reason) return t('unknown_b23a6a8');
+  const known = SPEC_REASON_IDS[reason];
+  const tools = /^cites (\d+) tools \((.+)\)$/.exec(reason);
+  const entity = /^entity "(.*)" carries no id$/.exec(reason);
+  const window = /^window "(.*)" has no dates on record and no trailing-day preset$/.exec(reason);
+  if (!known && !tools && !entity && !window) return reason;
+  return t('savedSpecReason', {
+    reason: known ?? (tools ? 'tools' : entity ? 'entityId' : 'windowDates'),
+    count: tools ? Number(tools[1]) : 0,
+    name: entity?.[1] ?? window?.[1] ?? '',
+    tools: tools?.[2] ?? '',
+  });
+}
+
 /** One line under a module: re-runnable and for which window, or why not. */
-export function describeBlockSpec(entry: DashboardBlockSpec | undefined): string {
-  if (!entry) return 'Saved without a re-run spec';
-  if (!entry.spec) return `Not re-runnable: ${entry.reason}`;
+export function describeBlockSpec(
+  entry: DashboardBlockSpec | undefined,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
+  if (!entry) return uiTranslate ? uiTranslate('savedSpecMissing') : 'Saved without a re-run spec';
+  if (!entry.spec)
+    return uiTranslate
+      ? uiTranslate('helper_b7d6c82ec61b', { v0: specReason(entry.reason, uiTranslate) })
+      : `Not re-runnable: ${entry.reason}`;
+  if (uiTranslate) {
+    const range = entry.spec.range;
+    const window =
+      range.kind === 'preset'
+        ? uiTranslate('savedSpecWindow', {
+            preset: range.preset,
+            days: range.preset === 'flight' ? 0 : Number(range.preset.slice(1)),
+          })
+        : range.from === range.to
+          ? uiDateFormat(uiLocale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
+              new Date(`${range.from}T00:00:00Z`),
+            )
+          : `${uiDateFormat(uiLocale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${range.from}T00:00:00Z`))} → ${uiDateFormat(uiLocale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${range.to}T00:00:00Z`))}`;
+    return uiTranslate('savedSpecDescription', { window, derived: entry.spec.derived ?? 'none' });
+  }
   const derived = entry.spec.derived ? ` · ${DERIVED_NOTE[entry.spec.derived]}` : '';
   return `Re-runnable · computed for ${rangeSpecLabel(entry.spec.range)}${derived}`;
 }
 
 export function SavedDashboardsPanel() {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const scope = useJainaBrandScope();
   const brandId = scope?.brandId ?? null;
   const [openId, setOpenId] = useState<string | null>(null);
@@ -75,13 +127,15 @@ export function SavedDashboardsPanel() {
         onClick={() => setExpanded((value) => !value)}
         type="button"
       >
-        {expanded ? (
-          <ChevronDownIcon className="size-4 text-muted-foreground" />
-        ) : (
-          <ChevronRightIcon className="size-4 text-muted-foreground" />
-        )}
-        Saved dashboards
-        <span className="text-muted-foreground text-xs">({dashboards.length})</span>
+        {uiText.rich('sentence_375df8af6920', {
+          v0: () =>
+            expanded ? (
+              <ChevronDownIcon className="size-4 text-muted-foreground" />
+            ) : (
+              <ChevronRightIcon className="size-4 text-muted-foreground" />
+            ),
+          v1: () => <span className="text-muted-foreground text-xs">({dashboards.length})</span>,
+        })}
       </button>
       {/* The opened dashboard is a REPORT — five modules of charts and tables — and it lands
        *  inside a host that bounds its own height. Without a scroll of its own the list grew
@@ -109,18 +163,24 @@ export function SavedDashboardsPanel() {
                     {dashboard.name}
                   </button>
                   <span className="text-muted-foreground text-xs">
-                    saved {DATE_FMT.format(new Date(dashboard.created_at))} ·{' '}
-                    {dashboard.blocks.length} module{dashboard.blocks.length === 1 ? '' : 's'}
-                    {dashboard.window_label ? ` · covers ${dashboard.window_label}` : ''}
+                    {uiText.rich('sentence_d16fe834cc14', {
+                      date: uiDateFormat(uiLocale, { month: 'short', day: 'numeric' }).format(
+                        new Date(dashboard.created_at),
+                      ),
+                      count: dashboard.blocks.length,
+                      hasWindow: dashboard.window_label ? 'yes' : 'no',
+                      window: dashboard.window_label ?? '',
+                    })}
                   </span>
                   <a
                     className="inline-flex items-center gap-1 text-primary-ink text-xs hover:underline"
                     href={jainaPromptHref(refreshPrompt)}
                   >
-                    <RefreshCwIcon className="size-3" /> Ask Jaina to refresh
+                    <RefreshCwIcon className="size-3" />
+                    {uiText('ask_jaina_to_refresh_8e49228')}
                   </a>
                   <Button
-                    aria-label={`Delete dashboard ${dashboard.name}`}
+                    aria-label={uiText('template_ebfde02db718', { v0: dashboard.name })}
                     onClick={() => void remove(dashboard.id)}
                     size="icon-sm"
                     type="button"
@@ -132,10 +192,11 @@ export function SavedDashboardsPanel() {
                 {isOpen ? (
                   <div className="mt-2 space-y-3">
                     <p className="text-muted-foreground text-xs">
-                      Figures as of the day this was saved. Refresh to get today's.
-                      {dashboard.spec
-                        ? null
-                        : ' Saved without a re-run spec: its figures cannot be re-dated.'}
+                      {uiText.rich('sentence_7057a8de711c', {
+                        v0: dashboard.spec
+                          ? ''
+                          : uiText('saved_without_a_re_run_spec_its_figures_canno_77d8d6f'),
+                      })}
                     </p>
                     {/* The scope frame first, as the live report reads: the window before
                      *  the figures, even on a row saved before the save kept it in front. */}
@@ -152,7 +213,7 @@ export function SavedDashboardsPanel() {
                             className="mt-1 text-muted-foreground text-xs"
                             data-testid="block-rerun"
                           >
-                            {describeBlockSpec(specByBlock.get(block.block_id))}
+                            {describeBlockSpec(specByBlock.get(block.block_id), uiText, uiLocale)}
                           </p>
                         ) : null}
                       </div>

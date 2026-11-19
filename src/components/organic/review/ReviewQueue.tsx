@@ -9,46 +9,49 @@ import {
   type ReviewQueueItem,
 } from '@continuum/contracts';
 import { motion, type PanInfo, useMotionValue, useTransform } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useReviewQueue } from '@/hooks/useReviewQueue';
 import { useBrandStyles } from '@/hooks/useStylesShelf';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
 import { ApiError } from '@/lib/api/errors';
 
 /** How far (px, with a flick's velocity counted in) a card travels before it counts. */
 const SWIPE_THRESHOLD = 140;
 
-const CATEGORY_LABEL: Record<HeadlessEffect['category'], string> = {
-  camera: 'Camera',
-  film: 'Film',
-  retro: 'Retro video',
-  lens: 'Lens',
-  print: 'Print',
-  grade: 'Grade',
-};
+const CATEGORY_LABEL = {
+  camera: 'reviewCategoryCamera',
+  film: 'reviewCategoryFilm',
+  retro: 'reviewCategoryRetro',
+  lens: 'reviewCategoryLens',
+  print: 'reviewCategoryPrint',
+  grade: 'reviewCategoryGrade',
+} as const satisfies Record<HeadlessEffect['category'], string>;
 
-const DONE: Record<ReviewDecision['decision'], string> = {
-  approve: 'Approved: it is on the schedule',
-  skip: 'Skipped',
-  revise: 'Sent back with your change',
-};
+const DONE = {
+  approve: 'reviewDoneApprove',
+  skip: 'reviewDoneSkip',
+  revise: 'reviewDoneRevise',
+} as const satisfies Record<ReviewDecision['decision'], string>;
 
-function describeError(error: unknown): string {
-  if (error instanceof ApiError) {
-    const reason = typeof error.payload?.reason === 'string' ? error.payload.reason : null;
-    if (reason === 'account_missing') return 'connect a social account for this platform first';
-    return reason ? `${error.message} (${reason})` : error.message;
-  }
-  return error instanceof Error ? error.message : 'something went wrong';
-}
+const FAILED = {
+  approve: 'reviewApproveFailed',
+  skip: 'reviewSkipFailed',
+  revise: 'reviewReviseFailed',
+} as const satisfies Record<ReviewDecision['decision'], string>;
 
 function conceptLabel(item: ReviewQueueItem): string {
   return headlessConcept(item.creative.concept).label;
 }
 
-function effectLabel(effectId: string | undefined, brandEffects: readonly HeadlessEffect[]) {
-  if (!effectId) return 'No effect';
+function effectLabel(
+  effectId: string | undefined,
+  brandEffects: readonly HeadlessEffect[],
+  noEffect: string,
+) {
+  if (!effectId) return noEffect;
   return (
     headlessEffect(effectId)?.label ??
     brandEffects.find((effect) => effect.id === effectId)?.label ??
@@ -66,6 +69,8 @@ type CardProps = {
 };
 
 function SwipeCard({ item, effectName, autoFocus, onDecide, onRevise }: CardProps) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-240, 240], [-8, 8]);
   const dragged = useRef(false);
@@ -97,8 +102,11 @@ function SwipeCard({ item, effectName, autoFocus, onDecide, onRevise }: CardProp
       // biome-ignore lint/a11y/noNoninteractiveTabindex: the card is the keyboard target for ←/→/Enter; the buttons below are the pointer and screen-reader equivalents.
       tabIndex={0}
       role="group"
-      aria-roledescription="review card"
-      aria-label={`${conceptLabel(item)}, ${effectName}. Right arrow approves, left arrow skips, Enter describes a change.`}
+      aria-roledescription={uiText('reviewCardRole')}
+      aria-label={uiText('reviewCardInstructions', {
+        concept: conceptLabel(item),
+        effect: effectName,
+      })}
       aria-keyshortcuts="ArrowRight ArrowLeft Enter"
       drag="x"
       dragSnapToOrigin
@@ -138,7 +146,7 @@ function SwipeCard({ item, effectName, autoFocus, onDecide, onRevise }: CardProp
         <Badge variant="teal">{effectName}</Badge>
         <Badge variant="muted">{item.platform}</Badge>
         {item.scheduledAt && (
-          <Badge variant="muted">{new Date(item.scheduledAt).toLocaleString()}</Badge>
+          <Badge variant="muted">{new Date(item.scheduledAt).toLocaleString(uiLocale)}</Badge>
         )}
       </div>
       {item.caption && <p className="line-clamp-3 text-sm">{item.caption}</p>}
@@ -154,6 +162,7 @@ type ReviseFormProps = {
 };
 
 function ReviseForm({ item, brandEffects, onSubmit, onCancel }: ReviseFormProps) {
+  const uiText = useTranslations('organic');
   const [note, setNote] = useState('');
   const [effectId, setEffectId] = useState('');
   const noteId = useId();
@@ -170,7 +179,7 @@ function ReviseForm({ item, brandEffects, onSubmit, onCancel }: ReviseFormProps)
 
   return (
     <form
-      aria-label="Describe a change"
+      aria-label={uiText('describe_a_change_8612ced')}
       onSubmit={submit}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onCancel();
@@ -178,7 +187,7 @@ function ReviseForm({ item, brandEffects, onSubmit, onCancel }: ReviseFormProps)
       className="flex flex-col gap-2 rounded-xl border bg-muted/30 p-3"
     >
       <label htmlFor={noteId} className="text-sm font-medium">
-        Describe a change
+        {uiText('describe_a_change_8612ced')}
       </label>
       <textarea
         id={noteId}
@@ -188,11 +197,11 @@ function ReviseForm({ item, brandEffects, onSubmit, onCancel }: ReviseFormProps)
         maxLength={400}
         value={note}
         onChange={(event) => setNote(event.target.value)}
-        placeholder="Open on the product, not the gym floor"
+        placeholder={uiText('open_on_the_product_not_the_gym_floor_d3717fe')}
         className="rounded-md border bg-background p-2 text-sm"
       />
       <label htmlFor={effectFieldId} className="text-sm font-medium">
-        Re-style with an effect
+        {uiText('re_style_with_an_effect_185b8e5')}
       </label>
       <select
         id={effectFieldId}
@@ -200,9 +209,9 @@ function ReviseForm({ item, brandEffects, onSubmit, onCancel }: ReviseFormProps)
         onChange={(event) => setEffectId(event.target.value)}
         className="h-8 rounded-md border bg-background px-2 text-sm"
       >
-        <option value="">Keep the current look</option>
+        <option value="">{uiText('keep_the_current_look_fac831f')}</option>
         {brandEffects.length > 0 && (
-          <optgroup label="Your effects">
+          <optgroup label={uiText('your_effects_c64f1f1')}>
             {brandEffects.map((effect) => (
               <option key={effect.id} value={effect.id}>
                 {effect.label}
@@ -211,7 +220,7 @@ function ReviseForm({ item, brandEffects, onSubmit, onCancel }: ReviseFormProps)
           </optgroup>
         )}
         {Object.entries(CATEGORY_LABEL).map(([category, label]) => (
-          <optgroup key={category} label={label}>
+          <optgroup key={category} label={uiText(label)}>
             {HEADLESS_EFFECTS.filter((effect) => effect.category === category).map((effect) => (
               <option
                 key={effect.id}
@@ -225,15 +234,14 @@ function ReviseForm({ item, brandEffects, onSubmit, onCancel }: ReviseFormProps)
         ))}
       </select>
       <p className="text-xs text-muted-foreground">
-        An effect alone re-styles the same takes at no cost. A note re-directs the piece with the
-        same concept and cast.
+        {uiText('an_effect_alone_re_styles_the_same_takes_at_n_1c7378d')}
       </p>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={!trimmed && !effectId}>
-          Send change
+          {uiText('send_change_2b77183')}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
-          Cancel
+          {uiText('cancel_19766ed')}
         </Button>
       </div>
     </form>
@@ -243,6 +251,8 @@ function ReviseForm({ item, brandEffects, onSubmit, onCancel }: ReviseFormProps)
 /** The swipe review queue: right approves onto its schedule, left skips, a tap describes a change
  *  or re-styles it with an effect. Every decision leaves the deck at once and returns if refused. */
 export function ReviewQueue({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('organic');
+  const formatUiError = useUiErrorMessage();
   const { items, isLoading, error, decide } = useReviewQueue(brandId);
   const { styles } = useBrandStyles(brandId);
   const [revising, setRevising] = useState(false);
@@ -258,35 +268,39 @@ export function ReviewQueue({ brandId }: { brandId: string }) {
     setRevising(false);
     try {
       await decide({ draftId: item.draftId, decision });
-      setAnnouncement(`${DONE[decision.decision]}.`);
+      setAnnouncement(uiText(DONE[decision.decision]));
     } catch (cause) {
-      setAnnouncement(
-        `Couldn't ${decision.decision} this post: ${describeError(cause)}. It is back in the queue.`,
-      );
+      const localizedReason =
+        cause instanceof ApiError && cause.payload?.reason === 'account_missing'
+          ? uiText('reviewAccountRequired')
+          : formatUiError(cause);
+      setAnnouncement(uiText(FAILED[decision.decision], { reason: localizedReason }));
     }
   };
 
   return (
     <section
-      aria-label="Review queue"
+      aria-label={uiText('review_queue_3e1654b')}
       className="mx-auto flex h-full min-h-0 w-full max-w-sm flex-col gap-3 overflow-y-auto pb-6"
     >
       <header className="flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold">Review</h2>
-        <span className="text-xs text-muted-foreground">{items.length} to review</span>
+        <h2 className="text-sm font-semibold">{uiText('review_aff0766')}</h2>
+        <span className="text-xs text-muted-foreground">
+          {uiText.rich('sentence_586535cdc400', { count: items.length })}
+        </span>
       </header>
       <p role="status" aria-live="polite" className="text-xs text-muted-foreground empty:hidden">
         {announcement}
       </p>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading the queue…</p>
+        <p className="text-sm text-muted-foreground">{uiText('loading_the_queue_7a0ee88')}</p>
       ) : error ? (
         <p role="alert" className="text-sm text-destructive">
-          Couldn't load the queue: {error.message}
+          {uiText('reviewQueueFailed', { reason: formatUiError(error) })}
         </p>
       ) : !top ? (
         <p className="text-sm text-muted-foreground">
-          Nothing to review. New posts land here once a plan's media is made.
+          {uiText('nothing_to_review_new_posts_land_here_once_a__b030a92')}
         </p>
       ) : (
         <>
@@ -300,7 +314,11 @@ export function ReviewQueue({ brandId }: { brandId: string }) {
             <SwipeCard
               key={top.draftId}
               item={top}
-              effectName={effectLabel(top.creative.effectId, brandEffects)}
+              effectName={effectLabel(
+                top.creative.effectId,
+                brandEffects,
+                uiText('reviewNoEffect'),
+              )}
               autoFocus={keyboardDecided.current}
               onDecide={(decision, fromKeyboard) => send(top, { decision }, fromKeyboard)}
               onRevise={() => setRevising(true)}
@@ -312,7 +330,7 @@ export function ReviewQueue({ brandId }: { brandId: string }) {
               aria-keyshortcuts="ArrowLeft"
               onClick={() => send(top, { decision: 'skip' })}
             >
-              ← Skip
+              {uiText('skip_4de3209')}
             </Button>
             <Button
               variant="secondary"
@@ -320,14 +338,14 @@ export function ReviewQueue({ brandId }: { brandId: string }) {
               aria-expanded={revising}
               onClick={() => setRevising((open) => !open)}
             >
-              Change
+              {uiText('change_c0bf75b')}
             </Button>
             <Button
               variant="success"
               aria-keyshortcuts="ArrowRight"
               onClick={() => send(top, { decision: 'approve' })}
             >
-              Approve →
+              {uiText('approve_50944ec')}
             </Button>
           </div>
           {revising && (

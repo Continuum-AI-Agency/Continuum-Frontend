@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Where a button appears, and where it does not.
 //
 // It sits beside the button-text field rather than under it because the answer
@@ -25,30 +27,28 @@ import { Info } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export function ButtonReachNote() {
+  const uiText = useTranslations('organic');
   return (
     <Popover>
       <PopoverTrigger
-        aria-label="Where the button appears"
+        aria-label={uiText('where_the_button_appears_2e451d3')}
         className="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <Info className="size-3" aria-hidden />
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-72 p-3">
         <div className="flex flex-col gap-2 text-2xs leading-snug">
-          <p className="text-xs font-semibold leading-none">Where the button appears</p>
-          <p className="text-muted-foreground">
-            A button looks better than a link sitting in the text, and it is easier to tap. In the
-            Instagram app, it works.
+          <p className="text-xs font-semibold leading-none">
+            {uiText('where_the_button_appears_2e451d3')}
           </p>
           <p className="text-muted-foreground">
-            It does not appear when someone reads the message in a browser — on a computer or on a
-            phone. There the message arrives with your text and nothing to tap. This is a limit of
-            Instagram, not of this rule, and it affects every tool that sends buttons.
+            {uiText('a_button_looks_better_than_a_link_sitting_in__cc7ae19')}
           </p>
           <p className="text-muted-foreground">
-            Most people read their messages in the app, so for most rules this is fine. If you would
-            rather nobody can be left without a way through, clear this field: the link then travels
-            in the message, which shows everywhere.
+            {uiText('it_does_not_appear_when_someone_reads_the_mes_dbbc39f')}
+          </p>
+          <p className="text-muted-foreground">
+            {uiText('most_people_read_their_messages_in_the_app_so_c8d9048')}
           </p>
         </div>
       </PopoverContent>

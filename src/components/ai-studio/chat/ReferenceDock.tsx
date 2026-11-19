@@ -1,7 +1,7 @@
 'use client';
 import { Image as ImageIcon, RotateCw, SquarePen, Trash2, Upload } from 'lucide-react';
-
 import Image from 'next/image';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { type FileError, type FileRejection, useDropzone } from 'react-dropzone';
 import { ImageMarkupDialog } from '@/components/ai-studio/markup/ImageMarkupDialog';
@@ -10,6 +10,7 @@ import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   formatMiB,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -58,6 +59,8 @@ const useLocalDropzone = (
   onAcceptUpload: (files: File[]) => Promise<void>,
   onReject?: (rejected: FileRejection[]) => void,
 ): DZReturn => {
+  const uiErrorText = useUiErrorMessage();
+
   const [files, setFiles] = React.useState<LocalFile[]>([]);
   const [errors, setErrors] = React.useState<{ name: string; message: string }[]>([]);
   const [successes, setSuccesses] = React.useState<string[]>([]);
@@ -91,7 +94,7 @@ const useLocalDropzone = (
           setErrors([
             {
               name: accepted[0]?.name ?? 'file',
-              message: error instanceof Error ? error.message : 'Failed to process file',
+              message: uiErrorText(error),
             },
           ]);
         } finally {
@@ -140,6 +143,10 @@ export function ReferenceDock({
   onChangeFirstFrame,
   onChangeLastFrame,
 }: ReferenceDockProps) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const { show } = useToast();
   const [isDragging, setIsDragging] = React.useState(false);
 
@@ -180,13 +187,17 @@ export function ReferenceDock({
     (opts: { label: string; sizeBytes: number; maxBytes: number }) => {
       if (opts.sizeBytes <= opts.maxBytes) return true;
       show({
-        title: 'Attachment too large',
-        description: `${opts.label} is ${formatMiB(opts.sizeBytes)} (max ${formatMiB(opts.maxBytes)}).`,
+        title: translateUi('attachment_too_large_db1b98a5'),
+        description: translateUi('value0_is_value1_max_value2_2c95c616', {
+          value0: String(opts.label),
+          value1: String(formatMiB(opts.sizeBytes)),
+          value2: String(formatMiB(opts.maxBytes)),
+        }),
         variant: 'error',
       });
       return false;
     },
-    [show],
+    [show, translateUi],
   );
 
   const handleLocalFiles = React.useCallback(
@@ -197,8 +208,10 @@ export function ReferenceDock({
       const maxToProcess = slot ? 1 : remaining;
       if (maxToProcess === 0) {
         show({
-          title: 'Reference limit',
-          description: `Max ${maxRefs} reference images`,
+          title: translateUi('reference_limit_e3955b4e'),
+          description: translateUi('max_value0_reference_images_70c7a0c0', {
+            value0: String(maxRefs),
+          }),
           variant: 'error',
         });
         return;
@@ -213,8 +226,8 @@ export function ReferenceDock({
 
         if (!isImage) {
           show({
-            title: 'Unsupported',
-            description: 'Only image references are supported',
+            title: translateUi('unsupported_54324658'),
+            description: translateUi('only_image_references_are_supported_cbdabd46'),
             variant: 'error',
           });
           continue;
@@ -222,7 +235,11 @@ export function ReferenceDock({
         if (
           !enforceMaxAttachmentBytes({
             label:
-              slot === 'first' ? 'First frame' : slot === 'last' ? 'Last frame' : 'Reference image',
+              slot === 'first'
+                ? translateUi('first_frame_70c0e501')
+                : slot === 'last'
+                  ? translateUi('last_frame_909e0b8a')
+                  : translateUi('reference_image_1a11982b'),
             sizeBytes: file.size,
             maxBytes: IMAGE_REFERENCE_MAX_BYTES,
           })
@@ -266,6 +283,7 @@ export function ReferenceDock({
       onChangeRefs,
       refs,
       show,
+      translateUi,
     ],
   );
 
@@ -276,12 +294,12 @@ export function ReferenceDock({
         .slice(0, 3)
         .join(' • ');
       show({
-        title: 'File rejected',
-        description: message || 'Unsupported file',
+        title: translateUi('file_rejected_0a53e32f'),
+        description: message || translateUi('unsupported_file_cf507be5'),
         variant: 'error',
       });
     },
-    [show],
+    [show, translateUi],
   );
 
   const handleDrop = React.useCallback(
@@ -303,8 +321,8 @@ export function ReferenceDock({
         if (!rawPayload) {
           if (!dataTransfer.files || dataTransfer.files.length === 0) {
             show({
-              title: 'Drop ignored',
-              description: 'No asset data detected in drop.',
+              title: translateUi('drop_ignored_4f9dd2a1'),
+              description: translateUi('no_asset_data_detected_in_drop_1762f5f3'),
               variant: 'warning',
             });
           }
@@ -314,8 +332,8 @@ export function ReferenceDock({
         const parsed = parseReferenceDropPayload(rawPayload);
         if (!parsed) {
           show({
-            title: 'Drop failed',
-            description: 'Unrecognized drop payload',
+            title: translateUi('drop_failed_abc2b996'),
+            description: translateUi('unrecognized_drop_payload_eb488d5c'),
             variant: 'error',
           });
           return;
@@ -326,8 +344,8 @@ export function ReferenceDock({
 
         if (!isImage) {
           show({
-            title: 'Unsupported',
-            description: 'Only image references are supported',
+            title: translateUi('unsupported_54324658'),
+            description: translateUi('only_image_references_are_supported_cbdabd46'),
             variant: 'error',
           });
           return;
@@ -336,7 +354,11 @@ export function ReferenceDock({
         if (parsed.kind === 'remote' && typeof parsed.sizeBytes === 'number') {
           const maxBytes = IMAGE_REFERENCE_MAX_BYTES;
           const label =
-            slot === 'first' ? 'First frame' : slot === 'last' ? 'Last frame' : 'Reference image';
+            slot === 'first'
+              ? translateUi('first_frame_70c0e501')
+              : slot === 'last'
+                ? translateUi('last_frame_909e0b8a')
+                : translateUi('reference_image_1a11982b');
           if (!enforceMaxAttachmentBytes({ label, sizeBytes: parsed.sizeBytes, maxBytes })) {
             return;
           }
@@ -344,7 +366,11 @@ export function ReferenceDock({
 
         const maxBytes = IMAGE_REFERENCE_MAX_BYTES;
         const label =
-          slot === 'first' ? 'First frame' : slot === 'last' ? 'Last frame' : 'Reference image';
+          slot === 'first'
+            ? translateUi('first_frame_70c0e501')
+            : slot === 'last'
+              ? translateUi('last_frame_909e0b8a')
+              : translateUi('reference_image_1a11982b');
         const { base64, sourceName, byteLength } = await resolveDroppedBase64(parsed, maxBytes);
         if (
           typeof byteLength === 'number' &&
@@ -355,8 +381,10 @@ export function ReferenceDock({
 
         if (refs.length >= maxRefs && !slot) {
           show({
-            title: 'Reference limit',
-            description: `Max ${maxRefs} reference images`,
+            title: translateUi('reference_limit_e3955b4e'),
+            description: translateUi('max_value0_reference_images_70c7a0c0', {
+              value0: String(maxRefs),
+            }),
             variant: 'error',
           });
           return;
@@ -381,8 +409,8 @@ export function ReferenceDock({
       } catch (error) {
         console.error(error);
         show({
-          title: 'Failed to add reference',
-          description: error instanceof Error ? error.message : 'Unknown error',
+          title: translateUi('failed_to_add_reference_3bc8b186'),
+          description: uiErrorText(error),
           variant: 'error',
         });
       }
@@ -397,6 +425,8 @@ export function ReferenceDock({
       onChangeFirstFrame,
       onChangeLastFrame,
       show,
+      translateUi,
+      uiErrorText,
     ],
   );
 
@@ -408,10 +438,12 @@ export function ReferenceDock({
         refId: opts.ref.id,
         sourceBase64: opts.ref.base64,
         sourceMime: opts.ref.mime,
-        title: `Edit ${opts.ref.name ?? 'reference'}`,
+        title: translateUi('edit_value0_44b87feb', {
+          value0: String(opts.ref.name ?? translateUi('referenceFallback')),
+        }),
       });
     },
-    [],
+    [translateUi],
   );
 
   const refsDropzone = useLocalDropzone(
@@ -456,7 +488,7 @@ export function ReferenceDock({
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ImageIcon />
-            <span className="font-medium">References</span>
+            <span className="font-medium">{translateUi('references_69824d3b')}</span>
           </div>
           <Pill variant="muted">{refs.length}</Pill>
         </div>
@@ -492,7 +524,9 @@ export function ReferenceDock({
                     />
                   ))}
                   {refs.length === 0 ? (
-                    <span className="text-xs text-gray-400">Drop or upload images.</span>
+                    <span className="text-xs text-gray-400">
+                      {translateUi('drop_or_upload_images_733c29e3')}
+                    </span>
                   ) : null}
                 </div>
               </ScrollArea>
@@ -506,7 +540,7 @@ export function ReferenceDock({
             {supportsFrames ? (
               <>
                 <FrameTile
-                  label="First frame"
+                  label={translateUi('first_frame_70c0e501')}
                   refImage={firstFrame}
                   dropzoneProps={firstDropzone}
                   onClear={() => onChangeFirstFrame?.()}
@@ -519,7 +553,7 @@ export function ReferenceDock({
                   dropSlot="first"
                 />
                 <FrameTile
-                  label="Last frame"
+                  label={translateUi('last_frame_909e0b8a')}
                   refImage={lastFrame}
                   dropzoneProps={lastDropzone}
                   onClear={() => onChangeLastFrame?.()}
@@ -539,7 +573,8 @@ export function ReferenceDock({
         <div className="mt-3 flex items-center gap-2">
           <Upload />
           <span className="text-xs text-gray-400">
-            Drag from Creative Library to seed your generation.
+            {' '}
+            {translateUi('drag_from_creative_library_to_seed__c8c8632f')}{' '}
           </span>
         </div>
       </div>
@@ -558,24 +593,24 @@ export function ReferenceDock({
                 refs.map((r) => (r.id === markupState.refId ? applyMarkupToRef(r, result) : r)),
               );
               show({
-                title: 'Markup saved',
-                description: 'Reference updated.',
+                title: translateUi('markup_saved_854648a0'),
+                description: translateUi('reference_updated_a0533b81'),
                 variant: 'success',
               });
             }
             if (markupState.target === 'first' && firstFrame) {
               onChangeFirstFrame?.(applyMarkupToRef(firstFrame, result));
               show({
-                title: 'Markup saved',
-                description: 'First frame updated.',
+                title: translateUi('markup_saved_854648a0'),
+                description: translateUi('first_frame_updated_7c65c19c'),
                 variant: 'success',
               });
             }
             if (markupState.target === 'last' && lastFrame) {
               onChangeLastFrame?.(applyMarkupToRef(lastFrame, result));
               show({
-                title: 'Markup saved',
-                description: 'Last frame updated.',
+                title: translateUi('markup_saved_854648a0'),
+                description: translateUi('last_frame_updated_4ab1e0a4'),
                 variant: 'success',
               });
             }
@@ -602,6 +637,8 @@ function RefChip({
   allowReferenceType?: boolean;
   onTypeChange?: (type: 'asset' | 'style') => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-2 py-1 backdrop-blur max-w-full">
       <Image
@@ -613,17 +650,19 @@ function RefChip({
         className="h-10 w-10 sm:h-12 sm:w-12 rounded-md object-cover"
       />
       <span className="text-xs truncate max-w-[140px] sm:max-w-[180px]">
-        {refImage.name ?? 'ref'}
+        {refImage.name ?? translateUi('ref_3ff6c057')}
       </span>
-      {refImage.originalBase64 ? <Pill variant="warning">edited</Pill> : null}
+      {refImage.originalBase64 ? (
+        <Pill variant="warning">{translateUi('edited_1fb9f409')}</Pill>
+      ) : null}
       {allowReferenceType ? (
         <select
           className="rounded border border-white/15 bg-slate-900/80 text-xs"
           value={refImage.referenceType ?? 'asset'}
           onChange={(e) => onTypeChange?.(e.target.value as 'asset' | 'style')}
         >
-          <option value="asset">asset</option>
-          <option value="style">style</option>
+          <option value="asset">{translateUi('asset_d59386e0')}</option>
+          <option value="style">{translateUi('style_cb86eb2d')}</option>
         </select>
       ) : null}
       {onRevert ? (
@@ -677,6 +716,8 @@ function FrameTile({
   };
   dropSlot: 'first' | 'last';
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div
       data-reference-drop-slot={dropSlot}
@@ -695,7 +736,8 @@ function FrameTile({
           />
           {refImage.originalBase64 ? (
             <Pill variant="warning" className="absolute left-1 top-1">
-              edited
+              {' '}
+              {translateUi('edited_1fb9f409')}{' '}
             </Pill>
           ) : null}
           <div className="absolute right-1 top-1 flex items-center gap-1">
@@ -715,7 +757,8 @@ function FrameTile({
               className="border-destructive text-destructive hover:text-destructive"
               onClick={onClear}
             >
-              Clear
+              {' '}
+              {translateUi('clear_83b12c22')}{' '}
             </Button>
           </div>
         </div>

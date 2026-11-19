@@ -6,6 +6,7 @@ import {
   createAutomationWebhookDestinationRequestSchema,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocale, useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,8 +41,15 @@ const pixelKey = (pixel: Pick<CapiPixel, 'adAccountId' | 'id'>) =>
 const destinationUrlSchema = createAutomationWebhookDestinationRequestSchema.shape.url;
 const webhookResourcesKey = (brandId: string) => ['automation-webhook-resources', brandId] as const;
 
-const lastFired = (value: string | null) =>
-  value ? `last fired ${new Date(value).toLocaleDateString()}` : 'never fired';
+const lastFired = (
+  value: string | null,
+  uiText: ReturnType<typeof useTranslations<'scale'>>,
+  locale: string,
+) =>
+  uiText('capiLastFired', {
+    hasDate: value ? 'yes' : 'no',
+    date: value ? new Date(value).toLocaleDateString(locale) : '',
+  });
 
 export function useCapiSettings(brandId: string) {
   return useQuery({
@@ -52,16 +60,20 @@ export function useCapiSettings(brandId: string) {
 }
 
 export function CapiPixelPanel(props: CapiPanelProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const settings = useCapiSettings(props.brandId);
   return (
     <Panel
-      title="Pixel"
-      description="The Meta dataset (pixel) server events are sent to, and where each delivery result is forwarded."
+      title={uiText('pixel_5817280')}
+      description={uiText('the_meta_dataset_pixel_server_events_are_sent_e22dc22')}
     >
       {settings.isPending ? (
         <Skeleton className="h-24 w-full" />
       ) : settings.isError ? (
-        <PanelError message={capiErrorMessage(settings.error, 'Could not load CAPI settings.')} />
+        <PanelError
+          message={capiErrorMessage(settings.error, 'Could not load CAPI settings.', uiText)}
+        />
       ) : (
         <PixelForm key={settings.data?.updatedAt ?? 'new'} settings={settings.data} {...props} />
       )}
@@ -75,6 +87,8 @@ function PixelForm({
   onForbidden,
   settings,
 }: CapiPanelProps & { settings: CapiSettings | null }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const queryClient = useQueryClient();
   const testCodeId = useId();
   const [pixel, setPixel] = useState(
@@ -116,10 +130,10 @@ function PixelForm({
         testEventCode: testCode.trim() || null,
         forwardDestinationId: forward === NO_FORWARD ? null : forward,
       });
-      toast.success('Conversions API settings saved');
+      toast.success(uiText('conversions_api_settings_saved_1b0ba01'));
       await queryClient.invalidateQueries({ queryKey: capiQueryKeys.settings(brandId) });
     } catch (saveError) {
-      setError(writeFailure(saveError, onForbidden, 'Could not save these settings.'));
+      setError(writeFailure(saveError, onForbidden, 'Could not save these settings.', uiText));
     } finally {
       setSaving(false);
     }
@@ -128,7 +142,7 @@ function PixelForm({
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label>Pixel</Label>
+        <Label>{uiText('pixel_5817280')}</Label>
         {pixels.isPending ? (
           <Skeleton className="h-8 w-72" />
         ) : pixels.isError ? (
@@ -136,26 +150,29 @@ function PixelForm({
             message={capiErrorMessage(
               pixels.error,
               'Could not list pixels. Check the Meta connection above.',
+              uiText,
             )}
           />
         ) : pixels.data.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No pixels on this brand&rsquo;s Meta ad accounts.
+            {uiText('no_pixels_on_this_brand_s_meta_ad_accounts_6f8320e')}
           </p>
         ) : (
           <Select value={pixel} onValueChange={setPixel} disabled={readOnly}>
-            <SelectTrigger className="w-full max-w-md" aria-label="Pixel">
-              <SelectValue placeholder="Choose a pixel" items={pixelLabels} />
+            <SelectTrigger className="w-full max-w-md" aria-label={uiText('pixel_5817280')}>
+              <SelectValue placeholder={uiText('choose_a_pixel_43de5ff')} items={pixelLabels} />
             </SelectTrigger>
             <SelectContent>
               {[...byAccount].map(([adAccountId, accountPixels]) => (
                 <SelectGroup key={adAccountId}>
-                  <SelectLabel>Ad account {adAccountId}</SelectLabel>
+                  <SelectLabel>
+                    {uiText.rich('sentence_dcfa914a7ec0', { v0: adAccountId })}
+                  </SelectLabel>
                   {accountPixels.map((item) => (
                     <SelectItem key={pixelKey(item)} value={pixelKey(item)}>
                       {item.name ?? item.id}
                       <span className="text-xs text-muted-foreground">
-                        {item.id} · {lastFired(item.lastFiredTime)}
+                        {item.id} · {lastFired(item.lastFiredTime, uiText, uiLocale)}
                       </span>
                     </SelectItem>
                   ))}
@@ -167,7 +184,7 @@ function PixelForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor={testCodeId}>Test event code</Label>
+        <Label htmlFor={testCodeId}>{uiText('test_event_code_c53bf92')}</Label>
         <Input
           id={testCodeId}
           className="max-w-xs"
@@ -177,8 +194,7 @@ function PixelForm({
           onChange={(event) => setTestCode(event.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          Copy it from Events Manager → your dataset → Test events. Events sent as a test land there
-          instead of in your reporting.
+          {uiText('copy_it_from_events_manager_your_dataset_test_bbdcafb')}
         </p>
       </div>
 
@@ -192,7 +208,7 @@ function PixelForm({
 
       <PanelError message={error} />
       <Button disabled={readOnly || saving || !pixel} onClick={() => void save()}>
-        {saving ? 'Saving…' : 'Save'}
+        {saving ? uiText('saving_23e3929') : uiText('save_1509f56')}
       </Button>
     </div>
   );
@@ -205,6 +221,8 @@ function ForwardDestinationField({
   value,
   onChange,
 }: CapiPanelProps & { value: string; onChange: (value: string) => void }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -240,7 +258,9 @@ function ForwardDestinationField({
       await queryClient.invalidateQueries({ queryKey: webhookResourcesKey(brandId) });
       onChange(result.destination.id);
     } catch (createError) {
-      setError(writeFailure(createError, onForbidden, 'Could not create this destination.'));
+      setError(
+        writeFailure(createError, onForbidden, 'Could not create this destination.', uiText),
+      );
     } finally {
       setBusy(false);
     }
@@ -248,13 +268,16 @@ function ForwardDestinationField({
 
   return (
     <div className="space-y-1.5">
-      <Label>Forward delivery results to</Label>
+      <Label>{uiText('forward_delivery_results_to_64c63ae')}</Label>
       <Select value={value} onValueChange={onChange} disabled={readOnly}>
-        <SelectTrigger className="w-full max-w-md" aria-label="Forwarding destination">
+        <SelectTrigger
+          className="w-full max-w-md"
+          aria-label={uiText('forwarding_destination_9e3fd77')}
+        >
           <SelectValue items={labels} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={NO_FORWARD}>Don&rsquo;t forward</SelectItem>
+          <SelectItem value={NO_FORWARD}>{uiText('don_t_forward_75db287')}</SelectItem>
           {destinations.map((item) => (
             <SelectItem key={item.id} value={item.id}>
               {item.name}
@@ -264,19 +287,22 @@ function ForwardDestinationField({
         </SelectContent>
       </Select>
       <p className="text-xs text-muted-foreground">
-        After each delivery Continuum POSTs the result there, signed: event counts, status and
-        Meta&rsquo;s trace id. No customer data is included.
+        {uiText('after_each_delivery_continuum_posts_the_resul_e8dbaa4')}
       </p>
       {resources.isError ? (
         <PanelError
-          message={capiErrorMessage(resources.error, 'Could not load webhook destinations.')}
+          message={capiErrorMessage(
+            resources.error,
+            'Could not load webhook destinations.',
+            uiText,
+          )}
         />
       ) : null}
 
       {revealed ? (
         <RevealOnceSecret
           secret={revealed.secret}
-          subject={`destination “${revealed.name}”`}
+          subject={uiText('capiRevealSubject', { kind: 'destination', name: revealed.name })}
           onDismiss={() => setRevealed(null)}
         />
       ) : (
@@ -285,8 +311,8 @@ function ForwardDestinationField({
             className="w-48"
             value={name}
             disabled={readOnly || busy}
-            placeholder="New destination name"
-            aria-label="New destination name"
+            placeholder={uiText('new_destination_name_052a04f')}
+            aria-label={uiText('new_destination_name_052a04f')}
             onChange={(event) => setName(event.target.value)}
           />
           <Input
@@ -295,7 +321,7 @@ function ForwardDestinationField({
             value={url}
             disabled={readOnly || busy}
             placeholder="https://hooks.example.com/capi"
-            aria-label="New destination URL"
+            aria-label={uiText('new_destination_url_d798805')}
             aria-invalid={urlInvalid}
             onChange={(event) => setUrl(event.target.value)}
           />
@@ -304,12 +330,12 @@ function ForwardDestinationField({
             disabled={readOnly || busy || url.length === 0 || urlInvalid}
             onClick={() => void create()}
           >
-            Create destination
+            {uiText('create_destination_16cb2de')}
           </Button>
         </div>
       )}
       {urlInvalid ? (
-        <PanelError message="Enter a public HTTPS URL, for example https://hooks.example.com/capi." />
+        <PanelError message={uiText('enter_a_public_https_url_for_example_https_ho_0d89de8')} />
       ) : null}
       <PanelError message={error} />
     </div>

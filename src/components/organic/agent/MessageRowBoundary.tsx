@@ -7,6 +7,7 @@
 // from the same state. A DOM error React hits while committing the row (Chrome's page translation
 // rewriting nodes it holds, facebook/react#11538) lands here too.
 
+import { useTranslations } from 'next-intl';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 type Props = { messageId: string; children: ReactNode };
@@ -25,24 +26,29 @@ export class MessageRowBoundary extends Component<Props, State> {
 
   render(): ReactNode {
     if (!this.state.failed) return this.props.children;
-    return (
-      <div
-        role="alert"
-        translate="no"
-        data-message-row-state="error"
-        className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2"
-      >
-        <span className="min-w-0 text-sm text-muted-foreground">
-          This message could not be displayed.
-        </span>
-        <button
-          type="button"
-          className="shrink-0 text-sm font-medium text-foreground underline-offset-4 hover:underline"
-          onClick={() => this.setState({ failed: false })}
-        >
-          Show again
-        </button>
-      </div>
-    );
+    return <MessageRowFallback onShowAgain={() => this.setState({ failed: false })} />;
   }
+}
+
+function MessageRowFallback({ onShowAgain }: { onShowAgain: () => void }) {
+  const uiText = useTranslations('organic');
+  return (
+    <div
+      role="alert"
+      translate="no"
+      data-message-row-state="error"
+      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2"
+    >
+      <span className="min-w-0 text-sm text-muted-foreground">
+        {uiText('this_message_could_not_be_displayed_ea1e1dc')}
+      </span>
+      <button
+        type="button"
+        className="shrink-0 text-sm font-medium text-foreground underline-offset-4 hover:underline"
+        onClick={onShowAgain}
+      >
+        {uiText('show_again_b800ebd')}
+      </button>
+    </div>
+  );
 }

@@ -1,5 +1,6 @@
 'use client';
 import { Eye, EyeOff } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { forwardRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ type FormInputProps = Omit<RootProps, 'type'> & {
 
 export const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
   ({ label, error, type, ...props }, ref) => {
+    const tUi = useTranslations('auth');
     const [showPassword, setShowPassword] = useState(false);
     const isPasswordField = type === 'password';
     const inputType: InputType | undefined = isPasswordField && showPassword ? 'text' : type;
@@ -47,7 +49,7 @@ export const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
               variant="ghost"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? tUi('m_e40123b4e7') : tUi('m_044b852f30')}
             >
               {showPassword ? (
                 <EyeOff className="w-4 h-4 text-gray-500 dark:text-gray-400" />

@@ -1,6 +1,7 @@
 'use client';
 
 import { Send } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,8 @@ export function EditorAgentPanel({
   projectId: string;
   onApplied: (beforeRevision: number) => Promise<void>;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -46,19 +49,20 @@ export function EditorAgentPanel({
   return (
     <aside
       className="flex h-full w-full shrink-0 flex-col border-l border-border bg-card md:w-80"
-      aria-label="Video Editor agent"
+      aria-label={translateUi('video_editor_agent_9d726b34')}
     >
       <div className="border-b border-border p-4">
-        <h2 className="text-sm font-semibold">Editor agent</h2>
+        <h2 className="text-sm font-semibold">{translateUi('editor_agent_acb612aa')}</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Gemini 3.8 Flash · edits this project’s timeline
+          {' '}
+          {translateUi('gemini_3_8_flash_edits_this_project_3ff2fe5f')}{' '}
         </p>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">
         {messages.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            Try “Slow the opening zoom,” “Trim scene two by a second,” or “Add a title over the
-            payoff.”
+            {' '}
+            {translateUi('try_slow_the_opening_zoom_trim_scen_b9486276')}{' '}
           </p>
         ) : (
           messages.map((message, index) => (
@@ -70,7 +74,11 @@ export function EditorAgentPanel({
             </p>
           ))
         )}
-        {sending ? <p className="text-xs text-muted-foreground">Inspecting the timeline…</p> : null}
+        {sending ? (
+          <p className="text-xs text-muted-foreground">
+            {translateUi('inspecting_the_timeline_f63fc120')}
+          </p>
+        ) : null}
       </div>
       <form
         className="space-y-2 border-t border-border p-3"
@@ -83,8 +91,8 @@ export function EditorAgentPanel({
           <Textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Describe an edit…"
-            aria-label="Ask the Video Editor agent"
+            placeholder={translateUi('describe_an_edit_cd801bc5')}
+            aria-label={translateUi('ask_the_video_editor_agent_c2c8b0d1')}
             rows={3}
             disabled={sending}
             className="pr-9"
@@ -96,7 +104,7 @@ export function EditorAgentPanel({
           />
         </div>
         <Button type="submit" size="sm" className="w-full" disabled={sending || !draft.trim()}>
-          <Send className="size-3.5" /> Apply edit
+          <Send className="size-3.5" /> {translateUi('apply_edit_d539998e')}{' '}
         </Button>
       </form>
     </aside>

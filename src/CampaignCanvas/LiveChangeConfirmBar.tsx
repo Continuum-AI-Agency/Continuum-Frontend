@@ -1,6 +1,7 @@
 'use client';
 
 import type { JainaApprovalVariant, LiveChangePreviewPayload } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { type LiveChangeDecision, liveChangeConfirmBarOf } from '@/lib/campaign-canvas/liveChange';
 
@@ -44,6 +45,7 @@ export function LiveChangeConfirmBar({
    */
   implementBlocked?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const [asked, setAsked] = React.useState(false);
   React.useEffect(() => {
     if (!asked) return;
@@ -69,23 +71,23 @@ export function LiveChangeConfirmBar({
 
   const note =
     bar.kind === 'google_note'
-      ? 'Jaina cannot change Google Ads yet. This is the projection only; nothing can be applied from here.'
+      ? uiText('jaina_cannot_change_google_ads_yet_this_is_th_de7643c')
       : deciding
         ? pendingDecision === 'approve'
-          ? 'Approving…'
-          : 'Declining…'
+          ? uiText('approving_e99dcb0')
+          : uiText('declining_fb03c72')
         : bar.kind === 'confirm'
           ? preview.projection
-            ? 'A projection, not a guarantee. Confirming uses the same approval as the chat card.'
-            : 'Confirming uses the same approval as the chat card.'
-          : 'Nothing is applied yet. Jaina will ask for your approval on each change.';
+            ? uiText('a_projection_not_a_guarantee_confirming_uses__e78db42')
+            : uiText('confirming_uses_the_same_approval_as_the_chat_9d60cdf')
+          : uiText('nothing_is_applied_yet_jaina_will_ask_for_you_69bb060');
 
   return (
     <fieldset
       className="m-0 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-3 py-2"
       data-testid="live-change-confirm"
     >
-      <legend className="sr-only">Confirm change</legend>
+      <legend className="sr-only">{uiText('confirm_change_704ac1d')}</legend>
       <span className="min-w-0 text-[13px] text-muted-foreground" aria-live="polite">
         {note}
       </span>
@@ -99,22 +101,24 @@ export function LiveChangeConfirmBar({
               className={SECONDARY}
               data-testid="live-change-deny"
             >
-              Decline
+              {uiText('decline_a2d285b')}
             </button>
-            {(variants ?? [{ variant: 'apply' as const, label: 'Confirm and apply' }]).map(
-              (option) => (
-                <button
-                  key={option.variant}
-                  type="button"
-                  disabled={deciding || bar.kind !== 'confirm'}
-                  onClick={() => onDecide?.('approve', variants ? option.variant : undefined)}
-                  className={PRIMARY}
-                  data-testid={`live-change-approve-${option.variant}`}
-                >
-                  {option.label}
-                </button>
-              ),
-            )}
+            {(
+              variants ?? [
+                { variant: 'apply' as const, label: uiText('confirm_and_apply_50978b7') },
+              ]
+            ).map((option) => (
+              <button
+                key={option.variant}
+                type="button"
+                disabled={deciding || bar.kind !== 'confirm'}
+                onClick={() => onDecide?.('approve', variants ? option.variant : undefined)}
+                className={PRIMARY}
+                data-testid={`live-change-approve-${option.variant}`}
+              >
+                {option.label}
+              </button>
+            ))}
           </>
         ) : null}
         {bar.kind === 'implement' ? (
@@ -130,10 +134,10 @@ export function LiveChangeConfirmBar({
             data-testid="live-change-implement"
           >
             {asked
-              ? 'Asking Jaina…'
+              ? uiText('asking_jaina_eb0bfc5')
               : implementBlocked
-                ? 'Jaina is working…'
-                : 'Implement these changes'}
+                ? uiText('jaina_is_working_a3d6d42')
+                : uiText('implement_these_changes_1ddceca')}
           </button>
         ) : null}
       </span>

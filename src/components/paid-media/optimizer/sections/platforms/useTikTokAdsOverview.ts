@@ -1,4 +1,5 @@
 'use client';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // The TikTok tab's own read: paid-media-metrics, platform tiktok-ads, scope tiktok_snapshots —
 // the entity read the Optimizer's ingest makes, read here as the signed-in member of the brand.
@@ -53,12 +54,17 @@ export async function fetchTikTokAdsOverview(
 export function tiktokOverviewStateOf(
   advertiserId: string | null,
   query: { data: TikTokOverview | undefined; error: unknown; isError: boolean },
+  formatError?: (error: unknown) => string,
 ): TikTokAdsOverviewState {
   if (!advertiserId) return { status: 'not-connected' };
   if (query.isError) {
     return {
       status: 'error',
-      message: query.error instanceof Error ? query.error.message : 'Unknown error',
+      message: formatError
+        ? formatError(query.error)
+        : query.error instanceof Error
+          ? query.error.message
+          : 'Unknown error',
     };
   }
   if (!query.data) return { status: 'loading' };
@@ -69,6 +75,7 @@ export function useTikTokAdsOverview(
   brandId: string,
   advertiserId: string | null,
 ): TikTokAdsOverviewState {
+  const formatUiError = useUiErrorMessage();
   const query = useQuery({
     queryKey: tiktokAdsOverviewKey(brandId, advertiserId ?? 'none'),
     queryFn: () => fetchTikTokAdsOverview(brandId, advertiserId as string),
@@ -76,5 +83,5 @@ export function useTikTokAdsOverview(
     staleTime: FIVE_MINUTES,
     retry: 1,
   });
-  return tiktokOverviewStateOf(advertiserId, query);
+  return tiktokOverviewStateOf(advertiserId, query, formatUiError);
 }

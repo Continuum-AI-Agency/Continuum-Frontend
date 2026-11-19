@@ -6,16 +6,11 @@
 
 import type { HomeBriefData, HomeBriefFigure } from '@continuum/contracts';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { BriefSentence } from './BriefSentences';
 import { briefFigureHref, briefFigureSource, briefFigureWindow } from './briefEvidence';
-import {
-  BRIEF_EVIDENCE_NOTE,
-  type BriefEntry,
-  optimizerHref,
-  readOnLabel,
-  staleLabel,
-} from './briefModel';
+import { type BriefEntry, optimizerHref, readOnLabel, staleLabel } from './briefModel';
 
 const PLATFORM_LABEL: Record<BriefEntry['platform'], string> = {
   meta: 'Meta',
@@ -23,6 +18,7 @@ const PLATFORM_LABEL: Record<BriefEntry['platform'], string> = {
 };
 
 function FigureRow({ figure }: { figure: HomeBriefFigure }) {
+  const uiText = useTranslations('dashboard');
   const href = briefFigureHref(figure);
   const covers = briefFigureWindow(figure);
   return (
@@ -46,7 +42,7 @@ function FigureRow({ figure }: { figure: HomeBriefFigure }) {
             <>
               {' · '}
               <Link className="text-primary-ink underline-offset-2 hover:underline" href={href}>
-                Open
+                {uiText('open_ed077f3')}
               </Link>
             </>
           ) : null}
@@ -86,6 +82,7 @@ export default function BriefModule({
   entries: readonly BriefEntry[];
   failed: number;
 }) {
+  const uiText = useTranslations('dashboard');
   const today = new Date();
   return (
     <div className="flex flex-col gap-4" data-testid="home-brief-module">
@@ -116,7 +113,7 @@ export default function BriefModule({
                 className="text-primary-ink underline-offset-2 hover:underline"
                 href={optimizerHref(entry.adAccountId)}
               >
-                Open in Optimizer
+                {uiText('open_in_optimizer_c0e326a')}
               </Link>
               <Link
                 className="text-primary-ink underline-offset-2 hover:underline"
@@ -126,7 +123,7 @@ export default function BriefModule({
                   { newConversation: true },
                 )}
               >
-                Ask Jaina about this read
+                {uiText('ask_jaina_about_this_read_a56e38c')}
               </Link>
             </div>
           </article>
@@ -134,12 +131,12 @@ export default function BriefModule({
       })}
       {failed > 0 ? (
         <p className="text-muted-foreground text-xs">
-          {failed === 1 ? 'One account’s read' : `${failed} accounts’ reads`} could not be loaded.
+          {uiText('count_plural_one_one_account_s_read_could_not_604e627', { count: failed })}
         </p>
       ) : null}
       {brief ? null : (
         <p className="text-muted-foreground text-xs" data-testid="home-brief-evidence-note">
-          {BRIEF_EVIDENCE_NOTE}
+          {uiText('numbered_evidence_that_re_runs_each_figure_in_2728f97')}
         </p>
       )}
     </div>

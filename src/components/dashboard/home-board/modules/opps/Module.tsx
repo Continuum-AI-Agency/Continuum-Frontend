@@ -9,6 +9,7 @@
 import type { AccountCandidate, HomeOpportunitiesData, PlatformId } from '@continuum/contracts';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { boardPaletteClass } from '@/components/paid-media/optimizer/sections/board/palette';
 import { OptimizerActionsPortfolioGroup } from '@/components/paid-media/optimizer/sections/OptimizerActionsPortfolioGroup';
@@ -19,14 +20,8 @@ import {
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { cn } from '@/lib/utils';
 import { OppStack } from './OppStack';
-import {
-  OPPS_GOAL_UNITS_NOTE,
-  OPTIMIZER_LINKS,
-  portfolioDecisionsHref,
-  type WaitingPortfolio,
-  waitingLine,
-} from './oppsModel';
-import { ROW_LINK } from './tileParts';
+import { OPTIMIZER_LINKS, portfolioDecisionsHref, type WaitingPortfolio } from './oppsModel';
+import { ROW_LINK, useWaitingLine } from './tileParts';
 
 const NO_CARDS: AccountCandidate[] = [];
 
@@ -66,6 +61,8 @@ export default function OppsModule({
   /** The Backend's Opportunity stack; null until it is deployed or when it holds nothing. */
   stack: HomeOpportunitiesData | null;
 }) {
+  const uiText = useTranslations('dashboard');
+  const waitingLine = useWaitingLine();
   const [openId, setOpenId] = useState<string | null>(portfolios[0]?.id ?? null);
 
   const priced = stack && stack.opportunities.length > 0 ? stack : null;
@@ -74,9 +71,9 @@ export default function OppsModule({
     return (
       <div className="space-y-4 text-sm" data-testid="home-opps-module">
         {priced ? <OppStack stack={priced} /> : null}
-        <p>Nothing waits for a decision right now.</p>
+        <p>{uiText('nothing_waits_for_a_decision_right_now_e5b7556')}</p>
         <Link className={cn(ROW_LINK, 'text-xs')} href={OPTIMIZER_LINKS.actions}>
-          Open the Optimizer's Actions
+          {uiText('open_the_optimizer_s_actions_10044b2')}
         </Link>
       </div>
     );
@@ -88,7 +85,7 @@ export default function OppsModule({
         <OppStack stack={priced} />
       ) : (
         <p className="text-muted-foreground text-xs" data-testid="home-opps-goal-units">
-          {OPPS_GOAL_UNITS_NOTE}
+          {uiText('impact_in_goal_units_is_not_readable_yet_a_de_062b585')}
         </p>
       )}
       <ul className="space-y-3">
@@ -121,7 +118,7 @@ export default function OppsModule({
                     className={cn(ROW_LINK, 'text-xs')}
                     href={portfolioDecisionsHref(waiting.id)}
                   >
-                    Open {waiting.name} in the Optimizer
+                    {uiText('open_name_in_the_optimizer_706057e', { name: waiting.name })}
                   </Link>
                 </div>
               ) : null}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { revalidateBrandInsights } from '@/lib/actions/brandInsights';
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function OrganicNoticeBridge({ brandId, insightsError }: Props) {
+  const uiText = useTranslations('organic');
   const { show } = useToast();
   const router = useRouter();
 
@@ -20,13 +22,13 @@ export function OrganicNoticeBridge({ brandId, insightsError }: Props) {
   useEffect(() => {
     if (!insightsError || !claimOncePerSession('error-toast', brandId)) return;
     show({
-      title: 'Trend intelligence unavailable',
+      title: uiText('trend_intelligence_unavailable_31be83e'),
       description: insightsError,
       variant: 'error',
       durationMs: Infinity,
       dedupeKey: `organic-insights-error:${brandId}`,
       action: {
-        label: 'Retry',
+        label: uiText('retry_942087c'),
         // router.refresh() alone would re-render against the cached read.
         onClick: () =>
           void revalidateBrandInsights(brandId)
@@ -34,7 +36,7 @@ export function OrganicNoticeBridge({ brandId, insightsError }: Props) {
             .then(() => router.refresh()),
       },
     });
-  }, [brandId, insightsError, router, show]);
+  }, [brandId, insightsError, router, show, uiText]);
 
   return null;
 }

@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
+import { useLocale } from 'next-intl';
 import React from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { TimelineEvent, TimelineEventType } from '@/types/timeline';
@@ -52,6 +53,7 @@ export function TimelineEventMarker({
   onClick,
   isSelected,
 }: TimelineEventMarkerProps) {
+  const uiLocale = useLocale();
   return (
     <TooltipProvider>
       <Tooltip>
@@ -76,7 +78,7 @@ export function TimelineEventMarker({
           <div className="flex flex-col gap-1 text-xs">
             <span className="font-semibold">{event.summary || event.type.replace('_', ' ')}</span>
             <span className="text-muted-foreground">
-              {new Date(event.date).toLocaleDateString()} {event.time}
+              {new Date(event.date).toLocaleDateString(uiLocale)} {event.time}
             </span>
           </div>
         </TooltipContent>

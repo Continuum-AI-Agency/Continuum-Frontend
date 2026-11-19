@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { brandBookResponseSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 let editorIsDirty = false;
 const buildBrandSystemExport = mock(async () => ({

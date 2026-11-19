@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { renderHook } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import { useCalendarRunStream } from './useCalendarRunStream';

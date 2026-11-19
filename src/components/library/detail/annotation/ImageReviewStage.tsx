@@ -10,6 +10,7 @@
 
 import type { DrawingShape } from '@continuum/contracts';
 import { Eye, EyeOff, ImageOff } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useReducer, useState } from 'react';
 import {
   AnnotationOverlay,
@@ -53,6 +54,8 @@ export function ImageReviewStage({
   resetSignal = 0,
   defaultShowAll = false,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const [tool, setTool] = useState<StageTool>('point');
   const [color, setColor] = useState<string>(DEFAULT_DRAWING_COLOR);
   const [draftPoint, setDraftPoint] = useState<NormalizedPoint | null>(null);
@@ -117,8 +120,12 @@ export function ImageReviewStage({
           controlsExtra={
             <button
               type="button"
-              title={showAll ? 'Show marks for the selected comment only' : 'View all annotations'}
-              aria-label="View all annotations"
+              title={
+                showAll
+                  ? translateUi('show_marks_for_the_selected_comment_a3164561')
+                  : translateUi('view_all_annotations_1122366e')
+              }
+              aria-label={translateUi('view_all_annotations_1122366e')}
               aria-pressed={showAll}
               data-testid="zoom-show-all"
               onClick={() => setShowAll((value) => !value)}

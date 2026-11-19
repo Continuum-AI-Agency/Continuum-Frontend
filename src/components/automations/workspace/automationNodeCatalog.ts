@@ -28,6 +28,8 @@ import {
   Share2,
   SlidersHorizontal,
 } from 'lucide-react';
+import type { useTranslations } from 'next-intl';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
 
 export type AutomationNodeCategory = 'trigger' | 'context' | 'intelligence' | 'logic' | 'outcome';
 
@@ -254,16 +256,40 @@ const CATALOG_BY_TYPE = new Map(
   AUTOMATION_NODE_CATALOG.flatMap((group) => group.items).map((item) => [item.type, item]),
 );
 
+export function localizedAutomationNodeCatalog(
+  t: ReturnType<typeof useTranslations<'automations'>>,
+) {
+  return AUTOMATION_NODE_CATALOG.map((group) => ({
+    ...group,
+    label: localizeAutomationsCopy(group.label, t),
+    description: localizeAutomationsCopy(group.description, t),
+    items: group.items.map((item) => ({
+      ...item,
+      label: localizeAutomationsCopy(item.label, t),
+      description: localizeAutomationsCopy(item.description, t),
+    })),
+  }));
+}
+
 export const getAutomationNodeCatalogItem = (
   type: AutomationWorkflowNode['type'],
-): AutomationNodeCatalogItem =>
-  CATALOG_BY_TYPE.get(type) ?? {
+  translate?: ReturnType<typeof useTranslations<'automations'>>,
+): AutomationNodeCatalogItem => {
+  const item: AutomationNodeCatalogItem = CATALOG_BY_TYPE.get(type) ?? {
     type,
-    label: type.replaceAll('.', ' '),
+    label: 'Workflow step',
     description: 'Workflow step',
     category: 'context',
     icon: FileOutput,
   };
+  return translate
+    ? {
+        ...item,
+        label: localizeAutomationsCopy(item.label, translate),
+        description: localizeAutomationsCopy(item.description, translate),
+      }
+    : item;
+};
 
 export const getAutomationNodeLifecycle = (
   node: AutomationWorkflowNode,

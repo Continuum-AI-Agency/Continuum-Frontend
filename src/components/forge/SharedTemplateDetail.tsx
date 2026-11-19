@@ -11,6 +11,7 @@ import {
   RectangleHorizontal,
   Variable,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { FactList } from '@/components/forge/FactList';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
@@ -59,6 +60,9 @@ export function SharedTemplateDetail({
   onOpenSource?: () => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+  const displayLocale = useUiLocale();
+
   const { templateKey, workspaceId } = template;
   const name = template.displayName ?? templateDisplayName(template.name);
   const brand = brandName ?? 'this brand';
@@ -92,27 +96,42 @@ export function SharedTemplateDetail({
       <header className="flex flex-wrap items-center justify-between gap-2 px-[var(--card-pad)] py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={onBack}>
-            <ArrowLeft className="size-3.5" aria-hidden />
-            Templates
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}{' '}
           </Button>
           <h2 className="min-w-0 truncate text-base font-semibold">{name}</h2>
           <p className="truncate text-xs text-muted-foreground">
-            {template.sourceAssetId ? 'Built from your Library' : 'Shared with you'}{template.granted ? ` · in ${brand}` : null}
+            {template.sourceAssetId
+              ? translateUi('built_from_your_library_f6dff8e3')
+              : translateUi('shared_with_you_b447129c')}
+            {template.granted ? translateUi('in_value0_76a5c23c', { value0: String(brand) }) : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {onOpenSource ? <Button type="button" size="sm" variant="outline" onClick={onOpenSource}>Edit source</Button> : null}
+          {onOpenSource ? (
+            <Button type="button" size="sm" variant="outline" onClick={onOpenSource}>
+              {translateUi('edit_source_4314a941')}
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="sm"
             variant="outline"
             className="gap-1.5"
-            aria-label={template.granted ? `Remove ${name} from ${brand}` : `Use in ${brand}`}
+            aria-label={
+              template.granted
+                ? translateUi('remove_value0_from_value1_a5b978b5', {
+                    value0: String(name),
+                    value1: String(brand),
+                  })
+                : translateUi('use_in_value0_54e69fc0', { value0: String(brand) })
+            }
             disabled={busy}
             onClick={onToggle}
           >
             {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-            {template.granted ? 'Remove' : `Use in ${brand}`}
+            {template.granted
+              ? translateUi('remove_c3812fc4')
+              : translateUi('use_in_value0_54e69fc0', { value0: String(brand) })}
           </Button>
           {template.granted && !template.draft && onOpenRender ? (
             <Button
@@ -121,8 +140,9 @@ export function SharedTemplateDetail({
               className="gap-1.5"
               onClick={() => onOpenRender({ templateKey })}
             >
-              <Play className="size-3.5" aria-hidden />
-              Render with this
+              <Play className="size-3.5" aria-hidden /> {translateUi(
+                'render_with_this_c249855a',
+              )}{' '}
             </Button>
           ) : null}
         </div>
@@ -132,7 +152,7 @@ export function SharedTemplateDetail({
         <div className="flex min-w-0 flex-col gap-2 p-[var(--card-pad)]">
           {format ? (
             <FormatPreview
-              label="Template preview"
+              label={translateUi('template_preview_df89bd92')}
               formats={formats}
               value={format.id}
               onValueChange={setFormatId}
@@ -152,12 +172,14 @@ export function SharedTemplateDetail({
                       ),
                       caption: rendered.fileName,
                     }
-                  : { mode: 'none', message: 'No render of this format yet' }
+                  : { mode: 'none', message: translateUi('no_render_of_this_format_yet_fb756c80') }
               }
             />
           ) : (
             <div className="flex h-[min(60vh,40rem)] items-center justify-center bg-muted/40 text-xs text-muted-foreground">
-              {contract.isPending ? 'Reading the template…' : 'No formats listed for this template'}
+              {contract.isPending
+                ? translateUi('reading_the_template_78340ff8')
+                : translateUi('no_formats_listed_for_this_template_2c6f6f47')}
             </div>
           )}
         </div>
@@ -168,12 +190,12 @@ export function SharedTemplateDetail({
             facts={[
               {
                 icon: CircleDot,
-                label: 'Status',
+                label: translateUi('status_920e413c'),
                 value: <TemplateStatusPill status={template.draft ? 'draft' : 'ready'} />,
               },
               {
                 icon: RectangleHorizontal,
-                label: 'Formats',
+                label: translateUi('formats_9f01769a'),
                 value: ratios.length ? (
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     {ratios.map((ratio) => (
@@ -192,34 +214,44 @@ export function SharedTemplateDetail({
               },
               {
                 icon: Variable,
-                label: 'Variables',
+                label: translateUi('variables_02db55ba'),
                 numeric: true,
                 value: contract.data ? variables.length : '…',
               },
               {
                 icon: CalendarClock,
-                label: 'Updated',
-                value: template.updatedAt ? new Date(template.updatedAt).toLocaleDateString() : '—',
+                label: translateUi('updated_3a5ecca1'),
+                value: template.updatedAt
+                  ? new Date(template.updatedAt).toLocaleDateString(displayLocale)
+                  : '—',
               },
             ]}
           />
 
-          <Panel title="Variables" bodyClassName="p-0">
+          <Panel title={translateUi('variables_02db55ba')} bodyClassName="p-0">
             {contract.isPending ? (
               <p className="p-[var(--card-pad)] text-xs text-muted-foreground">
-                Reading what this template asks for…
+                {' '}
+                {translateUi('reading_what_this_template_asks_for_23027302')}{' '}
               </p>
             ) : contract.isError ? (
               <p role="alert" className="p-[var(--card-pad)] text-xs text-destructive">
-                Could not read this template:{' '}
-                {contract.error instanceof Error ? contract.error.message : 'unknown error'}
+                {' '}
+                {translateUi('could_not_read_this_template_11971a82')}{' '}
+                {contract.error instanceof Error
+                  ? contract.error.message
+                  : translateUi('unknown_error_3e4443e5')}
               </p>
             ) : variables.length === 0 ? (
               <p className="p-[var(--card-pad)] text-xs text-muted-foreground">
-                This template takes no variables.
+                {' '}
+                {translateUi('this_template_takes_no_variables_d0f3d2e2')}{' '}
               </p>
             ) : (
-              <ul aria-label="Variables" className="flex flex-col divide-y divide-border text-xs">
+              <ul
+                aria-label={translateUi('variables_02db55ba')}
+                className="flex flex-col divide-y divide-border text-xs"
+              >
                 {variables.map((variable) => (
                   <li
                     key={variable.key}
@@ -228,10 +260,14 @@ export function SharedTemplateDetail({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{variable.label}</span>
                       <span className="text-muted-foreground">{KIND_LABEL[variable.kind]}</span>
-                      {variable.required ? <Pill variant="warning">Required</Pill> : null}
+                      {variable.required ? (
+                        <Pill variant="warning">{translateUi('required_4850b174')}</Pill>
+                      ) : null}
                     </div>
                     {variable.options.length ? (
-                      <p className="text-muted-foreground">One of: {variable.options.join(', ')}</p>
+                      <p className="text-muted-foreground">
+                        {translateUi('one_of_35c3e6d3')} {variable.options.join(', ')}
+                      </p>
                     ) : null}
                     {variable.description ? (
                       <p className="text-muted-foreground">{variable.description}</p>

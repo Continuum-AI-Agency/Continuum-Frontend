@@ -7,6 +7,7 @@
 
 import { ArrowRightIcon, SparklesIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { type FormEvent, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,7 @@ import type { HomeBoardContext } from '../../types';
 import { askSuggestions } from './askModel';
 
 export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
+  const uiText = useTranslations('dashboard');
   const router = useRouter();
   const [question, setQuestion] = useState('');
   const suggestions = useMemo(
@@ -34,25 +36,28 @@ export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
 
   return (
     <section
-      aria-label="Ask Jaina"
+      aria-label={uiText('ask_jaina_0d70d16')}
       className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3"
       data-testid="home-ask"
     >
       <form className="flex min-w-0 items-center gap-2" onSubmit={onSubmit}>
         <SparklesIcon aria-hidden className="size-4 shrink-0 text-primary" />
         <Input
-          aria-label="Ask Jaina about this brand"
+          aria-label={uiText('ask_jaina_about_this_brand_92fd972')}
           className="h-9 min-w-0 flex-1"
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Ask Jaina about this brand…"
+          placeholder={uiText('ask_jaina_about_this_brand_66df6f8')}
           value={question}
         />
-        <Button aria-label="Ask Jaina" disabled={!typed} size="sm" type="submit">
-          Ask <ArrowRightIcon aria-hidden className="size-3.5" />
+        <Button aria-label={uiText('ask_jaina_0d70d16')} disabled={!typed} size="sm" type="submit">
+          {uiText('ask_b8c209c')} <ArrowRightIcon aria-hidden className="size-3.5" />
         </Button>
       </form>
       {suggestions.length > 0 ? (
-        <ul aria-label="Suggested questions" className="flex min-w-0 flex-wrap gap-1.5">
+        <ul
+          aria-label={uiText('suggested_questions_823a7e3')}
+          className="flex min-w-0 flex-wrap gap-1.5"
+        >
           {suggestions.map((suggestion) => (
             <li className="min-w-0 max-w-full" key={suggestion.key}>
               <button
@@ -69,7 +74,7 @@ export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
         </ul>
       ) : null}
       <p className="text-muted-foreground text-xs">
-        Opens Jaina with the question written in. Nothing is sent until you send it.
+        {uiText('opens_jaina_with_the_question_written_in_noth_de7dc82')}
       </p>
     </section>
   );

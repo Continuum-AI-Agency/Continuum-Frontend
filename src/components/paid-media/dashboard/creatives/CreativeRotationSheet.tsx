@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import * as React from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,6 +45,7 @@ export function CreativeRotationSheet({
   logs,
   focusLogId,
 }: CreativeRotationSheetProps) {
+  const uiText = useTranslations('scale');
   const summary = React.useMemo(
     () =>
       summarizeCreativeRotations({
@@ -78,9 +80,9 @@ export function CreativeRotationSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex h-full w-full flex-col gap-0 sm:max-w-md">
         <SheetHeader className="border-b border-border/60 p-4">
-          <SheetTitle className="text-sm">Creative rotation history</SheetTitle>
+          <SheetTitle className="text-sm">{uiText('creative_rotation_history_d839559')}</SheetTitle>
           <SheetDescription className="text-sm">
-            DCO actions for this ad in the current time window.
+            {uiText('dco_actions_for_this_ad_in_the_current_time_w_18f34d3')}
           </SheetDescription>
           {adSummary ? (
             <div className="mt-3">

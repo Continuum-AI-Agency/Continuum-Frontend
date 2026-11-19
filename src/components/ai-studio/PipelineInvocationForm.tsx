@@ -11,17 +11,21 @@ import {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Box, FileImage, Loader2, Play } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { elementCategoryLabel } from '@/components/ai-studio/elements/elementPresentation';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ELEMENT_CATEGORY_LABEL, useElements } from '@/lib/ai-studio/elements';
+import { useValidationErrorMap } from '@/i18n/validation';
+import { useElements } from '@/lib/ai-studio/elements';
 import { startPipelineRun, waitForPipelineRun } from '@/lib/ai-studio/pipelines';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
+import { formatDecimal } from '@/lib/format/decimal';
 import { cn } from '@/lib/utils';
 
 type PinnedAsset = { asset_id: string; version_id: string };
@@ -35,24 +39,31 @@ type PipelineRunExecutor = (
 
 const pinnedAssetSchema = z.object({ asset_id: z.string().uuid(), version_id: z.string().uuid() });
 
-function inputValueSchema(input: PipelineCapabilityV2['inputs'][number]) {
+function inputValueSchema(
+  input: PipelineCapabilityV2['inputs'][number],
+  t: ReturnType<typeof useUiTranslations<'studio'>>,
+) {
   if (input.kind === 'asset') {
     return z.array(pinnedAssetSchema).min(input.min_items).max(input.max_items);
   }
   if (input.kind === 'element') {
-    const selected = z.string().uuid('Choose an Element');
+    const selected = z.string().uuid(t('choose_an_element_a5f12fb6'));
     return input.required ? selected : z.union([selected, z.literal('')]);
   }
   let text = z.string();
   const minimum = input.required ? Math.max(1, input.min_length ?? 0) : (input.min_length ?? 0);
-  if (minimum > 0) text = text.min(minimum, `${input.label} is too short`);
-  if (input.max_length) text = text.max(input.max_length, `${input.label} is too long`);
+  if (minimum > 0) text = text.min(minimum, t('validationInputTooShort', { label: input.label }));
+  if (input.max_length)
+    text = text.max(input.max_length, t('validationInputTooLong', { label: input.label }));
   return input.required ? text : z.union([z.literal(''), text]);
 }
 
-function buildFormSchema(capability: PipelineCapabilityV2) {
+function buildFormSchema(
+  capability: PipelineCapabilityV2,
+  t: ReturnType<typeof useUiTranslations<'studio'>>,
+) {
   const inputs = Object.fromEntries(
-    capability.inputs.map((input) => [input.input_id, inputValueSchema(input)]),
+    capability.inputs.map((input) => [input.input_id, inputValueSchema(input, t)]),
   );
   return z.object({ inputs: z.object(inputs) });
 }
@@ -82,6 +93,8 @@ function AssetInput({
   selected: PinnedAsset[];
   onChange: (value: PinnedAsset[]) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const initialKind = input.media === 'image' || input.media === 'video' ? input.media : 'all';
   const { assets, loading, query, setQuery, error } = useStudioLibraryBrowser(brandId, {
     initialFilters: { kind: initialKind },
@@ -106,13 +119,14 @@ function AssetInput({
       <Input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        aria-label={`Search ${input.label}`}
-        placeholder={`Search ${input.media} assets…`}
+        aria-label={translateUi('search_value0_f834f781', { value0: String(input.label) })}
+        placeholder={translateUi('search_value0_assets_94bba2bd', { value0: String(input.media) })}
       />
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {loading ? (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" aria-hidden /> Reading the Library…
+          <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
+          {translateUi('reading_the_library_c11aab21')}{' '}
         </p>
       ) : (
         <div className="grid max-h-40 grid-cols-2 gap-1.5 overflow-y-auto">
@@ -137,7 +151,8 @@ function AssetInput({
                 <span className="min-w-0">
                   <span className="block truncate text-xs">{asset.title ?? asset.fileName}</span>
                   <span className="block font-mono text-3xs text-muted-foreground">
-                    exact version {asset.headVersionId?.slice(0, 8)}
+                    {' '}
+                    {translateUi('exact_version_68ab8187')} {asset.headVersionId?.slice(0, 8)}
                   </span>
                 </span>
               </button>
@@ -145,7 +160,9 @@ function AssetInput({
           })}
           {choices.length === 0 ? (
             <p className="col-span-2 text-xs text-muted-foreground">
-              No versioned {input.media} assets found.
+              {' '}
+              {translateUi('no_versioned_2bcee361')} {input.media}{' '}
+              {translateUi('assets_found_365e775e')}{' '}
             </p>
           ) : null}
         </div>
@@ -165,11 +182,19 @@ function ElementInput({
   selectedId: string;
   onChange: (value: string) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const { elements, isLoading, isError } = useElements(brandId);
   const choices = elements.filter((element) => input.allowed_categories.includes(element.category));
 
-  if (isLoading) return <p className="text-xs text-muted-foreground">Reading Elements…</p>;
-  if (isError) return <p className="text-xs text-destructive">Could not read Elements.</p>;
+  if (isLoading)
+    return (
+      <p className="text-xs text-muted-foreground">{translateUi('reading_elements_fbcafd3b')}</p>
+    );
+  if (isError)
+    return (
+      <p className="text-xs text-destructive">{translateUi('could_not_read_elements_37b80391')}</p>
+    );
   return (
     <div className="grid grid-cols-2 gap-1.5">
       {choices.map((element) => (
@@ -189,14 +214,16 @@ function ElementInput({
           <span className="min-w-0">
             <span className="block truncate text-xs">{element.name}</span>
             <span className="block text-3xs text-muted-foreground">
-              {ELEMENT_CATEGORY_LABEL[element.category]} Element
+              {elementCategoryLabel(element.category, translateUi)}{' '}
+              {translateUi('element_4e5b548d')}{' '}
             </span>
           </span>
         </button>
       ))}
       {choices.length === 0 ? (
         <p className="col-span-2 text-xs text-muted-foreground">
-          No matching Elements. Create one in AI Studio first.
+          {' '}
+          {translateUi('no_matching_elements_create_one_in__840857f0')}{' '}
         </p>
       ) : null}
     </div>
@@ -221,6 +248,10 @@ function PipelineReceipt({
   capability: PipelineCapabilityV2;
   receipt: PipelineRunReceipt;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const decimalLocale = useUiLocale();
+
   if (receipt.error) {
     return (
       <div role="alert" className="border-t border-border pt-3 text-xs text-destructive">
@@ -234,10 +265,10 @@ function PipelineReceipt({
   return (
     <section
       className="flex flex-col gap-3 border-t border-border pt-3"
-      aria-label="Pipeline outputs"
+      aria-label={translateUi('pipeline_outputs_d221da2a')}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium">Run outputs</p>
+        <p className="text-xs font-medium">{translateUi('run_outputs_691b7e7e')}</p>
         <Pill variant={receipt.status === 'completed' ? 'success' : 'muted'}>
           <PillIndicator
             variant={receipt.status === 'completed' ? 'success' : 'info'}
@@ -265,7 +296,10 @@ function PipelineReceipt({
                 </p>
                 {artifact.kind === 'element_candidate' ? (
                   <p className="font-mono text-3xs text-muted-foreground">
-                    reference {artifact.candidate.reference_asset.asset_id.slice(0, 8)} · version{' '}
+                    {' '}
+                    {translateUi('reference_52367a66')}{' '}
+                    {artifact.candidate.reference_asset.asset_id.slice(0, 8)}{' '}
+                    {translateUi('version_01ed56b7')}{' '}
                     {artifact.candidate.reference_asset.version_id.slice(0, 8)}
                   </p>
                 ) : null}
@@ -277,9 +311,9 @@ function PipelineReceipt({
       {cost ? (
         <p className="text-3xs text-muted-foreground">
           {cost.amount_minor === null
-            ? 'Cost not recorded'
-            : `${(cost.amount_minor / 100).toFixed(2)} ${cost.currency}`}{' '}
-          · {cost.generation_count} generations · quality{' '}
+            ? translateUi('cost_not_recorded_5aa5a2ef')
+            : `${formatDecimal(cost.amount_minor / 100, 2, decimalLocale)} ${cost.currency}`}{' '}
+          · {cost.generation_count} {translateUi('generations_quality_0660e5b0')}{' '}
           {Math.round((receipt.quality?.score ?? 0) * 100)}%
         </p>
       ) : null}
@@ -324,9 +358,13 @@ export function PipelineInvocationForm({
   capability: PipelineCapabilityV2;
   executePipeline?: PipelineRunExecutor;
 }) {
-  const schema = useMemo(() => buildFormSchema(capability), [capability]);
+  const validationErrorMap = useValidationErrorMap();
+
+  const translateUi = useUiTranslations('studio');
+
+  const schema = useMemo(() => buildFormSchema(capability, translateUi), [capability, translateUi]);
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema, { error: validationErrorMap }),
     defaultValues: defaultValues(capability),
   });
   const [receipt, setReceipt] = useState<PipelineRunReceipt | null>(null);
@@ -378,7 +416,9 @@ export function PipelineInvocationForm({
                     : { id: `pipeline-input-${input.input_id}-label` })}
                 >
                   {input.label}
-                  <span aria-hidden>{input.required ? ' *' : ' (optional)'}</span>
+                  <span aria-hidden>
+                    {input.required ? ' *' : translateUi('optional_edbfc3dc')}
+                  </span>
                 </Label>
                 {input.description ? (
                   <p className="text-xs text-muted-foreground">{input.description}</p>
@@ -425,7 +465,7 @@ export function PipelineInvocationForm({
       ) : null}
       <Button type="submit" size="sm" disabled={running}>
         {running ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-        {running ? 'Running…' : 'Run pipeline'}
+        {running ? translateUi('running_46c54136') : translateUi('run_pipeline_c415e404')}
       </Button>
       {receipt ? <PipelineReceipt capability={capability} receipt={receipt} /> : null}
     </form>

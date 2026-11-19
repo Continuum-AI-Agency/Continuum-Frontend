@@ -56,8 +56,15 @@ mock.module('@/lib/library/renderApprovals', () => ({
   fetchApprovalDestinations: async () => ({ destinations: [ROOM] }),
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { MetaPickerState, RenderPreflightRow } from './DeliveryTargetPicker';
 import { type FiredRow, RenderConfirmDialog } from './RenderConfirmDialog';
 

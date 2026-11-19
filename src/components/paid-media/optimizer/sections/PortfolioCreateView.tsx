@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Create view — a full-height page STATE for standing up a new portfolio, not a
 // sheet overlay. Modeled on OptimizerOnboarding: the same grid-rows shell + single
 // scroll region wrapping PortfolioSetup (start-from-a-suggestion cards + build-by-hand
@@ -27,11 +29,12 @@ export function PortfolioCreateView({
   onBack,
   onCreated,
 }: PortfolioCreateViewProps) {
+  const uiText = useTranslations('scale');
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       <header className="flex shrink-0 items-center gap-1.5 border-border/60 border-b px-4 py-2.5">
         <Button
-          aria-label="Back to portfolios"
+          aria-label={uiText('back_to_portfolios_94a4418')}
           className="-ml-2 h-7 gap-1.5 px-2 font-normal text-muted-foreground text-sm"
           onClick={onBack}
           size="sm"
@@ -39,12 +42,12 @@ export function PortfolioCreateView({
           variant="ghost"
         >
           <ArrowLeftIcon className="size-3.5" aria-hidden="true" />
-          Portfolios
+          {uiText('portfolios_e8af9d8')}
         </Button>
         <span aria-hidden="true" className="text-muted-foreground text-sm">
           /
         </span>
-        <h2 className="font-semibold text-sm tracking-tight">New portfolio</h2>
+        <h2 className="font-semibold text-sm tracking-tight">{uiText('new_portfolio_2ea4a33')}</h2>
       </header>
 
       <div className="min-h-0 overflow-y-auto px-4 py-5">

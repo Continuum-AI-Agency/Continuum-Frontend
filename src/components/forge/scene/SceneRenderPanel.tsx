@@ -2,6 +2,7 @@
 
 import type { BlendOutput, SceneRenderStatus } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { OpenInLibrary } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
@@ -31,8 +32,14 @@ const stateLabel = (state: string) =>
   isTerminalSceneRender(state) ? state[0]!.toUpperCase() + state.slice(1) : 'Rendering';
 
 export function SceneRenderStatePill({ state }: { state: string }) {
+  const translateUi = useUiTranslations('forge');
+
   return (
-    <Pill variant="outline" className="gap-1.5 text-2xs" title={`Render ${state}`}>
+    <Pill
+      variant="outline"
+      className="gap-1.5 text-2xs"
+      title={translateUi('render_value0_aba29037', { value0: String(state) })}
+    >
       <PillIndicator variant={STATE_TONE[state] ?? 'info'} pulse={!isTerminalSceneRender(state)} />
       {stateLabel(state)}
     </Pill>
@@ -54,6 +61,8 @@ export function SceneSignedMedia({
   label,
   fill = false,
 }: SceneMediaProps & { fill?: boolean }) {
+  const translateUi = useUiTranslations('forge');
+
   const signed = useQuery({
     queryKey: [...signedAssetUrlQueryKey(brandId, pin.assetId), pin.versionId],
     queryFn: () => signLibraryAsset(brandId, pin.assetId, pin.versionId),
@@ -63,7 +72,9 @@ export function SceneSignedMedia({
   if (!signed.data)
     return (
       <div className="flex aspect-video items-center justify-center rounded-md bg-muted/70 text-2xs text-muted-foreground">
-        {signed.isError ? 'Could not load this file' : 'Loading…'}
+        {signed.isError
+          ? translateUi('could_not_load_this_file_73597263')
+          : translateUi('loading_ba3bbbe1')}
       </div>
     );
   return mediaType === 'video' ? (
@@ -75,7 +86,7 @@ export function SceneSignedMedia({
     // biome-ignore lint/performance/noImgElement: a signed Library render, not a Next-optimisable asset
     <img
       src={signed.data}
-      alt={`Render of ${label}`}
+      alt={translateUi('render_of_value0_e776df91', { value0: String(label) })}
       className={
         fill
           ? 'size-full object-contain'
@@ -111,8 +122,12 @@ function SceneRenderRow({
   /** What the job was asked to make, when known; otherwise the output's parsed type. */
   mediaType?: BlendOutput['mediaType'] | null;
 }) {
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const output = outputs.find((candidate) => candidate.id === render.outputId);
-  const label = output?.label ?? render.outputId ?? 'Render';
+  const label = output?.label ?? render.outputId ?? translateUi('render_6d89eb7d');
   return (
     <li className="flex flex-col gap-1.5 border-b border-border py-2 last:border-b-0">
       <div className="flex items-center justify-between gap-2">
@@ -121,7 +136,11 @@ function SceneRenderRow({
         </span>
         <SceneRenderStatePill state={render.state} />
       </div>
-      {at ? <span className="text-2xs text-muted-foreground">{formatRelativeTime(at)}</span> : null}
+      {at ? (
+        <span className="text-2xs text-muted-foreground">
+          {formatRelativeTime(at, undefined, currentUiLocale)}
+        </span>
+      ) : null}
       {render.error ? (
         <p className="m-0 text-xs text-destructive" title={render.error}>
           {sceneErrorSentence(render.error)}
@@ -156,13 +175,17 @@ export function SceneRenderHistory({
   exclude?: string | null;
   limit?: number;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const history = useQuery({
     queryKey: forgeQueryKeys.sceneRenders(brandId, assetId),
     queryFn: ({ signal }) => listSceneRenders(brandId, assetId, signal),
     staleTime: FORGE_STALE_MS.active,
   });
   if (history.isPending)
-    return <p className="m-0 text-xs text-muted-foreground">Loading renders…</p>;
+    return (
+      <p className="m-0 text-xs text-muted-foreground">{translateUi('loading_renders_a042de98')}</p>
+    );
   if (history.isError)
     return (
       <p role="alert" className="m-0 text-xs text-destructive">
@@ -173,11 +196,16 @@ export function SceneRenderHistory({
   if (!renders.length)
     return (
       <p className="m-0 text-xs text-muted-foreground">
-        {history.data.renders.length ? 'No earlier renders.' : 'No renders yet.'}
+        {history.data.renders.length
+          ? translateUi('no_earlier_renders_890fbba6')
+          : translateUi('no_renders_yet_5f26b282')}
       </p>
     );
   return (
-    <ul aria-label="Render history" className="m-0 flex list-none flex-col p-0">
+    <ul
+      aria-label={translateUi('render_history_be397c2b')}
+      className="m-0 flex list-none flex-col p-0"
+    >
       {renders.map((render) => (
         <SceneRenderRow
           key={render.jobId}
@@ -210,6 +238,8 @@ export function SceneRenderPanel({
   jobMediaType?: BlendOutput['mediaType'] | null;
   error: unknown;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   return (
     <div className="flex flex-col gap-3 p-3">
       {error ? (
@@ -218,9 +248,10 @@ export function SceneRenderPanel({
         </p>
       ) : null}
       {job ? (
-        <section aria-label="This render" className="flex flex-col gap-1">
+        <section aria-label={translateUi('this_render_26c02a7e')} className="flex flex-col gap-1">
           <h3 className="m-0 text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-            This render
+            {' '}
+            {translateUi('this_render_26c02a7e')}{' '}
           </h3>
           <ul className="m-0 list-none p-0">
             <SceneRenderRow
@@ -232,9 +263,10 @@ export function SceneRenderPanel({
           </ul>
         </section>
       ) : null}
-      <section aria-label="Renders" className="flex flex-col gap-1">
+      <section aria-label={translateUi('renders_5d75bf75')} className="flex flex-col gap-1">
         <h3 className="m-0 text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-          Renders
+          {' '}
+          {translateUi('renders_5d75bf75')}{' '}
         </h3>
         <SceneRenderHistory
           brandId={brandId}

@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // The autonomy tier as three borderless options, in plain language: what each one does and what it
 // never does. Shared by the creation wizard and the Manage panel so the tier reads the
@@ -43,12 +46,19 @@ export function TierCards({
   disabled,
   className,
 }: TierCardsProps) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   return (
     <fieldset className={cn('grid min-w-0 gap-1 sm:grid-cols-3', className)}>
-      <legend className="sr-only">Autonomy tier</legend>
+      <legend className="sr-only">{uiText('autonomy_tier_fb493fa')}</legend>
       {APPLY_MODES.map((tier) => {
         const active = value === tier || (tier === 'autopilot' && arming && value !== 'autopilot');
-        const copy = TIER_COPY[tier];
+        const copy = {
+          title: uiText('wizardTierTitle', { mode: tier }),
+          body: uiText('wizardTierBody', { mode: tier }),
+        };
         return (
           <button
             aria-pressed={active}
@@ -71,7 +81,7 @@ export function TierCards({
               {tier === 'autopilot' ? (
                 <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
               ) : null}
-              {applyModePill(tier)?.label ?? copy.title}
+              {applyModePill(tier, optimizerText)?.label ?? copy.title}
             </span>
             <span className="mt-0.5 block text-xs text-muted-foreground">{copy.body}</span>
           </button>

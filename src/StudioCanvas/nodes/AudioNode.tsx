@@ -7,6 +7,7 @@ import {
   useEdges,
 } from '@xyflow/react';
 import { Copy, Pause, Play, Trash2, Unlink, Volume2 } from 'lucide-react';
+import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -30,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { cn } from '@/lib/utils';
@@ -45,6 +47,12 @@ const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
 export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioNodeData>>) {
+  const dropUiLocale = useDropLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const brandId = useStudioStore((state) => state.brandId);
   const triggerSave = useStudioStore((state) => state.triggerSave);
@@ -146,8 +154,8 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
       if (file) {
         if (!file.type.startsWith('audio/')) {
           show({
-            title: 'Unsupported asset',
-            description: 'Only audio files can be dropped here.',
+            title: translateUi('unsupported_asset_add38b25'),
+            description: translateUi('only_audio_files_can_be_dropped_her_a46af896'),
             variant: 'warning',
           });
           return;
@@ -179,9 +187,9 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
             updateNodeData(id, { audio: result, fileName: file.name, ...CLEARED_TRIM });
           }
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to read dropped file';
+          const message = uiErrorText(error);
           show({
-            title: 'Drop failed',
+            title: translateUi('drop_failed_abc2b996'),
             description: message,
             variant: 'error',
           });
@@ -196,7 +204,11 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
 
       if (!rawPayload) return;
 
-      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64);
+      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64, undefined, {
+        t: translateUi,
+        locale: dropUiLocale,
+        errorText: uiErrorText,
+      });
       if (resolved.status === 'error') {
         show({
           title: resolved.title,
@@ -208,8 +220,8 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
 
       if (resolved.nodeType !== 'audio') {
         show({
-          title: 'Unsupported asset',
-          description: 'Only audio assets can be dropped here.',
+          title: translateUi('unsupported_asset_add38b25'),
+          description: translateUi('only_audio_assets_can_be_dropped_he_c9a03d9f'),
           variant: 'warning',
         });
         return;
@@ -229,7 +241,17 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
       });
       triggerSave();
     },
-    [brandId, fileToDataUrl, id, triggerSave, updateNodeData, show],
+    [
+      brandId,
+      fileToDataUrl,
+      id,
+      triggerSave,
+      updateNodeData,
+      show,
+      translateUi,
+      uiErrorText,
+      dropUiLocale,
+    ],
   );
 
   return (
@@ -282,7 +304,11 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                             type="button"
                             onClick={togglePlay}
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition-colors hover:bg-emerald-700"
-                            aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
+                            aria-label={
+                              isPlaying
+                                ? translateUi('pause_audio_4b5a6403')
+                                : translateUi('play_audio_33b31bc6')
+                            }
                           >
                             {isPlaying ? (
                               <Pause className="h-4 w-4" />
@@ -293,10 +319,12 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
 
                           <div className="min-w-0 flex-1 text-left">
                             <p className="truncate text-xs font-medium text-foreground">
-                              {data.fileName || 'Audio File'}
+                              {data.fileName || translateUi('audio_file_adf9b647')}
                             </p>
                             <p className="text-2xs text-muted-foreground">
-                              {isPlaying ? 'Playing…' : 'Click to play'}
+                              {isPlaying
+                                ? translateUi('playing_a9fcbd2b')
+                                : translateUi('click_to_play_6a526407')}
                             </p>
                           </div>
 
@@ -311,8 +339,10 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                           <EmptyMedia variant="icon">
                             <Volume2 />
                           </EmptyMedia>
-                          <EmptyTitle>Upload Audio</EmptyTitle>
-                          <EmptyDescription>Drag & drop or click</EmptyDescription>
+                          <EmptyTitle>{translateUi('upload_audio_31997f80')}</EmptyTitle>
+                          <EmptyDescription>
+                            {translateUi('drag_drop_or_click_f5869ccd')}
+                          </EmptyDescription>
                         </EmptyHeader>
                       </Empty>
                     )}
@@ -353,33 +383,33 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                   }
                 />
                 <TooltipContent>
-                  <p>Audio Output: {audioConnections} connections</p>
+                  <p>
+                    {translateUi('audio_output_ff184ce1')} {audioConnections}{' '}
+                    {translateUi('connections_1e5fac86')}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </div>
           }
         />
         <ContextMenuContent className="w-52">
-          <ContextMenuLabel>Audio Reference</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('audio_reference_7cc3183d')}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <Unlink className="mr-2 h-4 w-4" />
-            Detach connections
+            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
           </ContextMenuItem>
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>

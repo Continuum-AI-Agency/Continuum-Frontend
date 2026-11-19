@@ -15,6 +15,7 @@
 import type { CanvasLibraryAssetContext, PinnedLibraryAssetRef } from '@continuum/contracts';
 import { canvasLibraryDrift } from '@continuum/contracts';
 import { CheckCircle2, GitBranchPlus, Info, Loader2, MessageSquare, RefreshCw } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useId, useMemo, useState } from 'react';
 import { useAssetComments } from '@/components/library/detail/useAssetComments';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,8 @@ const STATUS_LABEL: Record<CanvasLibraryAssetContext['reviewStatus'], string> = 
 const chip = 'inline-flex h-5 items-center gap-1 rounded-sm px-1.5 font-medium';
 
 export function LibraryNodeStatus({ nodeId, data }: { nodeId: string; data: unknown }) {
+  const translateUi = useUiTranslations('library');
+
   const ref = useMemo(() => libraryNodeRef(data), [data]);
   const brandId = useStudioStore((state) => state.brandId);
   const asset = useLibraryContextStore((state) => (ref ? state.assets[ref.assetId] : undefined));
@@ -134,12 +137,15 @@ export function LibraryNodeStatus({ nodeId, data }: { nodeId: string; data: unkn
       <span
         className={cn(chip, STATUS_TONE[asset.reviewStatus])}
         style={asset.reviewColor ? { boxShadow: `inset 2px 0 0 ${asset.reviewColor}` } : undefined}
-        title="Library review status"
+        title={translateUi('library_review_status_47cf9e53')}
       >
         {statusLabel}
       </span>
       {versionNumber ? (
-        <span className={cn(chip, 'bg-muted text-muted-foreground')} title="Library version">
+        <span
+          className={cn(chip, 'bg-muted text-muted-foreground')}
+          title={translateUi('library_version_d62beb4c')}
+        >
           v{versionNumber}
         </span>
       ) : null}
@@ -150,7 +156,9 @@ export function LibraryNodeStatus({ nodeId, data }: { nodeId: string; data: unkn
             <button
               type="button"
               data-testid="library-node-comments"
-              aria-label={`${asset.openThreadCount} open comment threads`}
+              aria-label={translateUi('value0_open_comment_threads_f543ba7c', {
+                value0: String(asset.openThreadCount),
+              })}
               className={cn(
                 chip,
                 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -201,7 +209,7 @@ export function LibraryNodeStatus({ nodeId, data }: { nodeId: string; data: unkn
           ) : (
             <RefreshCw className="size-3" aria-hidden />
           )}
-          v{head.versionNumber} available · Use latest
+          v{head.versionNumber} {translateUi('available_use_latest_f9f9539f')}{' '}
         </button>
       ) : null}
 
@@ -210,19 +218,21 @@ export function LibraryNodeStatus({ nodeId, data }: { nodeId: string; data: unkn
           type="button"
           data-testid="library-node-decision-changed"
           onClick={acknowledge}
-          title="The Library review decision changed since this node last saw it. Click to acknowledge."
+          title={translateUi('the_library_review_decision_changed_c3aaf8cc')}
           className={cn(
             chip,
             'bg-violet-500/15 text-violet-800 hover:bg-violet-500/25 dark:text-violet-200',
           )}
         >
-          <CheckCircle2 className="size-3" aria-hidden />
-          Decision changed: {statusLabel}
+          <CheckCircle2 className="size-3" aria-hidden /> {translateUi('decision_changed_5628ae50')}{' '}
+          {statusLabel}
         </button>
       ) : null}
 
       {drift.deleted ? (
-        <span className={cn(chip, 'bg-destructive/15 text-destructive')}>Removed from Library</span>
+        <span className={cn(chip, 'bg-destructive/15 text-destructive')}>
+          {translateUi('removed_from_library_46354187')}
+        </span>
       ) : null}
 
       {ref.isOutput && pinned ? (
@@ -254,6 +264,8 @@ function NodeCommentThreads({
   assetId: string;
   versionId: string | undefined;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const { comments, loading, error, postComment, setResolved } = useAssetComments(brandId, assetId);
   const threads = useMemo(() => buildCommentThreads(comments), [comments]);
   const [showResolved, setShowResolved] = useState(false);
@@ -266,7 +278,8 @@ function NodeCommentThreads({
     >
       <div className="flex items-center justify-between text-xs">
         <span className="font-medium">
-          {threads.open.length} open · {threads.resolved.length} resolved
+          {threads.open.length} {translateUi('open_0f9f0d27')} {threads.resolved.length}{' '}
+          {translateUi('resolved_dc676b42')}{' '}
         </span>
         {threads.resolved.length > 0 ? (
           <button
@@ -274,11 +287,15 @@ function NodeCommentThreads({
             className="text-muted-foreground hover:text-foreground"
             onClick={() => setShowResolved((value) => !value)}
           >
-            {showResolved ? 'Hide resolved' : 'Show resolved'}
+            {showResolved
+              ? translateUi('hide_resolved_b502cf4b')
+              : translateUi('show_resolved_64d0005c')}
           </button>
         ) : null}
       </div>
-      {loading ? <p className="text-xs text-muted-foreground">Loading comments…</p> : null}
+      {loading ? (
+        <p className="text-xs text-muted-foreground">{translateUi('loading_comments_c8d872f3')}</p>
+      ) : null}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {shown.map((thread) => {
         const resolved = Boolean(thread.root.resolvedAt);
@@ -293,7 +310,9 @@ function NodeCommentThreads({
             {[thread.root, ...thread.replies].map((comment) => (
               <div key={comment.id} className="mb-1 text-xs">
                 <span className="font-medium">
-                  {comment.authorName ?? displayNameFromEmail(comment.authorEmail) ?? 'Member'}
+                  {comment.authorName ??
+                    displayNameFromEmail(comment.authorEmail) ??
+                    translateUi('member_7c968fb7')}
                 </span>{' '}
                 <span className="whitespace-pre-wrap break-words text-foreground/90">
                   {comment.body}
@@ -302,8 +321,8 @@ function NodeCommentThreads({
             ))}
             <div className="mt-1 flex items-center gap-2">
               <InlineComposer
-                placeholder="Reply…"
-                label="Reply"
+                placeholder={translateUi('reply_1d627af0')}
+                label={translateUi('reply_c253f451')}
                 onSubmit={(body) =>
                   postComment({ body, parentCommentId: thread.root.id, versionId }).then(() => {})
                 }
@@ -315,15 +334,15 @@ function NodeCommentThreads({
                 className="h-6 px-2 text-2xs"
                 onClick={() => void setResolved(thread.root.id, !resolved)}
               >
-                {resolved ? 'Reopen' : 'Resolve'}
+                {resolved ? translateUi('reopen_a886d1dc') : translateUi('resolve_c8f193b3')}
               </Button>
             </div>
           </div>
         );
       })}
       <InlineComposer
-        placeholder="Comment on this asset…"
-        label="Comment"
+        placeholder={translateUi('comment_on_this_asset_963a0c3d')}
+        label={translateUi('comment_44f5e3fb')}
         onSubmit={(body) => postComment({ body, versionId }).then(() => {})}
       />
     </div>
@@ -388,6 +407,8 @@ function SaveAsRevision({
   nodeId: string;
   output: Parameters<typeof saveCanvasOutputAsRevision>[0]['output'];
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [sources, setSources] = useState<PinnedLibraryAssetRef[]>([]);
   const [fileIntoReview, setFileIntoReview] = useState(false);
   const reviewToggleId = useId();
@@ -437,8 +458,8 @@ function SaveAsRevision({
               'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
           >
-            <GitBranchPlus className="size-3" aria-hidden />
-            Save as revision
+            <GitBranchPlus className="size-3" aria-hidden />{' '}
+            {translateUi('save_as_revision_bc959dc5')}{' '}
           </button>
         }
       />
@@ -446,14 +467,15 @@ function SaveAsRevision({
         <div data-testid="library-node-revision-panel" className="flex flex-col gap-2 text-xs">
           {sources.length === 0 ? (
             <p className="text-muted-foreground">
-              Wire a Library reference into this node to save the output as its next version.
+              {' '}
+              {translateUi('wire_a_library_reference_into_this__084fa103')}{' '}
             </p>
           ) : (
             sources.map((source) => {
               const name =
                 assets[source.asset_id]?.title ??
                 assets[source.asset_id]?.fileName ??
-                'Library asset';
+                translateUi('libraryAssetFallback');
               const version = versions[source.version_id]?.versionNumber;
               return (
                 <Button
@@ -471,8 +493,11 @@ function SaveAsRevision({
                     <Loader2 className="size-3 animate-spin" aria-hidden />
                   ) : null}
                   <span className="truncate">
-                    Revise {name}
-                    {version ? ` (from v${version})` : ''}
+                    {' '}
+                    {translateUi('revise_f1323f09')} {name}
+                    {version
+                      ? translateUi('from_v_value0_1c78f2f1', { value0: String(version) })
+                      : ''}
                   </span>
                 </Button>
               );
@@ -485,7 +510,7 @@ function SaveAsRevision({
               checked={fileIntoReview}
               onCheckedChange={(checked) => setFileIntoReview(checked === true)}
             />
-            <label htmlFor={reviewToggleId}>Send to review</label>
+            <label htmlFor={reviewToggleId}>{translateUi('send_to_review_35de7e2d')}</label>
           </div>
           {result ? (
             <p data-testid="library-node-revision-result" className="text-muted-foreground">

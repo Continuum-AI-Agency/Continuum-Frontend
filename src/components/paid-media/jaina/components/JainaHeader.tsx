@@ -1,5 +1,7 @@
 'use client';
+
 import { Archive, Layers, RotateCcw, Target, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { ActiveProjectSelect, useActiveProjectOptional } from '@/components/projects';
 import {
@@ -38,6 +40,7 @@ export function JainaHeader({
   onStop,
   isStreaming,
 }: JainaHeaderProps) {
+  const uiText = useTranslations('scale');
   // Optional: this surface also renders inside the Campaign Canvas, which is not guaranteed
   // to sit under the dashboard shell's ActiveProjectProvider. No provider, no chip — never a
   // thrown hook.
@@ -46,7 +49,9 @@ export function JainaHeader({
     <header className="relative z-10 flex items-center justify-between gap-3 border-b border-border/70 bg-background/70 p-3 transition-all duration-300">
       <div className="flex items-center gap-4 flex-1 min-w-0">
         <div className="flex items-center gap-2 shrink-0 mr-2">
-          <h2 className="text-sm font-semibold tracking-tight whitespace-nowrap">Jaina</h2>
+          <h2 className="text-sm font-semibold tracking-tight whitespace-nowrap">
+            {uiText('jaina_15cdaaf')}
+          </h2>
           <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
         </div>
 
@@ -88,28 +93,27 @@ export function JainaHeader({
                 variant="secondary"
                 size="sm"
                 className="hover:bg-white/10"
-                aria-label="Clear Memory"
+                aria-label={uiText('clear_memory_0a9b5fe')}
               >
                 <RotateCcw />
-                <span className="hidden xs:inline">Memory</span>
+                <span className="hidden xs:inline">{uiText('memory_c3963ae')}</span>
               </Button>
             }
           />
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Clear Jaina's memory?</AlertDialogTitle>
+              <AlertDialogTitle>{uiText('clear_jaina_s_memory_8432ef6')}</AlertDialogTitle>
               <AlertDialogDescription>
-                This will permanently erase Jaina's memory for this ad account. She will start fresh
-                on your next message. This cannot be undone.
+                {uiText('this_will_permanently_erase_jaina_s_memory_fo_ef50cf6')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={onClearMemory}
               >
-                Clear memory
+                {uiText('clear_memory_64f0ea3')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -122,28 +126,27 @@ export function JainaHeader({
                 variant="secondary"
                 size="sm"
                 className="hover:bg-white/10"
-                aria-label="Clear Conversation"
+                aria-label={uiText('clear_conversation_2fe8467')}
               >
                 <X />
-                <span className="hidden xs:inline">Clear</span>
+                <span className="hidden xs:inline">{uiText('clear_83b12c2')}</span>
               </Button>
             }
           />
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Clear this conversation?</AlertDialogTitle>
+              <AlertDialogTitle>{uiText('clear_this_conversation_f907fd6')}</AlertDialogTitle>
               <AlertDialogDescription>
-                This will delete the current conversation and all its messages. This cannot be
-                undone.
+                {uiText('this_will_delete_the_current_conversation_and_c1d8246')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={onClearConversation}
               >
-                Clear conversation
+                {uiText('clear_conversation_16299ad')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -151,7 +154,7 @@ export function JainaHeader({
 
         {isStreaming && (
           <Button variant="destructive" size="sm" onClick={onStop} className="animate-pulse">
-            Stop
+            {uiText('stop_cae7d57')}
           </Button>
         )}
       </div>

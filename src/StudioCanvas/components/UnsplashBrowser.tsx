@@ -11,7 +11,8 @@
 
 import type { UnsplashOrientation, UnsplashPhoto } from '@continuum/contracts';
 import { Camera, Loader2 } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useCallback, useRef, useState, useMemo as useUiConfigMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,12 +23,18 @@ const PER_PAGE = 24;
 
 type Status = 'idle' | 'loading' | 'loaded' | 'error' | 'unconfigured';
 
-const ORIENTATIONS: ReadonlyArray<{ value: UnsplashOrientation | 'any'; label: string }> = [
-  { value: 'any', label: 'Any' },
-  { value: 'landscape', label: 'Landscape' },
-  { value: 'portrait', label: 'Portrait' },
-  { value: 'squarish', label: 'Square' },
-];
+function useLocalOrientationsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: ReadonlyArray<{ value: UnsplashOrientation | 'any'; label: string }> = [
+      { value: 'any', label: translateConfig('any_2b505597') },
+      { value: 'landscape', label: translateConfig('landscape_e658d3ae') },
+      { value: 'portrait', label: translateConfig('portrait_f71094c3') },
+      { value: 'squarish', label: translateConfig('square_c11092bc') },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 interface UnsplashBrowserProps {
   brandProfileId?: string;
@@ -36,6 +43,10 @@ interface UnsplashBrowserProps {
 }
 
 export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBrowserProps) {
+  const ORIENTATIONS = useLocalOrientationsMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   const [query, setQuery] = useState('');
   const [orientation, setOrientation] = useState<UnsplashOrientation | 'any'>('any');
   const [status, setStatus] = useState<Status>('idle');
@@ -78,13 +89,13 @@ export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBro
         const rateLimited = error instanceof Error && /rate.?limit|429/i.test(error.message);
         setErrorMessage(
           rateLimited
-            ? 'Unsplash is rate limited right now — try again in a few minutes.'
-            : "Couldn't reach Unsplash. Please try again.",
+            ? translateUi('unsplash_is_rate_limited_right_now__f1b0f7b2')
+            : translateUi('couldn_t_reach_unsplash_please_try__b4f23a35'),
         );
         setStatus('error');
       }
     },
-    [brandProfileId],
+    [brandProfileId, translateUi],
   );
 
   const changeOrientation = useCallback(
@@ -111,14 +122,18 @@ export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBro
         }}
       >
         <Input
-          aria-label="Search Unsplash"
-          placeholder="Search photos — e.g. minimal studio backdrop"
+          aria-label={translateUi('search_unsplash_89223d02')}
+          placeholder={translateUi('search_photos_e_g_minimal_studio_ba_4ad6116a')}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           disabled={status === 'loading'}
         />
         <Button type="submit" disabled={status === 'loading' || !query.trim()}>
-          {status === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+          {status === 'loading' ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            translateUi('search_49c266ba')
+          )}
         </Button>
       </form>
 
@@ -147,7 +162,8 @@ export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBro
 
       {status === 'unconfigured' && (
         <p className="text-sm text-muted-foreground">
-          Unsplash isn&apos;t configured on this environment yet.
+          {' '}
+          {translateUi('unsplash_isn_t_configured_on_this_e_91db2499')}{' '}
         </p>
       )}
 
@@ -156,7 +172,9 @@ export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBro
       )}
 
       {status === 'loaded' && photos.length === 0 && (
-        <p className="text-sm text-muted-foreground">No photos matched that search.</p>
+        <p className="text-sm text-muted-foreground">
+          {translateUi('no_photos_matched_that_search_0c10dab0')}
+        </p>
       )}
 
       {status === 'loaded' && photos.length > 0 && (
@@ -167,13 +185,20 @@ export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBro
                 type="button"
                 onClick={() => onPick(photo)}
                 className="group relative overflow-hidden rounded-md border border-border/60 focus:outline-none focus:ring-2 focus:ring-ring"
-                aria-label={`Add photo by ${photo.photographerName} to the canvas`}
+                aria-label={translateUi('add_photo_by_value0_to_the_canvas_07c20e4c', {
+                  value0: String(photo.photographerName),
+                })}
               >
                 {/* Hotlinked from the Unsplash CDN — see the file header. The
                     dominant colour paints the tile before the image lands. */}
                 <img
                   src={photo.thumbUrl}
-                  alt={photo.alt ?? `Photo by ${photo.photographerName}`}
+                  alt={
+                    photo.alt ??
+                    translateUi('photo_by_value0_05034f6b', {
+                      value0: String(photo.photographerName),
+                    })
+                  }
                   loading="lazy"
                   className="aspect-[4/3] w-full object-cover transition group-hover:opacity-90"
                   style={{ backgroundColor: photo.color }}
@@ -188,7 +213,7 @@ export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBro
                 >
                   {photo.photographerName}
                 </a>
-                {' on '}
+                {translateUi('unsplashCreditOn')}
                 <a
                   href={photo.unsplashUrl}
                   target="_blank"

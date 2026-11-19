@@ -17,6 +17,7 @@ import {
   Video,
   XCircle,
 } from 'lucide-react';
+import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -40,6 +41,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { cn } from '@/lib/utils';
@@ -64,6 +66,12 @@ export function VideoReferenceNode({
   data,
   selected,
 }: NodeProps<ReactFlowNode<VideoNodeData>>) {
+  const dropUiLocale = useDropLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -76,7 +84,7 @@ export function VideoReferenceNode({
   const videoRef = useRef<HTMLVideoElement>(null);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
-  const refBadge = referenceStatusBadge(data.referenceStatus);
+  const refBadge = referenceStatusBadge(data.referenceStatus, translateUi);
 
   // Calculate connection counts for tooltips
   const videoConnections = edges.filter(
@@ -198,8 +206,8 @@ export function VideoReferenceNode({
       if (file) {
         if (!file.type.startsWith('video/')) {
           show({
-            title: 'Unsupported asset',
-            description: 'Only video files can be dropped here.',
+            title: translateUi('unsupported_asset_add38b25'),
+            description: translateUi('only_video_files_can_be_dropped_her_80dc0c07'),
             variant: 'warning',
           });
           return;
@@ -218,9 +226,9 @@ export function VideoReferenceNode({
             ...CLEARED_TRIM,
           });
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to read dropped file';
+          const message = uiErrorText(error);
           show({
-            title: 'Drop failed',
+            title: translateUi('drop_failed_abc2b996'),
             description: message,
             variant: 'error',
           });
@@ -235,7 +243,11 @@ export function VideoReferenceNode({
 
       if (!rawPayload) return;
 
-      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64);
+      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64, undefined, {
+        t: translateUi,
+        locale: dropUiLocale,
+        errorText: uiErrorText,
+      });
       if (resolved.status === 'error') {
         show({
           title: resolved.title,
@@ -247,8 +259,8 @@ export function VideoReferenceNode({
 
       if (resolved.nodeType !== 'video') {
         show({
-          title: 'Unsupported asset',
-          description: 'Only video assets can be dropped here.',
+          title: translateUi('unsupported_asset_add38b25'),
+          description: translateUi('only_video_assets_can_be_dropped_he_7bd719f6'),
           variant: 'warning',
         });
         return;
@@ -267,7 +279,17 @@ export function VideoReferenceNode({
       });
       triggerSave();
     },
-    [fileToDataUrl, id, triggerSave, updateNodeData, show, uploadLocalReference],
+    [
+      fileToDataUrl,
+      id,
+      triggerSave,
+      updateNodeData,
+      show,
+      uploadLocalReference,
+      translateUi,
+      uiErrorText,
+      dropUiLocale,
+    ],
   );
 
   return (
@@ -332,9 +354,7 @@ export function VideoReferenceNode({
                         }
                       />
                       <TooltipContent className="flex max-w-[220px] flex-col items-start gap-1.5">
-                        <p className="text-xs">
-                          {data.referenceError ?? 'Upload failed — try again'}
-                        </p>
+                        <p className="text-xs">{translateUi('upload_failed_try_again_eb575f9b')}</p>
                         <Button
                           size="sm"
                           variant="secondary"
@@ -342,8 +362,7 @@ export function VideoReferenceNode({
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={handleRetryUpload}
                         >
-                          <RotateCw className="mr-1 h-3 w-3" />
-                          Retry
+                          <RotateCw className="mr-1 h-3 w-3" /> {translateUi('retry_942087cc')}{' '}
                         </Button>
                       </TooltipContent>
                     </Tooltip>
@@ -381,8 +400,10 @@ export function VideoReferenceNode({
                           <EmptyMedia variant="icon">
                             <Video />
                           </EmptyMedia>
-                          <EmptyTitle>Upload Video</EmptyTitle>
-                          <EmptyDescription>Drag & drop or click</EmptyDescription>
+                          <EmptyTitle>{translateUi('upload_video_077b5d64')}</EmptyTitle>
+                          <EmptyDescription>
+                            {translateUi('drag_drop_or_click_f5869ccd')}
+                          </EmptyDescription>
                         </EmptyHeader>
                       </Empty>
                     )}
@@ -431,33 +452,33 @@ export function VideoReferenceNode({
                   }
                 />
                 <TooltipContent>
-                  <p>Video Output: {videoConnections} connections</p>
+                  <p>
+                    {translateUi('video_output_f8e2ac83')} {videoConnections}{' '}
+                    {translateUi('connections_1e5fac86')}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </div>
           }
         />
         <ContextMenuContent className="w-52">
-          <ContextMenuLabel>Video Reference</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('video_reference_01388507')}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <Unlink className="mr-2 h-4 w-4" />
-            Detach connections
+            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
           </ContextMenuItem>
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>

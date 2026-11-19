@@ -8,6 +8,7 @@
 
 import type { BoardModuleSize } from '@continuum/contracts';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useMemo, useRef } from 'react';
 import { figureProps, formatCurrency } from '@/components/paid-media/optimizer/format';
 import { cn } from '@/lib/utils';
@@ -35,7 +36,10 @@ import { useMetaRanking } from './metaReads';
 const TEST_ID = 'board-module-branches';
 const MAX_ROWS: Record<BoardModuleSize, number> = { s: 5, m: 6, l: 8, w: 8 };
 
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 export default function BranchesLens({ ctx, slot }: BoardModuleProps) {
+  const uiText = useTranslations('scale');
   const campaigns = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_campaigns');
   const model = useMemo(
     () =>
@@ -47,14 +51,16 @@ export default function BranchesLens({ ctx, slot }: BoardModuleProps) {
       slot={slot}
       state={frameStateOf(campaigns.status, model != null)}
       testId={TEST_ID}
-      title="Branches"
+      title={uiText('branches_2eee037')}
     >
       {campaigns.status !== 'ready' ? (
-        <ReadNote size={slot.size} state={campaigns} testId={TEST_ID} what="campaigns" />
+        <ReadNote size={slot.size} state={campaigns} testId={TEST_ID} />
       ) : model ? (
         <BranchesView currency={ctx.currency} model={model} size={slot.size} />
       ) : (
-        <LensNote testId={`${TEST_ID}-empty`}>No campaign spent in the last 30 days.</LensNote>
+        <LensNote testId={`${TEST_ID}-empty`}>
+          {uiText('no_campaign_spent_in_the_last_30_days_57b869c')}
+        </LensNote>
       )}
     </MetaFrame>
   );
@@ -76,23 +82,32 @@ export function BranchesView({
   );
 }
 
-function rowTip(row: MixRow, model: MixModel, currency: string | null) {
-  const words = model.result?.en;
+function rowTip(row: MixRow, model: MixModel, currency: string | null, uiText: ScaleCopy) {
+  const result = model.result?.kind;
   return (
     <span className="flex flex-col gap-0.5">
       <span className="font-medium">{row.label}</span>
       <span>
-        {formatCurrency(row.spend, currency)} spend · {formatShare(row.spendShare)}
+        {uiText('spend_spend_share_17eb5f8', {
+          spend: formatCurrency(row.spend, currency),
+          share: formatShare(row.spendShare),
+        })}
       </span>
-      {words && row.results != null ? (
+      {result && row.results != null ? (
         <span>
-          {row.results.toLocaleString('en-US')} {row.results === 1 ? words.one : words.many} ·{' '}
-          {formatShare(row.resultShare)}
+          {uiText('count_plural_one_result_select_purchases_purc_1169e66', {
+            count: row.results,
+            result,
+            share: formatShare(row.resultShare),
+          })}
         </span>
       ) : null}
-      {words && row.costPerResult != null ? (
+      {result && row.costPerResult != null ? (
         <span>
-          {formatCurrency(row.costPerResult, currency)} per {words.one}
+          {uiText('cost_per_result_select_purchases_purchase_lea_7034173', {
+            cost: formatCurrency(row.costPerResult, currency),
+            result,
+          })}
         </span>
       ) : null}
     </span>
@@ -100,6 +115,7 @@ function rowTip(row: MixRow, model: MixModel, currency: string | null) {
 }
 
 function BranchesSmall({ model, currency }: { model: MixModel; currency: string | null }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const headline = mixHeadline(model, currency);
   const rows = foldTail(model, MAX_ROWS.s).filter((row) => row.costPerResult != null);
@@ -150,7 +166,11 @@ function BranchesSmall({ model, currency }: { model: MixModel; currency: string 
           ))}
         </ul>
       ) : (
-        <LensNote>No {model.result?.en.many ?? 'results'} in the last 30 days.</LensNote>
+        <LensNote>
+          {uiText('no_result_select_purchases_purchases_leads_le_7721ef0', {
+            result: model.result?.kind ?? 'none',
+          })}
+        </LensNote>
       )}
     </div>
   );
@@ -206,31 +226,43 @@ function BranchesFull({
   size: BoardModuleSize;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion() ?? false;
   const host = useRef<HTMLDivElement>(null);
   const { tip, show, hide } = useChartTip(host);
   const rows = foldTail(model, MAX_ROWS[size]);
   const max = Math.max(...rows.map((row) => Math.max(row.spendShare, row.resultShare ?? 0)), 0.01);
-  const words = model.result?.en;
-  const noun = model.by === 'branch' ? 'branches' : 'campaigns';
+  const kind = model.result?.kind;
+  const result = kind ?? 'none';
   const reference = model.reference;
+  const scope =
+    model.by === 'branch'
+      ? uiText('rows_plural_one_branch_other_branches_from_ca_76225b4', {
+          rows: model.rows.filter((row) => !row.folded).length,
+          campaigns: model.campaignCount,
+        })
+      : uiText('count_plural_one_campaign_other_campaigns_03261b4', {
+          count: model.campaignCount,
+        });
   return (
     <div className="flex flex-col gap-3">
       <WindowLine
-        detail={`${
-          model.by === 'branch'
-            ? `${model.rows.filter((row) => !row.folded).length} ${noun} from ${model.campaignCount} campaigns`
-            : `${model.campaignCount} campaigns`
-        }${
-          words && model.totals.results != null
-            ? ` · ${model.totals.results.toLocaleString('en-US')} ${words.many}`
-            : ''
-        }`}
+        detail={
+          kind && model.totals.results != null
+            ? `${scope} · ${uiText('count_plural_one_result_select_purchases_purc_eb47074', {
+                count: model.totals.results,
+                result: kind,
+              })}`
+            : scope
+        }
         testId={TEST_ID}
       />
       <div className="relative" ref={host}>
         <ul
-          aria-label={`Share of spend and of ${words?.many ?? 'results'} by ${model.by}`}
+          aria-label={uiText('share_of_spend_and_of_result_select_purchases_f6796f0', {
+            result,
+            by: model.by,
+          })}
           className="flex flex-col gap-2.5"
         >
           {rows.map((row, index) => (
@@ -248,14 +280,21 @@ function BranchesFull({
                 </span>
                 {model.by === 'branch' && !row.folded && row.campaignIds.length > 1 ? (
                   <span className="block text-muted-foreground text-xs">
-                    {row.campaignIds.length} campaigns
+                    {uiText('count_plural_one_campaign_other_campaigns_03261b4', {
+                      count: row.campaignIds.length,
+                    })}
                   </span>
                 ) : null}
               </span>
               <span
-                aria-label={`${row.label}: ${formatShare(row.spendShare)} of spend, ${formatShare(row.resultShare)} of ${words?.many ?? 'results'}`}
+                aria-label={uiText('label_spend_of_spend_results_of_result_select_9ba602f', {
+                  label: row.label,
+                  spend: formatShare(row.spendShare),
+                  results: formatShare(row.resultShare),
+                  result,
+                })}
                 className="flex min-w-0 flex-col gap-1"
-                onPointerEnter={(event) => show(event, rowTip(row, model, currency))}
+                onPointerEnter={(event) => show(event, rowTip(row, model, currency, uiText))}
                 onPointerLeave={hide}
                 role="img"
               >
@@ -286,7 +325,7 @@ function BranchesFull({
                 >
                   {row.costPerResult != null
                     ? formatCurrency(row.costPerResult, currency)
-                    : `No ${words?.many ?? 'results'}`}
+                    : uiText('no_result_select_purchases_purchases_leads_le_11fad86', { result })}
                 </span>
                 {row.costPerResult != null && reference ? (
                   <span className="flex items-center justify-end gap-1 text-muted-foreground text-xs">
@@ -305,21 +344,35 @@ function BranchesFull({
         <ChartTip tip={tip} />
       </div>
       <LegendRow>
-        <LegendItem label="Share of spend" variant="outline" />
+        <LegendItem label={uiText('share_of_spend_eadd3f9')} variant="outline" />
         <LegendItem
           color={BOARD_COLOR.below}
-          label={`Share of ${words?.many ?? 'results'} · under ${reference?.kind === 'average' ? 'average' : 'goal'}`}
+          label={uiText('share_of_result_select_purchases_purchases_le_97a42f6', {
+            result,
+            reference: reference?.kind === 'average' ? 'average' : 'goal',
+          })}
         />
         {model.rows.some((row) => row.tone === 'mid' && row.costPerResult != null) ? (
-          <LegendItem color={BOARD_COLOR.mid} label="on it" />
+          <LegendItem color={BOARD_COLOR.mid} label={uiText('on_it_c13ba5b')} />
         ) : null}
-        <LegendItem color={BOARD_COLOR.above} label="over" />
-        {reference && words ? (
+        <LegendItem color={BOARD_COLOR.above} label={uiText('over_5fb6a47')} />
+        {reference && kind ? (
           <span data-testid={`${TEST_ID}-reference`}>
-            Cost per {words.one} ·{' '}
-            {reference.kind === 'goal'
-              ? `goal ${formatCurrency(reference.value, currency)}${reference.source ? ` (${reference.source})` : ''}`
-              : `account average ${formatCurrency(reference.value, currency)}`}
+            {reference.kind !== 'goal'
+              ? uiText('cost_per_result_select_purchases_purchase_lea_02a122c', {
+                  result: kind,
+                  average: formatCurrency(reference.value, currency),
+                })
+              : reference.source
+                ? uiText('cost_per_result_select_purchases_purchase_lea_b4e3a24', {
+                    result: kind,
+                    goal: formatCurrency(reference.value, currency),
+                    source: reference.source,
+                  })
+                : uiText('cost_per_result_select_purchases_purchase_lea_03f7f67', {
+                    result: kind,
+                    goal: formatCurrency(reference.value, currency),
+                  })}
           </span>
         ) : null}
       </LegendRow>

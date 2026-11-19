@@ -3,16 +3,17 @@
 // The expanded doctor: every check in three groups — what needs fixing (each with its fix), what
 // passes, and what Continuum cannot read yet (never counted as passing).
 
+import { useTranslations } from 'next-intl';
 import { CheckIcon, FixLink } from './DoctorParts';
 import type { DoctorCheck, DoctorCheckStatus, DoctorView } from './doctorModel';
 
 type ReadyView = Extract<DoctorView, { state: 'ready' }>;
 
-const GROUPS: { status: Exclude<DoctorCheckStatus, 'loading'>; title: string }[] = [
-  { status: 'fail', title: 'Needs fixing' },
-  { status: 'pass', title: 'Passing' },
-  { status: 'unreadable', title: 'Not readable yet' },
-];
+const GROUPS = [
+  { status: 'fail', title: 'needs_fixing_3cd915e' },
+  { status: 'pass', title: 'passing_83e6fba' },
+  { status: 'unreadable', title: 'not_readable_yet_0a48a0f' },
+] as const satisfies readonly { status: Exclude<DoctorCheckStatus, 'loading'>; title: string }[];
 
 function CheckRow({ check }: { check: DoctorCheck }) {
   return (
@@ -44,23 +45,32 @@ function CheckRow({ check }: { check: DoctorCheck }) {
 }
 
 export default function HealthModule({ view }: { view: ReadyView }) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="space-y-5" data-testid="home-health-module">
       <p className="text-muted-foreground text-sm">
-        {view.passing} of {view.total} readable checks pass
-        {view.failing > 0 ? `; ${view.failing} need fixing` : ''}.
+        {view.failing > 0
+          ? uiText('passing_of_total_readable_checks_pass_failing_7514a7a', {
+              passing: view.passing,
+              total: view.total,
+              failing: view.failing,
+            })
+          : uiText('passing_of_total_readable_checks_pass_2702dae', {
+              passing: view.passing,
+              total: view.total,
+            })}
       </p>
       {GROUPS.map((group) => {
         const checks = view.checks.filter((check) => check.status === group.status);
         if (checks.length === 0) return null;
         return (
           <section
-            aria-label={group.title}
+            aria-label={uiText(group.title)}
             data-testid={`home-health-group-${group.status}`}
             key={group.status}
           >
             <h4 className="font-medium text-sm">
-              {group.title} <span className="text-muted-foreground">· {checks.length}</span>
+              {uiText(group.title)} <span className="text-muted-foreground">· {checks.length}</span>
             </h4>
             <ul
               className="hit-area-column divide-y divide-border/60"

@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 // H11 Organic week, expanded: the seven days with every published, scheduled and waiting post,
 // inline approval for a waiting draft (the calendar's own Approve & schedule — the gated
 // group-approve route, then each row to scheduled), and the 7-day reach / interactions rollup.
@@ -8,8 +10,7 @@
 // module says they are not readable yet. Best time to post stays absent: it comes from
 // organic_best_times, which the browser can only reach through the organic insights edge — and
 // that edge generates the insights (a model call) on a cold cache, so the Home never asks it.
-import { useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveScheduleDraft';
 import type {
@@ -28,15 +29,12 @@ import { reachRowsOf, topPostLine } from './organicWeekRead';
 import { homeOrganicDraftsKey, useOrganicWeek } from './useOrganicWeek';
 import { type OrganicWeekRead, useOrganicWeekRead } from './useOrganicWeekRead';
 
-export const BEST_TIME_COLD = 'Best time not read yet — open Organic to read it.';
-export const PER_POST_NOT_READABLE =
-  "Reach per post this week and the week's top post are not readable yet.";
-
 function platformsOf(platforms: string[]): string {
   return platforms.map(organicPlatformLabel).join(' · ');
 }
 
 function PublishedItem({ post }: { post: OrganicCalendarPostedContent }) {
+  const uiText = useTranslations('dashboard');
   return (
     <li className="flex min-w-0 flex-col gap-1 rounded-lg border bg-card p-2 text-xs">
       <span className="text-2xs text-muted-foreground">
@@ -44,19 +42,20 @@ function PublishedItem({ post }: { post: OrganicCalendarPostedContent }) {
       </span>
       <span className="line-clamp-2 font-medium">{post.title}</span>
       <Badge className="w-fit" variant="success">
-        Published
+        {uiText('published_2ef42ec')}
       </Badge>
     </li>
   );
 }
 
 function ScheduledItem({ card }: { card: OrganicCalendarDraft }) {
+  const uiText = useTranslations('dashboard');
   return (
     <li className="flex min-w-0 flex-col gap-1 rounded-lg border bg-background p-2 text-xs">
       <span className="text-2xs text-muted-foreground">{platformsOf(card.platforms)}</span>
       <span className="line-clamp-2 font-medium">{card.title}</span>
       <Badge className="w-fit" variant="outline">
-        Scheduled · {card.timeLabel}
+        {uiText('scheduled_time_8646ea3', { time: card.timeLabel })}
       </Badge>
     </li>
   );
@@ -73,6 +72,7 @@ function WaitingItem({
   disabled: boolean;
   onApprove: () => void;
 }) {
+  const uiText = useTranslations('dashboard');
   return (
     <li
       className="flex min-w-0 flex-col gap-1 rounded-lg border border-dashed p-2 text-xs"
@@ -83,7 +83,9 @@ function WaitingItem({
       </span>
       <span className="line-clamp-2 font-medium">{item.card.title}</span>
       {item.approvedNotScheduled ? (
-        <span className="text-2xs text-muted-foreground">Approved, not scheduled yet</span>
+        <span className="text-2xs text-muted-foreground">
+          {uiText('approved_not_scheduled_yet_48691fd')}
+        </span>
       ) : null}
       <Button
         className="h-7 w-fit px-2 text-xs"
@@ -94,7 +96,7 @@ function WaitingItem({
         type="button"
         variant="outline"
       >
-        {busy ? 'Approving…' : 'Approve & schedule'}
+        {busy ? uiText('approving_e99dcb0') : uiText('approve_schedule_c9fe0bd')}
       </Button>
     </li>
   );
@@ -109,6 +111,7 @@ function DayColumn({
   pendingId: string | null;
   onApprove: (card: OrganicCalendarDraft) => void;
 }) {
+  const uiText = useTranslations('dashboard');
   const empty = day.published.length + day.scheduled.length + day.waiting.length === 0;
   return (
     <section
@@ -123,10 +126,12 @@ function DayColumn({
         )}
       >
         {day.label} <span className="font-normal">{day.dateLabel}</span>
-        {day.isToday ? <span className="text-2xs text-muted-foreground">Today</span> : null}
+        {day.isToday ? (
+          <span className="text-2xs text-muted-foreground">{uiText('today_2b065c7')}</span>
+        ) : null}
       </h4>
       {empty ? (
-        <p className="text-2xs text-muted-foreground">Nothing planned</p>
+        <p className="text-2xs text-muted-foreground">{uiText('nothing_planned_7fb2fa8')}</p>
       ) : (
         <ul className="flex min-w-0 flex-col gap-1.5">
           {day.published.map((post) => (
@@ -157,6 +162,8 @@ function ReachRollup({
   brandId: string;
   organicAccounts: SnapshotAccountRef[];
 }) {
+  const uiText = useTranslations('dashboard');
+  const uiLocale = useLocale();
   const snapshot = useOrganicSnapshot(brandId, organicAccounts);
   if (snapshot.status === 'loading') {
     return <div aria-hidden="true" className="h-10 w-full animate-pulse rounded-md bg-muted/60" />;
@@ -166,15 +173,23 @@ function ReachRollup({
       ? summableRollups(snapshot.data.accounts, ['reach', 'totalInteractions'])
       : [];
   if (rollup.every((item) => item.value === null)) {
-    return <p className="text-muted-foreground text-xs">Couldn't read the last 7 days' reach.</p>;
+    return (
+      <p className="text-muted-foreground text-xs">
+        {uiText('couldn_t_read_the_last_7_days_reach_6596a39')}
+      </p>
+    );
   }
   return (
     <dl className="flex flex-wrap gap-x-5 gap-y-1" data-testid="home-organic-rollup">
       {rollup.map((item) =>
         item.value === null ? null : (
           <div className="flex flex-col" key={item.metricId}>
-            <dt className="text-2xs text-muted-foreground">{item.label} · last 7 days</dt>
-            <dd className="font-semibold text-base tabular-nums">{formatCount(item.value)}</dd>
+            <dt className="text-2xs text-muted-foreground">
+              {uiText('metric_last_7_days_4c54ffe', { metric: item.label })}
+            </dt>
+            <dd className="font-semibold text-base tabular-nums">
+              {formatCount(item.value, uiLocale)}
+            </dd>
           </div>
         ),
       )}
@@ -183,10 +198,11 @@ function ReachRollup({
 }
 
 function ReachPerPost({ read }: { read: OrganicWeekRead }) {
+  const uiText = useTranslations('dashboard');
   if (!read.data) {
     return read.unavailable ? (
       <p className="text-2xs text-muted-foreground" data-testid="home-organic-reach-note">
-        {PER_POST_NOT_READABLE}
+        {uiText('reach_per_post_this_week_and_the_week_s_top_p_6f35c08')}
       </p>
     ) : null;
   }
@@ -194,10 +210,12 @@ function ReachPerPost({ read }: { read: OrganicWeekRead }) {
   const topPost = topPostLine(read.data);
   return (
     <section className="flex min-w-0 flex-col gap-1.5" data-testid="home-organic-reach">
-      <h4 className="font-medium text-xs">Reach per post this week</h4>
+      <h4 className="font-medium text-xs">{uiText('reach_per_post_this_week_90e3dca')}</h4>
       {topPost ? <p className="text-xs tabular-nums">{topPost}</p> : null}
       {rows.length === 0 ? (
-        <p className="text-2xs text-muted-foreground">Nothing was published this week yet.</p>
+        <p className="text-2xs text-muted-foreground">
+          {uiText('nothing_was_published_this_week_yet_197cfb5')}
+        </p>
       ) : (
         <ul className="flex min-w-0 flex-col gap-1.5">
           {rows.map((row) => (
@@ -227,7 +245,7 @@ function ReachPerPost({ read }: { read: OrganicWeekRead }) {
                   rel="noreferrer"
                   target="_blank"
                 >
-                  View post
+                  {uiText('view_post_fe9715b')}
                 </a>
               ) : null}
             </li>
@@ -245,6 +263,8 @@ export default function OrganicWeekModule({
   brandId: string;
   organicAccounts: SnapshotAccountRef[];
 }) {
+  const uiText = useTranslations('dashboard');
+  const uiLocale = useLocale();
   const load = useOrganicWeek(brandId, organicAccounts);
   const read = useOrganicWeekRead(brandId, organicAccounts.length > 0);
   const { approveAndSchedule } = useApproveScheduleDraft();
@@ -267,14 +287,17 @@ export default function OrganicWeekModule({
     <div className="flex min-w-0 flex-col gap-4" data-testid="home-organic-module">
       <p className="text-muted-foreground text-xs" data-testid="home-organic-best-time">
         <Link className="underline underline-offset-2" href="/organic?tab=metrics">
-          {BEST_TIME_COLD}
+          {uiText('best_time_not_read_yet_open_organic_to_read_i_4a13a17')}
         </Link>
       </p>
       {week ? (
         <>
           <p className="text-xs tabular-nums">
-            {formatCount(week.published)} published · {formatCount(week.scheduled)} scheduled ·{' '}
-            {formatCount(week.waiting)} waiting for approval
+            {uiText('published_published_scheduled_scheduled_waiti_da1574e', {
+              published: formatCount(week.published, uiLocale),
+              scheduled: formatCount(week.scheduled, uiLocale),
+              waiting: formatCount(week.waiting, uiLocale),
+            })}
           </p>
           <div className="grid min-w-0 grid-cols-1 gap-3">
             {week.days.map((day) => (
@@ -283,14 +306,16 @@ export default function OrganicWeekModule({
           </div>
         </>
       ) : load.failed ? (
-        <p className="text-muted-foreground text-xs">Couldn't read this week's posts.</p>
+        <p className="text-muted-foreground text-xs">
+          {uiText('couldn_t_read_this_week_s_posts_28c6fd9')}
+        </p>
       ) : (
         <div aria-hidden="true" className="h-40 w-full animate-pulse rounded-md bg-muted/60" />
       )}
       <ReachRollup brandId={brandId} organicAccounts={organicAccounts} />
       <ReachPerPost read={read} />
       <Link className="text-xs underline underline-offset-2" href="/organic?tab=planner">
-        Open the Organic calendar
+        {uiText('open_the_organic_calendar_0af9705')}
       </Link>
     </div>
   );

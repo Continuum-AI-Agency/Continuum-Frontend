@@ -4,8 +4,8 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { GraphIssue } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { CanvasValidationPanel } from './CanvasValidationPanel';
 

@@ -1,3 +1,4 @@
+import { workflowNodeError } from '../utils/workflowUiFailure';
 // The Fast Cut block: footage on `media-in`, one music bed on `audio-in`, a montage out.
 // The cut is planned and rendered on the server from the saved room (executeWorkflow's
 // fastCut branch); this node holds the settings, previews what they do to the ladder with
@@ -25,6 +26,7 @@ import {
   useEdges,
 } from '@xyflow/react';
 import { Copy, Play, Scissors, Trash2 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -50,6 +52,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
+import { formatDecimal } from '@/lib/format/decimal';
 import { cn } from '@/lib/utils';
 import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -93,9 +96,22 @@ const TRANSIENT_LABELS: Record<CutTransientKind, string> = {
 const RUNG_PACINGS: ReadonlySet<CutPacing> = new Set(['steady', 'stutter']);
 /** What steady and stutter cut at when no rung is set (cutPlan.ts). */
 const DEFAULT_RUNG = 0.4;
-const RUNG_ITEMS = Object.fromEntries(CUT_RUNGS_SEC.map((rung) => [String(rung), `${rung} s`]));
 
 export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<FastCutNodeData>>) {
+  const decimalLocale = useUiLocale();
+  const number = useMemo(
+    () =>
+      new Intl.NumberFormat(decimalLocale, { maximumSignificantDigits: 21, useGrouping: false }),
+    [decimalLocale],
+  );
+  const rungItems = useMemo(
+    () =>
+      Object.fromEntries(CUT_RUNGS_SEC.map((rung) => [String(rung), number.format(rung) + ' s'])),
+    [number],
+  );
+
+  const translateUi = useUiTranslations('studio');
+
   const [isHovered, setIsHovered] = useState(false);
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -129,10 +145,16 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
     data.generatedVideoUrl ??
     data.generatedVideo;
   const caption = [
-    data.durationSec === undefined ? null : `${data.durationSec.toFixed(1)} s`,
-    data.fastCutFps === undefined ? null : `${data.fastCutFps} fps`,
-    data.fastCutCuts === undefined ? null : `${data.fastCutCuts} cuts`,
-    data.fastCutBpm === undefined ? null : `${Math.round(data.fastCutBpm)} BPM`,
+    data.durationSec === undefined
+      ? null
+      : `${formatDecimal(data.durationSec, 1, decimalLocale)} s`,
+    data.fastCutFps === undefined ? null : `${number.format(data.fastCutFps)} fps`,
+    data.fastCutCuts === undefined
+      ? null
+      : translateUi('fastCutCount', { count: data.fastCutCuts }),
+    data.fastCutBpm === undefined
+      ? null
+      : `${formatDecimal(Math.round(data.fastCutBpm), 0, decimalLocale)} BPM`,
   ]
     .filter((part): part is string => part !== null)
     .join(' · ');
@@ -179,7 +201,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                   className="h-7 w-7"
                   onClick={handleRun}
                   disabled={Boolean(data.isExecuting)}
-                  title="Run Node"
+                  title={translateUi('run_node_79567976')}
                 >
                   <Play className="h-4 w-4" />
                 </Button>
@@ -195,7 +217,12 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                   label={STUDIO_NODE_REGISTRY.fastCut.label}
                   title={STUDIO_NODE_REGISTRY.fastCut.description}
                 >
-                  <NodeBadge>{`${poolCount} in · ${hasBed ? 'bed' : 'no bed'}`}</NodeBadge>
+                  <NodeBadge>
+                    {translateUi('value0_in_value1_7a24d1ab', {
+                      value0: String(poolCount),
+                      value1: String(hasBed ? 'bed' : 'no bed'),
+                    })}
+                  </NodeBadge>
                 </NodeTitleBar>
 
                 <NodeContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 text-2xs">
@@ -203,7 +230,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                     {data.isExecuting ? (
                       <div className="flex flex-col items-center gap-2 p-3 text-muted-foreground">
                         <GenerationPulseLoader />
-                        <span>Cutting to the bed — this takes a minute or two</span>
+                        <span>{translateUi('cutting_to_the_bed_this_takes_a_min_1199b1f7')}</span>
                       </div>
                     ) : video ? (
                       // biome-ignore lint/a11y/useMediaCaption: a beat-cut montage over a music bed has no speech to caption
@@ -216,8 +243,8 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                       />
                     ) : (
                       <p className="px-3 text-center text-muted-foreground">
-                        Wire clips, stills or Elements into the footage pool (left, top) and one
-                        music bed into audio-in (left, bottom), then run.
+                        {' '}
+                        {translateUi('wire_clips_stills_or_elements_into__3556add1')}{' '}
                       </p>
                     )}
                   </div>
@@ -229,12 +256,12 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                   ) : null}
                   {data.error && !data.isExecuting ? (
                     <p className="text-destructive" data-testid="fast-cut-error">
-                      {data.error}
+                      {workflowNodeError(data, translateUi)}
                     </p>
                   ) : null}
 
                   <ToggleGroup
-                    aria-label="Pacing"
+                    aria-label={translateUi('pacing_afb633dc')}
                     variant="outline"
                     size="sm"
                     spacing={0}
@@ -256,7 +283,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                   </p>
 
                   <ToggleGroup
-                    aria-label="Layout"
+                    aria-label={translateUi('layout_a5119091')}
                     variant="outline"
                     size="sm"
                     spacing={0}
@@ -281,7 +308,9 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                     {RUNG_PACINGS.has(settings.pacing) ? (
                       <div className="flex items-center gap-1">
                         <span className="text-3xs text-muted-foreground">
-                          {settings.pacing === 'stutter' ? 'Base' : 'Rung'}
+                          {settings.pacing === 'stutter'
+                            ? translateUi('base_7b47361a')
+                            : translateUi('rung_24cfaa21')}
                         </span>
                         <Select
                           value={String(settings.rung ?? DEFAULT_RUNG)}
@@ -291,15 +320,15 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                           }}
                         >
                           <SelectTrigger
-                            aria-label="Rung"
+                            aria-label={translateUi('rung_24cfaa21')}
                             className="nodrag h-6 w-20 px-2 text-2xs"
                           >
-                            <SelectValue items={RUNG_ITEMS} />
+                            <SelectValue items={rungItems} />
                           </SelectTrigger>
                           <SelectContent>
                             {CUT_RUNGS_SEC.map((value) => (
                               <SelectItem key={value} value={String(value)}>
-                                {RUNG_ITEMS[String(value)]}
+                                {rungItems[String(value)]}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -307,7 +336,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                       </div>
                     ) : null}
                     <NumberScrubField
-                      label="Bars"
+                      label={translateUi('bars_f2c35269')}
                       orientation="inline"
                       min={2}
                       max={16}
@@ -320,7 +349,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
 
                   <ToggleGroup
                     type="multiple"
-                    aria-label="Beat-follow transients"
+                    aria-label={translateUi('beat_follow_transients_89ec0a64')}
                     variant="outline"
                     size="sm"
                     spacing={0}
@@ -343,7 +372,10 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
 
                   {preview.ok ? (
                     <>
-                      <ul aria-label="Cut ladder preview" className="space-y-0.5">
+                      <ul
+                        aria-label={translateUi('cut_ladder_preview_a7d1f582')}
+                        className="space-y-0.5"
+                      >
                         {preview.rungs.map((row) => (
                           <li
                             key={row.rung}
@@ -371,10 +403,16 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                         ))}
                       </ul>
                       <p className="tabular-nums" data-testid="fast-cut-preview-summary">
-                        {`${preview.fps} fps · ${preview.durationSec.toFixed(1)} s · ${preview.totalCuts} cuts`}
+                        {translateUi('value0_fps_value1_s_value2_cuts_434ae30c', {
+                          value0: String(preview.fps),
+                          value1: String(formatDecimal(preview.durationSec, 1, decimalLocale)),
+                          value2: String(preview.totalCuts),
+                        })}
                       </p>
                       <p className="text-muted-foreground">
-                        {`Preview assumes ${FAST_CUT_PREVIEW_BPM} BPM — the real cut follows the bed's measured tempo.`}
+                        {translateUi('preview_assumes_value0_bpm_the_real_90209d29', {
+                          value0: String(FAST_CUT_PREVIEW_BPM),
+                        })}
                       </p>
                     </>
                   ) : (
@@ -395,7 +433,8 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                     className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                   />
                   <span className="studio-handle-pill pointer-events-none absolute left-6 top-1/2 z-50 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100">
-                    Footage pool — clips, stills, Elements
+                    {' '}
+                    {translateUi('footage_pool_clips_stills_elements_10303071')}{' '}
                   </span>
                 </div>
                 <div
@@ -409,7 +448,8 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                     className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                   />
                   <span className="studio-handle-pill pointer-events-none absolute left-6 top-1/2 z-50 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100">
-                    Music bed — one Audio node
+                    {' '}
+                    {translateUi('music_bed_one_audio_node_3ec39200')}{' '}
                   </span>
                 </div>
               </div>
@@ -430,7 +470,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                     }
                   />
                   <TooltipContent>
-                    <p>Montage Output</p>
+                    <p>{translateUi('montage_output_1c40d15d')}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -441,13 +481,11 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
           <ContextMenuLabel>{STUDIO_NODE_REGISTRY.fastCut.label}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun} disabled={Boolean(data.isExecuting)}>
-            <Play className="mr-2 h-4 w-4" />
-            Run Node
+            <Play className="mr-2 h-4 w-4" /> {translateUi('run_node_79567976')}{' '}
             <ContextMenuShortcut>R</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuSeparator />
@@ -455,8 +493,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>

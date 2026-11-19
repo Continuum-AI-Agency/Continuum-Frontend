@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AdAccountBoardSlot, BoardModuleId, BoardModuleSize } from '@continuum/contracts';
 import { readAdAccount } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { BoardContext } from '../../types';
 import {
   EASY_FIT_META_ACCOUNT,

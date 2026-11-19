@@ -4,15 +4,13 @@
 // Every field shows the pending edit over the file's value and reports changes upward; the editor
 // decides what counts as an edit. A property the file animates or rigs is shown, never written.
 
-import type {
-  FontInventoryRow,
-  TemplateLayerTransform,
-} from '@continuum/contracts';
-import type { AuthoringEditableLayer, AuthoringLayerEdit } from './authoringTemplateLayerTypes';
+import type { FontInventoryRow, TemplateLayerTransform } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { Switch } from '@/components/ui/switch';
+import type { AuthoringEditableLayer, AuthoringLayerEdit } from './authoringTemplateLayerTypes';
 
 /** Bold uses an available face of the same family and style, preserving the source font. */
 export function boldFaceFor(font: string | null, fonts: FontInventoryRow[]) {
@@ -51,9 +49,7 @@ export function fontEditReason(layer: Pick<AuthoringEditableLayer, 'fontReason' 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-2">
-      <h4 className="text-xs font-medium text-foreground">
-        {title}
-      </h4>
+      <h4 className="text-xs font-medium text-foreground">{title}</h4>
       {children}
     </section>
   );
@@ -80,6 +76,8 @@ export function TemplateLayerInspector({
   onEditCommit?: (group: string) => void;
   idPrefix?: string;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const locked = (key: TemplateLayerTransform) => disabled || !!layer.transformLocks[key];
   const position = [edit?.x ?? layer.x ?? 0, edit?.y ?? layer.y ?? 0] as [number, number];
   const scale = edit?.scale ?? layer.scale ?? [100, 100];
@@ -92,7 +90,7 @@ export function TemplateLayerInspector({
   const numericCommit = (field: string) => onEditCommit?.(`${idPrefix}:${layer.layerId}:${field}`);
   return (
     <div className="flex flex-col gap-5">
-      <Section title="Layer">
+      <Section title={translateUi('layer_ac9ffcb2')}>
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{layer.text || layer.name}</p>
           <p className="truncate text-2xs text-muted-foreground">
@@ -101,7 +99,8 @@ export function TemplateLayerInspector({
         </div>
         <div className="flex items-center justify-between gap-3">
           <label htmlFor={`${idPrefix}-visible-${layer.layerId}`} className="text-xs">
-            Visible in template
+            {' '}
+            {translateUi('visible_in_template_105b588a')}{' '}
           </label>
           <Switch
             id={`${idPrefix}-visible-${layer.layerId}`}
@@ -112,16 +111,16 @@ export function TemplateLayerInspector({
           />
         </div>
         {layer.visibilitySlotKeys.length ? (
-          <Note>Visibility follows this layer’s shared Show field across formats.</Note>
+          <Note>{translateUi('visibility_follows_this_layer_s_sha_3bcde801')}</Note>
         ) : null}
         {layer.visibilityReason ? <Note>{layer.visibilityReason}</Note> : null}
       </Section>
 
-      <Section title="Transform">
+      <Section title={translateUi('transform_d2d68041')}>
         <div className="grid grid-cols-2 gap-2">
           <NumberScrubField
             label="X"
-            ariaLabel="Position X"
+            ariaLabel={translateUi('positionXLabel')}
             suffix="px"
             value={position[0]}
             disabled={locked('position')}
@@ -130,7 +129,7 @@ export function TemplateLayerInspector({
           />
           <NumberScrubField
             label="Y"
-            ariaLabel="Position Y"
+            ariaLabel={translateUi('positionYLabel')}
             suffix="px"
             value={position[1]}
             disabled={locked('position')}
@@ -138,7 +137,7 @@ export function TemplateLayerInspector({
             onCommit={() => numericCommit('y')}
           />
           <NumberScrubField
-            label="Rotation"
+            label={translateUi('rotation_57b5e2fc')}
             suffix="°"
             value={edit?.rotation ?? layer.rotation ?? 0}
             disabled={locked('rotation')}
@@ -146,7 +145,7 @@ export function TemplateLayerInspector({
             onCommit={() => numericCommit('rotation')}
           />
           <NumberScrubField
-            label="Opacity"
+            label={translateUi('opacity_6062652e')}
             suffix="%"
             min={0}
             max={100}
@@ -156,7 +155,7 @@ export function TemplateLayerInspector({
             onCommit={() => numericCommit('opacity')}
           />
           <NumberScrubField
-            label="Scale X"
+            label={translateUi('scale_x_9e894f3e')}
             suffix="%"
             value={scale[0]}
             disabled={locked('scale')}
@@ -164,7 +163,7 @@ export function TemplateLayerInspector({
             onCommit={() => numericCommit('scale-x')}
           />
           <NumberScrubField
-            label="Scale Y"
+            label={translateUi('scale_y_5001e575')}
             suffix="%"
             value={scale[1]}
             disabled={locked('scale')}
@@ -172,19 +171,23 @@ export function TemplateLayerInspector({
             onCommit={() => numericCommit('scale-y')}
           />
         </div>
-        {layer.parentName ? <Note>X and Y are relative to {layer.parentName}.</Note> : null}
+        {layer.parentName ? (
+          <Note>
+            {translateUi('x_and_y_are_relative_to_fa334ca1')} {layer.parentName}.
+          </Note>
+        ) : null}
         {locks.map((reason) => (
           <Note key={reason}>{reason}</Note>
         ))}
       </Section>
 
       {layer.kind === 'text' ? (
-        <Section title="Text">
+        <Section title={translateUi('text_71988c4d')}>
           {layer.text ? <p className="break-words text-xs">{layer.text}</p> : null}
           <div className="grid grid-cols-2 items-end gap-2">
             <NumberScrubField
-              label="Size"
-              ariaLabel="Text size (pt)"
+              label={translateUi('size_1af85190')}
+              ariaLabel={translateUi('text_size_pt_e978300b')}
               suffix="pt"
               min={1}
               max={1000}
@@ -205,13 +208,17 @@ export function TemplateLayerInspector({
                 onCheckedChange={() => {
                   if (weight.target?.postScriptName) onEdit({ font: weight.target.postScriptName });
                 }}
-              />
-              Bold
+              />{' '}
+              {translateUi('bold_94fee62e')}{' '}
             </label>
           </div>
           {font ? <Note>{font}</Note> : null}
           {!fontReason && !weight.target ? (
-            <Note>Upload this font’s {weight.bold ? 'regular' : 'bold'} face to change bold.</Note>
+            <Note>
+              {translateUi('upload_this_font_s_5e0f94e7')}{' '}
+              {weight.bold ? translateUi('regular_667937c3') : translateUi('bold_e0007a5b')}{' '}
+              {translateUi('face_to_change_bold_d0eca551')}
+            </Note>
           ) : null}
           {fontReason ? <Note>{fontReason}</Note> : null}
           {layer.textReason ? <Note>{layer.textReason}</Note> : null}

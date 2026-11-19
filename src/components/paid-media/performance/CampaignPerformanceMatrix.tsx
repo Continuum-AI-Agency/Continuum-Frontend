@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowDownIcon, ArrowUpIcon, MinusIcon } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +18,9 @@ import {
   deltaTone,
   formatDeltaPct,
   formatMetric,
+  getMetric,
   heatmapPaint,
+  localizeHeatmapLabel,
   MATRIX_METRICS,
   paintToStyle,
   percentile,
@@ -39,12 +42,15 @@ type CampaignPerformanceMatrixProps = {
   onCampaignSelect?: (campaignId: string) => void;
 };
 
-function statusLabel(status: string): string {
+function statusLabel(
+  status: string,
+  translate: ReturnType<typeof useTranslations<'scale'>>,
+): string {
   const upper = status.toUpperCase();
-  if (upper === 'ACTIVE') return 'Active';
-  if (upper === 'PAUSED') return 'Paused';
-  if (upper === 'DELETED') return 'Deleted';
-  return status || 'Unknown';
+  if (upper === 'ACTIVE') return translate('entityActive');
+  if (upper === 'PAUSED') return translate('entityPaused');
+  if (upper === 'DELETED') return translate('entityDeleted');
+  return status || translate('unknown_b764cdc');
 }
 
 export function CampaignPerformanceMatrix({
@@ -55,6 +61,15 @@ export function CampaignPerformanceMatrix({
   onMetricChange,
   onCampaignSelect,
 }: CampaignPerformanceMatrixProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const displayMetrics = React.useMemo(
+    () =>
+      MATRIX_METRICS.map((metric) =>
+        getMetric(metric.key, (source) => localizeHeatmapLabel(source, uiText)),
+      ),
+    [uiText],
+  );
   const sortedCampaigns = React.useMemo(() => {
     return campaigns
       .filter((campaign) => campaign.metrics)
@@ -63,28 +78,28 @@ export function CampaignPerformanceMatrix({
 
   const valuesByMetric = React.useMemo(() => {
     return new Map(
-      MATRIX_METRICS.map((candidate) => [
+      displayMetrics.map((candidate) => [
         candidate.key,
         sortedCampaigns
           .map((campaign) => campaign.metrics?.[candidate.key])
           .filter((value): value is number => typeof value === 'number' && Number.isFinite(value)),
       ]),
     );
-  }, [sortedCampaigns]);
+  }, [sortedCampaigns, displayMetrics]);
 
   const dataPointByCampaignMetric = React.useMemo(() => {
     return new Map(dataPoints.map((point) => [`${point.campaignId}:${point.metric}`, point]));
   }, [dataPoints]);
 
-  const selectedMetricMeta = MATRIX_METRICS.find((candidate) => candidate.key === metric);
+  const selectedMetricMeta = displayMetrics.find((candidate) => candidate.key === metric);
 
   if (campaigns.length === 0) {
     return (
       <div className="grid min-h-[22rem] place-items-center rounded-lg border border-dashed border-border/70 bg-muted/15 p-8 text-center">
         <div>
-          <div className="text-sm font-semibold">No campaign data yet</div>
+          <div className="text-sm font-semibold">{uiText('no_campaign_data_yet_dff058f')}</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Select an ad account or refresh once Meta returns campaign metrics.
+            {uiText('select_an_ad_account_or_refresh_once_meta_ret_e6c4a70')}
           </div>
         </div>
       </div>
@@ -95,13 +110,13 @@ export function CampaignPerformanceMatrix({
     <section className="overflow-hidden rounded-lg border border-border/70 bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/15 px-3 py-2">
         <div>
-          <h3 className="text-sm font-semibold tracking-tight">Detail</h3>
+          <h3 className="text-sm font-semibold tracking-tight">{uiText('detail_fb5f27d')}</h3>
           <p className="text-xs text-muted-foreground">
-            Sortable matrix with cell-level percentile tint and trend.
+            {uiText('sortable_matrix_with_cell_level_percentile_ti_c820415')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1">
-          {MATRIX_METRICS.map((candidate) => (
+          {displayMetrics.map((candidate) => (
             <button
               key={candidate.key}
               type="button"
@@ -124,20 +139,22 @@ export function CampaignPerformanceMatrix({
           <TableHeader className="sticky top-0 z-20 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85">
             <TableRow>
               <TableHead className="sticky left-0 z-30 min-w-[280px] border-r border-border/60 bg-card/95 px-3">
-                Campaign
+                {uiText('campaign_268286d')}
               </TableHead>
-              <TableHead className="w-[88px] px-2">Status</TableHead>
+              <TableHead className="w-[88px] px-2">{uiText('status_920e413')}</TableHead>
               <TableHead className="w-[100px] px-2 text-right">
                 <span className="inline-flex items-center gap-1 text-2xs uppercase tracking-[0.08em] text-muted-foreground">
-                  Trend
-                  {selectedMetricMeta ? (
-                    <span className="font-mono normal-case tracking-normal text-muted-foreground/70">
-                      ({selectedMetricMeta.shortLabel})
-                    </span>
-                  ) : null}
+                  {uiText.rich('sentence_1940550fbcca', {
+                    v0: () =>
+                      selectedMetricMeta ? (
+                        <span className="font-mono normal-case tracking-normal text-muted-foreground/70">
+                          ({selectedMetricMeta.shortLabel})
+                        </span>
+                      ) : null,
+                  })}
                 </span>
               </TableHead>
-              {MATRIX_METRICS.map((candidate) => (
+              {displayMetrics.map((candidate) => (
                 <TableHead key={candidate.key} className="min-w-[92px] px-2 text-right">
                   <button
                     type="button"
@@ -160,7 +177,7 @@ export function CampaignPerformanceMatrix({
               ))}
               <TableHead className="min-w-[96px] px-3 text-right">
                 <span className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
-                  Signal
+                  {uiText('signal_1e9806e')}
                 </span>
               </TableHead>
             </TableRow>
@@ -223,7 +240,7 @@ export function CampaignPerformanceMatrix({
                       variant={campaign.status.toUpperCase() === 'ACTIVE' ? 'default' : 'secondary'}
                       className="text-2xs uppercase tracking-[0.08em]"
                     >
-                      {statusLabel(campaign.status)}
+                      {statusLabel(campaign.status, uiText)}
                     </Badge>
                   </TableCell>
                   <TableCell className="px-2 py-2 text-right">
@@ -235,7 +252,7 @@ export function CampaignPerformanceMatrix({
                       height={20}
                     />
                   </TableCell>
-                  {MATRIX_METRICS.map((candidate) => {
+                  {displayMetrics.map((candidate) => {
                     const value = campaign.metrics?.[candidate.key];
                     const rank =
                       typeof value === 'number'
@@ -262,7 +279,7 @@ export function CampaignPerformanceMatrix({
                           )}
                           style={paintToStyle(paint) as React.CSSProperties}
                         >
-                          {formatMetric(candidate.key, value)}
+                          {formatMetric(candidate.key, value, uiLocale)}
                         </button>
                       </TableCell>
                     );
@@ -291,10 +308,18 @@ type SignalChipProps = {
 };
 
 function SignalChip({ status, deltaPct, tone }: SignalChipProps) {
-  const label = formatDeltaPct(deltaPct);
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const label = formatDeltaPct(deltaPct, uiLocale);
   const Glyph = tone === 'positive' ? ArrowUpIcon : tone === 'negative' ? ArrowDownIcon : MinusIcon;
   const statusLabelText =
-    status && status !== 'unknown' ? status.charAt(0).toUpperCase() + status.slice(1) : null;
+    status === 'strong'
+      ? uiText('heatmapStrong')
+      : status === 'watch'
+        ? uiText('heatmapWatch')
+        : status === 'risk'
+          ? uiText('heatmapRisk')
+          : undefined;
 
   return (
     <span

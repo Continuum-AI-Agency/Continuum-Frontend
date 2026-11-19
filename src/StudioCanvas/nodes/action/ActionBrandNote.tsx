@@ -11,12 +11,15 @@
 // picked.
 
 import type { ActionId } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useBrandType } from '@/lib/brands/useBrandType.client';
 import { useStudioStore } from '../../stores/useStudioStore';
 import { describeHeadlineFaces, resolveHeadlineFaces } from '../../utils/actions/imageText';
 import { NodeBadge } from '../NodeChrome';
 
 function BurnInTypeBadge() {
+  const translateUi = useUiTranslations('studio');
+
   const brandId = useStudioStore((state) => state.brandId);
   const { inputs, isLoading } = useBrandType(brandId);
   if (isLoading) return null;
@@ -24,7 +27,7 @@ function BurnInTypeBadge() {
   return (
     <NodeBadge title={describeHeadlineFaces(faces)} data-type-source={faces.source}>
       {faces.family}
-      {faces.source === 'fallback' ? ' (no brand face)' : ''}
+      {faces.source === 'fallback' ? translateUi('no_brand_face_bc9b6712') : ''}
     </NodeBadge>
   );
 }

@@ -1,12 +1,19 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+
+import { useTranslations } from 'next-intl';
 import React, { useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { buildOAuthStartUrl } from '@/lib/oauth';
 import { openCenteredPopup, waitForPopupMessage } from '@/lib/popup';
 
 export default function GoogleOAuthButton() {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('auth');
+
   const router = useRouter();
   const { show } = useToast();
   const [pending, setPending] = useState(false);
@@ -16,11 +23,11 @@ export default function GoogleOAuthButton() {
     setPending(true);
 
     const popupUrl = buildOAuthStartUrl('google', 'auth', { popup: true });
-    const popup = openCenteredPopup(popupUrl, 'Continue with Google');
+    const popup = openCenteredPopup(popupUrl, tUi('m_ccc5b0edaa'));
     if (!popup) {
       show({
-        title: 'Popup blocked',
-        description: 'Enable popups to continue with Google.',
+        title: tUi('m_ee9be85313'),
+        description: tUi('m_339554ce02'),
         variant: 'error',
       });
       setPending(false);
@@ -36,16 +43,16 @@ export default function GoogleOAuthButton() {
         predicate: (message) => message.context === 'auth',
       },
     ).then((payload) => {
-      throw new Error(payload.message ?? 'Google sign-in was cancelled.');
+      throw new Error(payload.message ?? tUi('m_219408b705'));
     });
 
     Promise.race([success, failure])
       .then(() => {
-        show({ title: 'Signed in', description: 'Welcome back!', variant: 'success' });
+        show({ title: tUi('m_1b6c524ffb'), description: tUi('m_1c5b34d687'), variant: 'success' });
         router.replace('/onboarding');
       })
       .catch((error) => {
-        show({ title: 'Google sign-in failed', description: error.message, variant: 'error' });
+        show({ title: tUi('m_44c242032b'), description: uiErrorMessage(error), variant: 'error' });
       })
       .finally(() => {
         setPending(false);
@@ -59,7 +66,7 @@ export default function GoogleOAuthButton() {
       disabled={pending}
       className="px-3 py-2 rounded border w-full disabled:opacity-60 disabled:cursor-not-allowed"
     >
-      {pending ? 'Opening Google…' : 'Continue with Google'}
+      {pending ? tUi('m_ad35c732bd') : tUi('m_ccc5b0edaa')}
     </button>
   );
 }

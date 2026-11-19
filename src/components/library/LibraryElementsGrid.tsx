@@ -1,19 +1,23 @@
 'use client';
 
 import { Layers, Plus } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { ElementCard } from '@/components/ai-studio/elements/ElementCard';
 import { ElementsPanel } from '@/components/ai-studio/elements/ElementsPanel';
+import { elementCategoryLabel } from '@/components/ai-studio/elements/elementPresentation';
 import { Button } from '@/components/ui/button';
 import {
   ELEMENT_CATEGORIES,
-  ELEMENT_CATEGORY_LABEL,
   elementDefaultReferenceAssetId,
   useElements,
   useSignedAssetUrls,
 } from '@/lib/ai-studio/elements';
 
 export function LibraryElementsGrid({ brandId }: { brandId: string }) {
+  const translateUi = useUiTranslations('library');
+  const elementText = useUiTranslations('studio');
+
   const { elements, isLoading, isError, error } = useElements(brandId);
   const [panelOpen, setPanelOpen] = useState(false);
   const [initialView, setInitialView] = useState<'list' | 'create'>('list');
@@ -35,7 +39,8 @@ export function LibraryElementsGrid({ brandId }: { brandId: string }) {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Droppable onto canvas and pipeline ports. Save a model, product or style once.
+          {' '}
+          {translateUi('droppable_onto_canvas_and_pipeline__de0c4d4b')}{' '}
         </p>
         <Button
           type="button"
@@ -46,23 +51,25 @@ export function LibraryElementsGrid({ brandId }: { brandId: string }) {
             setPanelOpen(true);
           }}
         >
-          <Plus className="size-4" />
-          New Element
+          <Plus className="size-4" /> {translateUi('new_element_45e3dc5d')}{' '}
         </Button>
       </div>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading Elements…</p>
+        <p className="text-sm text-muted-foreground">{translateUi('loading_elements_f4e8a467')}</p>
       ) : isError ? (
-        <p className="text-sm text-destructive">{error?.message ?? 'Failed to load Elements'}</p>
+        <p className="text-sm text-destructive">
+          {error?.message ?? translateUi('failed_to_load_elements_2559d3d4')}
+        </p>
       ) : elements.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-          No Elements yet. Select images and use Mark as Element, or create one here.
+          {' '}
+          {translateUi('no_elements_yet_select_images_and_u_4ebcae2f')}{' '}
         </p>
       ) : (
         grouped.map((group) => (
           <section key={group.category} className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {ELEMENT_CATEGORY_LABEL[group.category]}
+              {elementCategoryLabel(group.category, elementText)}
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {group.items.map((element) => (

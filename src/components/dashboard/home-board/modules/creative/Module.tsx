@@ -1,5 +1,7 @@
 'use client';
 
+import type { HomeCreativeSpotlightData } from '@continuum/contracts';
+import Link from 'next/link';
 // H09 expanded: the Backend's Creative Spotlight when it answers (top ads by spend with hook rate,
 // format and fatigue; until it deploys the module says so), every ad the stored creative report
 // judged — stored thumbnail, stored reason, standing, cost — filterable by standing, the report's
@@ -9,8 +11,7 @@
 // recommendation for the ad's ad set: generation starts from that recommendation there
 // (optimizer_request_creative_generation is a write and stays on that page). No AI Studio route
 // takes an ad, so AI Studio is linked as itself.
-import type { HomeCreativeSpotlightData } from '@continuum/contracts';
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { lazy, Suspense, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -24,15 +25,12 @@ import {
   type CreativeSpotlight,
   type CreativeStanding,
   needsNewCreative,
-  STANDING_LABEL,
   STANDING_ORDER,
 } from './creativeModel';
 import { SpotlightSection } from './SpotlightSection';
+import { STANDING_LABEL_KEYS } from './standingLabel';
 
 const Flywheel = lazy(() => import('../flywheel/Flywheel'));
-
-export const SPOTLIGHT_NOT_READABLE =
-  'Hook rate, format and a fatigue score are not readable yet on the Home.';
 
 const STANDING_BADGE: Record<CreativeStanding, 'success' | 'destructive' | 'warning' | 'muted'> = {
   winning: 'success',
@@ -44,6 +42,7 @@ const STANDING_BADGE: Record<CreativeStanding, 'success' | 'destructive' | 'warn
 type Filter = 'all' | CreativeStanding;
 
 function Card({ card }: { card: CreativeCard }) {
+  const uiText = useTranslations('dashboard');
   const reworks = card.standing === 'losing' || card.standing === 'iterate';
   return (
     <li
@@ -58,7 +57,9 @@ function Card({ card }: { card: CreativeCard }) {
         <span className="font-semibold text-xs tabular-nums">
           {card.cost ?? card.vsCohort ?? '—'}
         </span>
-        <Badge variant={STANDING_BADGE[card.standing]}>{STANDING_LABEL[card.standing]}</Badge>
+        <Badge variant={STANDING_BADGE[card.standing]}>
+          {uiText(STANDING_LABEL_KEYS[card.standing])}
+        </Badge>
       </div>
       {card.cost && card.vsCohort ? (
         <p className="px-1 text-2xs text-muted-foreground tabular-nums">{card.vsCohort}</p>
@@ -66,7 +67,7 @@ function Card({ card }: { card: CreativeCard }) {
       <p className="line-clamp-4 px-1 text-2xs text-muted-foreground leading-snug">{card.reason}</p>
       {card.briefTitle ? (
         <p className="px-1 text-2xs leading-snug">
-          <span className="text-muted-foreground">Brief: </span>
+          <span className="text-muted-foreground">{uiText('brief_cf6b473')} </span>
           {card.briefTitle}
         </p>
       ) : null}
@@ -78,12 +79,12 @@ function Card({ card }: { card: CreativeCard }) {
             rel="noreferrer"
             target="_blank"
           >
-            View post
+            {uiText('view_post_fe9715b')}
           </a>
         ) : null}
         {reworks && card.optimizerRecommendationId ? (
           <Link className="text-2xs text-primary hover:underline" href={CREATIVE_LINKS.optimizer}>
-            Make variants in the Optimizer
+            {uiText('make_variants_in_the_optimizer_db4c0dd')}
           </Link>
         ) : null}
       </div>
@@ -92,6 +93,7 @@ function Card({ card }: { card: CreativeCard }) {
 }
 
 function ReportSection({ spotlight }: { spotlight: CreativeSpotlight }) {
+  const uiText = useTranslations('dashboard');
   const [filter, setFilter] = useState<Filter>('all');
   const filters: Filter[] = [
     'all',
@@ -105,19 +107,25 @@ function ReportSection({ spotlight }: { spotlight: CreativeSpotlight }) {
       <p className="text-muted-foreground text-xs leading-snug">
         {spotlight.adAccountName ? `${spotlight.adAccountName} · ` : ''}
         {spotlight.currency
-          ? `Cost per result in ${spotlight.currency}, last 30 days.`
-          : 'This brand’s Meta accounts use more than one currency, so each ad shows its cost against the cohort median instead of a money figure.'}
+          ? uiText('cost_per_result_in_currency_last_30_days_898458f', {
+              currency: spotlight.currency,
+            })
+          : uiText('this_brand_s_meta_accounts_use_more_than_one__cbbab5b')}
       </p>
       {spotlight.refreshFailed ? (
         <p
           className="text-amber-800 text-xs dark:text-amber-300"
           data-testid="creative-refresh-failed"
         >
-          The latest refresh of this report failed; this is the last report stored.
+          {uiText('the_latest_refresh_of_this_report_failed_this_3ff3e59')}
         </p>
       ) : null}
 
-      <div aria-label="Filter ads by standing" className="flex flex-wrap gap-1" role="tablist">
+      <div
+        aria-label={uiText('filter_ads_by_standing_498ebbd')}
+        className="flex flex-wrap gap-1"
+        role="tablist"
+      >
         {filters.map((key) => (
           <button
             aria-selected={filter === key}
@@ -132,7 +140,7 @@ function ReportSection({ spotlight }: { spotlight: CreativeSpotlight }) {
             role="tab"
             type="button"
           >
-            {key === 'all' ? 'All' : STANDING_LABEL[key]}{' '}
+            {key === 'all' ? uiText('all_a52ace4') : uiText(STANDING_LABEL_KEYS[key])}{' '}
             <span className="tabular-nums">
               {key === 'all' ? spotlight.total : spotlight.counts[key]}
             </span>
@@ -148,7 +156,7 @@ function ReportSection({ spotlight }: { spotlight: CreativeSpotlight }) {
 
       {spotlight.themes.length > 0 ? (
         <section className="space-y-1.5">
-          <h4 className="font-semibold text-xs">What the report sees</h4>
+          <h4 className="font-semibold text-xs">{uiText('what_the_report_sees_548510b')}</h4>
           <ul className="list-disc space-y-1 pl-4 text-xs leading-snug">
             {spotlight.themes.map((theme) => (
               <li key={theme}>{theme}</li>
@@ -171,6 +179,7 @@ export default function CreativeModule({
   /** The Backend's Creative Spotlight; null until it is deployed or when it holds nothing. */
   read?: HomeCreativeSpotlightData | null;
 }) {
+  const uiText = useTranslations('dashboard');
   const reportThumbs = new Map(
     (spotlight?.cards ?? []).map((card) => [card.adId, card.thumbnailUrl]),
   );
@@ -180,7 +189,7 @@ export default function CreativeModule({
       {spotlight ? <ReportSection spotlight={spotlight} /> : null}
       {read ? null : (
         <p className="text-muted-foreground text-xs" data-testid="creative-not-readable">
-          {SPOTLIGHT_NOT_READABLE}
+          {uiText('hook_rate_format_and_a_fatigue_score_are_not__33560fc')}
         </p>
       )}
 
@@ -189,7 +198,7 @@ export default function CreativeModule({
           className={buttonVariants({ variant: 'outline', size: 'sm' })}
           href={CREATIVE_LINKS.insights}
         >
-          Open Creative Insights
+          {uiText('open_creative_insights_fcbecd8')}
         </Link>
       </div>
 

@@ -1,18 +1,19 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { useValidationErrorMap } from '@/i18n/validation';
 import { type PresentationScope, presentationsApi } from '@/lib/api/presentations.client';
 
-const formatsSchema = z
-  .object({ pptx: z.boolean(), pdf: z.boolean() })
-  .refine((value) => value.pptx || value.pdf, {
-    message: 'Choose at least one output format.',
+const formatsSchema = (translateUi: ReturnType<typeof useUiTranslations<'forge'>>) =>
+  z.object({ pptx: z.boolean(), pdf: z.boolean() }).refine((value) => value.pptx || value.pdf, {
+    message: translateUi('validationOutputFormats'),
     path: ['pptx'],
   });
 type Preview = Awaited<ReturnType<typeof presentationsApi.previewExport>>;
@@ -35,8 +36,14 @@ export function PresentationExportPanel({
   save: () => Promise<boolean>;
   onError: (message: string) => void;
 }) {
-  const form = useForm<z.infer<typeof formatsSchema>>({
-    resolver: zodResolver(formatsSchema),
+  const validationErrorMap = useValidationErrorMap();
+
+  const displayLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
+  const form = useForm<z.infer<ReturnType<typeof formatsSchema>>>({
+    resolver: zodResolver(formatsSchema(translateUi), { error: validationErrorMap }),
     defaultValues: { pptx: true, pdf: true },
   });
   const [busy, setBusy] = useState(false);
@@ -52,13 +59,13 @@ export function PresentationExportPanel({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        Create an editable PowerPoint file and a static PDF. Each output is saved to Files with this
-        deck’s source and revision.
+        {' '}
+        {translateUi('create_an_editable_powerpoint_file__ac5b2d6c')}{' '}
       </p>
       {blocked ? (
         <p role="alert" className="text-sm text-destructive">
-          Resolve the blocking import issues before exporting. Your original PowerPoint file is
-          preserved.
+          {' '}
+          {translateUi('resolve_the_blocking_import_issues__55c6d981')}{' '}
         </p>
       ) : null}
       <form
@@ -86,7 +93,9 @@ export function PresentationExportPanel({
               disabled={busy}
               onCheckedChange={(value) => form.setValue('pptx', value === true)}
             />
-            <FieldLabel htmlFor="presentation-export-pptx">PowerPoint (.pptx)</FieldLabel>
+            <FieldLabel htmlFor="presentation-export-pptx">
+              {translateUi('powerpoint_pptx_5fd9ab01')}
+            </FieldLabel>
           </Field>
           <Field orientation="horizontal">
             <Checkbox
@@ -95,36 +104,44 @@ export function PresentationExportPanel({
               disabled={busy}
               onCheckedChange={(value) => form.setValue('pdf', value === true)}
             />
-            <FieldLabel htmlFor="presentation-export-pdf">PDF (.pdf)</FieldLabel>
+            <FieldLabel htmlFor="presentation-export-pdf">
+              {translateUi('pdf_pdf_18086e0b')}
+            </FieldLabel>
           </Field>
           <FieldError errors={[form.formState.errors.pptx]} />
           {dirty ? (
             <Button type="button" variant="outline" onClick={() => void save()}>
-              Save before exporting
+              {' '}
+              {translateUi('save_before_exporting_5d93cc9d')}{' '}
             </Button>
           ) : null}
           <Button type="submit" variant="outline" disabled={busy || dirty || blocked}>
-            {busy ? 'Preparing export…' : 'Review export'}
+            {busy
+              ? translateUi('preparing_export_e6b52069')
+              : translateUi('review_export_6b5bead6')}
           </Button>
         </FieldGroup>
       </form>
       {preview ? (
         <section
-          aria-label="Export confirmation"
+          aria-label={translateUi('export_confirmation_cea4e89d')}
           className="flex flex-col gap-3 border-t border-border pt-4"
         >
-          <h3 className="text-sm font-medium">Approve export</h3>
+          <h3 className="text-sm font-medium">{translateUi('approve_export_c5934a75')}</h3>
           <p className="text-sm">
-            “{title}”, revision {preview.revision}, as{' '}
+            “{title}
+            {translateUi('revision_1235355f')} {preview.revision}
+            {translateUi('as_45c24a28')}{' '}
             {preview.formats.map((format) => format.toUpperCase()).join(' and ')}.
           </p>
           <p className="text-xs text-muted-foreground">
-            Approval expires{' '}
-            {new Date(preview.expiresAt).toLocaleTimeString([], {
+            {' '}
+            {translateUi('approval_expires_c1c99fa7')}{' '}
+            {new Date(preview.expiresAt).toLocaleTimeString(displayLocale, {
               hour: 'numeric',
               minute: '2-digit',
-            })}
-            . Further edits require a new review.
+            })}{' '}
+            {translateUi('further_edits_require_a_new_review_389f075e')}{' '}
           </p>
           <Button
             disabled={busy || dirty || blocked || preview.revision !== revision}
@@ -152,13 +169,18 @@ export function PresentationExportPanel({
               }
             }}
           >
-            {busy ? 'Exporting…' : 'Confirm export to Files'}
+            {busy
+              ? translateUi('exporting_a2dd9cbb')
+              : translateUi('confirm_export_to_files_5ff5ccab')}
           </Button>
         </section>
       ) : null}
       {outputs.length ? (
-        <section aria-label="Exported files" className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">Saved to Files</h3>
+        <section
+          aria-label={translateUi('exported_files_79bcebb0')}
+          className="flex flex-col gap-2"
+        >
+          <h3 className="text-sm font-medium">{translateUi('saved_to_files_5376e7f3')}</h3>
           {outputs.map((output) => (
             <a
               key={`${output.assetId}:${output.versionId}`}

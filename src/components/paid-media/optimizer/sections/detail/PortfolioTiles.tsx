@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The four tiles under the anchor (P1, "Lectura continua"): no box at all — a 12px label, a
 // 22px figure and two 12px lines, the tiles split by thin vertical hairlines. Four columns on a
@@ -48,6 +49,7 @@ function hairline(index: number): string {
 }
 
 export function PortfolioTiles({ tiles, onEditSetting, onReviewDecisions }: PortfolioTilesProps) {
+  const uiText = useTranslations('scale');
   return (
     <div
       className="grid grid-cols-2 gap-x-4 gap-y-4 @[56rem]/news:grid-cols-4"
@@ -82,7 +84,7 @@ export function PortfolioTiles({ tiles, onEditSetting, onReviewDecisions }: Port
                           data-testid="header-chip"
                           key={segment.setting}
                           onClick={() => onEditSetting(segment.setting)}
-                          title="Edit in Manage"
+                          title={uiText('edit_in_manage_56aeaa4')}
                           type="button"
                         >
                           {segment.text}

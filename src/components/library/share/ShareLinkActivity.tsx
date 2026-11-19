@@ -8,31 +8,35 @@ import type {
   ShareLinkActivityEvent,
   ShareLinkEventKind,
 } from '@continuum/contracts';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 
-const VERB: Record<ShareLinkEventKind, string> = {
-  open: 'opened the link',
-  view: 'viewed',
-  play: 'played',
-  download: 'downloaded',
-  download_all: 'downloaded all',
-  comment: 'commented',
-  decision: 'gave a decision',
-  field_edit: 'edited the field',
-};
+const VERB_KEYS = {
+  open: 'shareOpened',
+  view: 'shareViewed',
+  play: 'sharePlayed',
+  download: 'shareDownloaded',
+  download_all: 'shareDownloadedAll',
+  comment: 'shareCommented',
+  decision: 'shareDecision',
+  field_edit: 'shareFieldEdited',
+} as const satisfies Record<ShareLinkEventKind, string>;
 
-function reviewerLabel(event: ShareLinkActivityEvent): string {
-  if (event.reviewerName && event.reviewerEmail) return `${event.reviewerName} <${event.reviewerEmail}>`;
-  return event.reviewerName ?? event.reviewerEmail ?? 'Anonymous viewer';
+function reviewerLabel(event: ShareLinkActivityEvent, anonymousLabel: string): string {
+  if (event.reviewerName && event.reviewerEmail)
+    return `${event.reviewerName} <${event.reviewerEmail}>`;
+  return event.reviewerName ?? event.reviewerEmail ?? anonymousLabel;
 }
 
 type Counts = { views: number; plays: number; downloads: number; comments: number };
 
 function CountCells({ counts }: { counts: Counts }) {
+  const locale = useUiLocale();
+  const format = new Intl.NumberFormat(locale);
   return (
     <>
       {(['views', 'plays', 'downloads', 'comments'] as const).map((key) => (
         <td key={key} data-count={key} className="px-1 text-right tabular-nums">
-          {counts[key]}
+          {format.format(counts[key])}
         </td>
       ))}
     </>
@@ -41,15 +45,17 @@ function CountCells({ counts }: { counts: Counts }) {
 
 // Views, plays, downloads and comments, per asset and per viewer.
 export function ShareActivityTotalsTable({ totals }: { totals: ShareActivityTotals }) {
+  const translateUi = useUiTranslations('library');
+
   if (totals.byAsset.length === 0 && totals.byViewer.length === 0) return null;
   const head = (label: string) => (
     <thead>
       <tr className="text-muted-foreground">
         <th className="text-left font-medium">{label}</th>
-        <th className="px-1 text-right font-medium">Views</th>
-        <th className="px-1 text-right font-medium">Plays</th>
-        <th className="px-1 text-right font-medium">Downloads</th>
-        <th className="px-1 text-right font-medium">Comments</th>
+        <th className="px-1 text-right font-medium">{translateUi('views_69c40459')}</th>
+        <th className="px-1 text-right font-medium">{translateUi('plays_725b66fb')}</th>
+        <th className="px-1 text-right font-medium">{translateUi('downloads_d5fdc1af')}</th>
+        <th className="px-1 text-right font-medium">{translateUi('comments_355f79f2')}</th>
       </tr>
     </thead>
   );
@@ -57,11 +63,13 @@ export function ShareActivityTotalsTable({ totals }: { totals: ShareActivityTota
     <div className="flex flex-col gap-2 text-2xs" data-share-totals>
       {totals.byAsset.length > 0 ? (
         <table className="w-full">
-          {head('Asset')}
+          {head(translateUi('asset_80d298c9'))}
           <tbody>
             {totals.byAsset.map((row) => (
               <tr key={row.assetId} data-totals-asset={row.assetId}>
-                <td className="max-w-40 truncate text-foreground">{row.title ?? 'Asset'}</td>
+                <td className="max-w-40 truncate text-foreground">
+                  {row.title ?? translateUi('asset_80d298c9')}
+                </td>
                 <CountCells counts={row} />
               </tr>
             ))}
@@ -69,12 +77,12 @@ export function ShareActivityTotalsTable({ totals }: { totals: ShareActivityTota
         </table>
       ) : null}
       <table className="w-full">
-        {head('Viewer')}
+        {head(translateUi('shareViewer'))}
         <tbody>
           {totals.byViewer.map((row) => (
             <tr key={row.viewerKey} data-totals-viewer={row.email ?? row.name ?? row.viewerKey}>
               <td className="max-w-40 truncate text-foreground">
-                {row.name ?? row.email ?? 'Anonymous viewer'}
+                {row.name ?? row.email ?? translateUi('anonymous_viewer_f88f3027')}
               </td>
               <CountCells counts={row} />
             </tr>
@@ -88,18 +96,29 @@ export function ShareActivityTotalsTable({ totals }: { totals: ShareActivityTota
 export function ShareLinkActivity({
   events,
   totals,
-  emptyLabel = 'No activity yet.',
+  emptyLabel,
 }: {
   events: ShareLinkActivityEvent[];
   totals?: ShareActivityTotals;
   emptyLabel?: string;
 }) {
-  if (events.length === 0) return <p className="text-xs text-muted-foreground">{emptyLabel}</p>;
+  const displayLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('library');
+
+  if (events.length === 0)
+    return (
+      <p className="text-xs text-muted-foreground">
+        {emptyLabel ?? translateUi('shareNoActivity')}
+      </p>
+    );
   const groups = new Map<string, { title: string; events: ShareLinkActivityEvent[] }>();
   for (const event of events) {
     const key = event.assetId ?? 'link';
     const group = groups.get(key) ?? {
-      title: event.assetId ? (event.assetTitle ?? 'Asset') : 'Whole link',
+      title: event.assetId
+        ? (event.assetTitle ?? translateUi('asset_80d298c9'))
+        : translateUi('whole_link_80b891f3'),
       events: [],
     };
     group.events.push(event);
@@ -119,10 +138,13 @@ export function ShareLinkActivity({
                 className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground"
               >
                 <span className="min-w-0 truncate">
-                  <span className="text-foreground">{reviewerLabel(event)}</span> {VERB[event.kind]}
+                  <span className="text-foreground">
+                    {reviewerLabel(event, translateUi('anonymous_viewer_f88f3027'))}
+                  </span>{' '}
+                  {translateUi(VERB_KEYS[event.kind])}
                 </span>
                 <time dateTime={event.createdAt} className="shrink-0 tabular-nums">
-                  {new Date(event.createdAt).toLocaleString()}
+                  {new Date(event.createdAt).toLocaleString(displayLocale)}
                 </time>
               </li>
             ))}

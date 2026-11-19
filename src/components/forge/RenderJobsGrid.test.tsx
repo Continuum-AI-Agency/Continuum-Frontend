@@ -229,7 +229,15 @@ mock.module('@/lib/supabase/realtime', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { RenderFileSpecs } from './RenderFileSpecs';
 import { RenderJobsGrid } from './RenderJobsGrid';
 

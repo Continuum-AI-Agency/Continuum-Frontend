@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Wraps a disabled control and explains WHY it is disabled plus what unlocks it
 // (base for BUG-013/014/015). Disabled controls do not fire hover/focus events,
@@ -25,6 +26,8 @@ export function DisabledReason({
   side = 'top',
   className,
 }: DisabledReasonProps) {
+  const tUi = useTranslations('common');
+
   const descriptionId = useId();
 
   return (
@@ -45,12 +48,17 @@ export function DisabledReason({
         <TooltipContent side={side} className="max-w-xs">
           <p className="text-sm">{reason}</p>
           {unlocks !== undefined ? (
-            <p className="mt-1 text-xs text-muted-foreground">Unlocks {unlocks}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {tUi('m_896b841f3b')}
+              {unlocks}
+            </p>
           ) : null}
         </TooltipContent>
       </Tooltip>
       <span id={descriptionId} className="sr-only">
-        {unlocks !== undefined ? `${reason} Unlocks ${unlocks}` : reason}
+        {unlocks !== undefined
+          ? tUi('m_6c1017523d', { v0: String(reason), v1: String(unlocks) })
+          : reason}
       </span>
     </TooltipProvider>
   );
