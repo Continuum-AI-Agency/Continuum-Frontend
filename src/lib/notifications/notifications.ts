@@ -51,6 +51,7 @@ export type NotificationDisplay = {
 // the library page opens it on load. A comment's notification (reply, mention)
 // also names the comment, so the modal opens on that thread and its moment.
 // Legacy rows without an assetId in their payload still land on /library.
+// A claimed pre-payment is about billing, not an asset, so it opens Billing settings.
 export function describeNotification(notification: AppNotification): NotificationDisplay {
   const actorName = payloadString(notification, 'actorName') ?? 'A teammate';
   const assetName = payloadString(notification, 'assetName') ?? 'a creative';
@@ -116,5 +117,16 @@ export function describeNotification(notification: AppNotification): Notificatio
         detail: message,
         href,
       };
+    case 'prepayment_claimed': {
+      const brandName = payloadString(notification, 'brandName');
+      const payerEmail = payloadString(notification, 'payerEmail');
+      return {
+        title: brandName ? `Pre-Payment claimed for ${brandName}` : 'Pre-Payment claimed',
+        detail: payerEmail
+          ? `The plan you paid for as ${payerEmail} is now active on this brand.`
+          : 'The plan you paid for is now active on this brand.',
+        href: '/settings?section=billing',
+      };
+    }
   }
 }

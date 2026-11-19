@@ -55,6 +55,21 @@ describe('describeNotification', () => {
     expect(display.href).toBe('/library?assetId=asset-1');
   });
 
+  it('describes a claimed pre-payment by the brand the payer made, linking to Billing', () => {
+    const row = mapNotificationRow({
+      ...baseRow,
+      actor_user_id: null,
+      kind: 'prepayment_claimed',
+      payload: { brandName: 'Acme', payerEmail: 'buyer@example.com' },
+    });
+    if (!row) throw new Error('prepayment_claimed must map');
+    expect(describeNotification(row)).toEqual({
+      title: 'Pre-Payment claimed for Acme',
+      detail: 'The plan you paid for as buyer@example.com is now active on this brand.',
+      href: '/settings?section=billing',
+    });
+  });
+
   it('falls back gracefully when the payload is empty', () => {
     const display = describeNotification(notification({ payload: {} }));
     expect(display.title).toBe('A teammate asked you to review “a creative”');

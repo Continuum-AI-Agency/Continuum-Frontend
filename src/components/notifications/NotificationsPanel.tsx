@@ -8,6 +8,7 @@ import type { AppNotification } from '@continuum/contracts';
 import {
   AlarmClockIcon,
   AtSignIcon,
+  BadgeCheckIcon,
   CheckCheckIcon,
   CircleCheckBigIcon,
   EyeIcon,
@@ -31,6 +32,7 @@ const KIND_ICONS = {
   asset_assigned: UserCheckIcon,
   review_reminder: AlarmClockIcon,
   review_escalation: SirenIcon,
+  prepayment_claimed: BadgeCheckIcon,
 } satisfies Record<AppNotification['kind'], typeof EyeIcon>;
 
 export type NotificationsPanelProps = {
