@@ -9,6 +9,7 @@ import {
   MetaRow,
   PlatformTag,
 } from '@/components/shared/agent-cards/agentCardKit';
+import { MediaCostPlanList } from '@/components/shared/agent-cards/MediaCostPlanList';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CardContent, CardFooter } from '@/components/ui/card';
 import {
@@ -179,6 +180,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
     return (
       <HeadlessBatchApprovalCard
         quote={approval.batchPreview ?? null}
+        costPlan={approval.costPlan ?? null}
         onApproveAction={props.onApproveAction}
         onDenyAction={props.onDenyAction}
         disabled={props.disabled}
@@ -257,6 +259,7 @@ function GenericToolApprovalCard({
                     {!platform && !angle && !caption && batchSize === 0 && (
                       <p className="text-xs text-muted-foreground">{approval.toolName}</p>
                     )}
+                    {approval.costPlan ? <MediaCostPlanList plan={approval.costPlan} /> : null}
                   </CardContent>
                   <CardFooter className="flex items-center justify-end gap-1 border-t border-border/50 px-3 py-2">
                     <AgentButton

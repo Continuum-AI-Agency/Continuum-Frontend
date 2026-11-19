@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { agentDelegatedFrameSchema } from '../agents/cross-agent';
+import { mediaCostPlanSchema } from '../headless-content/costPlan';
 import { headlessCreativeBlocksSchema } from '../headless-content/styles';
 import { aeoSnapshotCardSchema } from '../organic/aeo';
 import { uiMediaStripFrameSchema } from '../organic/chat-media';
@@ -932,6 +933,8 @@ const toolApprovalRequiredSchema = z.object({
       input: z.unknown(),
       /** headlessBatchCreate only: the batch's bound, cost and cast step, for its one card. */
       batchPreview: headlessBatchQuoteSchema.optional(),
+      /** Every model call the approved work makes, priced: the card's cost pre-plan. */
+      costPlan: mediaCostPlanSchema.optional(),
     })
     .loose(),
 });

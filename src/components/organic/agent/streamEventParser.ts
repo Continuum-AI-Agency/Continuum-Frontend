@@ -6,6 +6,7 @@ import {
   chatMediaStripDataSchema,
   headlessBatchQuoteSchema,
   type MediaSearchResultsFrame,
+  mediaCostPlanSchema,
   mediaSearchResultsFrameSchema,
   type OrganicStreamFrame,
   organicPlanStatusDataSchema,
@@ -508,6 +509,9 @@ function parsePlanStatus(event: Record<string, unknown>): ParsedPlanStatus | nul
 // (and with it the only card that may approve the batch's money).
 const lenientBatchQuoteSchema = z.object(headlessBatchQuoteSchema.shape);
 
+// Decoration beside the card, never its gate: an unreadable plan just drops.
+const lenientCostPlanSchema = z.object(mediaCostPlanSchema.shape);
+
 function parseToolApproval(event: Record<string, unknown>): ToolApproval | null {
   const payload = getEventPayload(event);
   const approvalId = readNonEmptyString(payload.approvalId);
@@ -515,12 +519,14 @@ function parseToolApproval(event: Record<string, unknown>): ToolApproval | null 
   const toolName = readNonEmptyString(payload.toolName);
   if (!approvalId || !toolCallId || !toolName) return null;
   const batchPreview = lenientBatchQuoteSchema.safeParse(payload.batchPreview);
+  const costPlan = lenientCostPlanSchema.safeParse(payload.costPlan);
   return {
     approvalId,
     toolCallId,
     toolName,
     input: payload.input,
     ...(batchPreview.success ? { batchPreview: batchPreview.data } : {}),
+    ...(costPlan.success ? { costPlan: costPlan.data } : {}),
   };
 }
 
