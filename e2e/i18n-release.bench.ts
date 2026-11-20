@@ -5,7 +5,7 @@
  * For each UI language (en, pt-BR, es) it picks the language in Settings the way a person does,
  * then asserts the outcome at every boundary it crosses:
  *   - Auth: `user_metadata.ui_locale` holds the choice (read back with the service role);
- *   - a fresh session with no language cookie opens in that language (the account drives it);
+ *   - a new device signing in by magic link opens in that language (the account drives it);
  *   - the navigation reads the catalog's own words for that language;
  *   - each main route renders in it: `<html lang>`, the Backend answered, no next-intl or
  *     hydration error in the console, no page error, no leaked message key, and no long string
@@ -99,26 +99,55 @@ const admin = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
 
-async function openContext(browser: Awaited<ReturnType<typeof chromium.launch>>) {
-  const bundle = await mintSessionBundleForEmail(EMAIL);
-  await pinSessionBrand(bundle.accessToken, BRAND);
-  const context = await browser.newContext({
+type Browser = Awaited<ReturnType<typeof chromium.launch>>;
+const newContext = (browser: Browser, cookies: { name: string; value: string }[] = []) =>
+  browser.newContext({
     viewport: { width: 1440, height: 1000 },
     extraHTTPHeaders: BYPASS
       ? { 'x-vercel-protection-bypass': BYPASS, 'x-vercel-set-bypass-cookie': 'samesitenone' }
       : undefined,
     storageState: {
       origins: [],
-      cookies: bundle.state.cookies.map((cookie) => ({
+      cookies: cookies.map((cookie) => ({
         ...cookie,
         domain: HOST as string,
+        path: '/',
+        expires: -1,
+        httpOnly: false,
         secure: true,
         sameSite: 'Lax' as const,
       })),
     },
   });
+
+/** The Settings session: a minted session pinned to the bench brand. */
+async function openContext(browser: Browser) {
+  const bundle = await mintSessionBundleForEmail(EMAIL);
+  await pinSessionBrand(bundle.accessToken, BRAND);
+  const context = await newContext(browser, bundle.state.cookies);
   if (RELAY_CORS) await relayCors(context);
   return { context, userId: bundle.userId };
+}
+
+/**
+ * A new device: no cookies at all, signed in through the deployed `/auth/confirm` with a real
+ * magic-link token, as a person does. A minted session would not do: the account language
+ * rides in the JWT, and a token minted before the change carries the old one.
+ */
+async function signInFresh(browser: Browser) {
+  const link = await admin.auth.admin.generateLink({ type: 'magiclink', email: EMAIL });
+  const tokenHash = link.data?.properties?.hashed_token;
+  if (link.error || !tokenHash) throw new Error(`generateLink failed: ${link.error?.message}`);
+  const context = await newContext(browser);
+  if (RELAY_CORS) await relayCors(context);
+  const page = await context.newPage();
+  await page.goto(`${ORIGIN}/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 90_000,
+  });
+  if (new URL(page.url()).pathname.startsWith('/login'))
+    throw new Error(`Magic-link sign-in landed on ${page.url()}`);
+  return { context, page };
 }
 
 async function relayCors(context: BrowserContext) {
@@ -188,9 +217,9 @@ try {
     const stored = (await admin.auth.admin.getUserById(userId)).data.user?.user_metadata?.ui_locale;
     check(`${locale}: the choice is saved on the account`, stored === locale, String(stored));
 
-    // A new session carries no NEXT_LOCALE cookie: only the account can pick the language.
-    const fresh = await openContext(browser);
-    const page = await fresh.context.newPage();
+    // A new device carries no NEXT_LOCALE cookie: only the account can pick the language.
+    const fresh = await signInFresh(browser);
+    const page = fresh.page;
     const navLabel = catalog('navigation', locale)[navigationMessageKeys.Settings] as string;
     for (const route of ROUTES) {
       const seen = watch(page);
