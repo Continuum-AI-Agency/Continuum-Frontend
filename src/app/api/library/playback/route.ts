@@ -28,6 +28,7 @@ type PlaybackRow = {
   width: number | null;
   height: number | null;
   duration_ms: number | null;
+  updated_at: string | null;
 };
 
 const PLAYBACK_ROLES = [...LIBRARY_VIDEO_PLAYBACK_ROLES, 'audio_proxy'];
@@ -71,7 +72,9 @@ export async function GET(request: Request) {
   const [{ data, error }, { data: version }] = await Promise.all([
     mediaSchema(supabase)
       .from('asset_renditions')
-      .select('role, bucket, storage_path, mime_type, size_bytes, width, height, duration_ms')
+      .select(
+        'role, bucket, storage_path, mime_type, size_bytes, width, height, duration_ms, updated_at',
+      )
       .eq('asset_version_id', assetVersionId)
       .eq('asset_id', assetId)
       .eq('brand_id', brandId)
@@ -90,7 +93,7 @@ export async function GET(request: Request) {
   }
   const rows = (data ?? []) as PlaybackRow[];
   const signed = await mintSignedUrls(
-    rows.map((row) => ({ bucket: row.bucket, path: row.storage_path })),
+    rows.map((row) => ({ bucket: row.bucket, path: row.storage_path, version: row.updated_at })),
   );
   // A row whose URL did not sign is left out rather than offered as a dead source.
   const ready = (role: string) => {

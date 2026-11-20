@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useTranslations } from 'next-intl';
 import { BrandInsightsGenerateButton } from '@/components/brand-insights/BrandInsightsGenerateButton';
 import { BrandTrendsPanel } from '@/components/brand-insights/BrandTrendsPanel';
 import { DashboardBriefing } from '@/components/dashboard/briefing/DashboardBriefing';
@@ -44,6 +45,7 @@ export function OrganicDashboardView({
   insightsGeneratedAt,
   insightsStatus,
 }: OrganicDashboardViewProps) {
+  const uiText = useTranslations('dashboard');
   const generatedAt = trendsAndEvents.generatedAt ?? insightsGeneratedAt;
   const isCold = trendsAndEvents.trends.length === 0 || !generatedAt;
 
@@ -91,7 +93,12 @@ export function OrganicDashboardView({
             country={trendsAndEvents.country}
             generatedAt={generatedAt}
             status={trendsAndEvents.status ?? insightsStatus}
-            actionSlot={<ModuleShortcutLink href="/organic?tab=metrics" label="Open metrics" />}
+            actionSlot={
+              <ModuleShortcutLink
+                href="/organic?tab=metrics"
+                label={uiText('open_metrics_4975865')}
+              />
+            }
             statusSlot={
               <BrandInsightsGenerateButton brandId={brandId} lastGeneratedAt={generatedAt} force />
             }

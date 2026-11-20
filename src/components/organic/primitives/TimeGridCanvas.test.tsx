@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { cloneElement, type ReactElement, type ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { render as rtlRender } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import { buildPlannerPlatforms } from './planner-platforms';
 import type { OrganicCalendarDay } from './types';

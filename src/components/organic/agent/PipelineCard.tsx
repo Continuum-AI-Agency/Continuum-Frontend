@@ -1,21 +1,9 @@
 'use client';
 
-import {
-  hasApprovablePreview,
-  resolveOrganicAgentLabel,
-  resolveOrganicGenerationDisplay,
-} from '@continuum/contracts';
-import {
-  AlertCircle,
-  Check,
-  Clock,
-  ImageOff,
-  Loader2,
-  PencilRuler,
-  Sparkles,
-  Wand2,
-} from 'lucide-react';
+import { resolveOrganicGenerationDisplay } from '@continuum/contracts';
+import { AlertCircle, Check, Clock, Loader2, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import type { ChatMedia } from '@/components/chat/media/media';
@@ -29,17 +17,28 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCalendarStore } from '@/lib/organic/store';
+import {
+  localizeOrganicAgentLabel,
+  translateOrganicControlLabel,
+} from '@/lib/ui/organicLifecycleLabels';
 import { cn } from '@/lib/utils';
 import { rankCardMedia, useDraftChatMedia } from '../hooks/useDraftStoryboard';
 import { resolveConceptPreviewUrls } from './conceptPreview';
 import { type ConceptStatus, resolveConceptStatus } from './conceptStatus';
+import { DraftCardActions, DraftIdTag, FailureNotice } from './DraftCardActions';
 import { StatusDetail } from './StatusDetail';
 import type { CheckpointState, PipelineCardState, PipelineStage, PipelineStageNode } from './types';
 
 // One vocabulary across surfaces: the stepper labels each stage with the SAME canonical
 // resolver the generations widget uses, instead of a divergent local map.
-const stageLabel = (stage: PipelineStage): string =>
-  resolveOrganicGenerationDisplay({ status: 'running', stage }).label;
+const stageLabel = (
+  stage: PipelineStage,
+  translate: Parameters<typeof translateOrganicControlLabel>[1],
+): string =>
+  translateOrganicControlLabel(
+    resolveOrganicGenerationDisplay({ status: 'running', stage }).label,
+    translate,
+  );
 
 const IMAGE_OUTLINE = 'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10';
 
@@ -76,6 +75,7 @@ function PreviewImages({
 }
 
 function StageNode({ node, index }: { node: PipelineStageNode; index: number }) {
+  const commonText = useTranslations('common');
   const dot =
     node.status === 'active' ? (
       <motion.div
@@ -107,7 +107,7 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
           node.status === 'pending' ? 'text-muted-foreground/50' : 'text-muted-foreground',
         )}
       >
-        {stageLabel(node.stage)}
+        {stageLabel(node.stage, commonText)}
       </span>
     </motion.div>
   );
@@ -115,10 +115,10 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
 
 // Four experiential enrichment checkpoints shown once copy is received.
 const CHECKPOINT_STEPS = [
-  { key: 'concept' as const, label: 'Concept' },
-  { key: 'copy' as const, label: 'Copy' },
-  { key: 'preview' as const, label: 'Preview' },
-  { key: 'realized' as const, label: 'Fully fleshed out' },
+  { key: 'concept' as const, label: 'checkpointConcept' },
+  { key: 'copy' as const, label: 'checkpointCopy' },
+  { key: 'preview' as const, label: 'checkpointPreview' },
+  { key: 'realized' as const, label: 'checkpointRealized' },
 ] as const;
 
 type CheckpointStepKey = (typeof CHECKPOINT_STEPS)[number]['key'];
@@ -150,6 +150,7 @@ function CheckpointStepNode({
   label: string;
   checkpoint: CheckpointState;
 }) {
+  const uiText = useTranslations('organic');
   const status = checkpointStepStatus(stepKey, checkpoint);
 
   const dot =
@@ -167,13 +168,13 @@ function CheckpointStepNode({
 
   const sublabel =
     status === 'awaiting'
-      ? 'Awaiting your choice'
+      ? uiText('checkpointWaitingChoice')
       : status === 'generating'
-        ? 'Fleshing out…'
+        ? uiText('checkpointRealizing')
         : status === 'user_supplied'
-          ? 'Your creative'
+          ? uiText('checkpointYourCreative')
           : status === 'ready'
-            ? 'Ready'
+            ? uiText('checkpointReady')
             : null;
 
   return (
@@ -197,11 +198,17 @@ function CheckpointStepNode({
 }
 
 function CheckpointStepper({ checkpoint }: { checkpoint: CheckpointState }) {
+  const uiText = useTranslations('organic');
   return (
     <div className="grid gap-2 rounded-lg bg-muted/25 px-2.5 py-2">
       <div className="flex items-start gap-1">
         {CHECKPOINT_STEPS.map(({ key, label }) => (
-          <CheckpointStepNode key={key} stepKey={key} label={label} checkpoint={checkpoint} />
+          <CheckpointStepNode
+            key={key}
+            stepKey={key}
+            label={uiText(label)}
+            checkpoint={checkpoint}
+          />
         ))}
       </div>
       <div className="grid grid-cols-4 gap-1">
@@ -229,9 +236,21 @@ type PipelineCardProps = {
   onEnrichDraft?: (draftId: string) => void;
   /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
   onGenerateMedia?: (draftId: string, format: string, previewRevision: string) => void;
+  /** Re-queue this job in place: Retry (failed) and Recreate draft (draft gone) alike. */
+  onRetryJob?: (jobId: string) => void;
+  /** Open the planner on this draft; `null` opens the planner (a draft that is gone). */
+  onOpenDraft?: (draftId: string | null) => void;
 };
 
-export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineCardProps) {
+export function PipelineCard({
+  card,
+  onEnrichDraft,
+  onGenerateMedia,
+  onRetryJob,
+  onOpenDraft,
+}: PipelineCardProps) {
+  const uiText = useTranslations('organic');
+  const commonText = useTranslations('common');
   const quality = qualityPercent(card.quality?.overallScore);
   // WHY a flagged draft was flagged. A passing draft's reviewer notes are not the user's
   // problem; a failed one's are, and a bare percentage names none of them.
@@ -242,11 +261,17 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
   // ONE status presentation with the plan row: the resolver owns the vocabulary,
   // conceptStatus adds the `kind` that separates real progress from a run we have
   // lost sight of, and media failure from a job that died with nothing to show.
-  const state: ConceptStatus = resolveConceptStatus({
-    status: card.status,
-    stage: card.currentStage ?? null,
-    checkpoint: card.checkpoint ?? null,
-  });
+  const state: ConceptStatus = resolveConceptStatus(
+    {
+      status: card.status,
+      stage: card.currentStage ?? null,
+      checkpoint: card.checkpoint ?? null,
+      draftMissing: card.draftMissing ?? null,
+    },
+    (label) => translateOrganicControlLabel(label, commonText),
+  );
+  // A missing draft's old id points at nothing: no media lookup, no link, no action on it.
+  const draftId = card.draftMissing ? null : (card.draftId ?? null);
 
   // While a named stage is genuinely advancing, surface WHO is working + WHAT stage
   // ("Copywriter · Writing copy"), matching the generations widget. A blind run has
@@ -254,7 +279,10 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
   const activeNode = card.stages.find((node) => node.status === 'active');
   const liveLabel =
     state.advancing && activeNode
-      ? [resolveOrganicAgentLabel(activeNode.agentName), stageLabel(activeNode.stage)]
+      ? [
+          localizeOrganicAgentLabel(activeNode.agentName, commonText),
+          stageLabel(activeNode.stage, commonText),
+        ]
           .filter(Boolean)
           .join(' · ')
       : null;
@@ -266,13 +294,14 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
   // media — reels included — and its re-signed storyboard reach the card whatever the
   // calendar is showing. The expand job usually finishes after the chat stream closes,
   // so this is the reliable inline source.
-  const draftMedia = useDraftChatMedia(card.draftId, card.preview);
+  const draftMedia = useDraftChatMedia(draftId, card.preview);
   const previewUrls = useMemo(() => resolveConceptPreviewUrls(card.preview), [card.preview]);
   // Final media wins, then the live blueprint frame, then the draft's storyboard. A
   // preview replayed from a restored session is a lapsed signature: last resort only.
   const { media: previewMedia } = useMemo(
     () =>
       rankCardMedia({
+        translate: uiText,
         idPrefix: `preview:${card.jobId}`,
         realized: draftMedia.realized,
         preview: previewUrls,
@@ -282,6 +311,7 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
         format: card.preview?.format,
       }),
     [
+      uiText,
       card.jobId,
       draftMedia.realized,
       draftMedia.storyboard,
@@ -302,10 +332,6 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
     [previewMedia, card.preview?.caption],
   );
 
-  // Approve-through media actions, wired exactly like ConceptCard's: Enrich while
-  // only text exists, Generate media once the blueprint landed. Neither shows once
-  // media is final/user-supplied or already rendering.
-  const draftId = card.draftId ?? null;
   const mediaStatus = card.checkpoint?.mediaStatus;
   // Media is on its way: a preview frame or a final render is being made, or the card
   // has media and its draft is still being looked up or signed.
@@ -318,29 +344,6 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
       (card.checkpoint?.blueprintReady === true ||
         mediaStatus === 'ready' ||
         mediaStatus === 'user_supplied'));
-  const mediaSettled =
-    mediaStatus === 'ready' || mediaStatus === 'user_supplied' || mediaStatus === 'generating';
-  // Generate media needs the approval token: the realize path re-reads the draft's
-  // stamped revision and rejects an absent or stale one, so a button without it would
-  // only ever return preview_approval_required / preview_changed.
-  const canApprovePreview = hasApprovablePreview(card.checkpoint);
-  const showGenerateMedia = Boolean(
-    onGenerateMedia &&
-      draftId &&
-      canApprovePreview &&
-      card.checkpoint?.blueprintReady &&
-      !mediaSettled,
-  );
-  // THE INVARIANT: an unsettled card must always offer something to click. Enrich
-  // re-runs the blueprint expansion, which stamps a FRESH previewRevision — so it is
-  // both the pre-blueprint action and the recovery when a blueprint landed without a
-  // usable token (preview signing failed, or an older row hydrated stage-only). Without
-  // this fallback the card renders "Awaiting media choice" and dies there.
-  const showEnrich = Boolean(
-    onEnrichDraft && draftId && card.checkpoint?.textReady && !mediaSettled && !showGenerateMedia,
-  );
-  const [mediaActionSent, setMediaActionSent] = useState(false);
-
   const reconciledRef = useRef(false);
   useEffect(() => {
     if (reconciledRef.current) return;
@@ -356,6 +359,7 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
         <div className="flex min-w-0 items-center gap-2">
           {card.platform && <PlatformTag platform={card.platform} />}
           <MetaRow items={[card.preview?.format ?? undefined]} />
+          <DraftIdTag draftId={draftId} />
         </div>
         <StatusLabel
           detail={
@@ -365,7 +369,7 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
               diagnostic={state.diagnostic}
               error={card.error?.message ?? null}
               pct={card.pct ?? null}
-              stageLabel={activeNode ? stageLabel(activeNode.stage) : state.label}
+              stageLabel={activeNode ? stageLabel(activeNode.stage, commonText) : state.label}
             />
           }
           title={state.diagnostic ?? undefined}
@@ -421,69 +425,19 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
         </p>
       )}
 
-      {state.kind === 'media_failed' && (
-        <p className="flex items-start gap-1.5 text-sm text-destructive/85 text-pretty">
-          <ImageOff aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>The copy is saved — only the media failed to render.</span>
-        </p>
-      )}
+      <FailureNotice status={state} error={card.error ?? null} className="text-sm" />
 
-      {(state.kind === 'failed' || state.kind === 'media_failed') && card.error?.message && (
-        <p className="line-clamp-2 text-sm text-destructive/80">{card.error.message}</p>
-      )}
-
-      {(showEnrich || showGenerateMedia) && draftId && (
-        <div className="-mx-[var(--card-pad)] -mb-[var(--card-pad)] flex items-stretch border-t border-border/40">
-          {showEnrich && (
-            <button
-              type="button"
-              title={
-                state.kind === 'media_failed'
-                  ? 'Re-sketch the blueprint and try the media again'
-                  : card.checkpoint?.blueprintReady
-                    ? 'Rebuild the blueprint to refresh its preview approval'
-                    : 'Sketch a low-cost blueprint before final media'
-              }
-              disabled={mediaActionSent}
-              onClick={() => {
-                setMediaActionSent(true);
-                onEnrichDraft?.(draftId);
-              }}
-              className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
-            >
-              <PencilRuler className="h-3 w-3" />
-              {mediaActionSent
-                ? 'Enriching…'
-                : state.kind === 'media_failed'
-                  ? 'Try media again'
-                  : card.checkpoint?.blueprintReady
-                    ? 'Rebuild preview'
-                    : 'Enrich'}
-            </button>
-          )}
-          {showGenerateMedia && (
-            <button
-              type="button"
-              title="Render the final media from the approved blueprint"
-              disabled={mediaActionSent}
-              onClick={() => {
-                setMediaActionSent(true);
-                if (card.checkpoint?.previewRevision) {
-                  onGenerateMedia?.(
-                    draftId,
-                    card.preview?.format ?? '',
-                    card.checkpoint.previewRevision,
-                  );
-                }
-              }}
-              className="flex flex-1 items-center justify-center gap-1 py-2.5 text-2xs text-muted-foreground transition-colors hover:text-primary disabled:pointer-events-none disabled:opacity-40"
-            >
-              <Wand2 className="h-3 w-3" />
-              {mediaActionSent ? 'Generating…' : 'Generate media'}
-            </button>
-          )}
-        </div>
-      )}
+      <DraftCardActions
+        variant="footer"
+        status={state}
+        draftId={draftId}
+        checkpoint={card.checkpoint}
+        format={card.preview?.format ?? null}
+        onRetry={onRetryJob ? () => onRetryJob(card.jobId) : undefined}
+        onOpenDraft={onOpenDraft}
+        onEnrichDraft={onEnrichDraft}
+        onGenerateMedia={onGenerateMedia}
+      />
 
       {lightboxItems.length > 0 && (
         <MediaLightbox
@@ -492,7 +446,7 @@ export function PipelineCard({ card, onEnrichDraft, onGenerateMedia }: PipelineC
           onIndexChange={setLightboxIndex}
           onOpenChange={(open) => setLightboxIndex(open ? (lightboxIndex ?? 0) : null)}
           open={lightboxIndex !== null}
-          title={card.preview?.format ?? 'Preview'}
+          title={card.preview?.format ?? uiText('preview_324b134')}
         />
       )}
     </AgentArtifactCard>

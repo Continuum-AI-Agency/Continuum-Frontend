@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import React from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 // The real map is MapLibre (WebGL) and the real choropleth is an SVG chart — neither
 // runs in the DOM test environment. The stubs keep the primitives' contract: the

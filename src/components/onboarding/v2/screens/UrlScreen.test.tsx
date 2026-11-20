@@ -1,6 +1,7 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import type { OnboardingIntake } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { UrlScreen } from './UrlScreen';
 
 afterEach(cleanup);

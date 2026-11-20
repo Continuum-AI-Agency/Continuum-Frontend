@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // Manage → Attribution (frontend.html §4, decisiones 20): what this portfolio counts its
 // results with. Three sources, as hairline-separated rows — each platform's own (the default), GA4, the client's spreadsheet —
 // with the one in use marked. The spreadsheet card carries its last read, its coverage, its
@@ -21,9 +23,11 @@ import {
 } from '../platformCaps/usePortfolioPlatformCaps';
 import { MultiPlatformUnavailable } from '../platforms/MultiPlatformUnavailable';
 import {
+  attributionCopy,
   attributionSourceName,
-  COVERAGE_BAR_EXPLAINED,
   configuredSource,
+  coverageBarExplanation,
+  formatAttributionPercent,
   formatReadAge,
   matchCheckLine,
 } from './attributionModel';
@@ -54,6 +58,8 @@ function SourceCard({
   inUse: boolean;
   children?: React.ReactNode;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <div
       className={cn('space-y-1.5 px-3 py-2.5', inUse && 'rounded-md bg-primary/10')}
@@ -67,11 +73,15 @@ function SourceCard({
           inUse && 'text-primary-ink',
         )}
       >
-        {attributionSourceName(kind)}
-        {kind === 'platform' ? <span className="text-muted-foreground">default</span> : null}
-        {inUse ? <span className="font-normal text-primary-ink">· in use</span> : null}
+        {attributionSourceName(kind, uiText)}
+        {kind === 'platform' ? (
+          <span className="text-muted-foreground">{uiText('default_37a8eec')}</span>
+        ) : null}
+        {inUse ? (
+          <span className="font-normal text-primary-ink">{uiText('in_use_11cc6e9')}</span>
+        ) : null}
       </p>
-      <p className="text-muted-foreground text-xs">{CARD_COPY[kind]}</p>
+      <p className="text-muted-foreground text-xs">{attributionCopy(CARD_COPY[kind], uiText)}</p>
       {children}
     </div>
   );
@@ -95,6 +105,8 @@ export function AttributionSectionView({
   /** Known, from another read, to hold a member off Meta. A Meta-only portfolio gets no note. */
   nonMetaMember?: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const [settingUp, setSettingUp] = useState(false);
   const [resync, setResync] = useState<ResyncState>({ status: 'idle' });
   const metrics = metricsState.status === 'ready' ? metricsState.metrics : null;
@@ -118,14 +130,19 @@ export function AttributionSectionView({
   return (
     <div className="space-y-2" data-testid="attribution-section">
       {metricsState.status === 'unavailable' && nonMetaMember ? (
-        <MultiPlatformUnavailable detail="The source in use can't be read yet; results use each platform's own count." />
+        <MultiPlatformUnavailable
+          detail={attributionCopy(
+            "The source in use can't be read yet; results use each platform's own count.",
+            uiText,
+          )}
+        />
       ) : null}
       <div className="divide-y divide-border/60">
         <SourceCard inUse={used === 'platform'} kind="platform" />
         <SourceCard inUse={used === 'ga4'} kind="ga4">
           {configured !== 'ga4' ? (
             <p className="text-muted-foreground text-xs" data-testid="ga4-unavailable">
-              Choosing GA4 isn't available yet.
+              {uiText('choosing_ga4_isn_t_available_yet_86c712a')}
             </p>
           ) : null}
         </SourceCard>
@@ -133,22 +150,31 @@ export function AttributionSectionView({
           {sheet ? (
             <div className="space-y-1 text-xs" data-testid="sheet-status">
               <p>
-                Last read {formatReadAge(sheet.refreshed_at, now) ?? 'never'} ·{' '}
-                {Math.round(sheet.coverage_pct * 100)}% covered
+                {uiText('attributionSheetStatus', {
+                  age:
+                    formatReadAge(sheet.refreshed_at, now, uiLocale, uiText) ??
+                    uiText('attributionNever'),
+                  percentage: formatAttributionPercent(sheet.coverage_pct, uiLocale),
+                })}
               </p>
               {sheet.error ? (
                 <p className="text-destructive" data-testid="sheet-error">
-                  The last read failed: {sheet.error}
+                  {attributionCopy(
+                    'The last read failed. Check the sheet connection and try again.',
+                    uiText,
+                  )}
                 </p>
               ) : null}
               {configured === 'spreadsheet' && used !== 'spreadsheet' ? (
                 <p className="text-muted-foreground" data-testid="sheet-fallback">
-                  Not in use right now. {COVERAGE_BAR_EXPLAINED}
+                  {uiText.rich('sentence_801485215264', {
+                    v0: coverageBarExplanation(uiText, uiLocale),
+                  })}
                 </p>
               ) : null}
             </div>
           ) : (
-            <p className="text-muted-foreground text-xs">Not set up.</p>
+            <p className="text-muted-foreground text-xs">{uiText('not_set_up_81e0b57')}</p>
           )}
           <div className="flex flex-wrap gap-2 pt-1">
             {sheet ? (
@@ -159,28 +185,33 @@ export function AttributionSectionView({
                 type="button"
                 variant="secondary"
               >
-                Re-read now
+                {uiText('re_read_now_ca3ac49')}
               </Button>
             ) : null}
             {!settingUp ? (
               <Button onClick={() => setSettingUp(true)} size="sm" type="button" variant="outline">
-                {sheet ? 'Change the sheet' : 'Connect a sheet'}
+                {sheet ? uiText('change_the_sheet_17e474d') : uiText('connect_a_sheet_db7dd60')}
               </Button>
             ) : null}
           </div>
           {resync.status === 'done' ? (
             <p className="text-xs" data-testid="sheet-resync-result">
-              Read just now · {matchCheckLine(resync.report, 'adset_name')}
+              {uiText.rich('sentence_802b92a102d0', {
+                v0: matchCheckLine(resync.report, 'adset_name', uiText, uiLocale),
+              })}
             </p>
           ) : null}
           {resync.status === 'unavailable' ? (
             <p className="text-muted-foreground text-xs" data-testid="sheet-resync-unavailable">
-              Re-reading isn't available yet.
+              {uiText('re_reading_isn_t_available_yet_2c20558')}
             </p>
           ) : null}
           {resync.status === 'error' ? (
             <p className="text-destructive text-xs" role="alert">
-              {resync.message}
+              {attributionCopy(
+                'The spreadsheet request could not be completed. Check the connection and try again.',
+                uiText,
+              )}
             </p>
           ) : null}
         </SourceCard>
@@ -198,7 +229,7 @@ export function AttributionSectionView({
         />
       ) : null}
       <p className="text-muted-foreground text-xs">
-        A change of source is logged in Activity as a settings row and is not undone with a button.
+        {uiText('a_change_of_source_is_logged_in_activity_as_a_fbc75b7')}
       </p>
     </div>
   );

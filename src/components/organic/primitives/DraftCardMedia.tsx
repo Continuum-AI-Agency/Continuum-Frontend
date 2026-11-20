@@ -3,6 +3,7 @@
 import { resolveOrganicImageUrl } from '@continuum/contracts';
 import { Play } from 'lucide-react';
 import Image from 'next/image';
+import { VideoStill } from '@/components/media/VideoStill';
 import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
 import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import { cn } from '@/lib/utils';
@@ -171,15 +172,11 @@ export function DraftCardMedia({
   if (media?.kind === 'video') {
     return (
       <div className={cn('relative overflow-hidden', aspectClass, className)}>
-        {/* Muted and paused: the poster (or the first frame) is the still preview. */}
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <video
-          src={media.poster ? media.url : `${media.url}#t=0.01`}
-          poster={media.poster ?? undefined}
-          muted
-          playsInline
-          preload="metadata"
-          aria-label={altText}
+        {/* The poster as a lazy still, else the first frame once near the screen. */}
+        <VideoStill
+          src={`${media.url}#t=0.01`}
+          poster={media.poster}
+          alt={altText}
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 flex items-center justify-center">

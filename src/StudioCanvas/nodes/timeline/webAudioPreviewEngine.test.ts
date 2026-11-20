@@ -8,6 +8,7 @@ import {
   type DecodedPreviewAudioAsset,
   fadeInGainAt,
   fadeOutGainAt,
+  previewAudioSources,
   volumeAutomation,
 } from './webAudioPreviewEngine';
 
@@ -17,7 +18,7 @@ const event: TimelinePreviewAudioEvent = {
   sourceKey: 'voice-source:v1',
   sourceNodeId: 'voice-source',
   kind: 'audio',
-  blob: new Blob(),
+  media: 'https://media.example/voice.m4a',
   outputStartSec: 4,
   outputEndSec: 10,
   sourceStartSec: 2,
@@ -27,6 +28,39 @@ const event: TimelinePreviewAudioEvent = {
   fadeInSec: 1,
   fadeOutSec: 2,
 };
+
+describe('previewAudioSources', () => {
+  it('decodes one span per source, covering every event that plays from it', () => {
+    const split: TimelinePreviewAudioEvent = {
+      ...event,
+      id: 'voiceover-tail',
+      outputStartSec: 10,
+      outputEndSec: 12,
+      sourceStartSec: 9,
+      sourceEndSec: 11,
+    };
+    const sources = previewAudioSources({ events: [event, split], totalDurationSec: 12 });
+    expect([...sources.values()]).toEqual([
+      {
+        media: 'https://media.example/voice.m4a',
+        startSec: 2,
+        endSec: 11,
+        cacheKey: 'https://media.example/voice.m4a#2-11',
+      },
+    ]);
+  });
+
+  it('keys a URL by its range, so an unchanged clip is a cache hit after an edit and a trim is a new read', () => {
+    const plan = (sourceEndSec: number) => ({
+      events: [{ ...event, sourceEndSec }],
+      totalDurationSec: 12,
+    });
+    const key = (sourceEndSec: number) =>
+      previewAudioSources(plan(sourceEndSec)).get(event.sourceKey)?.cacheKey;
+    expect(key(8)).toBe(key(8));
+    expect(key(7)).not.toBe(key(8));
+  });
+});
 
 describe('Web Audio preview schedule', () => {
   it('seeks into a voiceover using the matching source offset', () => {

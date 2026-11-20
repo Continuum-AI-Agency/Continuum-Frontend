@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Mounted ONCE in the authenticated layout, above the router.
 //
@@ -18,12 +19,12 @@ import {
   activeAgentRunsResponseSchema,
   isTerminalAgentRunStatus,
 } from '@continuum/contracts';
-import { useRouter } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useToast } from '@/components/ui/ToastProvider';
 import { type RunEventAgentKind, useAgentRunStream } from '@/hooks/useAgentRunStream';
+import { useRouter } from '@/i18n/navigation';
 import {
   browserStorage,
   createAcknowledgedRuns,
@@ -87,6 +88,8 @@ function runHref(run: AgentRunDto): string {
  * `createAcknowledgedRuns`.
  */
 function useCompletionToasts(): void {
+  const tUi = useTranslations('common');
+
   const runs = useAgentRunStore((state) => state.runs);
   const viewingSessionId = useAgentRunStore((state) => state.viewingSessionId);
   const { show } = useToast();
@@ -114,14 +117,17 @@ function useCompletionToasts(): void {
       const label = AGENT_LABEL[run.agent];
       const href = runHref(run);
       const openSession = run.sessionId
-        ? { label: 'View', onClick: () => router.push(href) }
+        ? { label: tUi('m_69bd4ef9fb'), onClick: () => router.push(href) }
         : undefined;
 
       show({
         title:
           run.status === 'completed'
-            ? `${label} finished${run.title ? `: ${run.title}` : ''}`
-            : `${label} run failed`,
+            ? tUi('m_0c4a155dd0', {
+                v0: String(label),
+                v1: String(run.title ? `: ${run.title}` : ''),
+              })
+            : tUi('m_78a37576d5', { v0: String(label) }),
         description: run.status === 'failed' ? (run.errorMessage ?? undefined) : undefined,
         variant: run.status === 'completed' ? 'success' : 'error',
         action: openSession,

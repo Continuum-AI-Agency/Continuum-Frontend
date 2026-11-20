@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import type { BatchItem } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import es from '../../../../messages/studio/es.json';
+import pt from '../../../../messages/studio/pt-BR.json';
+import { workflowUiText } from '../workflowUiFailure';
 
 import { addBatchItems, batchItemLabel } from './addItems';
 
@@ -91,5 +95,29 @@ describe('batchItemLabel', () => {
 
   it('falls back to a 1-based position for unlabelled media', () => {
     expect(batchItemLabel(image('a'), 2)).toBe('Item 3');
+  });
+});
+
+describe('batch localized guidance', () => {
+  it('keeps admission decisions and stored values while localizing refusal facts', () => {
+    const before = [image('a')];
+    const result = addBatchItems({ items: before, itemType: 'image' }, [video('b')]);
+    const t = createTranslator({ locale: 'es', messages: { studio: es }, namespace: 'studio' });
+    expect(result.items).toBe(before);
+    expect(result.refused[0]).toContain('This batch holds images');
+    expect(workflowUiText(result.uiRefusals[0], t)).toContain('Este lote contiene imágenes');
+    expect(workflowUiText(result.uiRefusals[0], t)).toContain('video no puede agregarse');
+  });
+  it('localizes only a guaranteed fallback label, preserving authored labels and text', () => {
+    const t = createTranslator({ locale: 'es', messages: { studio: es }, namespace: 'studio' });
+    expect(batchItemLabel(image('a'), 2, t)).toBe('Elemento 3');
+    expect(batchItemLabel({ ...image('a'), label: 'Item 3' }, 2, t)).toBe('Item 3');
+    expect(batchItemLabel(text('b', 'English source'), 2, t)).toBe('English source');
+    const p = createTranslator({ locale: 'pt-BR', messages: { studio: pt }, namespace: 'studio' });
+    const result = addBatchItems(
+      { items: Array.from({ length: 100 }, (_, i) => image(String(i))), itemType: 'image' },
+      [image('last')],
+    );
+    expect(workflowUiText(result.uiRefusals[0], p)).toContain('mais 1 item não foi adicionado');
   });
 });

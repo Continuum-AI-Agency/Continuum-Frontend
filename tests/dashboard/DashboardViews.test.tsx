@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import type React from 'react';
 import { OrganicDashboardView } from '@/components/dashboard/views/OrganicDashboardView';
 import { PaidDashboardView } from '@/components/dashboard/views/PaidDashboardView';
+import { render } from '@/i18n/__tests__/render';
 
 // Mock child widgets to avoid deep rendering and network calls
 mock.module('@/components/paid-media/PaidMediaReportingWidget', () => ({

@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { VERNE_TITLE_RIGHT_MARGIN } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The panel's own behaviour is what is under test: what it WRITES for a pick, a drag and a
 // snap. The store and the design-system read are boundaries this component only reads

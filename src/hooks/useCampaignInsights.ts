@@ -1,8 +1,9 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { PaidMediaTimeRange } from '@/components/paid-media/dashboard/timeRange';
-import { loadFailureMessage } from '@/lib/api/loadFailure';
+import { type LoadFailureCause, loadFailureCause } from '@/lib/api/loadFailure';
 import type {
   CampaignInsightsResponse,
   ComputedInsight,
@@ -109,12 +110,13 @@ function deriveBudgetInsights(pacing: BudgetPacingEntry): ComputedInsight[] {
 }
 
 export function useCampaignInsights(params: UseCampaignInsightsParams): UseCampaignInsightsReturn {
+  const uiText = useTranslations('scale');
   const { brandId, adAccountId, campaignId, timeRange, enabled = true } = params;
 
   const [data, setData] = React.useState<CampaignInsightsResponse | null>(null);
   const [pacing, setPacing] = React.useState<BudgetPacingEntry | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [errorCause, setError] = React.useState<LoadFailureCause | null>(null);
   const [refreshTick, setRefreshTick] = React.useState(0);
 
   const requestIdRef = React.useRef(0);
@@ -195,7 +197,7 @@ export function useCampaignInsights(params: UseCampaignInsightsParams): UseCampa
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(loadFailureMessage('campaign insights', err));
+        setError(loadFailureCause(err));
       })
       .finally(() => {
         if (requestId === requestIdRef.current) {
@@ -220,7 +222,9 @@ export function useCampaignInsights(params: UseCampaignInsightsParams): UseCampa
     expiresAt: data?.expires_at ?? null,
     pacing,
     isLoading,
-    error,
+    error: errorCause
+      ? uiText('cause_select_timeout_couldn_t_load_campaign_i_b8eb493', { cause: errorCause })
+      : null,
     refresh,
   };
 }

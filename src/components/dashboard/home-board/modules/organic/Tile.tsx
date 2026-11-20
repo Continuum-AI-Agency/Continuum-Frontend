@@ -3,6 +3,7 @@
 // H11 Organic week, the tile: posts this week (published + scheduled), how they spread over the
 // seven days, and how many drafts wait for approval. Approving happens in the expanded module. The
 // Backend's organic week adds the week's top post by reach; without it the tile is as above.
+import { useLocale, useTranslations } from 'next-intl';
 import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatCount } from '@/lib/home/format';
@@ -16,22 +17,14 @@ import { useOrganicWeekRead } from './useOrganicWeekRead';
 
 const Module = lazy(() => import('./Module'));
 
-function waitingLine(waiting: number): string {
-  if (waiting === 0) return 'Nothing waiting for approval';
-  return `${waiting} ${waiting === 1 ? 'draft needs' : 'drafts need'} approval`;
-}
-
-function postsLabel(count: number): string {
-  return count === 1 ? 'post this week' : 'posts this week';
-}
-
 function WeekBars({ week }: { week: OrganicWeek }) {
+  const uiText = useTranslations('dashboard');
   const counts = week.days.map(
     (day) => day.published.length + day.scheduled.length + day.waiting.length,
   );
   const max = Math.max(1, ...counts);
   return (
-    <ol aria-label="Posts per day" className="grid grid-cols-7 items-end gap-1">
+    <ol aria-label={uiText('posts_per_day_b47a04a')} className="grid grid-cols-7 items-end gap-1">
       {week.days.map((day, index) => {
         const count = counts[index] ?? 0;
         return (
@@ -62,6 +55,14 @@ function WeekBars({ week }: { week: OrganicWeek }) {
 }
 
 export default function OrganicTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
+  const uiLocale = useLocale();
+  const postsLabel = (count: number) =>
+    uiText('count_plural_one_post_this_week_other_posts_t_a36abb9', { count });
+  const waitingLine = (waiting: number) =>
+    waiting === 0
+      ? uiText('nothing_waiting_for_approval_8cbe922')
+      : uiText('count_plural_one_draft_needs_approval_other_d_5e30762', { count: waiting });
   const load = useOrganicWeek(ctx.brandId, ctx.organicAccounts);
   const read = useOrganicWeekRead(ctx.brandId, ctx.organicAccounts.length > 0);
   const topPost = read.data ? topPostLine(read.data) : null;
@@ -75,11 +76,15 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
 
   return (
     <HomeTileFrame
-      badge={week ? `${formatCount(week.postsThisWeek)} ${postsLabel(week.postsThisWeek)}` : null}
+      badge={
+        week
+          ? `${formatCount(week.postsThisWeek, uiLocale)} ${postsLabel(week.postsThisWeek)}`
+          : null
+      }
       expanded={
         week ? <Module brandId={ctx.brandId} organicAccounts={ctx.organicAccounts} /> : undefined
       }
-      expandedDescription="This week's published, scheduled and waiting posts."
+      expandedDescription={uiText('this_week_s_published_scheduled_and_waiting_p_7b0a64c')}
       state={view.state}
       tile={tile}
     >
@@ -89,9 +94,11 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
       ) : null}
       {view.state === 'error' ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-muted-foreground text-xs">Couldn't read this week's posts.</p>
+          <p className="text-muted-foreground text-xs">
+            {uiText('couldn_t_read_this_week_s_posts_28c6fd9')}
+          </p>
           <Button className="h-7 px-2 text-xs" onClick={load.retry} size="sm" variant="outline">
-            Retry
+            {uiText('retry_942087c')}
           </Button>
         </div>
       ) : null}
@@ -99,7 +106,7 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
         <div className="flex min-w-0 flex-col gap-2">
           <p className="font-semibold text-2xl tabular-nums leading-none tracking-tight">
             <span data-testid="home-tile-organic-headline" data-value={week.postsThisWeek}>
-              {formatCount(week.postsThisWeek)}
+              {formatCount(week.postsThisWeek, uiLocale)}
             </span>{' '}
             <span className="font-normal text-muted-foreground text-xs">
               {postsLabel(week.postsThisWeek)}
@@ -120,7 +127,10 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
           ) : null}
           {tile.size === 'l' ? (
             <p className="text-2xs text-muted-foreground tabular-nums">
-              {formatCount(week.published)} published · {formatCount(week.scheduled)} scheduled
+              {uiText('published_published_scheduled_scheduled_eb4e2a7', {
+                published: formatCount(week.published, uiLocale),
+                scheduled: formatCount(week.scheduled, uiLocale),
+              })}
             </p>
           ) : null}
         </div>

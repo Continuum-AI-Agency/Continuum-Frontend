@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // Ops surface: recent Trends generations for a brand with grounding latency,
 // so you can see at a glance that runs are happening and how fast grounding is.
 // Reads GET /api/trends/runs/recent via fetchRecentTrendsRuns.
@@ -47,6 +50,9 @@ function shortId(id: string): string {
 }
 
 export function RecentTrendsRunsCard({ brandId, limit = 20 }: { brandId: string; limit?: number }) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
   const [runs, setRuns] = useState<TrendsRecentRun[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,11 +63,11 @@ export function RecentTrendsRunsCard({ brandId, limit = 20 }: { brandId: string;
     try {
       setRuns(await fetchRecentTrendsRuns(brandId, limit));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load recent runs.');
+      setError(getUiErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [brandId, limit]);
+  }, [brandId, limit, getUiErrorMessage]);
 
   useEffect(() => {
     void load();
@@ -70,12 +76,12 @@ export function RecentTrendsRunsCard({ brandId, limit = 20 }: { brandId: string;
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recent Trends runs</CardTitle>
-        <CardDescription>Grounding latency and evidence status per generation.</CardDescription>
+        <CardTitle>{uiText('m_975c09676a')}</CardTitle>
+        <CardDescription>{uiText('m_a4d3cd253a')}</CardDescription>
         <CardAction>
           <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            {uiText('refresh_0e91610')}
           </Button>
         </CardAction>
       </CardHeader>
@@ -84,19 +90,19 @@ export function RecentTrendsRunsCard({ brandId, limit = 20 }: { brandId: string;
           <p className="text-sm text-destructive">{error}</p>
         ) : runs.length === 0 ? (
           <p className="text-sm text-secondary opacity-70">
-            {loading ? 'Loading…' : 'No recent runs.'}
+            {loading ? uiText('loading_ba3bbbe') : uiText('m_af8ffa77fd')}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-border border-b text-left text-secondary opacity-70">
-                  <th className="py-2 pr-4 font-medium">Generation</th>
-                  <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 pr-4 font-medium">Total</th>
-                  <th className="py-2 pr-4 font-medium">Grounding</th>
-                  <th className="py-2 pr-4 font-medium">Sources</th>
-                  <th className="py-2 pr-4 font-medium">Evidence</th>
+                  <th className="py-2 pr-4 font-medium">{uiText('m_8d441fb5f6')}</th>
+                  <th className="py-2 pr-4 font-medium">{uiText('status_920e413')}</th>
+                  <th className="py-2 pr-4 font-medium">{uiText('total_c9b3c38')}</th>
+                  <th className="py-2 pr-4 font-medium">{uiText('m_1953f23d54')}</th>
+                  <th className="py-2 pr-4 font-medium">{uiText('sources_caf85b0')}</th>
+                  <th className="py-2 pr-4 font-medium">{uiText('m_7ea014de7b')}</th>
                 </tr>
               </thead>
               <tbody>

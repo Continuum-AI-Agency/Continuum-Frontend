@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { createSessionLossGuard } from '@/lib/auth/sessionLoss';
 import { onBrandChange } from '@/lib/brands/brand-switch';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { setSignedUrlCacheOwner } from '@/StudioCanvas/utils/signedUrlCache';
 import { retryUnlessTimeout } from './retry';
 
 function createQueryClient(): QueryClient {
@@ -44,6 +45,8 @@ export function ReactQueryProvider({ children }: { children: React.ReactNode }) 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      // The canvas keeps signed URLs across reloads for this person only.
+      setSignedUrlCacheOwner(session?.user.id ?? null);
       if (event === 'SIGNED_OUT' || (!session && event === 'TOKEN_REFRESHED')) {
         sessionLoss.onSignedOut();
       }

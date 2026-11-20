@@ -4,6 +4,8 @@
 
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import {
   ColorPicker,
   ColorPickerFormat,
@@ -30,10 +32,11 @@ export interface ColorFieldProps {
 }
 
 export function ColorField({ value, onChange, label, id, disabled, className }: ColorFieldProps) {
+  const uiText = useTranslations('common');
   return (
     <Popover>
       <PopoverTrigger
-        aria-label={`${label} colour`}
+        aria-label={uiText('m_6efca00ea4', { v0: String(label) })}
         className={cn(
           'flex h-7 flex-1 items-center gap-2 rounded-md border border-input bg-transparent px-2 text-left text-xs',
           'hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden',
@@ -50,7 +53,7 @@ export function ColorField({ value, onChange, label, id, disabled, className }: 
           data-slot="color-field-swatch"
           style={value ? { background: value } : { background: CHECKER }}
         />
-        <span className="font-mono text-muted-foreground">{value ?? 'Auto'}</span>
+        <span className="font-mono text-muted-foreground">{value ?? uiText('auto_0286249')}</span>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-3">
         <ColorPicker onChange={onChange} value={value ?? undefined}>

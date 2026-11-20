@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 
-import { FigmaApiError, figmaErrorMessage, listFigmaFolders } from './figma';
+import {
+  FigmaApiError,
+  figmaErrorMessage,
+  importFigmaPaste,
+  isFigmaClipboard,
+  listFigmaFolders,
+} from './figma';
 
 const originalFetch = globalThis.fetch;
 
@@ -52,5 +58,43 @@ describe('Figma Library client', () => {
     expect(limited.message).toContain('Try again in 2 min');
     expect(limited.reconnect).toBe(false);
     expect(figmaErrorMessage(new FigmaApiError('figma_not_connected')).reconnect).toBe(true);
+  });
+
+  it('posts a Figma clipboard to the paste route and reads back one asset per layer', async () => {
+    process.env.NEXT_PUBLIC_API_URL = 'https://api.example.com';
+    const html = '<span data-buffer="<!--(figma)ZmlnLWtpd2k=(/figma)-->"></span>';
+    let requestedUrl = '';
+    let requestedBody = '';
+    globalThis.fetch = mock(async (url, init) => {
+      requestedUrl = String(url);
+      requestedBody = String(init?.body);
+      return Response.json({
+        assets: [
+          {
+            assetId: '22222222-2222-4222-8222-222222222222',
+            versionId: '33333333-3333-4333-8333-333333333333',
+            figmaNodeId: '1:2',
+            status: 'created',
+          },
+        ],
+      });
+    }) as typeof fetch;
+
+    expect(isFigmaClipboard(html)).toBe(true);
+    expect(isFigmaClipboard('<p>plain copy</p>')).toBe(false);
+    const assets = await importFigmaPaste(
+      '11111111-1111-4111-8111-111111111111',
+      html,
+      async () => 'jwt',
+    );
+    expect(requestedUrl).toBe('https://api.example.com/integrations/figma/paste');
+    expect(JSON.parse(requestedBody)).toEqual({
+      brandId: '11111111-1111-4111-8111-111111111111',
+      html,
+    });
+    expect(assets.map((asset) => asset.figmaNodeId)).toEqual(['1:2']);
+    expect(figmaErrorMessage(new FigmaApiError('figma_paste_too_large')).message).toContain(
+      'too big',
+    );
   });
 });

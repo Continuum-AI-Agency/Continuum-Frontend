@@ -149,3 +149,49 @@ describe('MATRIX_METRICS catalog', () => {
     expect(getMetric('ctr').direction).toBe('higher');
   });
 });
+
+describe('localized presentation preserves metric meaning', () => {
+  for (const locale of ['en', 'pt-BR', 'es'] as const) {
+    it(`${locale}: keeps USD, thresholds, precision and signed percentage rounding`, () => {
+      const money = formatMetric('cpc', 2.5, locale);
+      expect(money).toBe(
+        new Intl.NumberFormat(locale, {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2,
+        }).format(2.5),
+      );
+      expect(money).not.toMatch(/R\$/);
+      expect(formatMetric('spend', 1500.49, locale)).toBe(
+        new Intl.NumberFormat(locale, {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0,
+        }).format(1500.49),
+      );
+      expect(formatMetric('ctr', 4.205, locale)).toBe(
+        new Intl.NumberFormat(locale, {
+          style: 'percent',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(0.0421),
+      );
+      expect(formatMetric('roas', 1.005, locale)).toBe(locale === 'en' ? '1.00' : '1,00');
+      expect(formatDeltaPct(12.5, locale)).toBe(
+        `+${new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(0.13)}`,
+      );
+      expect(formatMetric('cpa', Number.NaN, locale)).toBe('—');
+    });
+  }
+  it('changes display labels without changing metric IDs, direction or shared definitions', () => {
+    const localized = getMetric('spend', () => 'Investimento');
+    expect(localized).toEqual({
+      key: 'spend',
+      label: 'Investimento',
+      shortLabel: 'Investimento',
+      direction: 'neutral',
+    });
+    expect(getMetric('spend').label).toBe('Spend');
+    expect(deltaTone(getMetric('cpc'), -10)).toBe('positive');
+  });
+});

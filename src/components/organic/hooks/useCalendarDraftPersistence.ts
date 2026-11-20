@@ -46,6 +46,8 @@ type UseCalendarDraftPersistenceOptions = {
   platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>;
   /** The brand's zone: a chip's time of day names a moment there, as the field route reads it. */
   timeZone?: string;
+  /** A scheduled post's moment had passed, so the write floored it forward: tell the user. */
+  onScheduleFloored?: (title: string, scheduledIso: string) => void;
 };
 
 function parseUpdatedAt(value: string | null | undefined): number {
@@ -144,13 +146,19 @@ export function useCalendarDraftPersistence({
   updateDraftById,
   platformAccountIds = {},
   timeZone,
+  onScheduleFloored,
 }: UseCalendarDraftPersistenceOptions) {
   const hydratedKeyRef = React.useRef<string | null>(null);
   // Re-render-visible mirror of hydratedKeyRef so consumers (e.g. the AI Studio
   // apply-on-return effect, selection restore) can wait for the initial fetch-all
   // to finish before acting, instead of racing it.
   const [isHydrated, setIsHydrated] = React.useState(false);
+  // A ref, so a new callback identity never re-arms the autosave effect.
+  const onScheduleFlooredRef = React.useRef(onScheduleFloored);
+  onScheduleFlooredRef.current = onScheduleFloored;
   const knownBackendIdsRef = React.useRef<Set<string>>(new Set());
+  const saveRetryNonce = useCalendarStore((state) => state.saveRetryNonce);
+  const setSaveFailedDraftIds = useCalendarStore((state) => state.setSaveFailedDraftIds);
   const lastSyncedRef = React.useRef<SyncedIndex>(new Map());
   const syncInFlightRef = React.useRef(false);
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
@@ -290,6 +298,7 @@ export function useCalendarDraftPersistence({
           // agent-created drafts came back on the next fetch. Deletion is now
           // exclusively the explicit `pendingServerDeletes` queue that user-initiated
           // deletes populate and the sibling effect below drains.
+          const failedIds: string[] = [];
           for (const entry of changedEntries) {
             const payload = buildPersistedDraftPayload({
               brandId: brandProfileId,
@@ -320,8 +329,16 @@ export function useCalendarDraftPersistence({
               )
               .select('id, updated_at')
               .single();
-            if (error) continue;
-            if (!created.id) continue;
+            if (error || !created?.id) {
+              // Never silent: the card says "Failed to save" and offers Recreate.
+              failedIds.push(entry.draft.id);
+              continue;
+            }
+            // The floor is kept (a past scheduled_date would publish on the poller's next
+            // tick), but it is never silent: the user picked a moment that has passed.
+            if (payload.scheduledDateFloored && payload.scheduled_date) {
+              onScheduleFlooredRef.current?.(entry.draft.title, payload.scheduled_date);
+            }
 
             knownBackendIdsRef.current.add(created.id);
             updateDraftById(entry.draft.id, (draft) => ({
@@ -346,7 +363,13 @@ export function useCalendarDraftPersistence({
             }
           }
 
-          lastSyncedRef.current = indexEntries(persistableEntries);
+          // A failed insert stays out of the synced baseline, so Recreate (or the next edit)
+          // tries it again.
+          const failed = new Set(failedIds);
+          lastSyncedRef.current = indexEntries(
+            persistableEntries.filter((entry) => !failed.has(entry.draft.id)),
+          );
+          setSaveFailedDraftIds(failedIds);
           await refetch();
         } finally {
           syncInFlightRef.current = false;
@@ -363,6 +386,8 @@ export function useCalendarDraftPersistence({
     persistDraftFields,
     platformAccountIds,
     refetch,
+    saveRetryNonce,
+    setSaveFailedDraftIds,
     supabase,
     timeZone,
     updateDraftById,

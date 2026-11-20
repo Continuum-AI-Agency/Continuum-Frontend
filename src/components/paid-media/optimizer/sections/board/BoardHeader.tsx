@@ -15,6 +15,7 @@ import {
   TriangleAlertIcon,
   UsersIcon,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -43,13 +44,17 @@ const MODE_TONE: Record<AdAccountMode, { band: string; badge: string }> = {
 };
 
 /** "leads reales · goal $99 MXN": what counts on this account, with its count and goal when the
- *  reading has them. The label is the reading's, in the account's language. */
-export function resultChipText(result: AdAccountReading['result']): string {
-  const parts = [
-    result.count != null ? `${formatResultCount(result.count)} ${result.label}` : result.label,
-  ];
-  if (result.goal != null) parts.push(`goal ${formatCurrency(result.goal, result.currency)}`);
-  return parts.join(' · ');
+ *  reading has them. The label is the reading's, in the account's language; `withGoal` words the
+ *  goal in the UI's. */
+export function resultChipText(
+  result: AdAccountReading['result'],
+  withGoal: (label: string, goal: string) => string,
+): string {
+  const label =
+    result.count != null ? `${formatResultCount(result.count)} ${result.label}` : result.label;
+  return result.goal != null
+    ? withGoal(label, formatCurrency(result.goal, result.currency))
+    : label;
 }
 
 export function BoardHeader({
@@ -60,6 +65,7 @@ export function BoardHeader({
   /** The layout switch, drawn at the header's right. */
   toggle?: ReactNode;
 }) {
+  const uiText = useTranslations('scale');
   const Icon = MODE_ICON[reading.mode];
   const tone = MODE_TONE[reading.mode];
   return (
@@ -88,10 +94,14 @@ export function BoardHeader({
         <span
           className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs"
           data-testid="board-result-chip"
-          title="The result that counts on this account"
+          title={uiText('the_result_that_counts_on_this_account_99311da')}
         >
           <TargetIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate">{resultChipText(reading.result)}</span>
+          <span className="truncate">
+            {resultChipText(reading.result, (label, goal) =>
+              uiText('label_goal_goal_85aaad8', { label, goal }),
+            )}
+          </span>
         </span>
         {toggle}
       </div>

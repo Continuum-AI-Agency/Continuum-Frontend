@@ -17,6 +17,7 @@ import {
   type PortfolioListItem,
 } from '@continuum/contracts';
 import { Loader2Icon, LockIcon, PauseIcon, PlayIcon, ShieldIcon } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -39,7 +40,6 @@ import {
   type AutonomyLevel,
   autonomyErrorText,
   LEVEL_APPLY_MODE,
-  LEVEL_COPY,
   readAutonomy,
   showsScope,
 } from './autonomyModel';
@@ -71,6 +71,8 @@ export function PortfolioAutonomyCard({
   onSetScope,
   onSetStopped,
 }: PortfolioAutonomyCardProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   // What the database confirmed, held until the list read catches up with it: only an answered
   // write lands here, so a pending or refused one never moves the dial. It is tied to the row it
   // was written over, and any newer row from the list read is the truth again.
@@ -161,7 +163,9 @@ export function PortfolioAutonomyCard({
     .filter((cap) => !cap.missing && cap.key !== 'paused')
     .map((cap) => cap.label)
     .join(' · ');
-  const writesTo = read.writable.map((platform) => PLATFORM_NAMES[platform]).join(' and ');
+  const writesTo = new Intl.ListFormat(uiLocale, { type: 'conjunction' }).format(
+    read.writable.map((platform) => PLATFORM_NAMES[platform]),
+  );
 
   return (
     <li
@@ -173,7 +177,7 @@ export function PortfolioAutonomyCard({
         <div className="min-w-0 flex-1 basis-full sm:basis-40">
           <p className="truncate font-medium text-foreground text-sm">{portfolio.name}</p>
           <p className="flex flex-wrap items-center gap-1.5 text-muted-foreground text-xs">
-            {humanize(portfolio.objective)}
+            {humanize(portfolio.objective, uiText)}
             <PlatformChips platforms={read.platforms} />
           </p>
         </div>
@@ -190,7 +194,7 @@ export function PortfolioAutonomyCard({
           type="button"
           variant="ghost"
         >
-          Manage
+          {uiText('manage_5a23444')}
         </Button>
       </div>
 
@@ -204,7 +208,7 @@ export function PortfolioAutonomyCard({
           value={read.level}
         />
         <p className="text-muted-foreground text-xs" data-testid="autonomy-level-hint">
-          {LEVEL_COPY[read.level].hint}
+          {uiText('autonomyLevelHint', { level: read.level })}
         </p>
         {read.blockers.map((blocker) => (
           <p
@@ -216,7 +220,7 @@ export function PortfolioAutonomyCard({
             <LockIcon aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
             <span>
               <span className="font-medium text-foreground">
-                {LEVEL_COPY[blocker.level].label}:
+                {uiText('autonomyLevelLabel', { level: blocker.level })}:
               </span>{' '}
               {blocker.reason}
             </span>
@@ -234,7 +238,9 @@ export function PortfolioAutonomyCard({
       </div>
 
       <div className="space-y-1.5">
-        <p className="font-medium text-foreground text-xs">What autopilot may approve on its own</p>
+        <p className="font-medium text-foreground text-xs">
+          {uiText('what_autopilot_may_approve_on_its_own_0e715c7')}
+        </p>
         <AutopilotScopesField
           disabled={!read.scopesEditable || busy}
           noActor={
@@ -251,7 +257,7 @@ export function PortfolioAutonomyCard({
         />
         {read.scopesEditable ? null : (
           <p className="text-muted-foreground text-xs" data-testid="autonomy-scopes-locked">
-            These take effect on Autopilot.
+            {uiText('these_take_effect_on_autopilot_6189840')}
           </p>
         )}
       </div>
@@ -275,7 +281,7 @@ export function PortfolioAutonomyCard({
           onClick={onManage}
           type="button"
         >
-          {read.capsReady ? 'Edit caps' : 'Set caps'}
+          {read.capsReady ? uiText('edit_caps_97aaa7c') : uiText('set_caps_a04c254')}
         </button>
       </div>
 
@@ -296,12 +302,12 @@ export function PortfolioAutonomyCard({
             ) : (
               <PauseIcon aria-hidden="true" className="size-3.5" />
             )}
-            {read.stopped ? 'Resume autopilot' : 'Stop autopilot'}
+            {read.stopped ? uiText('resume_autopilot_05810ef') : uiText('stop_autopilot_1971a79')}
           </Button>
           <span className="text-muted-foreground text-xs">
             {read.stopped
-              ? 'Ingest and scoring still run; nothing is written.'
-              : 'Halts every autonomous write without leaving Autopilot.'}
+              ? uiText('ingest_and_scoring_still_run_nothing_is_writt_3661b1f')
+              : uiText('halts_every_autonomous_write_without_leaving__50a38ff')}
           </span>
         </div>
       ) : null}
@@ -315,16 +321,18 @@ export function PortfolioAutonomyCard({
       <AlertDialog onOpenChange={(open) => setArming(open)} open={arming}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Turn on autopilot for “{portfolio.name}”?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {uiText('turn_on_autopilot_for_name_0b12ffb', { name: portfolio.name })}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Autopilot writes real budgets to {writesTo} on every cycle, without waiting for a
-              person, inside its caps: {capsLabel}. Anything a scope creates is born paused. Stop
-              halts every write without leaving Autopilot. To see the cycle it would run first,
-              preview it in Manage.
+              {uiText('autopilot_writes_real_budgets_to_platforms_on_bdb6e3f', {
+                platforms: writesTo,
+                caps: capsLabel,
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
             <Button
               onClick={() => {
                 setArming(false);
@@ -333,7 +341,7 @@ export function PortfolioAutonomyCard({
               type="button"
               variant="outline"
             >
-              Preview in Manage
+              {uiText('preview_in_manage_7ee1ba3')}
             </Button>
             <Button
               onClick={() => {
@@ -342,7 +350,7 @@ export function PortfolioAutonomyCard({
               }}
               type="button"
             >
-              Turn on autopilot
+              {uiText('turn_on_autopilot_67b12ff')}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

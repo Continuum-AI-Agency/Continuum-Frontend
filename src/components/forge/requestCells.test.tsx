@@ -6,7 +6,6 @@ import type {
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CellContext } from '@tanstack/react-table';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { type RequestRow, rowStatusOf, seedRow } from '@/components/forge/renderRequestRows';
 import {
@@ -15,6 +14,12 @@ import {
   StatusCell,
   VariableCell,
 } from '@/components/forge/requestCells';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 installPickerDomGlobals();
 afterEach(cleanup);
@@ -189,7 +194,12 @@ describe('the status column, with no preflight', () => {
       ? new Map(
           verdicts.map((verdict) => [
             'hero',
-            { key: 'hero', subject: 'media', unknownReason: null, ...verdict } as ApiRenderFitVerdict,
+            {
+              key: 'hero',
+              subject: 'media',
+              unknownReason: null,
+              ...verdict,
+            } as ApiRenderFitVerdict,
           ]),
         )
       : undefined;

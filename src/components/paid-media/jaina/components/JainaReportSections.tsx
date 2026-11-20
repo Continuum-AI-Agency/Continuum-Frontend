@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertCircleIcon, CheckCircle2Icon, InfoIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Pill } from '@/components/kibo-ui/pill';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import type { FrontendCheckpointReport } from '@/lib/jaina/schemas';
@@ -30,6 +31,7 @@ function SectionCard({
   section: FrontendCheckpointReport['sections'][number];
   isStreaming?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const severityColor = {
     positive: 'success',
     neutral: 'teal',
@@ -67,7 +69,11 @@ function SectionCard({
         <Pill variant="muted" className="capitalize">
           {section.scope}
         </Pill>
-        {section.confidence && <Pill variant="teal">{section.confidence} confidence</Pill>}
+        {section.confidence && (
+          <Pill variant="teal">
+            {uiText.rich('sentence_01cabaa82058', { v0: section.confidence })}
+          </Pill>
+        )}
       </div>
 
       {section.summary && (
@@ -102,7 +108,9 @@ function SectionCard({
                     )}
                     {highlight.evidence && highlight.evidence.length > 0 && (
                       <div className="mt-2 text-xs text-muted-foreground">
-                        Evidence: {highlight.evidence.join(', ')}
+                        {uiText.rich('sentence_53d3253be481', {
+                          v0: highlight.evidence.join(', '),
+                        })}
                       </div>
                     )}
                   </div>
@@ -171,19 +179,21 @@ function SectionCard({
       {section.actions && section.actions.length > 0 && (
         <div className="space-y-3 pt-2">
           <span className="text-sm font-semibold text-foreground uppercase tracking-wider">
-            Recommended Actions
+            {uiText('recommended_actions_828232e')}
           </span>
           {section.actions.map((action, aIndex) => (
             <div key={aIndex} className="rounded-xl bg-primary/10 p-3">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-foreground">
-                    {action.title || 'Action'}
+                    {action.title || uiText('action_64cff13')}
                   </span>
                   <div className="flex gap-2">
                     {action.priority && <Pill variant="teal">{action.priority}</Pill>}
                     {action.expected_impact && (
-                      <Pill variant="success">Impact: {action.expected_impact}</Pill>
+                      <Pill variant="success">
+                        {uiText.rich('sentence_46bdc3b60a78', { v0: action.expected_impact })}
+                      </Pill>
                     )}
                   </div>
                 </div>

@@ -2,14 +2,18 @@
 
 import { Check, CircleNotch, Envelope, Sparkle, Users, X } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
-
-import { createMagicLinkAction, revokeInviteAction } from '@/app/(post-auth)/settings/actions';
+import {
+  createMagicLinkAction,
+  revokeInviteAction,
+} from '@/app/[locale]/(post-auth)/settings/actions';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type { BrandInvite, BrandRole } from '@/lib/onboarding/state';
 import { trackOnboardingEvent } from '@/lib/onboarding/telemetry';
 import { cn } from '@/lib/utils';
@@ -18,17 +22,17 @@ type AssignableRole = Exclude<BrandRole, 'owner'>;
 
 const ASSIGNABLE_ROLES: AssignableRole[] = ['admin', 'operator', 'viewer'];
 
-const ROLE_LABEL: Record<AssignableRole, string> = {
-  admin: 'Admin',
-  operator: 'Operator',
-  viewer: 'Viewer',
-};
+const ROLE_LABEL = {
+  admin: 'roleAdmin',
+  operator: 'roleOperator',
+  viewer: 'roleViewer',
+} as const;
 
-const ROLE_BLURB: Record<AssignableRole, string> = {
-  admin: 'Full access + billing',
-  operator: 'Plan and launch campaigns',
-  viewer: 'Read-only access',
-};
+const ROLE_BLURB = {
+  admin: 'roleAdminBlurb',
+  operator: 'roleOperatorBlurb',
+  viewer: 'roleViewerBlurb',
+} as const;
 
 const ENTER_EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -61,6 +65,10 @@ const chipVariants = {
 };
 
 export function TeamInviteSection() {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('onboarding');
+
   const { brandId, state, updateState } = useOnboarding();
   const { show } = useToast();
   const [email, setEmail] = useState('');
@@ -77,8 +85,8 @@ export function TeamInviteSection() {
   const handleInvite = async () => {
     if (!emailValid) {
       show({
-        title: 'Invalid email',
-        description: 'Please enter a valid email address.',
+        title: tUi('m_899a38bce7'),
+        description: tUi('m_d2306dd897'),
         variant: 'error',
       });
       return;
@@ -105,10 +113,10 @@ export function TeamInviteSection() {
       }
 
       show({
-        title: result.emailSent ? 'Invite sent' : 'Invite link created',
+        title: result.emailSent ? tUi('m_c484ac0615') : tUi('m_a61d183183'),
         description: result.emailSent
-          ? `We emailed ${trimmed}.`
-          : `Share the link with ${trimmed} to grant access.`,
+          ? tUi('m_ec3ceea70c', { v0: String(trimmed) })
+          : tUi('m_87f928cc60', { v0: String(trimmed) }),
         variant: 'success',
       });
       setEmail('');
@@ -116,8 +124,8 @@ export function TeamInviteSection() {
       window.setTimeout(() => setJustSent(false), 1200);
     } catch (error) {
       show({
-        title: "Couldn't send invite",
-        description: error instanceof Error ? error.message : 'Please try again.',
+        title: tUi('m_af1411ca3f'),
+        description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
         variant: 'error',
       });
     } finally {
@@ -133,8 +141,8 @@ export function TeamInviteSection() {
       await revokeInviteAction(brandId, inviteId);
     } catch (error) {
       show({
-        title: "Couldn't revoke invite",
-        description: error instanceof Error ? error.message : 'Please try again.',
+        title: tUi('m_8fc7bb4a12'),
+        description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
         variant: 'error',
       });
       return;
@@ -149,11 +157,9 @@ export function TeamInviteSection() {
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Users className="h-4 w-4 text-[var(--primary)]" />
-            Invite your team
+            {tUi('m_722fe78c34')}
           </div>
-          <p className="text-sm leading-snug text-muted-foreground">
-            Magic-link invites. They can join with one click.
-          </p>
+          <p className="text-sm leading-snug text-muted-foreground">{tUi('m_26137ae593')}</p>
         </div>
         <AnimatePresence>
           {sentInvites.length > 0 ? (
@@ -165,7 +171,8 @@ export function TeamInviteSection() {
               className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--cs-teal,#0daea2)_14%,transparent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-[var(--cs-teal,#0daea2)]"
             >
               <Check className="h-2.5 w-2.5" weight="bold" />
-              {sentInvites.length} sent
+              {sentInvites.length}
+              {tUi('m_4641fb82c9')}
             </motion.span>
           ) : null}
         </AnimatePresence>
@@ -175,7 +182,7 @@ export function TeamInviteSection() {
         <div className="space-y-2.5">
           <div className="relative">
             <Label htmlFor="onboarding-invite-email" className="sr-only">
-              Email
+              {tUi('m_84add5b295')}
             </Label>
             <motion.div
               aria-hidden
@@ -205,14 +212,14 @@ export function TeamInviteSection() {
                   void handleInvite();
                 }
               }}
-              placeholder="teammate@company.com"
+              placeholder={tUi('m_5fd1aa6c8d')}
               disabled={submitting}
               className="h-11 rounded-lg border-input bg-background pl-12 text-sm text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
             />
           </div>
 
           <fieldset
-            aria-label="Role"
+            aria-label={tUi('m_c3f104d136')}
             className="relative flex items-center gap-1 rounded-full border border-border bg-muted p-1"
           >
             {ASSIGNABLE_ROLES.map((option) => {
@@ -238,7 +245,7 @@ export function TeamInviteSection() {
                       className="absolute inset-0 -z-0 rounded-full bg-[var(--primary)] shadow-[0_1px_2px_oklch(0%_0_0/0.18),inset_0_1px_0_oklch(100%_0_0/0.22)]"
                     />
                   ) : null}
-                  <span className="relative">{ROLE_LABEL[option]}</span>
+                  <span className="relative">{tUi(ROLE_LABEL[option])}</span>
                 </button>
               );
             })}
@@ -247,7 +254,7 @@ export function TeamInviteSection() {
             key={role}
             className="px-1 text-xs leading-snug text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
           >
-            {ROLE_BLURB[role]}
+            {tUi(ROLE_BLURB[role])}
           </p>
 
           <Button
@@ -270,7 +277,7 @@ export function TeamInviteSection() {
                   className="inline-flex items-center gap-2"
                 >
                   <CircleNotch className="h-3.5 w-3.5 animate-spin" />
-                  Sending invite…
+                  {tUi('m_6da2dfbf47')}
                 </motion.span>
               ) : justSent ? (
                 <motion.span
@@ -282,7 +289,7 @@ export function TeamInviteSection() {
                   className="inline-flex items-center gap-2"
                 >
                   <Check className="h-4 w-4" weight="bold" />
-                  Invite sent
+                  {tUi('m_c484ac0615')}
                 </motion.span>
               ) : (
                 <motion.span
@@ -293,7 +300,7 @@ export function TeamInviteSection() {
                   className="inline-flex items-center gap-2"
                 >
                   <Sparkle className="h-3.5 w-3.5" />
-                  Send invite
+                  {tUi('m_11a4b1afe5')}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -313,9 +320,7 @@ export function TeamInviteSection() {
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]">
                   <Users className="h-3.5 w-3.5 text-[var(--primary)]" />
                 </div>
-                <p className="text-xs leading-snug text-muted-foreground">
-                  No invites yet. Add teammates now or later from Settings.
-                </p>
+                <p className="text-xs leading-snug text-muted-foreground">{tUi('m_d619531e25')}</p>
               </motion.div>
             ) : (
               <motion.ul
@@ -353,7 +358,9 @@ export function TeamInviteSection() {
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
                           <span className="rounded-full bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] px-2 py-0.5 text-2xs font-medium uppercase tracking-wide text-[var(--primary)]">
-                            {ROLE_LABEL[inviteRole] ?? invite.role}
+                            {Object.hasOwn(ROLE_LABEL, inviteRole)
+                              ? tUi(ROLE_LABEL[inviteRole])
+                              : invite.role}
                           </span>
                           <Button
                             type="button"
@@ -361,7 +368,7 @@ export function TeamInviteSection() {
                             size="icon"
                             className="h-6 w-6 opacity-0 motion-safe:transition-opacity motion-safe:duration-150 group-hover:opacity-100"
                             onClick={() => handleRemove(invite.id)}
-                            title="Revoke invite"
+                            title={tUi('m_bdc5453b5c')}
                           >
                             <X className="h-3 w-3 text-muted-foreground hover:text-rose-600" />
                           </Button>

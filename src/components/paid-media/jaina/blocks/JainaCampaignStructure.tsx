@@ -27,6 +27,7 @@ import {
 } from '@continuum/contracts';
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LecturaView } from '@/CampaignCanvas/lectura/LecturaView';
 import { buttonVariants } from '@/components/ui/button';
@@ -37,13 +38,13 @@ import { cn } from '@/lib/utils';
 import { JAINA_TYPE } from '../reading';
 import { scaffoldCanvasHref, useScaffoldThread } from '../scaffold/scaffoldThreadContext';
 
-const LAYOUT_LABEL: Record<CampaignStructurePayload['layout'], string> = {
-  tree: 'Campaign structure',
-  matrix: 'Audience × creative',
-  funnel: 'Funnel map',
-  diff: 'Original vs copy',
-  outline: 'Outline',
-};
+const LAYOUT_LABEL = {
+  tree: 'campaign_structure_a29e8b1',
+  matrix: 'audience_creative_500cf62',
+  funnel: 'funnel_map_127fcaa',
+  diff: 'original_vs_copy_968f29e',
+  outline: 'outline_eabbf3a',
+} as const satisfies Record<CampaignStructurePayload['layout'], string>;
 
 const PROVENANCE_CLASS: Record<FieldProvenance, string> = {
   user_gave: 'bg-blue-600/10 text-blue-700 dark:text-blue-300',
@@ -59,10 +60,11 @@ const PROVENANCE_DOT: Record<FieldProvenance, string> = {
 
 /** Mock-up 09's foot: how many fields the person gave, Jaina filled, and Jaina still asks. */
 function CountsLine({ counts }: { counts: CampaignStructurePayload['counts'] }) {
+  const uiText = useTranslations('scale');
   const items: [FieldProvenance, string][] = [
-    ['user_gave', `You gave ${counts.userGave}`],
-    ['jaina_filled', `Jaina filled ${counts.jainaFilled}`],
-    ['jaina_asks', `Jaina asks ${counts.jainaAsks}`],
+    ['user_gave', uiText('you_gave_count_13a97b0', { count: counts.userGave })],
+    ['jaina_filled', uiText('jaina_filled_count_c1d04d4', { count: counts.jainaFilled })],
+    ['jaina_asks', uiText('jaina_asks_count_6b5ad81', { count: counts.jainaAsks })],
   ];
   return (
     <p className="flex flex-wrap gap-1.5 text-xs" data-testid="campaign-structure-counts">
@@ -96,6 +98,7 @@ function StructureFrame({
   title: string;
   onUnreachable: () => void;
 }) {
+  const uiText = useTranslations('scale');
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<FrameState>('loading');
 
@@ -137,7 +140,7 @@ function StructureFrame({
       ) : (
         <div className="absolute inset-0 grid place-items-center p-4">
           <p className="text-center text-xs text-muted-foreground">
-            {state === 'loading' ? 'Drawing…' : HYPERFRAME_UNREACHABLE_NOTE}
+            {state === 'loading' ? uiText('drawing_eb683f4') : HYPERFRAME_UNREACHABLE_NOTE}
           </p>
         </div>
       )}
@@ -165,6 +168,7 @@ export const isReadStructure = (structure: CampaignStructurePayload): boolean =>
 export type JainaCampaignStructureProps = { structure: CampaignStructurePayload };
 
 export function JainaCampaignStructure({ structure }: JainaCampaignStructureProps) {
+  const uiText = useTranslations('scale');
   const { sessionId, onScaffoldFocus } = useScaffoldThread();
   const scope = useJainaBrandScope();
   const [frameFailed, setFrameFailed] = useState(false);
@@ -190,7 +194,10 @@ export function JainaCampaignStructure({ structure }: JainaCampaignStructureProp
       <figcaption className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="min-w-0">
           <span className={`block ${JAINA_TYPE.label} text-muted-foreground`}>
-            {LAYOUT_LABEL[structure.layout]} · version {structure.version}
+            {uiText('layout_version_version_412bee0', {
+              layout: uiText(LAYOUT_LABEL[structure.layout]),
+              version: structure.version,
+            })}
           </span>
         </span>
         {/* Read carries its own "Open in canvas"; a compiled picture needs the link here. */}
@@ -201,7 +208,7 @@ export function JainaCampaignStructure({ structure }: JainaCampaignStructureProp
             href={canvasHref}
           >
             <ExternalLink className="size-3.5" />
-            Open on canvas
+            {uiText('open_on_canvas_41c4341')}
           </Link>
         ) : null}
       </figcaption>
@@ -210,7 +217,7 @@ export function JainaCampaignStructure({ structure }: JainaCampaignStructureProp
           brandId={scope.brandId}
           html={structure.html}
           onUnreachable={onUnreachable}
-          title={`${LAYOUT_LABEL[structure.layout]} · ${structure.title}`}
+          title={`${uiText(LAYOUT_LABEL[structure.layout])} · ${structure.title}`}
         />
       ) : null}
       {view === 'read' ? (
@@ -224,8 +231,10 @@ export function JainaCampaignStructure({ structure }: JainaCampaignStructureProp
       ) : null}
       {view === 'read' && structure.truncated ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          {structure.counts.adSets} ad sets and {structure.counts.ads} ads are too many to list
-          here. The scaffold card and the canvas show every one.
+          {uiText('adsets_ad_sets_and_ads_ads_are_too_many_to_li_8d7b8ab', {
+            adSets: structure.counts.adSets,
+            ads: structure.counts.ads,
+          })}
         </p>
       ) : null}
       {framed ? null : (

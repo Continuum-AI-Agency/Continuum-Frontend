@@ -6,7 +6,8 @@ import {
   type SheetSyncReport,
   SheetSyncReportSchema,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { FIXTURE_NOW, portfolioMetricsFixture } from './__fixtures__/portfolioMetricsFixture';
 import { AttributionSectionView } from './AttributionSection';
 import type { SheetAttributionApi, SheetCallOutcome } from './sheetAttributionApi';

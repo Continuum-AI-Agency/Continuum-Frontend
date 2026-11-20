@@ -2,6 +2,7 @@
 
 import type { CustomField } from '@continuum/contracts';
 import { SlidersHorizontal } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -16,6 +17,7 @@ import {
   visibleCardFields,
 } from './cardOptions';
 import { BUILT_IN_LIST_COLUMNS } from './listSort';
+import { useLibraryFieldOptions } from './useLibraryFieldOptions';
 
 const GROUP_LABEL: Record<LibraryFieldGroup | 'custom', string> = {
   file: 'File',
@@ -83,6 +85,13 @@ export function CardOptionsMenu({
   /** List view has no cards to size — it only picks the columns it does not always show. */
   showSizeAndAspect?: boolean;
 }) {
+  const translateUi = useUiTranslations('library');
+  const {
+    fields: BUILT_IN_CARD_FIELDS,
+    aspects: CARD_ASPECTS,
+    sizes: CARD_SIZES,
+  } = useLibraryFieldOptions();
+
   const fields = visibleCardFields(card);
   const builtIns = showSizeAndAspect
     ? BUILT_IN_CARD_FIELDS
@@ -106,11 +115,17 @@ export function CardOptionsMenu({
             variant="outline"
             size="sm"
             data-testid="library-card-options"
-            aria-label={showSizeAndAspect ? 'Card options' : 'Columns'}
+            aria-label={
+              showSizeAndAspect
+                ? translateUi('card_options_772ad453')
+                : translateUi('columns_53aade77')
+            }
             className="h-8"
           >
             <SlidersHorizontal className="size-3.5" />
-            <span className="hidden sm:inline">{showSizeAndAspect ? 'Cards' : 'Columns'}</span>
+            <span className="hidden sm:inline">
+              {showSizeAndAspect ? translateUi('cards_a52fcbbc') : translateUi('columns_53aade77')}
+            </span>
           </Button>
         }
       />
@@ -118,14 +133,14 @@ export function CardOptionsMenu({
         {showSizeAndAspect ? (
           <>
             <Segment
-              label="Size"
+              label={translateUi('size_1af85190')}
               options={CARD_SIZES}
               value={card?.size ?? 'md'}
               testIdPrefix="card-size"
               onChange={(size) => onChange({ size })}
             />
             <Segment
-              label="Aspect ratio"
+              label={translateUi('aspect_ratio_d7ad336f')}
               options={CARD_ASPECTS}
               value={card?.aspect ?? 'original'}
               testIdPrefix="card-aspect"
@@ -135,7 +150,9 @@ export function CardOptionsMenu({
         ) : null}
         <fieldset className="flex max-h-80 flex-col gap-2 overflow-y-auto">
           <legend className="mb-1.5 text-xs font-medium text-muted-foreground">
-            {showSizeAndAspect ? 'Show on cards' : 'Columns'}
+            {showSizeAndAspect
+              ? translateUi('show_on_cards_850f1600')
+              : translateUi('columns_53aade77')}
           </legend>
           {groups.map(({ group, options }) => (
             <div key={group} className="flex flex-col gap-1.5">

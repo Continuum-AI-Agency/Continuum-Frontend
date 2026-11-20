@@ -1,7 +1,9 @@
 'use client';
-
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 import type { EntityNounSource } from './entityNoun';
 import { freezeLabel } from './reportModel';
 
@@ -18,7 +20,10 @@ export function HeldPill({
   /** The item's platform and level; absent reads as a Meta ad set. */
   entity?: EntityNounSource | null;
 }) {
-  const held = freezeLabel(reason, entity);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const held = freezeLabel(reason, entity, optimizerText);
   if (!held) return null;
 
   return (

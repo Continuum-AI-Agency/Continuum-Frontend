@@ -2,6 +2,7 @@
 
 import { Command as CommandPrimitive } from 'cmdk';
 import { CheckIcon, SearchIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type * as React from 'react';
 import {
   Dialog,
@@ -27,8 +28,8 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
 }
 
 function CommandDialog({
-  title = 'Command Palette',
-  description = 'Search for a command to run...',
+  title: uiProvidedTitle,
+  description: uiProvidedDescription,
   children,
   className,
   showCloseButton = false,
@@ -40,6 +41,10 @@ function CommandDialog({
   showCloseButton?: boolean;
   children: React.ReactNode;
 }) {
+  const defaultUiText = useTranslations('common');
+  const title = uiProvidedTitle ?? defaultUiText('m_5843727a59');
+  const description = uiProvidedDescription ?? defaultUiText('m_4a3cc275c7');
+
   return (
     <Dialog {...props}>
       <DialogHeader className="sr-only">

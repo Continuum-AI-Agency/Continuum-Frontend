@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { Skill } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from './slash-menu';
 
 const shortcut = (slug: string, category: string): Skill => ({

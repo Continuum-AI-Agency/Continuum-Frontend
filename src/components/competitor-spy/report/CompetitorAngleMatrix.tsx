@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+
 // Competitors × top angles grid — the per-competitor decomposition of the
 // cross-rollup angle table. CSS-grid matrix adapted from the optimizer
 // AngleMatrix, with a single-hue intensity fill from longevityWeightedShare
@@ -11,6 +14,7 @@ import { humanize, percent } from './gapPresentation';
 const MAX_ANGLES = 8;
 
 export function CompetitorAngleMatrix({ rows }: { rows: CompetitorAngleMapRow[] }) {
+  const uiText = useTranslations('competitor');
   const angleRows = rows.filter((row) => row.dimension === 'angle');
   const crossRows = angleRows.filter((row) => row.competitorId === null);
   const competitorRows = angleRows.filter((row) => row.competitorId !== null);
@@ -23,14 +27,17 @@ export function CompetitorAngleMatrix({ rows }: { rows: CompetitorAngleMapRow[] 
   const competitors = new Map<string, string>();
   for (const row of competitorRows) {
     if (row.competitorId && !competitors.has(row.competitorId)) {
-      competitors.set(row.competitorId, row.competitorName ?? 'Unknown');
+      competitors.set(
+        row.competitorId,
+        row.competitorName ?? localizeCompetitorCopy('Unknown', uiText),
+      );
     }
   }
 
   if (topAngles.length === 0 || competitors.size === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">
-        The matrix fills once competitor ads carry labeled angles.
+        {uiText('the_matrix_fills_once_competitor_ads_carry_la_d751d18')}
       </p>
     );
   }
@@ -86,6 +93,8 @@ function MatrixRow({
   byKey: Map<string, CompetitorAngleMapRow>;
   maxShare: number;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('competitor');
   return (
     <>
       <div className="flex items-center truncate pr-1 text-muted-foreground">{competitorName}</div>
@@ -93,8 +102,13 @@ function MatrixRow({
         const cell = byKey.get(`${competitorId}::${angle}`);
         const ratio = cell ? Math.min(cell.longevityWeightedShare / maxShare, 1) : null;
         const label = cell
-          ? `${competitorName}, ${humanize(angle)}: ${percent(cell.longevityWeightedShare)} of their ad longevity across ${cell.adCount} ads`
-          : `${competitorName}, ${humanize(angle)}: no ads`;
+          ? uiText('m_4c97aa8ee6', {
+              name: competitorName,
+              angle: humanize(angle),
+              share: percent(cell.longevityWeightedShare, uiLocale),
+              count: cell.adCount,
+            })
+          : uiText('m_76e5e3fab8', { name: competitorName, angle: humanize(angle) });
         return (
           <div
             aria-label={label}
@@ -110,10 +124,14 @@ function MatrixRow({
                   }
                 : undefined
             }
-            title={cell ? `${cell.adCount} ads · ${cell.activeAdCount} active` : 'no ads'}
+            title={
+              cell
+                ? uiText('m_8c3fa165f8', { count: cell.adCount, active: cell.activeAdCount })
+                : uiText('no_ads_ab230e9')
+            }
           >
             {cell ? (
-              <span className="font-medium">{percent(cell.longevityWeightedShare)}</span>
+              <span className="font-medium">{percent(cell.longevityWeightedShare, uiLocale)}</span>
             ) : (
               <span className="text-muted-foreground/50">—</span>
             )}

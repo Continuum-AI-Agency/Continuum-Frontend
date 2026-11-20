@@ -9,8 +9,14 @@
 // Motion: the tiles come in with a short stagger and slide to their new place when the order
 // changes (a shared layout, FLIP). Both are off under reduced motion.
 
-import { arrangeHomeTiles, type HomeBoardSort, type HomeTileId } from '@continuum/contracts';
+import {
+  arrangeHomeTiles,
+  type HomeBoardSort,
+  type HomeMode,
+  type HomeTileId,
+} from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { ModuleFrameSkeleton } from '@/components/paid-media/optimizer/sections/board/ModuleFrame';
 import { boardPaletteClass } from '@/components/paid-media/optimizer/sections/board/palette';
@@ -36,13 +42,23 @@ const SLOT: Variants = {
 export const HOME_BOARD_GRID =
   'grid grid-flow-row-dense grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4';
 
-const SORTS: { id: HomeBoardSort; label: string }[] = [
-  { id: 'impact', label: 'Goal impact' },
-  { id: 'urgency', label: 'Urgency' },
-  { id: 'module', label: 'Module' },
-];
+const SORTS = [
+  { id: 'impact', label: 'goal_impact_f93ea05' },
+  { id: 'urgency', label: 'urgency_03d37e9' },
+  { id: 'module', label: 'module_f148224' },
+] as const satisfies readonly { id: HomeBoardSort; label: string }[];
+
+/** The reading's mode label (contracts' MODE_LABELS), said in the UI language. */
+const MODE_LABEL_KEYS = {
+  setup: 'setting_up_dbdf27e',
+  fix: 'fix_first_14cf914',
+  operate: 'autopilot_0c62cfc',
+  approve: 'you_approve_3701b80',
+  recommend: 'continuum_recommends_c5742de',
+} as const satisfies Record<HomeMode, string>;
 
 export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
+  const uiText = useTranslations('dashboard');
   const reduce = useReducedMotion();
   const [sort, setSort] = useState<HomeBoardSort>('impact');
   const { pins, togglePin } = usePinnedTiles(ctx.userId, ctx.brandId);
@@ -58,7 +74,7 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
 
   return (
     <section
-      aria-label="Home"
+      aria-label={uiText('home_3a78695')}
       className={cn('space-y-3 px-[var(--card-pad)] py-4', boardPaletteClass)}
       data-testid="home-board-root"
     >
@@ -69,7 +85,7 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
               className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary text-xs"
               data-testid="home-board-mode"
             >
-              {ctx.reading.modeLabel}
+              {uiText(MODE_LABEL_KEYS[ctx.reading.mode])}
             </span>
             <span className="text-muted-foreground text-xs">{ctx.reading.modeReason}</span>
           </p>
@@ -79,10 +95,10 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
             <StoryButton ctx={ctx} />
           </Suspense>
           <Tabs onValueChange={(value) => setSort(value as HomeBoardSort)} value={sort}>
-            <TabsList aria-label="Order tiles by">
+            <TabsList aria-label={uiText('order_tiles_by_63f5c5e')}>
               {SORTS.map((option) => (
                 <TabsTrigger className="text-xs" key={option.id} value={option.id}>
-                  {option.label}
+                  {uiText(option.label)}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -126,7 +142,7 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
         </motion.div>
       </HomeBoardChromeContext.Provider>
       <p className="px-1 text-muted-foreground text-xs">
-        Order = impact on the goal × urgency × confidence. A pinned tile stays at the top.
+        {uiText('order_impact_on_the_goal_urgency_confidence_a_1592031')}
       </p>
     </section>
   );

@@ -10,13 +10,17 @@
 
 import { Moon, Sun } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useHydrated } from '@/hooks/useHydrated';
 import type { ThemeAppearance } from '@/lib/theme/themeDom';
 
 const GLYPH = '!h-[18px] !w-[18px] stroke-[1.8]';
 
-export function themeToggleLabel(appearance: ThemeAppearance): string {
-  return appearance === 'dark' ? 'Light mode' : 'Dark mode';
+export function themeToggleLabel(
+  appearance: ThemeAppearance,
+  labels = { light: 'Light mode', dark: 'Dark mode' },
+): string {
+  return appearance === 'dark' ? labels.light : labels.dark;
 }
 
 export function ThemeToggleGlyph({
@@ -58,12 +62,14 @@ export function ThemeToggleGlyph({
 
 /** The toggle's text, neutral until hydration for the same reason as the glyph. */
 export function ThemeToggleText({ appearance }: { appearance: ThemeAppearance }) {
+  const t = useTranslations('navigation');
+  const labels = { light: t('themeLight'), dark: t('themeDark') };
   const hydrated = useHydrated();
-  if (hydrated) return <>{themeToggleLabel(appearance)}</>;
+  if (hydrated) return <>{themeToggleLabel(appearance, labels)}</>;
   return (
     <>
-      <span className="dark:hidden">{themeToggleLabel('light')}</span>
-      <span className="hidden dark:inline">{themeToggleLabel('dark')}</span>
+      <span className="dark:hidden">{themeToggleLabel('light', labels)}</span>
+      <span className="hidden dark:inline">{themeToggleLabel('dark', labels)}</span>
     </>
   );
 }

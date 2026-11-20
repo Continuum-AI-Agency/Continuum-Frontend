@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { OrganicWinners } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { EASY_FIT_ACCOUNT, EASY_FIT_REPORT } from '../creative/__fixtures__/creativeReport';
 import { NO_WINNERS, TWO_WINNERS } from './__fixtures__/organicWinners';
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { Copy, ShieldCheck } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useId, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -9,20 +10,32 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/toast-imperative';
 
-async function copy(value: string, label: string) {
+async function copy(
+  value: string,
+  label: string,
+  translate: ReturnType<typeof useTranslations<'scale'>>,
+) {
   try {
     await navigator.clipboard.writeText(value);
-    toast.success(`${label} copied`);
+    toast.success(translate('copied_label', { label }));
   } catch {
-    toast.error(`Could not copy the ${label.toLowerCase()}`);
+    toast.error(translate('copy_failed_label', { label }));
   }
 }
 
 export function CopyButton({ value, label }: { value: string; label: string }) {
+  const uiText = useTranslations('scale');
   return (
-    <Button size="sm" variant="outline" type="button" onClick={() => void copy(value, label)}>
-      <Copy data-icon="inline-start" />
-      Copy {label.toLowerCase()}
+    <Button
+      size="sm"
+      variant="outline"
+      type="button"
+      onClick={() => void copy(value, label, uiText)}
+    >
+      {uiText.rich('sentence_3b090963837f', {
+        v0: () => <Copy data-icon="inline-start" />,
+        v1: label.toLowerCase(),
+      })}
     </Button>
   );
 }
@@ -51,27 +64,31 @@ export function RevealOnceSecret({
   onDismiss: () => void;
   children?: ReactNode;
 }) {
+  const uiText = useTranslations('scale');
   const acknowledgeId = useId();
   const [acknowledged, setAcknowledged] = useState(false);
   return (
     <Alert>
       <ShieldCheck aria-hidden="true" />
-      <AlertTitle>Copy this signing secret now</AlertTitle>
+      <AlertTitle>{uiText('copy_this_signing_secret_now_62dfe07')}</AlertTitle>
       <AlertDescription className="space-y-3">
-        <p className="text-xs">Shown once for {subject}. Continuum cannot show it again.</p>
-        <CopyBlock value={secret} label="Signing secret" />
+        <p className="text-xs">{uiText.rich('sentence_2d2e8c304d64', { v0: subject })}</p>
+        <CopyBlock value={secret} label={uiText('signing_secret_e7ee22e')} />
         {children}
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-xs" htmlFor={acknowledgeId}>
-            <Checkbox
-              id={acknowledgeId}
-              checked={acknowledged}
-              onCheckedChange={(checked) => setAcknowledged(checked === true)}
-            />
-            I&rsquo;ve copied it
+            {uiText.rich('sentence_82256ab81eb9', {
+              v0: () => (
+                <Checkbox
+                  id={acknowledgeId}
+                  checked={acknowledged}
+                  onCheckedChange={(checked) => setAcknowledged(checked === true)}
+                />
+              ),
+            })}
           </label>
           <Button size="sm" disabled={!acknowledged} onClick={onDismiss}>
-            Done
+            {uiText('done_11a6767')}
           </Button>
         </div>
       </AlertDescription>

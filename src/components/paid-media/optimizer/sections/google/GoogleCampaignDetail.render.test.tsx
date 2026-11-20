@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, within } from '@testing-library/react';
+import { cleanup, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import {
   BEFORE_E1,
   BID_CARD,

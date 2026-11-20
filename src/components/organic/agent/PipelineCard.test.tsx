@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { PipelineCard } from './PipelineCard';
 import type { CheckpointState, PipelineCardState } from './types';
@@ -143,7 +144,10 @@ describe('PipelineCard awaiting-media-choice invariant', () => {
     // No token, so approval must NOT be offered — clicking it would only ever return
     // preview_approval_required.
     expect(screen.queryByRole('button', { name: /Generate media/ })).toBeNull();
-    const recovery = screen.getByRole('button', { name: /Rebuild preview/ });
+    const recovery = screen.getByRole('button', { name: /Enrich/ });
+    expect(recovery.getAttribute('title')).toBe(
+      'Rebuild the blueprint to refresh its preview approval',
+    );
     fireEvent.click(recovery);
     expect(onEnrichDraft).toHaveBeenCalledWith('draft-1');
     expect(onGenerateMedia).not.toHaveBeenCalled();
@@ -196,7 +200,7 @@ describe('PipelineCard awaiting-media-choice invariant', () => {
     );
 
     expect(screen.getByRole('button', { name: /Generate media/ })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Rebuild preview/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Enrich/ })).toBeNull();
   });
 });
 

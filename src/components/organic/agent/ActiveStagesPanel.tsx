@@ -2,8 +2,13 @@
 
 import { AlertCircleIcon, CheckCircle2Icon, CircleDotIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
 import { Trace } from '@/components/ui/trace';
+import {
+  localizeOrganicAgentLabel,
+  translateOrganicControlLabel,
+} from '@/lib/ui/organicLifecycleLabels';
 import type { PipelineStage, PipelineStageNode } from './types';
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
@@ -37,6 +42,8 @@ type ActiveStagesPanelProps = {
 };
 
 export function ActiveStagesPanel({ stages, isStreaming }: ActiveStagesPanelProps) {
+  const uiText = useTranslations('organic');
+  const commonText = useTranslations('common');
   if (!isStreaming || stages.length === 0) return null;
 
   const doneCount = stages.filter((s) => s.status === 'done').length;
@@ -51,7 +58,7 @@ export function ActiveStagesPanel({ stages, isStreaming }: ActiveStagesPanelProp
         className="mt-0.5 space-y-1 px-3 pb-1"
       >
         <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
-          <span className="font-mono">Pipeline</span>
+          <span className="font-mono">{uiText('pipeline_37e1c77')}</span>
           <span className="tabular-nums">
             {doneCount}/{TOTAL_STAGES}
           </span>
@@ -62,7 +69,7 @@ export function ActiveStagesPanel({ stages, isStreaming }: ActiveStagesPanelProp
               key={node.stage}
               status={STAGE_STATUS[node.status]}
               icon={<StageIcon status={node.status} />}
-              title={`${node.agentName ?? node.stage} · ${STAGE_LABELS[node.stage] ?? node.stage}`}
+              title={`${localizeOrganicAgentLabel(node.agentName, commonText) ?? translateOrganicControlLabel(STAGE_LABELS[node.stage], commonText)} · ${translateOrganicControlLabel(STAGE_LABELS[node.stage], commonText)}`}
             />
           ))}
         </Trace>

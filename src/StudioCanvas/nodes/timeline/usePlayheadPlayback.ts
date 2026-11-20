@@ -1,5 +1,5 @@
 import { type EditorClipTiming, editorClipSourceAt } from '@continuum/contracts';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { nextPlayhead, type PlaybackMode } from './motion/motionChrome';
 import type { TimelineAudioPreviewController } from './useTimelineAudioPreview';
 import { clipAtTime, type TimelineLayout } from './useTimelineEditorModel';
@@ -11,11 +11,14 @@ import { clipAtTime, type TimelineLayout } from './useTimelineEditorModel';
 // with the timeline scrubber. This mirrors what composeTimeline renders, with
 // DOM playback standing in for the final mediabunny encode.
 //
-// One <video> element serves every clip, so crossing a clip boundary means
-// re-pointing that element at another source and another source-time. That
-// hand-off is the whole difficulty: the element's clock is only meaningful once
-// it has actually landed on the cue point, so the driver tracks the cue it issued
-// and runs the playhead on wall-clock until the element catches up.
+// Two <video> elements take turns (ping-pong): the one on screen plays the current
+// clip while the hidden one is pointed at the next clip and parked on the frame the
+// cut shows, so a cut is a swap instead of a source load. When the hidden element
+// does not hold the next clip (a scrub, a loop, an edit), the on-screen element is
+// re-pointed at another source and source-time instead. That hand-off is the whole
+// difficulty: the element's clock is only meaningful once it has actually landed on
+// the cue point, so the driver tracks the cue it issued and runs the playhead on
+// wall-clock until the element catches up.
 
 export interface ClipMedia {
   kind: 'video' | 'image';
@@ -67,7 +70,14 @@ export interface PlayheadFrame {
 }
 
 export interface PlayheadPlayback {
+  /** The element on screen: whichever of `videoRefs` is active. */
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  /** Both elements, in a fixed order, so a host renders each one in a fixed place. */
+  videoRefs: readonly [
+    React.RefObject<HTMLVideoElement | null>,
+    React.RefObject<HTMLVideoElement | null>,
+  ];
+  activeVideo: 0 | 1;
   playheadSec: number;
   isPlaying: boolean;
   isPreparing: boolean;
@@ -288,6 +298,30 @@ export function syncVideoToTimelineTime(params: {
   return nextCue;
 }
 
+/**
+ * Park the hidden element on the clip the playhead reaches when the current one ends, paused
+ * on the frame that cut shows. Re-cueing an element already there is a no-op, so this runs
+ * every tick.
+ */
+export function warmNextClip(params: {
+  layout: TimelineLayout;
+  mediaFor: (itemId: string) => ClipMedia | undefined;
+  video: PlaybackVideoElement | null;
+  timelineSec: number;
+}): PlaybackCue | null {
+  const { layout, mediaFor, video, timelineSec } = params;
+  const clip = clipAtTime(layout, timelineSec);
+  if (!clip || !video) return null;
+  const cutSec = clip.startSec + clip.durationSec;
+  // ponytail: the next clip in time order, so a loop back to the start is not warmed.
+  const next =
+    clipAtTime(layout, cutSec) ?? layout.clips.find((candidate) => candidate.startSec >= cutSec);
+  const media = next && next !== clip ? mediaFor(next.item.id) : undefined;
+  if (!next || !media) return null;
+  if (!video.paused) video.pause();
+  return cueVideoToClip(video, media, next.item.id, Math.max(0, cutSec - next.startSec));
+}
+
 export function usePlayheadPlayback(params: {
   layout: TimelineLayout;
   mediaFor: (itemId: string) => ClipMedia | undefined;
@@ -295,7 +329,31 @@ export function usePlayheadPlayback(params: {
   revisionKey?: string;
 }): PlayheadPlayback {
   const { layout, mediaFor, audioPreview, revisionKey } = params;
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const firstVideoRef = useRef<HTMLVideoElement>(null);
+  const secondVideoRef = useRef<HTMLVideoElement>(null);
+  const [activeVideo, setActiveVideo] = useState<0 | 1>(0);
+  const activeVideoRef = useRef<0 | 1>(0);
+  const videoRefs = useMemo(() => [firstVideoRef, secondVideoRef] as const, []);
+  const videoRef = useMemo<React.RefObject<HTMLVideoElement | null>>(
+    () => ({
+      get current() {
+        return videoRefs[activeVideoRef.current].current;
+      },
+      set current(element) {
+        videoRefs[activeVideoRef.current].current = element;
+      },
+    }),
+    [videoRefs],
+  );
+  const activeVideoElement = useCallback(
+    () => videoRefs[activeVideoRef.current].current,
+    [videoRefs],
+  );
+  const standbyVideo = useCallback(
+    () => videoRefs[activeVideoRef.current === 0 ? 1 : 0].current,
+    [videoRefs],
+  );
+  const standbyCueRef = useRef<PlaybackCue | null>(null);
   const [playheadSec, setPlayheadSecState] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
@@ -334,7 +392,7 @@ export function usePlayheadPlayback(params: {
     (sec: number) => {
       setPlayhead(sec);
       const clip = clipAtTime(layoutRef.current, playheadRef.current);
-      const video = videoRef.current;
+      const video = activeVideoElement();
       if (!clip || !video) return;
       const media = mediaForRef.current(clip.item.id);
       if (!media) return;
@@ -344,21 +402,27 @@ export function usePlayheadPlayback(params: {
         clip.item.id,
         playheadRef.current - clip.startSec,
       );
+      standbyCueRef.current = warmNextClip({
+        layout: layoutRef.current,
+        mediaFor: mediaForRef.current,
+        video: standbyVideo(),
+        timelineSec: playheadRef.current,
+      });
       if (isPlaying && audioPreviewRef.current?.active) {
         void audioPreviewRef.current.play(playheadRef.current);
       }
     },
-    [isPlaying, setPlayhead],
+    [activeVideoElement, isPlaying, setPlayhead, standbyVideo],
   );
 
   useEffect(() => {
     if (isPlaying || isPreparing) return;
-    const video = videoRef.current;
+    const video = activeVideoElement();
     const cue = () => seek(playheadRef.current);
     video?.addEventListener('loadedmetadata', cue);
     cue();
     return () => video?.removeEventListener('loadedmetadata', cue);
-  }, [isPlaying, isPreparing, layout, mediaFor, seek]);
+  }, [activeVideoElement, isPlaying, isPreparing, layout, mediaFor, seek]);
 
   const stop = useCallback(() => {
     playRequestRef.current += 1;
@@ -371,8 +435,8 @@ export function usePlayheadPlayback(params: {
     if (audioTime !== null) setPlayhead(audioTime);
     setIsPlaying(false);
     setIsPreparing(false);
-    videoRef.current?.pause();
-  }, [setPlayhead]);
+    activeVideoElement()?.pause();
+  }, [activeVideoElement, setPlayhead]);
 
   const tick = useCallback(
     (ts: number) => {
@@ -394,17 +458,31 @@ export function usePlayheadPlayback(params: {
         stop();
         return;
       }
+      const clipId = clipAtTime(layoutRef.current, nextSec)?.item.id;
+      if (clipId && cueRef.current?.clipId !== clipId && standbyCueRef.current?.clipId === clipId) {
+        // The cut: the hidden element already holds this clip, so it takes over the screen.
+        activeVideoElement()?.pause();
+        activeVideoRef.current = activeVideoRef.current === 0 ? 1 : 0;
+        setActiveVideo(activeVideoRef.current);
+        cueRef.current = standbyCueRef.current;
+      }
       cueRef.current = syncVideoToTimelineTime({
         layout: layoutRef.current,
         mediaFor: mediaForRef.current,
-        video: videoRef.current,
+        video: activeVideoElement(),
         timelineSec: nextSec,
         cue: cueRef.current,
+      });
+      standbyCueRef.current = warmNextClip({
+        layout: layoutRef.current,
+        mediaFor: mediaForRef.current,
+        video: standbyVideo(),
+        timelineSec: nextSec,
       });
       setPlayhead(nextSec);
       rafRef.current = requestAnimationFrame(tick);
     },
-    [setPlayhead, stop],
+    [activeVideoElement, setPlayhead, standbyVideo, stop],
   );
 
   const startLoop = useCallback(() => {
@@ -469,6 +547,8 @@ export function usePlayheadPlayback(params: {
 
   return {
     videoRef,
+    videoRefs,
+    activeVideo,
     playheadSec,
     isPlaying,
     isPreparing,

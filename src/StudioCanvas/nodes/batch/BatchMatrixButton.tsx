@@ -5,6 +5,7 @@
 // after it was rewired to a different generator.
 
 import { Grid3x3 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,8 @@ import { matrixFromRunRecord } from '../../utils/batch/matrix';
 import { MatrixResultsDialog } from './MatrixResultsDialog';
 
 export function BatchMatrixButton({ record }: { record: BatchRunRecord }) {
+  const translateUi = useUiTranslations('studio');
+
   const [open, setOpen] = useState(false);
   const total = record.completed + record.failed;
 
@@ -28,8 +31,11 @@ export function BatchMatrixButton({ record }: { record: BatchRunRecord }) {
           event.stopPropagation();
           setOpen(true);
         }}
-        title={`Batch results (${record.completed}/${total})`}
-        aria-label="Open batch results matrix"
+        title={translateUi('batch_results_value0_value1_ec6e1854', {
+          value0: String(record.completed),
+          value1: String(total),
+        })}
+        aria-label={translateUi('open_batch_results_matrix_2a8c378d')}
       >
         <Grid3x3 className="h-4 w-4" />
       </Button>
@@ -37,8 +43,11 @@ export function BatchMatrixButton({ record }: { record: BatchRunRecord }) {
         <MatrixResultsDialog
           open={open}
           onOpenChange={setOpen}
-          title={`Batch results — ${record.completed} of ${total}`}
-          layout={matrixFromRunRecord(record)}
+          title={translateUi('batch_results_value0_of_value1_99e0c1a2', {
+            value0: String(record.completed),
+            value1: String(total),
+          })}
+          layout={matrixFromRunRecord(record, translateUi)}
         />
       ) : null}
     </>

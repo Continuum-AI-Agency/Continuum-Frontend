@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { ComparisonBlockV2, InsightListBlockV2, NarrativeBlockV2 } from '@/lib/jaina/schemas';
 
 // Render markdown as plain text so the narrative-body assertions are
@@ -126,7 +127,7 @@ describe('Jaina block citations', () => {
 
     const chip = screen.getByLabelText(/analytics_query/);
     expect(chip.textContent).toContain('1');
-    expect(screen.getByText(/Used 1 sources/)).toBeDefined();
+    expect(screen.getByText(/Used 1 source\b/)).toBeDefined();
   });
 
   it('counts block and item evidence references in the provenance controls, never by id', () => {
@@ -148,7 +149,7 @@ describe('Jaina block citations', () => {
 
     const chip = screen.getByLabelText(/analytics_query/);
     expect(chip.textContent).toContain('1');
-    expect(screen.getByText(/Used 1 sources/)).toBeDefined();
+    expect(screen.getByText(/Used 1 source\b/)).toBeDefined();
   });
 
   it('omits chips and the Sources footer when the block has no citations', () => {

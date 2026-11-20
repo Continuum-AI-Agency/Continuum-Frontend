@@ -71,10 +71,17 @@ export function exactVersionPreviewUrl(
   versionId: string,
 ): string | undefined {
   const exact = versions.find((version) => version.id === versionId);
-  // The canonical version payload is always safe for the clip's declared media kind.
-  // A generated preview can instead be a video poster image, which is not playable in
-  // the timeline's <video> surface.
-  return exact?.signedUrl ?? exact?.preview?.signedUrl ?? undefined;
+  // The editor plays an MP4's ready 720p `preview_video` (same timing, a fraction of the
+  // bitrate; the export reads the version itself, server-side). Any other preview can be a
+  // poster image, unplayable in the timeline's <video>, and the H.264 ladder drops alpha, so
+  // a WebM/MOV cutout keeps its own file.
+  const proxy =
+    exact?.mimeType === 'video/mp4' &&
+    exact.preview?.role === 'preview_video' &&
+    exact.preview.state === 'ready'
+      ? exact.preview.signedUrl
+      : null;
+  return proxy ?? exact?.signedUrl ?? exact?.preview?.signedUrl ?? undefined;
 }
 
 export function primaryVideoTrack(

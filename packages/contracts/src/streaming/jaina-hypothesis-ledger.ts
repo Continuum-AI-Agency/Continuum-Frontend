@@ -118,6 +118,16 @@ export const jainaAnalysisProgressSchema = z.object({
 });
 export type JainaAnalysisProgress = z.infer<typeof jainaAnalysisProgressSchema>;
 
+/**
+ * The notice an analyst-mode turn opens with (Backend `analyst/reads.ts`): the turn is one free
+ * tool loop over the account's reads, so the app times it as reads, not as layers and hypotheses
+ * (Frontend `runProgress.ts`). Its read rows are `drill` rows.
+ */
+export const JAINA_ANALYST_NOTICE_ID = 'analyst';
+
+export const isAnalystNotice = (row: Pick<JainaAnalysisProgress, 'kind' | 'id'>): boolean =>
+  row.kind === 'notice' && row.id === JAINA_ANALYST_NOTICE_ID;
+
 export const isTerminalHypothesis = (entry: Pick<JainaHypothesisEntry, 'status'>): boolean =>
   entry.status !== 'open';
 

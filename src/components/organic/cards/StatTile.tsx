@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 
 // One metric tile: label + icon + value (+ optional delta, tooltip). Shared by
 // the gallery HoverCard quick-look and the post snapshot side panel so numbers
@@ -18,10 +21,10 @@ import type { MetricFormat, MetricIconKey } from './cardMetricSet';
 import { DeltaBadge } from './DeltaBadge';
 import { METRIC_ICONS } from './metricIcons';
 
-function formatMetric(value: number | undefined, format: MetricFormat): string {
-  if (format === 'watchtime') return formatWatchTime(value);
-  if (format === 'percent') return formatRate(value);
-  return formatCompactNumber(value);
+function formatMetric(value: number | undefined, format: MetricFormat, locale: UiLocale): string {
+  if (format === 'watchtime') return formatWatchTime(value, locale);
+  if (format === 'percent') return formatRate(value, locale);
+  return formatCompactNumber(value, locale);
 }
 
 export type StatTileProps = {
@@ -51,8 +54,10 @@ export function StatTile({
   className,
   lifetimeOnly = false,
 }: StatTileProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const Icon = iconKey ? METRIC_ICONS[iconKey] : undefined;
-  const formatted = formatMetric(value, format);
+  const formatted = formatMetric(value, format, uiLocale);
   const pct = comparison?.percentageChange;
 
   const body =
@@ -79,7 +84,7 @@ export function StatTile({
           <DeltaBadge comparison={comparison} className="self-start" />
         ) : lifetimeOnly ? (
           <span className="self-start rounded bg-slate-500/12 px-1 py-0.5 text-2xs font-medium leading-none text-slate-600 dark:text-slate-300">
-            Lifetime
+            {uiText('lifetime_bdcd897')}
           </span>
         ) : null}
       </div>
@@ -109,7 +114,7 @@ export function StatTile({
             <DeltaBadge comparison={comparison} />
           ) : lifetimeOnly ? (
             <span className="rounded bg-slate-500/12 px-1 py-0.5 text-2xs font-medium leading-none text-slate-600 dark:text-slate-300">
-              Lifetime
+              {uiText('lifetime_bdcd897')}
             </span>
           ) : null}
         </span>
@@ -125,7 +130,10 @@ export function StatTile({
         <p className="text-xs leading-snug">{tooltip}</p>
         {pct !== undefined && !Number.isNaN(pct) ? (
           <p className="mt-1 text-xs leading-snug text-muted-foreground">
-            {`${pct >= 0 ? '+' : '-'}${Math.abs(pct).toFixed(1)}% vs prior 7d`}
+            {uiText('percentPriorWeek', {
+              sign: pct >= 0 ? '+' : '-',
+              value: formatDecimal(Math.abs(pct), 1, uiLocale),
+            })}
           </p>
         ) : null}
       </TooltipContent>

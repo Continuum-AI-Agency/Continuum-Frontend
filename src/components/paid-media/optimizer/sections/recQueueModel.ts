@@ -1,3 +1,8 @@
+import type { UiLocale } from '@/i18n/config';
+import {
+  type OptimizerDisplayTranslate,
+  optimizerDisplayCopy,
+} from '@/lib/paid-media/optimizationMetricPresentation';
 // The recommendation queue's pure reads: the one-line evidence behind a row, the money a row
 // puts on the table, the "as of" line that says whether the queue is current, and the
 // grouped summary that turns ten identical "Pause ad set · HIGH" rows into "5 ad sets ·
@@ -27,19 +32,47 @@ const METRIC_LABEL: Record<string, string> = {
   reach_expansion: 'Reach growth',
 };
 
-function formatMetricValue(metric: string, value: number, currency: string | null): string {
+function formatMetricValue(
+  metric: string,
+  value: number,
+  currency: string | null,
+  locale: UiLocale = 'en',
+): string {
   switch (metric) {
     case 'spend':
     case 'cpp':
     case 'cpa':
-      return formatCurrency(value, currency);
+      return formatCurrency(value, currency, locale);
     case 'ctr':
-      return formatPercent(value * 100, { fractionDigits: 2 });
+      return formatPercent(value * 100, { fractionDigits: 2 }, locale);
     case 'reach_expansion':
-      return `${value.toFixed(2)}×`;
+      return `${new Intl.NumberFormat(locale, { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}×`;
     default:
-      return Number.isInteger(value) ? String(value) : value.toFixed(1);
+      return new Intl.NumberFormat(locale, {
+        useGrouping: false,
+        minimumFractionDigits: Number.isInteger(value) ? 0 : 1,
+        maximumFractionDigits: Number.isInteger(value) ? 0 : 1,
+      }).format(value);
   }
+}
+
+const METRIC_COPY_KEYS = {
+  spend: 'evidenceSpend',
+  cpp: 'evidenceCost',
+  cpa: 'evidenceCost',
+  frequency: 'evidenceFrequency',
+  reach_expansion: 'evidenceReachGrowth',
+} as const;
+function evidenceMetricLabel(metric: string, translate: OptimizerDisplayTranslate) {
+  return Object.hasOwn(METRIC_COPY_KEYS, metric)
+    ? translate(METRIC_COPY_KEYS[metric as keyof typeof METRIC_COPY_KEYS])
+    : (METRIC_LABEL[metric] ?? metric);
+}
+function evidenceWindowLabel(window: string, translate: OptimizerDisplayTranslate) {
+  const days = { d3: 3, d7: 7, d14: 14 } as const;
+  return Object.hasOwn(days, window)
+    ? translate('evidenceDays', { count: days[window as keyof typeof days] })
+    : (WINDOW_LABEL[window] ?? window);
 }
 
 /** "Cost per result $140 vs 2.5× the robust reference ($10) · 14d". Null when the row
@@ -47,12 +80,20 @@ function formatMetricValue(metric: string, value: number, currency: string | nul
 export function evidenceLine(
   evidence: RecommendationEvidence | null | undefined,
   currency: string | null,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
 ): string | null {
   if (!evidence) return null;
-  const metric = METRIC_LABEL[evidence.metric] ?? evidence.metric;
-  const value = formatMetricValue(evidence.metric, evidence.value, currency);
-  const window = WINDOW_LABEL[evidence.window] ?? evidence.window;
-  return `${metric} ${value} ${evidence.comparator} · ${window}`;
+  const metric = translate
+    ? evidenceMetricLabel(evidence.metric, translate)
+    : (METRIC_LABEL[evidence.metric] ?? evidence.metric);
+  const value = formatMetricValue(evidence.metric, evidence.value, currency, locale);
+  const window = translate
+    ? evidenceWindowLabel(evidence.window, translate)
+    : (WINDOW_LABEL[evidence.window] ?? evidence.window);
+  return translate
+    ? translate('evidenceLine', { metric, value, comparator: evidence.comparator, window })
+    : `${metric} ${value} ${evidence.comparator} · ${window}`;
 }
 
 /** Daily money the recommendation puts on the table; 0 when unknown so sorts stay stable. */
@@ -68,9 +109,15 @@ export function impactPerDay(rec: Pick<RecommendationRow, 'evidence'>): number {
 export function impactLabel(
   rec: Pick<RecommendationRow, 'evidence'>,
   currency: string | null,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
 ): string | null {
   const value = impactPerDay(rec);
-  return value > 0 ? `${formatPerPeriod(value, currency)} at stake` : null;
+  return value > 0
+    ? translate
+      ? translate('atStake', { amount: formatPerPeriod(value, currency, locale) })
+      : `${formatPerPeriod(value, currency, locale)} at stake`
+    : null;
 }
 
 /**
@@ -95,10 +142,11 @@ export function queueHeadline(rec: Pick<RecommendationRow, 'evidence'>): Candida
 export function queueHeadlineLine(
   rec: Pick<RecommendationRow, 'evidence'>,
   currency: string | null,
+  locale: UiLocale = 'en',
 ): string | null {
   const headline = queueHeadline(rec);
   if (!headline) return null;
-  const { figure, label } = formatHeadline(headline, currency);
+  const { figure, label } = formatHeadline(headline, currency, locale);
   return `${figure} ${label}`;
 }
 
@@ -113,6 +161,7 @@ export type QueueSummaryGroup = {
 /** One line per (kind, trigger) across the pending rows, biggest money first. */
 export function queueSummary(
   recs: ReadonlyArray<Pick<RecommendationRow, 'kind' | 'trigger' | 'evidence' | 'status'>>,
+  translate?: OptimizerDisplayTranslate,
 ): QueueSummaryGroup[] {
   const groups = new Map<string, QueueSummaryGroup>();
   for (const rec of recs) {
@@ -121,7 +170,7 @@ export function queueSummary(
     const group = groups.get(key) ?? {
       kind: rec.kind,
       trigger: rec.trigger,
-      label: recommendationLabel(rec.kind).label,
+      label: recommendationLabel(rec.kind, translate).label,
       count: 0,
       impactPerDay: 0,
     };
@@ -134,7 +183,35 @@ export function queueSummary(
 
 /** The trigger id in words: 'P2_sustained_poor' → 'sustained poor'. The prefix is engine
  *  vocabulary the reader does not need; the words after it are the reason in two words. */
-export function triggerWords(trigger: string): string {
+const TRIGGER_COPY_KEYS = {
+  P1_zero_upper_funnel: 'triggerP1_zero_upper_funnel',
+  P2_sustained_poor: 'triggerP2_sustained_poor',
+  P3_low_significance: 'triggerP3_low_significance',
+  C1_creative_drag: 'triggerC1_creative_drag',
+  C2_creative_winner: 'triggerC2_creative_winner',
+  C3_no_variance: 'triggerC3_no_variance',
+  C4_creative_decay: 'triggerC4_creative_decay',
+  C5_auction_displacement: 'triggerC5_auction_displacement',
+  F1_creative_fatigue: 'triggerF1_creative_fatigue',
+  F2_audience_saturation: 'triggerF2_audience_saturation',
+  F3_audience_exhausted: 'triggerF3_audience_exhausted',
+  D1_off_meta: 'triggerD1_off_meta',
+  D2_dark_with_budget: 'triggerD2_dark_with_budget',
+  D3_learning_limited: 'triggerD3_learning_limited',
+  S1_velocity_cap_binding: 'triggerS1_velocity_cap_binding',
+  S2_floor_too_high: 'triggerS2_floor_too_high',
+  S3_persistent_underspend: 'triggerS3_persistent_underspend',
+  S5_tracking_gap: 'triggerS5_tracking_gap',
+} as const;
+export function triggerWords(trigger: string, translate?: OptimizerDisplayTranslate): string {
+  if (translate) {
+    if (Object.hasOwn(TRIGGER_COPY_KEYS, trigger))
+      return translate(TRIGGER_COPY_KEYS[trigger as keyof typeof TRIGGER_COPY_KEYS]);
+    return trigger.startsWith('rule:')
+      ? translate('customRule', { name: trigger.slice(5) })
+      : trigger;
+  }
+
   const stripped = trigger.replace(/^[A-Z]\d+_/, '').replace(/^rule:/, 'rule ');
   return stripped.replace(/_/g, ' ');
 }
@@ -165,7 +242,8 @@ const TRIGGER_REASONS: Readonly<Record<string, string>> = {
 };
 
 /** Why a group of recommendations fired, in words: 'D1_off_meta' → 'paused or removed on Meta'. */
-export function triggerReason(trigger: string): string {
+export function triggerReason(trigger: string, translate?: OptimizerDisplayTranslate): string {
+  if (translate) return triggerWords(trigger, translate);
   return TRIGGER_REASONS[trigger] ?? triggerWords(trigger);
 }
 
@@ -215,7 +293,12 @@ const CAP_EPS = 0.005;
  *  recommendation itself otherwise. Only the words change — id, status and patch are kept. */
 export function withHonestCapBinding<
   T extends Pick<RecommendationRow, 'trigger' | 'reason' | 'evidence'>,
->(rec: T, items: ReadonlyArray<Pick<CycleItemRow, 'change_pct'>>): T {
+>(
+  rec: T,
+  items: ReadonlyArray<Pick<CycleItemRow, 'change_pct'>>,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
+): T {
   if (rec.trigger !== 'S1_velocity_cap_binding') return rec;
   // The engine's own counts already say it right; the recount below is only the fallback for rows written before them.
   if (rec.evidence?.capBinding) return rec;
@@ -232,22 +315,33 @@ export function withHonestCapBinding<
     (item) => Math.abs(Math.abs(item.change_pct as number) - cap) <= CAP_EPS,
   ).length;
   const n = moved.length;
-  const held =
-    atCap === 0
+  const capWords = new Intl.NumberFormat(locale, {
+    useGrouping: false,
+    maximumFractionDigits: 20,
+  }).format(capPct);
+  const held = translate
+    ? atCap === 0
+      ? translate('capHeldNone')
+      : translate('capHeldOther', { count: atCap, cap: capWords })
+    : atCap === 0
       ? 'The cap held none of them back.'
       : `The cap held ${atCap} other move${atCap === 1 ? '' : 's'} at ±${capPct}%.`;
-  const reason = `${beyond.length} of ${n} moves went past the ±${capPct}% per-cycle cap: pacing (or keeping the pool whole) may exceed it, so the cap did not bind them. ${held}`;
+  const reason = translate
+    ? translate('capBeyond', { beyond: beyond.length, total: n, cap: capWords, held })
+    : `${beyond.length} of ${n} moves went past the ±${capPct}% per-cycle cap: pacing (or keeping the pool whole) may exceed it, so the cap did not bind them. ${held}`;
   const headline = queueHeadline(rec);
   const evidence = rec.evidence
     ? {
         ...rec.evidence,
-        comparator: `${beyond.length} of ${n} moves past the ±${capPct}% cap`,
+        comparator: translate
+          ? translate('capComparator', { beyond: beyond.length, total: n, cap: capWords })
+          : `${beyond.length} of ${n} moves past the ±${capPct}% cap`,
         ...(headline
           ? {
               headline: {
                 ...headline,
                 value: Math.round((beyond.length / n) * 100),
-                label: 'of moves went past the cap',
+                label: optimizerDisplayCopy('capHeadline', translate),
               },
             }
           : {}),
@@ -277,9 +371,24 @@ export function asOfLine(
   latestCycleTs: string | null,
   nextCycleTs: string | null,
   stale = false,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
 ): string | null {
   const at = latestCycleTs ? Date.parse(latestCycleTs) : Number.NaN;
   if (Number.isNaN(at)) return null;
+  if (translate) {
+    const fmt = new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    const date = fmt.format(new Date(at));
+    const next = nextCycleTs ? Date.parse(nextCycleTs) : Number.NaN;
+    return Number.isNaN(next)
+      ? translate('asOfOnly', { date })
+      : translate(stale ? 'asOfAttempt' : 'asOfNext', { date, next: fmt.format(new Date(next)) });
+  }
   const parts = [`As of ${AS_OF_FMT.format(new Date(at))}`];
   const next = nextCycleTs ? Date.parse(nextCycleTs) : Number.NaN;
   if (!Number.isNaN(next)) {
@@ -314,14 +423,17 @@ export function settingsPatchOf(rec: Pick<RecommendationRow, 'seed'>): SettingsP
   };
 }
 
-export function settingsFieldLabel(field: SettingsPatch['field']): string {
+export function settingsFieldLabel(
+  field: SettingsPatch['field'],
+  translate?: OptimizerDisplayTranslate,
+): string {
   switch (field) {
     case 'max_change_pct_per_cycle':
-      return 'Autopilot hold threshold';
+      return optimizerDisplayCopy('settingThreshold', translate);
     case 'daily_total':
-      return 'Daily total';
+      return optimizerDisplayCopy('settingDailyTotal', translate);
     case 'period_budget':
-      return 'Flight budget';
+      return optimizerDisplayCopy('settingFlightBudget', translate);
   }
 }
 
@@ -329,11 +441,13 @@ export function formatSettingsValue(
   field: SettingsPatch['field'],
   value: number | null,
   currency: string | null,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
 ): string {
-  if (value == null) return 'not set';
+  if (value == null) return optimizerDisplayCopy('notSet', translate);
   // The stored field is a fraction; `formatPercent` takes display units and never multiplies.
-  if (field === 'max_change_pct_per_cycle') return formatPercent(value * 100);
-  return formatCurrency(value, currency);
+  if (field === 'max_change_pct_per_cycle') return formatPercent(value * 100, {}, locale);
+  return formatCurrency(value, currency, locale);
 }
 
 // ── The chart behind the evidence ─────────────────────────────────────────────
@@ -345,6 +459,8 @@ export function formatSettingsValue(
 export type EvidencePoint = { label: string; value: number };
 export type EvidenceSeries = {
   metric: string;
+  /** Localized caption; metric remains the stable source value. */
+  metricLabel?: string;
   /** How to print a value: money, a percentage, a plain number, or a multiple. */
   unit: 'money' | 'percent' | 'number' | 'multiple';
   points: EvidencePoint[];
@@ -359,7 +475,7 @@ const kpiOf = (w: Window, kpiField: string): number => {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 };
 
-export function evidenceSeries(
+function evidenceSeriesSource(
   evidence: RecommendationEvidence | null | undefined,
   snapshot: AdSetSnapshot | null | undefined,
   kpiField: string,
@@ -444,16 +560,21 @@ export function formatEvidenceValue(
   unit: EvidenceSeries['unit'],
   value: number,
   currency: string | null,
+  locale: UiLocale = 'en',
 ): string {
   switch (unit) {
     case 'money':
-      return formatCurrency(value, currency);
+      return formatCurrency(value, currency, locale);
     case 'percent':
-      return formatPercent(value * 100, { fractionDigits: 2 });
+      return formatPercent(value * 100, { fractionDigits: 2 }, locale);
     case 'multiple':
-      return `${value.toFixed(2)}×`;
+      return `${new Intl.NumberFormat(locale, { useGrouping: false, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}×`;
     default:
-      return Number.isInteger(value) ? String(value) : value.toFixed(1);
+      return new Intl.NumberFormat(locale, {
+        useGrouping: false,
+        minimumFractionDigits: Number.isInteger(value) ? 0 : 1,
+        maximumFractionDigits: Number.isInteger(value) ? 0 : 1,
+      }).format(value);
   }
 }
 
@@ -473,4 +594,41 @@ export function audienceExpansionPrompt(
     `Expand the audience of ${subject}.${diagnosis} ` +
     'Give me the three buckets — what it targets now, what the account already owns that it has never used (saved audiences, lookalikes, wider age or geo), and net-new interests verified in the catalogue this session — each option with its id and estimated size, then the combined reach estimate. Apply the brand rules first and mark anything they block.'
   );
+}
+
+/** Localize captions while retaining the metric discriminator, source figures and series order. */
+export function evidenceSeries(
+  evidence: RecommendationEvidence | null | undefined,
+  snapshot: AdSetSnapshot | null | undefined,
+  kpiField: string,
+  translate?: OptimizerDisplayTranslate,
+): EvidenceSeries | null {
+  const source = evidenceSeriesSource(evidence, snapshot, kpiField);
+  if (!source || !translate) return source;
+  const captions = {
+    'spend per day': 'evidenceSpendDay',
+    'people reached': 'evidencePeople',
+    frequency: 'evidenceFrequency',
+    cpa: 'evidenceCost',
+    cpp: 'evidenceCost',
+  } as const;
+  const window = (label: string) =>
+    /^(3|7|14)d$/.test(label)
+      ? translate('evidenceDays', { count: Number(label.slice(0, -1)) })
+      : label;
+  return {
+    ...source,
+    metricLabel: Object.hasOwn(captions, source.metric)
+      ? translate(captions[source.metric as keyof typeof captions])
+      : evidenceMetricLabel(source.metric, translate),
+    points: source.points.map((point) => ({ ...point, label: window(point.label) })),
+    thresholdLabel:
+      source.thresholdLabel === 'reference'
+        ? translate('evidenceReference')
+        : source.thresholdLabel === 'cap'
+          ? translate('evidenceCap')
+          : source.thresholdLabel
+            ? window(source.thresholdLabel)
+            : null,
+  };
 }

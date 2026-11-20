@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
-
+import { cleanup } from '@testing-library/react';
 import { buildPlannerPlatforms } from '@/components/organic/primitives/planner-platforms';
+import { render } from '@/i18n/__tests__/render';
 import { facebook } from '@/lib/brand-icons';
 import { FigmaIcon, InstagramIcon, makeSvgIcon } from './brandIcon';
 

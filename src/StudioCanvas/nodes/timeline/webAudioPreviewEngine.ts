@@ -139,15 +139,52 @@ export function buildPreviewAudioSchedule(input: {
   );
 }
 
-async function decodeAudioAsset(blob: Blob): Promise<DecodedPreviewAudioAsset> {
-  const { ALL_FORMATS, AudioBufferSink, BlobSource, Input } = await import('mediabunny');
-  const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
+export interface PreviewAudioSource {
+  media: Blob | string;
+  startSec: number;
+  endSec: number;
+  /** What the decoded audio is cached under: a URL by its range, a blob by its identity too. */
+  cacheKey: string;
+}
+
+/** One decode per source, spanning every event of the plan that plays from it. */
+export function previewAudioSources(
+  plan: TimelinePreviewAudioPlan,
+): Map<string, PreviewAudioSource> {
+  const sources = new Map<string, PreviewAudioSource>();
+  for (const event of plan.events) {
+    const known = sources.get(event.sourceKey);
+    const startSec = Math.min(known?.startSec ?? event.sourceStartSec, event.sourceStartSec);
+    const endSec = Math.max(known?.endSec ?? event.sourceEndSec, event.sourceEndSec);
+    const identity =
+      typeof event.media === 'string'
+        ? event.media
+        : `${event.sourceKey}:${event.media.type}:${event.media.size}`;
+    sources.set(event.sourceKey, {
+      media: event.media,
+      startSec,
+      endSec,
+      cacheKey: `${identity}#${startSec}-${endSec}`,
+    });
+  }
+  return sources;
+}
+
+// A URL is read by HTTP range: the header, then only the audio packets of the span. A file with
+// no audio track costs its header alone.
+async function decodeAudioAsset(source: PreviewAudioSource): Promise<DecodedPreviewAudioAsset> {
+  const { ALL_FORMATS, AudioBufferSink, BlobSource, Input, UrlSource } = await import('mediabunny');
+  const input = new Input({
+    source:
+      typeof source.media === 'string' ? new UrlSource(source.media) : new BlobSource(source.media),
+    formats: ALL_FORMATS,
+  });
   try {
     const track = await input.getPrimaryAudioTrack();
     if (!track) return { chunks: [] };
     const sink = new AudioBufferSink(track);
     const chunks: DecodedPreviewAudioChunk[] = [];
-    for await (const wrapped of sink.buffers()) {
+    for await (const wrapped of sink.buffers(source.startSec, source.endSec)) {
       chunks.push({
         buffer: wrapped.buffer,
         timestampSec: wrapped.timestamp,
@@ -260,12 +297,15 @@ export class TimelineWebAudioPreviewEngine {
     this.activeGains = [];
   }
 
-  private decode(event: TimelinePreviewAudioEvent): Promise<DecodedPreviewAudioAsset> {
-    const cacheKey = `${event.sourceKey}:${event.blob.type}:${event.blob.size}`;
-    const cached = this.decodedCache.get(cacheKey);
+  // ponytail: one entry per URL and range for the engine's life (an editor session); evict
+  // least-recently-used if trimming a long session holds too much audio.
+  private decode(source: PreviewAudioSource): Promise<DecodedPreviewAudioAsset> {
+    const cached = this.decodedCache.get(source.cacheKey);
     if (cached) return cached;
-    const pending = decodeAudioAsset(event.blob);
-    this.decodedCache.set(cacheKey, pending);
+    const pending = decodeAudioAsset(source);
+    this.decodedCache.set(source.cacheKey, pending);
+    // A failed read is not an answer: the next play asks again.
+    pending.catch(() => this.decodedCache.delete(source.cacheKey));
     return pending;
   }
 
@@ -279,15 +319,16 @@ export class TimelineWebAudioPreviewEngine {
     if ('baseLatency' in context && context.state === 'suspended') await context.resume();
 
     const decodedBySource = new Map<string, DecodedPreviewAudioAsset>();
-    const uniqueEvents = new Map(plan.events.map((event) => [event.sourceKey, event]));
     const decoded = await Promise.all(
-      [...uniqueEvents.values()].map(async (event) => ({
-        sourceKey: event.sourceKey,
-        asset: await this.decode(event),
+      [...previewAudioSources(plan)].map(async ([sourceKey, source]) => ({
+        sourceKey,
+        asset: await this.decode(source),
       })),
     );
     if (generation !== this.generation) return false;
     for (const entry of decoded) decodedBySource.set(entry.sourceKey, entry.asset);
+    // Nothing on the timeline has an audio track: the picture plays without Web Audio.
+    if (decoded.every((entry) => entry.asset.chunks.length === 0)) return false;
 
     const safeFrom = Math.max(0, Math.min(fromTimelineSec, plan.totalDurationSec));
     const latencyLead =

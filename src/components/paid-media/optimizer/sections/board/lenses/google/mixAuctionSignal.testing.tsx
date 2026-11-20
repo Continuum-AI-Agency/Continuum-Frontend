@@ -14,8 +14,8 @@ import {
   readAdAccount,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import type { BoardContext } from '../../types';
 
 export type ServedAccount = {

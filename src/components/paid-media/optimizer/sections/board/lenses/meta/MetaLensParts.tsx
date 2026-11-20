@@ -9,6 +9,7 @@
 // the categorical slots for the portfolios. Text never takes a series color.
 
 import type { AdAccountBoardSlot, BoardModuleSize } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import {
   type FocusEvent,
   type PointerEvent,
@@ -27,10 +28,6 @@ import { ModuleFrame, type ModuleFrameState } from '../../ModuleFrame';
 import { BOARD_COLOR } from '../../palette';
 import type { CostTone } from './metaLensModel';
 import type { MetaReadState } from './metaReads';
-
-/** Every Meta view reads the last 30 days; each says so, because the result module beside it
- *  reads 7 and two windows on one board must never read as one. */
-const META_WINDOW_LABEL = 'Last 30 days';
 
 /** What a view's frame tells the board (and its bench): still reading, the data is absent, a
  *  read failed, or the figures are in. */
@@ -71,12 +68,14 @@ export function MetaFrame({
   );
 }
 
-/** The window line a view opens with, and whatever it adds about its rows. */
+/** The window line a view opens with, and whatever it adds about its rows. Every Meta view reads
+ *  the last 30 days; each says so, because the result module beside it reads 7 and two windows
+ *  on one board must never read as one. */
 export function WindowLine({ detail, testId }: { detail?: string; testId: string }) {
+  const uiText = useTranslations('scale');
   return (
     <p className="text-muted-foreground text-xs" data-testid={`${testId}-window`}>
-      {META_WINDOW_LABEL}
-      {detail ? ` · ${detail}` : ''}
+      {detail ? uiText('last_30_days_detail_08f619d', { detail }) : uiText('last_30_days_f8f03fb')}
     </p>
   );
 }
@@ -97,24 +96,22 @@ const SKELETON_HEIGHT: Record<BoardModuleSize, string> = {
   w: 'h-40',
 };
 
-/** What a view shows while a read that is not ready answers: a body-sized skeleton, the line
+/** What a view shows while its campaign read is not ready: a body-sized skeleton, the line
  *  that says there is no Meta account to read, or the failure with a way to ask again. */
 export function ReadNote({
   state,
   size,
-  what,
   testId,
 }: {
   state: Exclude<MetaReadState<unknown>, { status: 'ready' }>;
   size: BoardModuleSize;
-  /** "campaigns", "ad sets": what the read was for. */
-  what: string;
   testId: string;
 }) {
+  const uiText = useTranslations('scale');
   if (state.status === 'loading') {
     return (
       <Skeleton
-        aria-label={`Reading ${what}`}
+        aria-label={uiText('reading_campaigns_5f205c8')}
         className={cn('w-full', SKELETON_HEIGHT[size])}
         data-testid={`${testId}-loading`}
       />
@@ -122,7 +119,9 @@ export function ReadNote({
   }
   if (state.status === 'no-account') {
     return (
-      <LensNote testId={`${testId}-empty`}>Select a Meta ad account to read its {what}.</LensNote>
+      <LensNote testId={`${testId}-empty`}>
+        {uiText('select_a_meta_ad_account_to_read_its_campaign_e3298ec')}
+      </LensNote>
     );
   }
   return (
@@ -130,9 +129,9 @@ export function ReadNote({
       className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs"
       data-testid={`${testId}-error`}
     >
-      The {what} could not be read.
+      {uiText('the_campaigns_could_not_be_read_296662f')}
       <Button onClick={state.retry} size="xs" variant="outline">
-        Retry
+        {uiText('retry_942087c')}
       </Button>
     </p>
   );

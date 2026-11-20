@@ -1,9 +1,11 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { usePathname, useRouter } from '@/i18n/navigation';
 import { BillingApiRequestError, fetchBillingOverview } from './billingApi';
 import {
   CHANGE_POLL_INTERVAL_MS,
@@ -46,20 +48,23 @@ function useBillingOverview(brandId: string, pollIntervalMs: number | false, ena
 // One toast slot for the whole wait: the outcome replaces "Payment received" in place.
 const PENDING_TOAST_KEY = 'billing-pending-change';
 
-function settledTitle(change: PendingBillingChange): string {
+function settledTitle(
+  change: PendingBillingChange,
+  t: ReturnType<typeof useTranslations<'common'>>,
+): string {
   switch (change.kind) {
     case 'plan_added':
-      return 'Your plan is active';
+      return t('billingPlanActive');
     case 'plan_removed':
-      return 'Plan removed';
+      return t('billingPlanRemoved');
     case 'credits_added':
-      return 'Canvas credits added';
+      return t('billingCreditsAdded');
     case 'overage_changed':
-      return change.enabled ? 'Auto-billing is on' : 'Auto-billing is off';
+      return change.enabled ? t('billingAutoOn') : t('billingAutoOff');
     case 'x_credits_added':
-      return 'X API credits added';
+      return t('billingXCreditsAdded');
     case 'x_overage_changed':
-      return change.enabled ? 'X auto-billing is on' : 'X auto-billing is off';
+      return change.enabled ? t('billingXAutoOn') : t('billingXAutoOff');
   }
 }
 
@@ -89,6 +94,7 @@ export function useBillingOverviewWithPendingChange(
   brandId: string,
   options: { returnsOnly?: boolean; enabled?: boolean } = {},
 ) {
+  const uiText = useTranslations('common');
   const { returnsOnly = false, enabled = true } = options;
   const { show } = useToast();
   const router = useRouter();
@@ -123,7 +129,11 @@ export function useBillingOverviewWithPendingChange(
     const rest = withoutCheckoutReturn(searchParams.toString(), returnsOnly ? [] : [FROM_PARAM]);
     router.replace(`${pathname}${rest}`, { scroll: false });
     if (checkoutReturn.outcome === 'cancel') {
-      show({ title: 'Checkout canceled', description: 'Nothing was charged.', variant: 'info' });
+      show({
+        title: uiText('checkout_canceled_5a996d2'),
+        description: uiText('nothing_was_charged_85c3bd5'),
+        variant: 'info',
+      });
       return;
     }
     const { sessionId } = checkoutReturn;
@@ -131,15 +141,15 @@ export function useBillingOverviewWithPendingChange(
       setReceipt({ sessionId, from, status: 'waiting' });
     } else {
       show({
-        title: 'Payment received',
-        description: 'Confirming with Stripe — this takes a few seconds.',
+        title: uiText('payment_received_2fef795'),
+        description: uiText('confirming_with_stripe_this_takes_a_few_secon_7ae40a3'),
         variant: 'info',
         dedupeKey: PENDING_TOAST_KEY,
       });
     }
     checkoutReturnRef.current = { from, printsReceipt: sessionId !== null };
     track(checkoutReturn.change);
-  }, [enabled, returnsOnly, pathname, router, searchParams, show, track]);
+  }, [enabled, returnsOnly, pathname, router, searchParams, show, track, uiText]);
 
   useEffect(() => {
     if (!pending || !data || !isChangeSettled(pending, data)) return;
@@ -150,14 +160,17 @@ export function useBillingOverviewWithPendingChange(
       setReceipt((current) => current && { ...current, status: 'settled' });
     } else {
       show({
-        title: settledTitle(pending),
+        title: settledTitle(pending, uiText),
         variant: 'success',
         dedupeKey: PENDING_TOAST_KEY,
         // An offer, never a redirect: the buyer may want to look at what they bought first.
         ...(from
           ? {
               durationMs: 10_000,
-              action: { label: 'Back to where you were', onClick: () => router.push(from) },
+              action: {
+                label: uiText('back_to_where_you_were_1e76eca'),
+                onClick: () => router.push(from),
+              },
             }
           : {}),
       });
@@ -166,7 +179,7 @@ export function useBillingOverviewWithPendingChange(
     setPending(null);
     // The sidebar's credits widget is server-rendered from the entitlements; re-render it.
     router.refresh();
-  }, [data, pending, router, show]);
+  }, [data, pending, router, show, uiText]);
 
   useEffect(() => {
     if (!pending) return;
@@ -176,8 +189,8 @@ export function useBillingOverviewWithPendingChange(
           setReceipt((current) => current && { ...current, status: 'timed_out' });
         } else {
           show({
-            title: 'Still waiting on Stripe',
-            description: 'Your payment went through. Refresh in a minute to see it here.',
+            title: uiText('still_waiting_on_stripe_e9d830a'),
+            description: uiText('your_payment_went_through_refresh_in_a_minute_2ad8837'),
             variant: 'warning',
             dedupeKey: PENDING_TOAST_KEY,
           });
@@ -188,7 +201,7 @@ export function useBillingOverviewWithPendingChange(
       Math.max(deadlineRef.current - Date.now(), 0),
     );
     return () => clearTimeout(timer);
-  }, [pending, show]);
+  }, [pending, show, uiText]);
 
   const closeReceipt = useCallback(() => setReceipt(null), []);
 

@@ -1,14 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  cleanup,
-  fireEvent,
-  render as renderWithoutClient,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
+import { render as renderWithoutClient } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -173,7 +167,7 @@ describe('OptimizerActionFeed', () => {
     };
     renderFeed('USD');
     expect(screen.getByRole('button', { name: 'Unpause' })).toBeTruthy();
-    expect(screen.getByText('PAUSED')).toBeTruthy();
+    expect(screen.getByText('Paused')).toBeTruthy();
   });
 
   // The flag is the SERVER's answer. A client-side guess is how a button starts lying.
@@ -263,7 +257,7 @@ describe('OptimizerActionFeed', () => {
       },
     };
     renderFeed('USD');
-    expect(screen.getByText('1 actions loaded — there are older ones.')).toBeTruthy();
+    expect(screen.getByText('1 action loaded — there are older ones.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     expect(loadedMore).toBe(1);
   });

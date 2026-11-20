@@ -1,5 +1,6 @@
 'use client';
 
+import type { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type ChatMedia,
@@ -351,6 +352,7 @@ export function rankCardMedia({
   previewStage = 'storyboard',
   storyboard,
   format,
+  translate,
 }: {
   idPrefix: string;
   realized: ChatMedia[];
@@ -359,12 +361,21 @@ export function rankCardMedia({
   previewStage?: PreviewMediaStage;
   storyboard: readonly string[];
   format?: string | null;
+  translate?: ReturnType<typeof useTranslations<'organic'>>;
 }): { source: CardMediaSource; media: ChatMedia[] } {
   if (realized.length > 0) return { source: 'realized', media: realized };
   const previews = (urls: readonly string[], stage: PreviewMediaStage = 'storyboard') =>
     mediaFromPreviewUrls(idPrefix, urls, format, stage).map((media, index, all) => ({
       ...media,
-      name: `${format ?? 'Post'} preview ${index + 1} of ${all.length}`,
+      name: translate
+        ? translate('draftPreviewName', {
+            format: /^(post|carousel|reel|story|image|video)$/i.test(format ?? 'post')
+              ? (format ?? 'post').toLowerCase()
+              : (format ?? 'post'),
+            index: index + 1,
+            total: all.length,
+          })
+        : `${format ?? 'Post'} preview ${index + 1} of ${all.length}`,
     }));
   if (preview.length > 0 && !previewStale) {
     return { source: 'live', media: previews(preview, previewStage) };

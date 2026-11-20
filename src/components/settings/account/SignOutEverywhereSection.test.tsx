@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // Settings → Profile: Sign out in the sidebar ends only this browser; this control ends every
 // session of the account, behind a confirmation. A session opened from an impersonation link

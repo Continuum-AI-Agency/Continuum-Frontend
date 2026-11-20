@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   DEFAULT_REVIEW_STATE_LABELS,
+  listReviewStateLabelsResponseSchema,
   reviewStateLabelSchema,
   reviewStateLabelsSchema,
 } from './review';
@@ -33,5 +34,26 @@ describe('review state labels', () => {
     expect(reviewStateLabelSchema.safeParse({ ...base, label: 'x'.repeat(41) }).success).toBe(
       false,
     );
+  });
+});
+
+describe('review label origins', () => {
+  it('accepts legacy readers and optional stored-label provenance', () => {
+    const legacy = { labels: [...DEFAULT_REVIEW_STATE_LABELS], customStates: [] };
+    expect(listReviewStateLabelsResponseSchema.parse(legacy).customizedStates).toBeUndefined();
+    expect(
+      listReviewStateLabelsResponseSchema.parse({ ...legacy, customizedStates: [] })
+        .customizedStates,
+    ).toEqual([]);
+    expect(
+      listReviewStateLabelsResponseSchema.parse({ ...legacy, customizedStates: ['approved'] })
+        .customizedStates,
+    ).toEqual(['approved']);
+    expect(
+      listReviewStateLabelsResponseSchema.safeParse({
+        ...legacy,
+        customizedStates: ['custom-label'],
+      }).success,
+    ).toBe(false);
   });
 });

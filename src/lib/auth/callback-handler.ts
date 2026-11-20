@@ -1,23 +1,38 @@
 import 'server-only';
 
 import { type NextRequest, NextResponse } from 'next/server';
+import { getTranslations } from 'next-intl/server';
+import type { UiLocale } from '@/i18n/config';
+import { getCookieLocale, restoreAccountLocale } from '@/i18n/server';
 import { resolveCallbackContext } from '@/lib/auth/callback-context';
 import {
   IMPERSONATION_COOKIE,
   IMPERSONATION_COOKIE_OPTIONS,
   IMPERSONATION_COOKIE_VALUE,
 } from '@/lib/auth/impersonation';
+import { escapePopupHtml, popupScriptJson } from '@/lib/auth/popup-html';
 import { resolveAuthRedirectPath } from '@/lib/auth/redirect';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-function renderPopupAwareResult(options: {
-  success: boolean;
-  context: string;
-  provider: string | null;
-  message?: string;
-  fallbackRedirect: string;
-  isPopup?: boolean;
-}) {
+function renderPopupAwareResult(
+  t: (
+    key:
+      | 'authentication'
+      | 'authenticationFailed'
+      | 'authenticationComplete'
+      | 'closeWindow'
+      | 'redirecting',
+  ) => string,
+  locale: UiLocale,
+  options: {
+    success: boolean;
+    context: string;
+    provider: string | null;
+    message?: string;
+    fallbackRedirect: string;
+    isPopup?: boolean;
+  },
+) {
   const { success, message, fallbackRedirect, context, provider, isPopup } = options;
   const payload = success
     ? {
@@ -30,22 +45,22 @@ function renderPopupAwareResult(options: {
         type: 'oauth:error',
         provider,
         context,
-        message: message ?? 'Authentication failed',
+        message: message ?? t('authenticationFailed'),
       };
 
   const html = `<!DOCTYPE html>
-<html lang="en">
-  <head><meta charset="utf-8" /><title>Authentication</title></head>
+<html lang="${locale}">
+  <head><meta charset="utf-8" /><title>${escapePopupHtml(t('authentication'))}</title></head>
   <body style="font-family: sans-serif; display: grid; min-height: 100vh; place-items: center;">
     <div>
-      <p>${success ? 'Authentication complete.' : 'Authentication failed.'}</p>
-      ${isPopup ? '<p>You can close this window.</p>' : '<p>Redirecting...</p>'}
+      <p>${escapePopupHtml(success ? t('authenticationComplete') : t('authenticationFailed'))}</p>
+      <p>${escapePopupHtml(isPopup ? t('closeWindow') : t('redirecting'))}</p>
     </div>
     <script>
       (function () {
         const isPopup = ${!!isPopup};
         try {
-          var payload = ${JSON.stringify(payload)};
+          var payload = ${popupScriptJson(payload)};
           if (isPopup && window.opener) {
             window.opener.postMessage(payload, window.location.origin);
             try { window.close(); } catch (_) {}
@@ -55,7 +70,7 @@ function renderPopupAwareResult(options: {
           // ignore and continue to fallback navigation
         }
         // Fallback for when this page is opened in the main window
-        window.location.replace(${JSON.stringify(fallbackRedirect)});
+        window.location.replace(${popupScriptJson(fallbackRedirect)});
       })();
     </script>
   </body>
@@ -71,6 +86,8 @@ function renderPopupAwareResult(options: {
 }
 
 export async function handleAuthCallbackRequest(request: NextRequest): Promise<NextResponse> {
+  let locale = await getCookieLocale();
+  let t = await getTranslations({ locale, namespace: 'auth' });
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
   const context = requestUrl.searchParams.get('context');
@@ -91,11 +108,11 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
   });
 
   if (!code) {
-    const response = renderPopupAwareResult({
+    const response = renderPopupAwareResult(t, locale, {
       success: false,
       context: resolved.context,
       provider: resolved.provider,
-      message: 'Missing authorization code.',
+      message: t('missingCode'),
       fallbackRedirect: `${origin}/login?error=auth_callback_failed`,
       isPopup,
     });
@@ -106,18 +123,18 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
 
   try {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
       console.error('[AUTH_CALLBACK] Failed to exchange code for session:', {
         error: error.message,
         timestamp: new Date().toISOString(),
       });
-      const response = renderPopupAwareResult({
+      const response = renderPopupAwareResult(t, locale, {
         success: false,
         context: resolved.context,
         provider: resolved.provider,
-        message: error.message,
+        message: t('authenticationFailed'),
         fallbackRedirect: `${origin}/login?error=auth_callback_failed`,
         isPopup,
       });
@@ -125,16 +142,19 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
       response.cookies.delete('continuum_oauth_provider');
       return response;
     }
+    if (data?.user) await restoreAccountLocale(data.user.user_metadata);
+    locale = await getCookieLocale();
+    t = await getTranslations({ locale, namespace: 'auth' });
   } catch (error) {
     console.error('[AUTH_CALLBACK] Unexpected error during OAuth callback:', {
       error: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString(),
     });
-    const response = renderPopupAwareResult({
+    const response = renderPopupAwareResult(t, locale, {
       success: false,
       context: resolved.context,
       provider: resolved.provider,
-      message: 'Unexpected error',
+      message: t('unexpectedError'),
       fallbackRedirect: `${origin}/login?error=unexpected_error`,
       isPopup,
     });
@@ -143,7 +163,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
     return response;
   }
 
-  const response = renderPopupAwareResult({
+  const response = renderPopupAwareResult(t, locale, {
     success: true,
     context: resolved.context,
     provider: resolved.provider,

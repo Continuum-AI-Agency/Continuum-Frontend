@@ -9,14 +9,14 @@ export type ListSort = { key: string; direction: SortDirection };
 export type SortValue = string | number | null;
 
 export const BUILT_IN_LIST_COLUMNS = [
-  { key: 'name', label: 'Name' },
-  { key: 'kind', label: 'Kind' },
-  { key: 'size', label: 'Size' },
-  { key: 'duration', label: 'Duration' },
-  { key: 'dimensions', label: 'Dimensions' },
-  { key: 'review', label: 'Review' },
-  { key: 'created', label: 'Created' },
-  { key: 'updated', label: 'Updated' },
+  { key: 'name', labelKey: 'name_dcd1d522' },
+  { key: 'kind', labelKey: 'kind_f5387f9b' },
+  { key: 'size', labelKey: 'size_1af85190' },
+  { key: 'duration', labelKey: 'duration_4fc52a3c' },
+  { key: 'dimensions', labelKey: 'dimensions_914182d5' },
+  { key: 'review', labelKey: 'review_aff0766a' },
+  { key: 'created', labelKey: 'created_d70b9e24' },
+  { key: 'updated', labelKey: 'updated_3a5ecca1' },
 ] as const;
 
 // List column key (views/cardOptions BUILT_IN_CARD_FIELDS) → the browse sort key that orders

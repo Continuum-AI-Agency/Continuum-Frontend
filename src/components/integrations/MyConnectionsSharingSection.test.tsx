@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { createTranslator } from 'next-intl';
+import { englishMessages, render } from '@/i18n/__tests__/render';
 
 // The section's real grouping and row rendering run; the server-only reads and the two
 // dialog buttons (router + toast) are replaced.
@@ -7,6 +9,15 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 const META = '00000000-0000-4000-8000-0000000000a1';
 const GOOGLE = '00000000-0000-4000-8000-0000000000a2';
 
+// The section is an async server component; outside an RSC request the real
+// next-intl/server throws, so it is given the English catalogs directly.
+const intlServer = await import('next-intl/server');
+mock.module('next-intl/server', () => ({
+  ...intlServer,
+  getLocale: async () => 'en',
+  getTranslations: async (namespace?: string) =>
+    createTranslator({ locale: 'en', messages: englishMessages, namespace }),
+}));
 mock.module('@/lib/integrations/ownedConnections', () => ({
   fetchOwnedConnections: async () => [
     {

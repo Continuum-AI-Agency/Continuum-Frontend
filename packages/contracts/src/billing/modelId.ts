@@ -116,6 +116,7 @@ const BILLING_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'gemini-omni-flash': 'gemini-omni-flash',
   'gemini-omni-flash-preview': 'gemini-omni-flash',
   'gemini-omni-1.1-flash': 'gemini-omni-flash',
+  'gemini-omni-1.2-flash': 'gemini-omni-flash',
 };
 
 /**

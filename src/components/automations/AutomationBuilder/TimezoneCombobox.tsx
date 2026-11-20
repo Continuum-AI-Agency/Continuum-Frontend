@@ -1,6 +1,7 @@
 'use client';
 
 import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +22,7 @@ type TimezoneComboboxProps = {
 };
 
 export function TimezoneCombobox({ value, onChange }: TimezoneComboboxProps) {
+  const uiText = useTranslations('automations');
   const [open, setOpen] = useState(false);
   const timezones = useMemo(() => listTimezones(), []);
 
@@ -33,19 +35,19 @@ export function TimezoneCombobox({ value, onChange }: TimezoneComboboxProps) {
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            aria-label="Timezone"
+            aria-label={uiText('timezone_4ceca1d')}
             className="w-full justify-between font-normal"
           >
-            <span className="truncate">{value || 'Pick a timezone'}</span>
+            <span className="truncate">{value || uiText('pick_a_timezone_4c5e74c')}</span>
             <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
           </Button>
         }
       />
       <PopoverContent className="w-[280px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search timezones…" />
+          <CommandInput placeholder={uiText('search_timezones_034969c')} />
           <CommandList>
-            <CommandEmpty>No timezone found.</CommandEmpty>
+            <CommandEmpty>{uiText('no_timezone_found_ec04105')}</CommandEmpty>
             <CommandGroup>
               {timezones.map((timezone) => (
                 <CommandItem

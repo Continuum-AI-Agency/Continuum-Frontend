@@ -5,6 +5,7 @@
 // someone opens it.
 
 import { BookOpenIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { lazy, Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,6 +21,7 @@ import type { HomeBoardContext } from '../../types';
 const StorySheet = lazy(() => import('./StorySheet'));
 
 export default function StoryButton({ ctx }: { ctx: HomeBoardContext }) {
+  const uiText = useTranslations('dashboard');
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -31,7 +33,7 @@ export default function StoryButton({ ctx }: { ctx: HomeBoardContext }) {
         type="button"
         variant="outline"
       >
-        <BookOpenIcon aria-hidden className="size-3.5" /> Weekly story
+        <BookOpenIcon aria-hidden className="size-3.5" /> {uiText('weekly_story_bc91068')}
       </Button>
       <Sheet onOpenChange={setOpen} open={open}>
         <SheetContent
@@ -40,9 +42,13 @@ export default function StoryButton({ ctx }: { ctx: HomeBoardContext }) {
           side="right"
         >
           <SheetHeader>
-            <SheetTitle>Weekly story</SheetTitle>
+            <SheetTitle>{uiText('weekly_story_bc91068')}</SheetTitle>
             <SheetDescription>
-              {ctx.brandName ?? 'This brand'} this week, from what Continuum already read.
+              {ctx.brandName
+                ? uiText('brand_this_week_from_what_continuum_already_r_303c131', {
+                    brand: ctx.brandName,
+                  })
+                : uiText('this_brand_this_week_from_what_continuum_alre_b74028e')}
             </SheetDescription>
           </SheetHeader>
           <div className="min-w-0 px-4 pb-6">

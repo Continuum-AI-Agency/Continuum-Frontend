@@ -51,7 +51,13 @@ const skillRow = (id: string, overrides: Partial<Skill> = {}): Skill => ({
 const shortcutRow = (id: string): Skill =>
   skillRow(id, { isTemplate: true, brandId: null, tags: ['shortcut', 'shortcut:light'] });
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import {
   DropdownMenu,
   DropdownMenuContent,

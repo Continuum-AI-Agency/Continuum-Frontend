@@ -16,6 +16,7 @@ import {
   termsLensTakeawayQuiet,
 } from '@continuum/contracts';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
@@ -73,12 +74,6 @@ const BUCKET_COLOR: Record<TermBucket, string> = {
   competitor: BOARD_COLOR.pmax,
   rest: BOARD_COLOR.video,
   wrong_intent: BOARD_COLOR.mid,
-};
-
-const HEADLINE_CAPTION: Record<FlaggedBucket, string> = {
-  brand: 'of search-term spend buys the brand',
-  competitor: 'of search-term spend buys competitor searches',
-  wrong_intent: 'of search-term spend has no intent to buy',
 };
 
 type ReadModel = Extract<TermsModel, { kind: 'read' }>;
@@ -161,13 +156,14 @@ function TermsBody({
   money: Money;
   size: BoardModuleSize;
 }) {
+  const uiText = useTranslations('scale');
   if (model.kind === 'unread') {
     return <LensNote testId="terms-unread">— {model.reason}</LensNote>;
   }
   if (model.kind === 'empty') {
     return (
       <LensNote testId="terms-empty">
-        No search term spent in Google's last 30 complete days.
+        {uiText('no_search_term_spent_in_google_s_last_30_comp_ebc3749')}
       </LensNote>
     );
   }
@@ -176,10 +172,13 @@ function TermsBody({
 }
 
 function Headline({ model, money }: { model: ReadModel; money: Money }) {
+  const uiText = useTranslations('scale');
   if (!model.headline) {
     return (
       <LensFigure
-        caption={`on ${model.termCount.toLocaleString('en-US')} search terms`}
+        caption={uiText('on_count_plural_one_search_term_other_search__a7a9142', {
+          count: model.termCount,
+        })}
         testId="terms-headline"
         value={money(model.total)}
       />
@@ -188,7 +187,10 @@ function Headline({ model, money }: { model: ReadModel; money: Money }) {
   const lead = model.buckets[model.headline];
   return (
     <LensFigure
-      caption={`${HEADLINE_CAPTION[model.headline]} · ${money(lead.spend)}`}
+      caption={uiText('bucket_select_brand_of_search_term_spend_buys_18374a7', {
+        bucket: model.headline,
+        spend: money(lead.spend),
+      })}
       testId="terms-headline"
       value={pct(lead.share)}
     />
@@ -216,12 +218,15 @@ function BucketBar({ model, money }: { model: ReadModel; money: Money }) {
   const parts = TERM_BUCKETS.map((bucket) => model.buckets[bucket]).filter(
     (figure) => figure.spend > 0,
   );
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   return (
     <div
-      aria-label={`Search-term spend by intent: ${parts
-        .map((figure) => `${TERM_BUCKET_LABEL[figure.bucket]} ${pct(figure.share)}`)
-        .join(', ')}`}
+      aria-label={uiText('search_term_spend_by_intent_list_c72dd01', {
+        list: parts
+          .map((figure) => `${TERM_BUCKET_LABEL[figure.bucket]} ${pct(figure.share)}`)
+          .join(', '),
+      })}
       className="flex h-2 w-full gap-0.5"
       data-testid="terms-bucket-bar"
       role="img"
@@ -274,6 +279,7 @@ function TermsFullBody({
   money: Money;
   size: BoardModuleSize;
 }) {
+  const uiText = useTranslations('scale');
   const [selection, setSelection] = useState<Selection | null>(null);
   const tall = size === 'l';
   const listsRoots = tall || size === 'w';
@@ -305,12 +311,14 @@ function TermsFullBody({
         ) : listsRoots ? (
           <TopGroups model={model} money={money} />
         ) : (
-          <LensNote>Tap a tile or a bucket to list its terms.</LensNote>
+          <LensNote>{uiText('tap_a_tile_or_a_bucket_to_list_its_terms_e7ad2d8')}</LensNote>
         )}
         <Takeaway model={model} money={money} />
         <LensNote testId="terms-scope">
-          {windowRangeLabel(model.window.since, model.window.until)} · Google's last 30 complete
-          days · {model.termCount.toLocaleString('en-US')} Search and Performance Max terms
+          {uiText('range_google_s_last_30_complete_days_count_pl_0226743', {
+            range: windowRangeLabel(model.window.since, model.window.until),
+            count: model.termCount,
+          })}
         </LensNote>
       </div>
     </div>
@@ -353,6 +361,7 @@ function Treemap({
   selection: Selection | null;
   onSelect: (selection: Selection) => void;
 }) {
+  const uiText = useTranslations('scale');
   const [ref, measured] = useBoxWidth<HTMLDivElement>();
   const width = measured ?? NARROWEST;
   const reduce = useReducedMotion();
@@ -383,7 +392,13 @@ function Treemap({
         const showLabel = rect.w >= LABEL_MIN.w && rect.h >= LABEL_MIN.h;
         const showMoney = showLabel && rect.h >= LABEL_MIN.hMoney;
         const share = tile.spend / model.total;
-        const summary = `${tile.label} · ${TERM_BUCKET_LABEL[tile.bucket]} · ${pct(share)} · ${tile.termCount} ${tile.termCount === 1 ? 'term' : 'terms'} · ${tile.conversions.toLocaleString('en-US', { maximumFractionDigits: 1 })} conv.`;
+        const summary = uiText('label_bucket_share_count_plural_one_term_othe_7d82cc4', {
+          label: tile.label,
+          bucket: TERM_BUCKET_LABEL[tile.bucket],
+          share: pct(share),
+          count: tile.termCount,
+          conversions: conversionCount(tile.conversions),
+        });
         return (
           <MarkTip
             key={tile.id}
@@ -498,13 +513,21 @@ function BucketLegend({
 
 const LISTED = 6;
 
+/** A conversion count as Google reports it, to one decimal. */
+function conversionCount(value: number): string {
+  return value.toLocaleString('en-US', { maximumFractionDigits: 1 });
+}
+
 function TermRow({ term, money }: { term: SearchTerm; money: Money }) {
+  const uiText = useTranslations('scale');
   return (
     <li className="flex min-w-0 items-baseline justify-between gap-3 py-1 text-xs">
       <span className="min-w-0 break-words text-foreground">{term.term}</span>
       <span className="shrink-0 text-muted-foreground tabular-nums">
-        {money(term.totals.spend)} ·{' '}
-        {term.totals.conversions.toLocaleString('en-US', { maximumFractionDigits: 1 })} conv.
+        {uiText('spend_conversions_conv_34bed36', {
+          spend: money(term.totals.spend),
+          conversions: conversionCount(term.totals.conversions),
+        })}
       </span>
     </li>
   );
@@ -519,6 +542,7 @@ function SelectedTerms({
   money: Money;
   selection: Selection;
 }) {
+  const uiText = useTranslations('scale');
   const terms = termsOfSelection(model, selection);
   const spend = terms.reduce((sum, term) => sum + term.totals.spend, 0);
   const tile = model.tiles.find(
@@ -530,10 +554,14 @@ function SelectedTerms({
   const title =
     tile?.label ??
     (selection.folded
-      ? `${TERM_BUCKET_LABEL[selection.bucket]} · smaller groups`
+      ? uiText('bucket_smaller_groups_47854db', { bucket: TERM_BUCKET_LABEL[selection.bucket] })
       : TERM_BUCKET_LABEL[selection.bucket]);
   return (
-    <section aria-label={`Terms in ${title}`} className="space-y-1" data-testid="terms-selected">
+    <section
+      aria-label={uiText('terms_in_title_7e1158b', { title })}
+      className="space-y-1"
+      data-testid="terms-selected"
+    >
       <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-xs">
         <LegendKey
           color={BUCKET_COLOR[selection.bucket]}
@@ -542,8 +570,10 @@ function SelectedTerms({
           <span className="font-semibold text-foreground">{title}</span>
         </LegendKey>
         <span className="text-muted-foreground tabular-nums">
-          {terms.length.toLocaleString('en-US')} {terms.length === 1 ? 'term' : 'terms'} ·{' '}
-          {money(spend)}
+          {uiText('count_plural_one_term_other_terms_spend_01db235', {
+            count: terms.length,
+            spend: money(spend),
+          })}
         </span>
       </p>
       <ul className="divide-y divide-border/60">
@@ -558,7 +588,10 @@ function SelectedTerms({
       <p className="flex flex-wrap items-center gap-x-3 text-xs">
         {terms.length > LISTED ? (
           <span className="text-muted-foreground">
-            The {LISTED} that spent most; {(terms.length - LISTED).toLocaleString('en-US')} more.
+            {uiText('the_listed_that_spent_most_more_number_more_950051f', {
+              listed: LISTED,
+              more: terms.length - LISTED,
+            })}
           </span>
         ) : null}
         <a
@@ -573,7 +606,7 @@ function SelectedTerms({
             { newConversation: true },
           )}
         >
-          Ask Jaina about these
+          {uiText('ask_jaina_about_these_736f511')}
         </a>
       </p>
     </section>
@@ -582,9 +615,14 @@ function SelectedTerms({
 
 /** The groups that spent most, whatever their bucket: the roots, competitors and themes. */
 function TopGroups({ model, money }: { model: ReadModel; money: Money }) {
+  const uiText = useTranslations('scale');
   return (
-    <section aria-label="Top roots" className="space-y-1" data-testid="terms-top-groups">
-      <p className="font-medium text-muted-foreground text-xs">Top roots</p>
+    <section
+      aria-label={uiText('top_roots_bbe4dfc')}
+      className="space-y-1"
+      data-testid="terms-top-groups"
+    >
+      <p className="font-medium text-muted-foreground text-xs">{uiText('top_roots_bbe4dfc')}</p>
       <ul className="divide-y divide-border/60">
         {model.topGroups.map(({ bucket, group }) => (
           <li
@@ -594,7 +632,9 @@ function TopGroups({ model, money }: { model: ReadModel; money: Money }) {
             <LegendKey color={BUCKET_COLOR[bucket]} hatched={bucket === 'wrong_intent'}>
               <span className="text-foreground">{group.label}</span>{' '}
               <span className="text-muted-foreground">
-                · {group.terms.length} {group.terms.length === 1 ? 'term' : 'terms'}
+                {uiText('count_plural_one_term_other_terms_d91ecf9', {
+                  count: group.terms.length,
+                })}
               </span>
             </LegendKey>
             <span className="shrink-0 text-muted-foreground tabular-nums">

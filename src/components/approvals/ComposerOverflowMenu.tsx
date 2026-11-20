@@ -1,6 +1,7 @@
 'use client';
 
 import { Ban, Copy, FileJson, MoreHorizontal, SkipForward } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,14 +23,16 @@ type Props = {
 };
 
 export function ComposerOverflowMenu({ action, onReject, onSkip, onViewPayload }: Props) {
+  const tUi = useTranslations('common');
+
   const handleCopy = React.useCallback(async () => {
     try {
       await navigator.clipboard.writeText(action.id);
-      toast.success('Action id copied');
+      toast.success(tUi('m_5f2a8f7086'));
     } catch {
-      toast.error("Couldn't copy");
+      toast.error(tUi('m_d1e1e108a2'));
     }
-  }, [action.id]);
+  }, [action.id, tUi]);
 
   return (
     <DropdownMenu>
@@ -40,7 +43,7 @@ export function ComposerOverflowMenu({ action, onReject, onSkip, onViewPayload }
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-muted-foreground"
-            aria-label="More actions"
+            aria-label={tUi('m_a1e34f9157')}
           >
             <MoreHorizontal className="h-4 w-4" strokeWidth={1.5} />
           </Button>
@@ -49,23 +52,23 @@ export function ComposerOverflowMenu({ action, onReject, onSkip, onViewPayload }
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onSelect={onReject} className="text-destructive focus:text-destructive">
           <Ban className="mr-2 h-4 w-4" strokeWidth={1.5} />
-          Reject…
+          {tUi('m_ca5aa8c9f5')}
           <DropdownMenuShortcut>R</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSkip}>
           <SkipForward className="mr-2 h-4 w-4" strokeWidth={1.5} />
-          Skip
+          {tUi('m_3da474537a')}
           <DropdownMenuShortcut>S</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onViewPayload}>
           <FileJson className="mr-2 h-4 w-4" strokeWidth={1.5} />
-          View raw payload
+          {tUi('m_f9816af43f')}
           <DropdownMenuShortcut>P</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={handleCopy}>
           <Copy className="mr-2 h-4 w-4" strokeWidth={1.5} />
-          Copy action id
+          {tUi('m_570308dc57')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

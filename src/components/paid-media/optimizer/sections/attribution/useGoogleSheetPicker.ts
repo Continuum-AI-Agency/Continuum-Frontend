@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Choosing a Google Sheet with the Drive picker the Backend already serves
 // (GET /integrations/google-drive/picker → a popup that posts `documents:linked` back to its
@@ -52,6 +53,7 @@ export function readPickerMessage(
 }
 
 export function useGoogleSheetPicker(brandId: string, onPicked: (sheet: PickedSheet) => void) {
+  const uiText = useTranslations('scale');
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   const stateRef = useRef<string | null>(null);
@@ -84,11 +86,11 @@ export function useGoogleSheetPicker(brandId: string, onPicked: (sheet: PickedSh
       stateRef.current = state;
       window.open(url, 'continuum-sheet-picker', 'width=720,height=640');
     } catch {
-      setError('The Drive picker could not open. Paste the sheet link instead.');
+      setError(uiText('the_drive_picker_could_not_open_paste_the_she_eb4c486'));
     } finally {
       setOpening(false);
     }
-  }, [brandId]);
+  }, [brandId, uiText]);
 
   return { open, opening, error };
 }

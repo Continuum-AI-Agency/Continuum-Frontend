@@ -1,11 +1,12 @@
 import type { ReadinessSeverity } from '@continuum/contracts';
 import { readinessSeverity } from '@continuum/contracts';
 import { BookOpen, Sparkles } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { ReadinessFinding } from '@/lib/onboarding/agentClient';
 import { cn } from '@/lib/utils';
-import { DIMENSION_LABELS } from './utils';
+import { getDimensionLabels } from './utils';
 
 // Static class strings so Tailwind can see them; colours are theme tokens so the
 // tint holds in dark mode.
@@ -43,6 +44,8 @@ type Props = {
 };
 
 export function FindingCallout({ finding, onSelect, onPreview, selected, controls }: Props) {
+  const tUi = useTranslations('onboarding');
+
   const severity = readinessSeverity(finding.score);
   const rail = Boolean(onSelect);
   const meta =
@@ -58,7 +61,7 @@ export function FindingCallout({ finding, onSelect, onPreview, selected, control
         ) : null}
         {rail ? (
           <span className="text-xs text-muted-foreground">
-            {DIMENSION_LABELS[finding.dimension]}
+            {getDimensionLabels(tUi)[finding.dimension]}
           </span>
         ) : null}
         {finding.target_field ? (
@@ -79,7 +82,7 @@ export function FindingCallout({ finding, onSelect, onPreview, selected, control
           <span className="block text-sm leading-snug text-muted-foreground">{finding.detail}</span>
         )}
         <span className="block pt-0.5 text-sm leading-snug text-foreground">
-          <span className="font-semibold">Try this: </span>
+          <span className="font-semibold">{tUi('m_506bc344f3')}</span>
           {finding.recommendation}
         </span>
         {meta}

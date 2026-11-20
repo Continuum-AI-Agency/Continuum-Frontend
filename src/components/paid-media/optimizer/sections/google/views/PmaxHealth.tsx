@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { googleCopy } from '../googlePresentation';
+
 // Performance Max health (P6 view 6): Poor asset groups first as their own finding, each group's
 // Ad Strength, status and assets, then each PMax campaign's spend by network. Says plainly what
 // no read returns (search categories, audience signals). Read-only; a group's fix is the Optimizer's
@@ -32,59 +35,6 @@ import {
 } from './pmaxHealthModel';
 import { CellText, ReadGate, ReasonNotes, ScopeLine, type ViewRead, viewRead } from './viewParts';
 
-const GROUP_COLUMNS: InsightColumn<AssetGroupRow>[] = [
-  {
-    id: 'group',
-    header: 'Asset group',
-    cell: (row) => (
-      <span className="block min-w-40">
-        <span className="font-medium">{row.name}</span>
-        {row.missingItems.length > 0 ? (
-          <span className="block text-muted-foreground text-xs">
-            Google asks: {row.missingItems.join(' · ')}
-          </span>
-        ) : null}
-      </span>
-    ),
-  },
-  {
-    id: 'strength',
-    header: 'Ad strength',
-    cell: (row) => (
-      <span className={row.poor ? 'font-medium text-destructive' : undefined}>
-        <CellText cell={row.strength} />
-      </span>
-    ),
-  },
-  { id: 'status', header: 'Status', cell: (row) => <CellText cell={row.status} /> },
-  { id: 'assets', header: 'Assets', cell: (row) => <CellText cell={row.assets} /> },
-];
-
-function networkColumns(currency: string | null): InsightColumn<NetworkSlice>[] {
-  return [
-    { id: 'network', header: 'Network', cell: (row) => row.network },
-    {
-      id: 'spend',
-      header: `Spend${currencyColumnSuffix(currency)}`,
-      align: 'right',
-      cell: (row) => formatCurrencyInColumn(row.spend, currency),
-    },
-    { id: 'share', header: 'Share', align: 'right', cell: (row) => formatShare(row.share) },
-    {
-      id: 'conversions',
-      header: 'Conv.',
-      align: 'right',
-      cell: (row) => <CellText cell={row.conversions} />,
-    },
-    {
-      id: 'cost',
-      header: 'Cost / conv.',
-      align: 'right',
-      cell: (row) => <CellText cell={row.costPerConversion} />,
-    },
-  ];
-}
-
 export function PmaxNetworkSplitView({
   name,
   read,
@@ -94,20 +44,55 @@ export function PmaxNetworkSplitView({
   read: ViewRead<GoogleBreakdownRead>;
   currency: string | null;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  function networkColumns(currency: string | null): InsightColumn<NetworkSlice>[] {
+    return [
+      { id: 'network', header: uiText('network_1744b96'), cell: (row) => row.network },
+      {
+        id: 'spend',
+        header: uiText('helper_ffca96014e32', { v0: currencyColumnSuffix(currency) }),
+        align: 'right',
+        cell: (row) => formatCurrencyInColumn(row.spend, currency, uiLocale),
+      },
+      {
+        id: 'share',
+        header: uiText('share_29887a5'),
+        align: 'right',
+        cell: (row) => formatShare(row.share, uiLocale),
+      },
+      {
+        id: 'conversions',
+        header: uiText('conv_d3875d6'),
+        align: 'right',
+        cell: (row) => <CellText cell={row.conversions} />,
+      },
+      {
+        id: 'cost',
+        header: uiText('cost_conv_c39a57f'),
+        align: 'right',
+        cell: (row) => <CellText cell={row.costPerConversion} />,
+      },
+    ];
+  }
+
   return (
-    <section aria-label={`Spend by network: ${name}`} className="space-y-2">
-      <h4 className="font-medium text-sm">Spend by network · {name}</h4>
+    <section aria-label={uiText('template_39ae8be6096d', { v0: name })} className="space-y-2">
+      <h4 className="font-medium text-sm">{uiText.rich('sentence_0e02ca348ece', { v0: name })}</h4>
       <ReadGate read={read}>
         {(data) => {
-          const slices = networkSplit(data, data.currency ?? currency);
+          const slices = networkSplit(data, data.currency ?? currency, uiLocale, uiText);
           if (slices.length === 0) {
-            return <ChartEmpty message="This campaign spent nothing in the window." />;
+            return (
+              <ChartEmpty message={uiText('this_campaign_spent_nothing_in_the_window_7d68548')} />
+            );
           }
           return (
             <div className="space-y-2">
               <ScopeLine>
-                {windowRangeLabel(data.range.since, data.range.until)} · conversion value isn't in
-                this read, so there is no ROAS by network
+                {uiText.rich('sentence_be83e2aaab46', {
+                  v0: windowRangeLabel(data.range.since, data.range.until, uiLocale),
+                })}
               </ScopeLine>
               <InsightDataTable
                 columns={networkColumns(data.currency ?? currency)}
@@ -138,43 +123,92 @@ export function PmaxHealthView({
   /** One campaign's spend by network: its own read. */
   network: (campaignId: string, name: string) => ReactNode;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const GROUP_COLUMNS: InsightColumn<AssetGroupRow>[] = [
+    {
+      id: 'group',
+      header: uiText('asset_group_0cdcb5b'),
+      cell: (row) => (
+        <span className="block min-w-40">
+          <span className="font-medium">{row.name}</span>
+          {row.missingItems.length > 0 ? (
+            <span className="block text-muted-foreground text-xs">
+              {uiText('pmax_missing_assets', { items: row.missingItems.join(' · ') })}
+            </span>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      id: 'strength',
+      header: uiText('ad_strength_7927af2'),
+      cell: (row) => (
+        <span className={row.poor ? 'font-medium text-destructive' : undefined}>
+          <CellText cell={row.strength} />
+        </span>
+      ),
+    },
+    {
+      id: 'status',
+      header: uiText('status_920e413'),
+      cell: (row) => <CellText cell={row.status} />,
+    },
+    {
+      id: 'assets',
+      header: uiText('assets_bd12731'),
+      cell: (row) => <CellText cell={row.assets} />,
+    },
+  ];
+
   return (
     <ReadGate read={read}>
       {(data) => {
-        const model = buildPmaxHealth(data);
+        const model = buildPmaxHealth(data, uiText, uiLocale);
         if (model.kind === 'unread') {
           return (
             <div className="space-y-2">
               <p className="text-muted-foreground text-sm" data-testid="pmax-unread">
                 — {model.reason}
               </p>
-              <p className="text-muted-foreground text-xs">{PMAX_NOT_READ}</p>
+              <p className="text-muted-foreground text-xs">{googleCopy(PMAX_NOT_READ, uiText)}</p>
             </div>
           );
         }
         if (model.groups.length === 0) {
-          return <ChartEmpty message="No Performance Max campaign in this account." />;
+          return (
+            <ChartEmpty message={uiText('no_performance_max_campaign_in_this_account_41c0dc9')} />
+          );
         }
         const window = data.signals?.window;
         return (
           <div className="space-y-4">
             {window ? (
               <ScopeLine>
-                {windowRangeLabel(window.since, window.until)} · Google's last 30 complete days ·{' '}
-                {model.groups.length} asset {model.groups.length === 1 ? 'group' : 'groups'}
+                {uiText.rich('sentence_a965a33b22eb', {
+                  range: windowRangeLabel(window.since, window.until, uiLocale),
+                  count: model.groups.length,
+                })}
               </ScopeLine>
             ) : null}
             <p className="text-sm" data-testid="pmax-poor">
               {model.poor.length > 0 ? (
                 <>
-                  <span className="font-semibold">
-                    {model.poor.length} of {model.groups.length}
-                  </span>{' '}
-                  asset {model.groups.length === 1 ? 'group rates' : 'groups rate'} Poor:{' '}
-                  {model.poor.map((group) => group.name).join(', ')}.
+                  {uiText.rich('sentence_884ad14d6b07', {
+                    ratio: () => (
+                      <span className="font-semibold">
+                        {uiText.rich('sentence_e900eefa5ce5', {
+                          v0: model.poor.length,
+                          v1: model.groups.length,
+                        })}
+                      </span>
+                    ),
+                    groups: model.groups.length,
+                    names: model.poor.map((group) => group.name).join(', '),
+                  })}
                 </>
               ) : (
-                <>No asset group rates Poor.</>
+                <>{uiText('no_asset_group_rates_poor_e0845a7')}</>
               )}
             </p>
             <InsightDataTable
@@ -191,7 +225,7 @@ export function PmaxHealthView({
               <div key={id}>{network(id, campaignName(id))}</div>
             ))}
             <p className="text-muted-foreground text-xs" data-testid="pmax-not-read">
-              {PMAX_NOT_READ}
+              {googleCopy(PMAX_NOT_READ, uiText)}
             </p>
           </div>
         );

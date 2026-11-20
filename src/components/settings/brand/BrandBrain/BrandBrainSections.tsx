@@ -2,6 +2,7 @@
 
 import type { BrandColorToken, BrandFontToken } from '@continuum/contracts';
 import { Plus, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
@@ -24,6 +25,8 @@ type Props = {
 // Seven short sections over one brand.md. Every edit is a pure transform of the document
 // (brandBrain.ts), so what Save sends is exactly what the raw view shows.
 export function BrandBrainSections({ doc, onChange, disabled }: Props) {
+  const tUi = useTranslations('settings');
+
   const text = (slice: brain.TextSlice) => ({
     value: slice.get(doc),
     onChange: (value: string) => onChange(slice.set(doc, value)),
@@ -37,47 +40,55 @@ export function BrandBrainSections({ doc, onChange, disabled }: Props) {
 
   return (
     <div className="divide-y divide-border/60" data-testid="brand-brain">
-      <BrainSection title="Positioning" hint="Who you are for, and why you over the alternative.">
+      <BrainSection title={tUi('m_86ba514122')} hint={tUi('m_e9a1216f41')}>
         <ProseField
-          label="Positioning"
+          label={tUi('m_86ba514122')}
           hideLabel
-          placeholder="For [who], [brand] is the [category] that [difference]."
+          placeholder={tUi('m_01545686e7')}
           {...text(brain.positioning)}
         />
       </BrainSection>
 
-      <BrainSection title="Pillars" hint="The themes every post ladders up to. One per line.">
+      <BrainSection title={tUi('m_2727a73fb1')} hint={tUi('m_bfe82bd389')}>
         <LinesField
-          label="Pillars"
+          label={tUi('m_2727a73fb1')}
           hideLabel
-          placeholder="Pillar: what it covers"
+          placeholder={tUi('m_3c0b640ccb')}
           {...list(brain.pillars)}
         />
       </BrainSection>
 
-      <BrainSection title="Voice" hint="How every caption should sound.">
-        <ProseField label="Tone" maxLength={LIMITS.tone} {...text(brain.tone)} />
-        <ProseField label="Style" maxLength={LIMITS.style} {...text(brain.style)} />
+      <BrainSection title={tUi('m_3091c8446f')} hint={tUi('m_06617d4752')}>
+        <ProseField label={tUi('m_376990dbb4')} maxLength={LIMITS.tone} {...text(brain.tone)} />
+        <ProseField label={tUi('m_99a0efc6cf')} maxLength={LIMITS.style} {...text(brain.style)} />
         <div className="grid gap-4 lg:grid-cols-2">
-          <LinesField label="Do" placeholder="One rule per line" {...list(brain.dos)} />
-          <LinesField label="Don't" placeholder="One rule per line" {...list(brain.donts)} />
+          <LinesField
+            label={tUi('m_22bdf47be3')}
+            placeholder={tUi('m_4796b87775')}
+            {...list(brain.dos)}
+          />
+          <LinesField
+            label={tUi('m_bfed24b7dd')}
+            placeholder={tUi('m_4796b87775')}
+            {...list(brain.donts)}
+          />
         </div>
       </BrainSection>
 
-      <BrainSection title="Audience" hint="The person a caption is written to.">
+      <BrainSection title={tUi('m_51d9934555')} hint={tUi('m_be3b307838')}>
         <ProseField
-          label="Audience"
+          label={tUi('m_51d9934555')}
           hideLabel
           maxLength={LIMITS.audience}
           {...text(brain.audience)}
         />
       </BrainSection>
 
-      <BrainSection title="Promise" hint="What a customer can count on, and your tagline.">
-        <ProseField label="Promise" hideLabel {...text(brain.promise)} />
+      <BrainSection title={tUi('m_fe5671922b')} hint={tUi('m_eefda4aa0d')}>
+        <ProseField label={tUi('m_fe5671922b')} hideLabel {...text(brain.promise)} />
       </BrainSection>
 
-      <BrainSection title="Visual identity" hint="The colors and type every image is held to.">
+      <BrainSection title={tUi('m_1f6f173d06')} hint={tUi('m_324cba8f62')}>
         <ColorsField
           colors={doc.tokens.colors}
           onChange={(colors) => onChange(brain.withColors(doc, colors))}
@@ -90,14 +101,11 @@ export function BrandBrainSections({ doc, onChange, disabled }: Props) {
         />
       </BrainSection>
 
-      <BrainSection
-        title="Generation defaults"
-        hint="Defaults for images and slides created for this brand. Request-specific instructions can still override them."
-      >
+      <BrainSection title={tUi('m_2c5cd2e3e7')} hint={tUi('m_61bb056c51')}>
         <label className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
-          Logo use
+          {tUi('m_eae876f5b8')}
           <select
-            aria-label="Default logo use"
+            aria-label={tUi('m_5126701a3c')}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
             disabled={disabled}
             value={doc.tokens.logo?.treatment_default ?? 'palette-only'}
@@ -105,8 +113,8 @@ export function BrandBrainSections({ doc, onChange, disabled }: Props) {
               onChange(brain.withLogoTreatment(doc, event.target.value as 'palette-only' | 'logo'))
             }
           >
-            <option value="palette-only">Use the palette; omit the logo by default</option>
-            <option value="logo">Include the logo by default</option>
+            <option value="palette-only">{tUi('m_7cd97cdc7d')}</option>
+            <option value="logo">{tUi('m_2e9507e2ce')}</option>
           </select>
         </label>
         <label className="flex items-center gap-2 text-sm text-foreground">
@@ -115,19 +123,26 @@ export function BrandBrainSections({ doc, onChange, disabled }: Props) {
             disabled={disabled}
             checked={doc.tokens.generation?.number_slides ?? false}
             onChange={(event) =>
-              onChange(brain.withGenerationPreferences(doc, { number_slides: event.target.checked }))
+              onChange(
+                brain.withGenerationPreferences(doc, { number_slides: event.target.checked }),
+              )
             }
           />
-          Number slides by default
+          {tUi('m_3cc7f2ca6b')}
         </label>
         {doc.tokens.colors.length > 0 ? (
           <fieldset className="space-y-2" disabled={disabled}>
-            <legend className="text-xs font-medium text-muted-foreground">Colors to avoid</legend>
+            <legend className="text-xs font-medium text-muted-foreground">
+              {tUi('m_86cd8848f5')}
+            </legend>
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               {doc.tokens.colors.map((color) => {
                 const avoided = doc.tokens.generation?.avoid_colors.includes(color.value) ?? false;
                 return (
-                  <label key={color.value} className="flex items-center gap-2 text-sm text-foreground">
+                  <label
+                    key={color.value}
+                    className="flex items-center gap-2 text-sm text-foreground"
+                  >
                     <input
                       type="checkbox"
                       checked={avoided}
@@ -136,10 +151,15 @@ export function BrandBrainSections({ doc, onChange, disabled }: Props) {
                         const avoidColors = event.target.checked
                           ? [...current, color.value]
                           : current.filter((value) => value !== color.value);
-                        onChange(brain.withGenerationPreferences(doc, { avoid_colors: avoidColors }));
+                        onChange(
+                          brain.withGenerationPreferences(doc, { avoid_colors: avoidColors }),
+                        );
                       }}
                     />
-                    <span className="h-3 w-3 rounded-full border border-border" style={{ backgroundColor: color.value }} />
+                    <span
+                      className="h-3 w-3 rounded-full border border-border"
+                      style={{ backgroundColor: color.value }}
+                    />
                     {color.name ?? color.value}
                   </label>
                 );
@@ -148,30 +168,34 @@ export function BrandBrainSections({ doc, onChange, disabled }: Props) {
           </fieldset>
         ) : null}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor="generation-guidance">
-            Additional generation guidance
+          <label
+            className="text-xs font-medium text-muted-foreground"
+            htmlFor="generation-guidance"
+          >
+            {tUi('m_fd18a765f3')}
           </label>
           <Textarea
             id="generation-guidance"
             maxLength={1200}
             disabled={disabled}
             value={doc.tokens.generation?.additional_guidance ?? ''}
-            placeholder="Optional visual rules to apply to generated images and slides."
+            placeholder={tUi('m_fde3022ab8')}
             onChange={(event) =>
-              onChange(brain.withGenerationPreferences(doc, { additional_guidance: event.target.value || undefined }))
+              onChange(
+                brain.withGenerationPreferences(doc, {
+                  additional_guidance: event.target.value || undefined,
+                }),
+              )
             }
           />
         </div>
       </BrainSection>
 
-      <BrainSection
-        title="Never say"
-        hint="Every caption the AI writes is told never to use these words."
-      >
-        <ChipsField label="Banned words" {...list(brain.bannedWords)} />
+      <BrainSection title={tUi('m_ae292cb28d')} hint={tUi('m_f15605009d')}>
+        <ChipsField label={tUi('m_7455fac9c6')} {...list(brain.bannedWords)} />
         <LinesField
-          label="Themes to avoid"
-          placeholder="One theme per line"
+          label={tUi('m_d4efaee90f')}
+          placeholder={tUi('m_69ca00409b')}
           {...list(brain.avoidThemes)}
         />
       </BrainSection>
@@ -318,6 +342,8 @@ function ChipsField({
   onChange: (items: readonly string[]) => void;
   disabled?: boolean;
 }) {
+  const tUi = useTranslations('settings');
+
   const id = useId();
   const [entry, setEntry] = useState('');
   const full = items.length >= LIMITS.bannedWords;
@@ -350,7 +376,7 @@ function ChipsField({
                 type="button"
                 onClick={() => onChange(items.filter((item) => item !== word))}
                 disabled={disabled}
-                aria-label={`Remove ${word}`}
+                aria-label={tUi('m_a31c68e147', { v0: String(word) })}
                 className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
               >
                 <X className="size-3" aria-hidden />
@@ -366,7 +392,9 @@ function ChipsField({
           onChange={(event) => setEntry(event.target.value)}
           onKeyDown={onKeyDown}
           maxLength={LIMITS.bannedWord}
-          placeholder={full ? `${LIMITS.bannedWords} words is the limit` : 'Add a word or phrase'}
+          placeholder={
+            full ? tUi('m_0ee9cc2956', { v0: String(LIMITS.bannedWords) }) : tUi('m_79a619c938')
+          }
           disabled={disabled || full}
           className="max-w-xs"
         />
@@ -377,7 +405,7 @@ function ChipsField({
           onClick={add}
           disabled={disabled || full || !entry.trim()}
         >
-          Add
+          {tUi('m_61cc55aa04')}
         </Button>
       </div>
     </div>
@@ -393,12 +421,14 @@ function ColorsField({
   onChange: (colors: BrandColorToken[]) => void;
   disabled?: boolean;
 }) {
+  const tUi = useTranslations('settings');
+
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">Colors</span>
+      <span className="text-xs font-medium text-muted-foreground">{tUi('m_88d5e4cac1')}</span>
       <ul className="flex flex-col gap-2">
         {colors.map((color, index) => {
-          const name = color.name ?? color.role ?? `Color ${index + 1}`;
+          const name = color.name ?? color.role ?? tUi('brandColorFallback', { index: index + 1 });
           return (
             <li key={`${index}-${color.role ?? ''}`} className="flex items-center gap-2">
               <ColorField
@@ -419,7 +449,7 @@ function ColorsField({
                 size="icon-sm"
                 onClick={() => onChange(colors.filter((_, i) => i !== index))}
                 disabled={disabled}
-                aria-label={`Remove ${name}`}
+                aria-label={tUi('m_a31c68e147', { v0: String(name) })}
               >
                 <X aria-hidden />
               </Button>
@@ -435,7 +465,8 @@ function ColorsField({
         disabled={disabled || colors.length >= MAX_COLORS}
         className="self-start"
       >
-        <Plus aria-hidden /> Add color
+        <Plus aria-hidden />
+        {tUi('m_7ff255d8ab')}
       </Button>
     </div>
   );
@@ -452,6 +483,8 @@ function FontsField({
   onChange: (fonts: BrandFontToken[]) => void;
   disabled?: boolean;
 }) {
+  const tUi = useTranslations('settings');
+
   const addId = useId();
   const [entry, setEntry] = useState('');
   const add = () => {
@@ -472,19 +505,21 @@ function FontsField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">Typography</span>
+      <span className="text-xs font-medium text-muted-foreground">{tUi('m_f4beb9af58')}</span>
       <ul className="flex flex-col gap-2">
         {fonts.map((font, index) => (
           <li key={`${index}-${font.family}`} className="flex items-center gap-2">
             <Input
               defaultValue={font.family}
               onBlur={(event) => commit(index, event.target.value)}
-              aria-label={`${font.role ?? 'Font'} family`}
+              aria-label={tUi('m_9a76d3f709', { v0: String(font.role ?? 'Font') })}
               maxLength={240}
               disabled={disabled}
               className="max-w-xs"
             />
-            <span className="text-xs capitalize text-muted-foreground">{font.role ?? 'font'}</span>
+            <span className="text-xs capitalize text-muted-foreground">
+              {font.role ?? tUi('m_4642576d84')}
+            </span>
           </li>
         ))}
       </ul>
@@ -499,8 +534,8 @@ function FontsField({
               event.preventDefault();
               add();
             }}
-            aria-label="Add a font family"
-            placeholder="Add a font family"
+            aria-label={tUi('m_d1e5213c4d')}
+            placeholder={tUi('m_d1e5213c4d')}
             maxLength={240}
             disabled={disabled}
             className="max-w-xs"
@@ -512,7 +547,7 @@ function FontsField({
             onClick={add}
             disabled={disabled || !entry.trim()}
           >
-            Add
+            {tUi('m_61cc55aa04')}
           </Button>
         </div>
       ) : null}

@@ -8,6 +8,7 @@
 // it, so it is not offered.
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { lazy, useMemo } from 'react';
 import { useOptimizerPortfolios } from '@/components/paid-media/optimizer/useOptimizerData';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,13 +17,14 @@ import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
 import type { HomeTileProps } from '../../types';
 import { OPTIMIZER_LINKS, portfolioDecisionsHref } from '../opps/oppsModel';
 import { ROW_LINK, ROW_LINK_LIST, TileReadError } from '../opps/tileParts';
-import { CHECKLIST_MISSING, checklistViewOf } from './checklistModel';
+import { checklistViewOf } from './checklistModel';
 
 const Module = lazy(() => import('./Module'));
 
 const ROWS_AT_SIZE = { l: 4, m: 2, s: 0 } as const;
 
 export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const { hasAnswer, isError, refetch, brandPortfolios } = portfolios;
   const view = useMemo(
@@ -34,7 +36,7 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
     return isError ? (
       <HomeTileFrame state="error" tile={tile}>
         <TileReadError onRetry={() => void refetch()}>
-          The Optimizer's portfolios could not be read, so this tile cannot say what is open.
+          {uiText('the_optimizer_s_portfolios_could_not_be_read__13404a7')}
         </TileReadError>
       </HomeTileFrame>
     ) : (
@@ -47,9 +49,9 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
   if (view.state === 'missing') {
     return (
       <HomeTileFrame state="missing" tile={tile}>
-        <TileMissing>{CHECKLIST_MISSING}</TileMissing>
+        <TileMissing>{uiText('no_portfolio_recommends_changes_for_the_clien_32df0ef')}</TileMissing>
         <Link className={cn(ROW_LINK, 'mt-2 inline-block text-xs')} href={OPTIMIZER_LINKS.create}>
-          Create a portfolio
+          {uiText('create_a_portfolio_2283fad')}
         </Link>
       </HomeTileFrame>
     );
@@ -60,7 +62,7 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
 
   return (
     <HomeTileFrame
-      badge={`${view.open} open`}
+      badge={uiText('count_open_63e9013', { count: view.open })}
       expanded={
         <Module
           adAccounts={ctx.adAccounts}
@@ -69,7 +71,7 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
           portfolios={view.portfolios}
         />
       }
-      expandedDescription="What the Optimizer recommends for the client to apply, to export or send."
+      expandedDescription={uiText('what_the_optimizer_recommends_for_the_client__70725a4')}
       state="ready"
       tile={tile}
     >
@@ -82,10 +84,14 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
           >
             {view.open}
           </span>
-          <span className="text-muted-foreground text-xs">open for the client</span>
+          <span className="text-muted-foreground text-xs">
+            {uiText('open_for_the_client_2aa6f2a')}
+          </span>
         </p>
         {view.open === 0 ? (
-          <p className="text-muted-foreground text-xs">Nothing is open for the client right now.</p>
+          <p className="text-muted-foreground text-xs">
+            {uiText('nothing_is_open_for_the_client_right_now_1924fc9')}
+          </p>
         ) : rows.length > 0 ? (
           <ul className={ROW_LINK_LIST} data-testid="home-tile-checklist-portfolios">
             {rows.map((portfolio) => (
@@ -100,14 +106,14 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
                   {portfolio.name}
                 </Link>
                 <span className="shrink-0 text-muted-foreground tabular-nums">
-                  {portfolio.open} open
+                  {uiText('count_open_63e9013', { count: portfolio.open })}
                 </span>
               </li>
             ))}
           </ul>
         ) : first ? (
           <p className="truncate text-muted-foreground text-xs">
-            {first.name}: {first.open} open
+            {uiText('name_count_open_f5fa2ed', { name: first.name, count: first.open })}
           </p>
         ) : null}
       </div>

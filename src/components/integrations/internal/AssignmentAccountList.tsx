@@ -1,6 +1,7 @@
 'use client';
 
 import { Lock, SearchX } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { PLATFORM_ICONS } from '@/components/settings/shell/platformIcons';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -48,12 +49,13 @@ function AccountRow({
   caption: string | null;
   onCheckedChange: (checked: boolean) => void;
 }) {
+  const uiText = useTranslations('common');
   const Icon = row.iconPlatformKey ? PLATFORM_ICONS[row.iconPlatformKey] : null;
   const controlId = `assign-account-${safeId(row.assetPk)}`;
   return (
     <label
       htmlFor={controlId}
-      title={`ID: ${row.externalId}`}
+      title={uiText('m_1f3204d951', { v0: String(row.externalId) })}
       className={cn(
         'flex min-h-10 items-center gap-3 rounded-md px-2 py-1.5 transition-colors',
         disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-accent/40',
@@ -78,7 +80,7 @@ function AccountRow({
               variant="outline"
               className="shrink-0 text-2xs font-normal text-muted-foreground"
             >
-              Read-only
+              {uiText('read_only_72bb908')}
             </Badge>
           ) : null}
         </span>
@@ -103,6 +105,7 @@ export function AssignmentAccountList({
   onToggle,
   onToggleMany,
 }: AssignmentAccountListProps) {
+  const uiText = useTranslations('common');
   const trimmed = query.trim();
 
   const rendered: Array<{
@@ -127,7 +130,10 @@ export function AssignmentAccountList({
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
         <SearchX className="h-5 w-5 text-muted-foreground" aria-hidden />
-        <p className="text-sm text-muted-foreground">No accounts match &ldquo;{trimmed}&rdquo;.</p>
+        <p className="text-sm text-muted-foreground">
+          {uiText('m_f993ca7878')}
+          {trimmed}&rdquo;.
+        </p>
       </div>
     );
   }
@@ -183,7 +189,7 @@ export function AssignmentAccountList({
                         variant="outline"
                         className="shrink-0 text-2xs font-normal text-muted-foreground"
                       >
-                        Read-only
+                        {uiText('read_only_72bb908')}
                       </Badge>
                     ) : null}
                   </span>

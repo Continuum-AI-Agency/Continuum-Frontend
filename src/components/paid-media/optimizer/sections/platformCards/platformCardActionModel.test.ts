@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import type { ActionRevertResponse } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import enCopy from '../../../../../../messages/scale/en.json';
+import esCopy from '../../../../../../messages/scale/es.json';
+import ptCopy from '../../../../../../messages/scale/pt-BR.json';
 import type { ApplyActionsResponse } from '../../useOptimizerData';
 import {
   ADD_GOOGLE_KEYWORD,
@@ -490,9 +494,9 @@ describe('the Meta cost cap (bid setting)', () => {
   it('opens the approval flow for a Meta cost cap, and for no other single Meta write', () => {
     expect(cardActionAvailability(META_COST_CAP, target(costCap))).toBe('ready');
     expect(cardActionAvailability(META_COST_CAP, target(write(RAISE_META_BUDGET)))).toBe('none');
-    expect(
-      cardActionAvailability(META_COST_CAP, { ...target(costCap), applyEnabled: false }),
-    ).toBe('apply_disabled');
+    expect(cardActionAvailability(META_COST_CAP, { ...target(costCap), applyEnabled: false })).toBe(
+      'apply_disabled',
+    );
   });
 
   it("names Meta's bid setting, never the portfolio's goal, in the action's minor units", () => {
@@ -504,9 +508,9 @@ describe('the Meta cost cap (bid setting)', () => {
   });
 
   it("says Meta's own check passed, not Google's validate_only", () => {
-    expect(previewVerdict(bidAnswer({ status: 'would_apply' }), 'MXN', 'meta').text).toBe(
-      'Meta still holds the figures this change expects. Nothing changes until you confirm.',
-    );
+    expect(
+      previewVerdict(bidAnswer({ status: 'would_apply' }), 'MXN', undefined, 'en', 'meta').text,
+    ).toBe('Meta still holds the figures this change expects. Nothing changes until you confirm.');
     expect(previewVerdict(bidAnswer({ status: 'would_apply' }), 'MXN').text).toStartWith(
       'Google checked it',
     );
@@ -521,6 +525,8 @@ describe('the Meta cost cap (bid setting)', () => {
           'bid_target_change: bid_amount_minor 40000 to 25000 moves 0.3750, over max_change_pct_per_cycle 0.2',
       }),
       'MXN',
+      undefined,
+      'en',
       'meta',
     );
     expect(verdict.text).toBe(
@@ -537,6 +543,8 @@ describe('the Meta cost cap (bid setting)', () => {
           'bid_strategy_not_cost_cap: 120200000000000901 bids LOWEST_COST_WITHOUT_CAP (held by the ad set); its bid_amount is not a cost cap',
       }),
       'MXN',
+      undefined,
+      'en',
       'meta',
     );
     expect(verdict.tone).toBe('refused');
@@ -549,4 +557,49 @@ describe('the Meta cost cap (bid setting)', () => {
       undoRestoresText({ field: 'bid_amount_minor', value: 40_000 }, 'set_bid_target', 'MXN'),
     ).toBe('Meta cost cap (bid setting) back to $400.00 MXN');
   });
+});
+
+describe('localized platform actions preserve wire data', () => {
+  for (const locale of ['en', 'pt-BR', 'es'] as const)
+    it(`uses stable refusal codes and exact figures in ${locale}`, () => {
+      const t = createTranslator({
+        locale,
+        namespace: 'scale',
+        messages: { scale: { en: enCopy, 'pt-BR': ptCopy, es: esCopy }[locale] },
+      });
+      const response = answer({
+        status: 'refused',
+        reason: 'preflight_failed:0:guardrail',
+        detail: 'bid_target_change: over max_change_pct_per_cycle 0.2',
+      });
+      const before = JSON.stringify(response);
+      const refusal = previewVerdict(response, 'MXN', t, locale);
+      expect(refusal.tone).toBe('refused');
+      expect(refusal.text).toContain('20%');
+      expect(refusal.text).not.toContain('max_change_pct_per_cycle');
+      expect(cardActionChange(write(RAISE_GOOGLE_BUDGET), 'MXN', t, locale)).toContain(
+        locale === 'en' ? '1,473.75' : locale === 'pt-BR' ? '1.473,75' : '1473,75',
+      );
+      const original = JSON.stringify(RAISE_GOOGLE_BUDGET);
+      expect(cardActionTitle(write(RAISE_GOOGLE_BUDGET), t, locale)).toContain('VIVO');
+      expect(JSON.stringify(RAISE_GOOGLE_BUDGET)).toBe(original);
+      expect(JSON.stringify(response)).toBe(before);
+      const metaBound = previewVerdict(
+        answer({
+          status: 'refused',
+          reason: 'guardrail',
+          detail:
+            'bid_target_change: bid_amount_minor 40000 to 25000 moves 0.3750, over max_change_pct_per_cycle 0.2',
+        }),
+        'MXN',
+        t,
+        locale,
+        'meta',
+      );
+      expect(metaBound.text).toContain('20%');
+      expect(metaBound.text).toContain('Meta');
+      expect(
+        previewVerdict(answer({ status: 'would_apply' }), 'MXN', t, locale, 'meta').text,
+      ).not.toBe(previewVerdict(answer({ status: 'would_apply' }), 'MXN', t, locale).text);
+    });
 });

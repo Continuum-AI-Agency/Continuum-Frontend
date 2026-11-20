@@ -1,5 +1,6 @@
 'use client';
 
+import { plannerInstantFromDayTime } from '@continuum/contracts';
 import {
   Check,
   CircleDashed,
@@ -17,9 +18,11 @@ import {
 } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import Image from 'next/image';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveScheduleDraft';
+import { useLadderStepRequest } from '@/components/organic/hooks/useDraftEnrichmentLadder';
 import {
   scheduleFieldPatch,
   useDraftFieldEditor,
@@ -43,6 +46,8 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
+import { draftCopyGap } from '@/lib/organic/draftReadiness';
+import { isUnpublishedPastDue } from '@/lib/organic/organicActionCopy';
 import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import {
   groupPublishBlocker,
@@ -54,7 +59,7 @@ import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
-import { UNSCHEDULED_DAY_ID } from './calendar-utils';
+import { formatWallClockLabel, UNSCHEDULED_DAY_ID } from './calendar-utils';
 import { CardTargets, StatusBadge, useCardCaption } from './DraftCardBadges';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
@@ -155,6 +160,8 @@ export function CalendarDraftCard({
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const platform = (draft.platforms[0] || 'instagram') as
     | 'instagram'
     | 'linkedin'
@@ -176,6 +183,18 @@ export function CalendarDraftCard({
   const [duplicatePickerOpen, setDuplicatePickerOpen] = React.useState(false);
   const [pendingTime, setPendingTime] = React.useState(draft.timeLabel);
   const [timeError, setTimeError] = React.useState<string | null>(null);
+  // The day the card sits on, so its time can be read as an instant. The unscheduled shelf
+  // has no date, and so no "past".
+  const cardDayId = useCalendarStore(
+    (state) => state.days.find((day) => day.slots.some((slot) => slot.id === draft.id))?.id ?? null,
+  );
+  const isPastDue = isUnpublishedPastDue({
+    status: draft.status,
+    scheduledAt:
+      cardDayId && cardDayId !== UNSCHEDULED_DAY_ID
+        ? plannerInstantFromDayTime({ dayId: cardDayId, timeOfDay: draft.timeLabel })
+        : null,
+  });
   const [isHoverPreviewOpen, setIsHoverPreviewOpen] = React.useState(false);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
@@ -192,17 +211,22 @@ export function CalendarDraftCard({
     publishPlatform !== null && draft.status !== 'published' && draft.status !== 'streaming';
   // usePublishDraft enforces this; naming it here turns a click that silently refuses into
   // a disabled item that says why.
-  const publishBlockedReason = React.useMemo(() => groupPublishBlocker(draft), [draft]);
+  const publishBlockedReason = React.useMemo(
+    () => groupPublishBlocker(draft, uiText, uiLocale),
+    [draft, uiText, uiLocale],
+  );
   const publishMemberCount = unpublishedMembers(draft).length;
   const publishDestination =
     publishMemberCount > 1
-      ? `${publishMemberCount} platforms`
+      ? uiText('platformCount', { count: publishMemberCount })
       : publishPlatformLabel(publishPlatform);
   const caption = useCardCaption(draft);
 
   const accentColor = resolvePlatformAccentColor(platform);
   const FormatGlyph = formatGlyph(draft.format);
-  const statusPresentation = draftStatusPresentation(draft.status);
+  const statusPresentation = draftStatusPresentation(draft.status, uiText);
+  const saveFailed = useCalendarStore((state) => state.saveFailedDraftIds.includes(draft.id));
+  const retryDraftSaves = useCalendarStore((state) => state.retryDraftSaves);
   // A week is only scannable if a card can show its whole idea. Cards stay clamped at
   // rest — the grid keeps its rhythm — and reveal the full title/copy on hover, or
   // whenever the card is the selected one being edited.
@@ -247,6 +271,10 @@ export function CalendarDraftCard({
     (draft.status === 'draft' || draft.status === 'placeholder') &&
     (mediaStage === 'text_only' || mediaStage === 'storyboard_ready');
   const showHoverPreview = draft.status !== 'streaming' && draft.status !== 'placeholder';
+  // An empty draft offers nothing to enrich or publish yet: its one action is writing the copy.
+  const copyGap = draftCopyGap(draft);
+  const brandId = useCalendarStore((state) => state.accountContext.brandId);
+  const { requestStep, isBusy: isRequestingCopy } = useLadderStepRequest(brandId ?? undefined);
 
   // Drag start has to close an already-open preview, not merely refuse to open a new one.
   React.useEffect(() => {
@@ -414,9 +442,10 @@ export function CalendarDraftCard({
                             compact glyphs give way first (format, then the status dot). */}
                         <span
                           data-card-time=""
+                          translate="no"
                           className="shrink-0 whitespace-nowrap text-2xs font-bold uppercase tabular-nums tracking-wider text-muted-foreground/70 @max-[14rem]/draft-card:tracking-normal"
                         >
-                          {draft.timeLabel}
+                          {formatWallClockLabel(draft.timeLabel, uiLocale)}
                         </span>
                         <span className="hidden min-w-0 items-center gap-1 text-muted-foreground/70 @max-[14rem]/draft-card:inline-flex">
                           <span
@@ -432,11 +461,16 @@ export function CalendarDraftCard({
                             aria-hidden
                             className="size-2.5 shrink-0 @max-[7rem]/draft-card:hidden"
                           />
-                          <span className="sr-only">{draft.format}</span>
+                          <span className="sr-only" translate="no">
+                            {draft.format}
+                          </span>
                           {needsMedia ? (
-                            <span className="inline-flex shrink-0 text-warning" title="Needs media">
+                            <span
+                              className="inline-flex shrink-0 text-warning"
+                              title={uiText('needs_media_157d226')}
+                            >
                               <ImageOff aria-hidden className="size-2.5" />
-                              <span className="sr-only">Needs media</span>
+                              <span className="sr-only">{uiText('needs_media_157d226')}</span>
                             </span>
                           ) : null}
                         </span>
@@ -459,7 +493,9 @@ export function CalendarDraftCard({
                                 side="top"
                                 className="max-w-[200px] border-border/70 bg-popover text-popover-foreground text-xs"
                               >
-                                <p className="mb-1 font-bold text-brand-primary/90">Post Idea</p>
+                                <p className="mb-1 font-bold text-brand-primary/90">
+                                  {uiText('post_idea_f36acd0')}
+                                </p>
                                 {draft.titleTopic}
                               </TooltipContent>
                             </Tooltip>
@@ -479,7 +515,11 @@ export function CalendarDraftCard({
                             // A pointer shortcut only: invisible until hover, it was a tab stop
                             // nobody could see. The keyboard regenerates from the context menu.
                             tabIndex={-1}
-                            aria-label={isFailed ? 'Retry failed draft' : 'Regenerate draft'}
+                            aria-label={
+                              isFailed
+                                ? uiText('retry_failed_draft_dedc9aa')
+                                : uiText('regenerate_draft_39e597a')
+                            }
                             className="inline-flex items-center justify-center h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface/50 rounded cursor-pointer @max-[14rem]/draft-card:hidden"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -507,9 +547,13 @@ export function CalendarDraftCard({
                           <Pill
                             variant="outline"
                             className="px-1.5 py-0 text-3xs"
-                            title={`Rendered with ${draft.mediaSuggestion.renderedWith.templateName}`}
+                            title={uiText('sentence_58dc98af5402', {
+                              template: draft.mediaSuggestion.renderedWith.templateName,
+                            })}
                           >
-                            Rendered with {draft.mediaSuggestion.renderedWith.templateName}
+                            {uiText('sentence_58dc98af5402', {
+                              template: draft.mediaSuggestion.renderedWith.templateName,
+                            })}
                           </Pill>
                         )}
                       </div>
@@ -533,11 +577,36 @@ export function CalendarDraftCard({
                       className="mt-1 text-2xs text-muted-foreground @max-[14rem]/draft-card:mt-0.5"
                     />
 
+                    {copyGap ? (
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <span className="min-w-0 truncate text-2xs italic text-muted-foreground/60 @max-[14rem]/draft-card:hidden">
+                          {copyGap === 'brief'
+                            ? uiText('needs_copy_9cce360')
+                            : uiText('empty_draft_nothing_written_yet_f0ec0fe')}
+                        </span>
+                        {draft.backendDraftId ? (
+                          <CardStageAction
+                            label={
+                              copyGap === 'brief'
+                                ? uiText('generate_copy_e0f96b1')
+                                : uiText('generate_with_ai_0dbd840')
+                            }
+                            onActivate={() => {
+                              if (!isRequestingCopy) void requestStep(draft, 'copy');
+                            }}
+                          />
+                        ) : null}
+                      </p>
+                    ) : null}
+
                     {/* The compact card hides the error panel, but not the one action a failed
                         card exists to offer. A refused publish has none: regenerating cannot fix it. */}
                     {isFailed && onRegenerate && (draft.generationError || !draft.publishError) ? (
                       <span className="mt-1 hidden @max-[14rem]/draft-card:flex">
-                        <CardStageAction label="Retry" onActivate={() => onRegenerate(draft.id)} />
+                        <CardStageAction
+                          label={uiText('retry_942087c')}
+                          onActivate={() => onRegenerate(draft.id)}
+                        />
                       </span>
                     ) : null}
 
@@ -547,9 +616,7 @@ export function CalendarDraftCard({
                       {/* Inline streaming status */}
                       {isStreaming && (
                         <p className="mt-0.5 text-2xs text-brand-primary/80 font-medium">
-                          {draft.generationStage
-                            ? `Generating · ${draft.generationStage}`
-                            : 'Generating...'}
+                          {uiText('generating_stage_progress')}
                         </p>
                       )}
 
@@ -565,7 +632,7 @@ export function CalendarDraftCard({
 
                       {draft.status === 'placeholder' && (
                         <p className="mt-1.5 text-2xs italic text-muted-foreground/60">
-                          Awaiting generation
+                          {uiText('awaiting_generation_29795ca')}
                         </p>
                       )}
 
@@ -573,7 +640,9 @@ export function CalendarDraftCard({
                       {typeof displayProgress === 'number' ? (
                         <div className="mt-3 space-y-1.5">
                           <div className="flex items-center justify-between text-2xs font-bold uppercase tracking-tighter text-muted-foreground">
-                            <span className="text-primary animate-pulse">GENERATING</span>
+                            <span className="text-primary animate-pulse">
+                              {uiText('generating_2e44a0c')}
+                            </span>
                             <span>{displayProgress}%</span>
                           </div>
                           <Progress value={displayProgress} className="h-1" />
@@ -584,7 +653,9 @@ export function CalendarDraftCard({
                       {isFailed && (draft.generationError || draft.publishError) ? (
                         <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
                           <p className="text-2xs font-semibold uppercase tracking-wide text-destructive">
-                            {draft.generationError ? 'Generation failed' : 'Publish failed'}
+                            {draft.generationError
+                              ? uiText('generation_failed_7825756')
+                              : uiText('publish_failed_2fe0dac')}
                           </p>
                           <p className="mt-0.5 line-clamp-2 text-2xs text-destructive/90">
                             {draft.generationError ?? draft.publishError}
@@ -610,7 +681,7 @@ export function CalendarDraftCard({
                                 }}
                               >
                                 <Zap className="h-3 w-3" />
-                                Retry
+                                {uiText('retry_942087c')}
                               </span>
                             ) : null}
                             {/* biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting */}
@@ -631,16 +702,76 @@ export function CalendarDraftCard({
                               }}
                             >
                               <X className="h-3 w-3" />
-                              Clear
+                              {uiText('clear_83b12c2')}
                             </span>
                           </div>
                         </div>
                       ) : null}
 
+                      {saveFailed ? (
+                        <p
+                          data-slot="save-failed-notice"
+                          className="mt-1.5 flex flex-wrap items-center gap-1.5 text-2xs text-destructive"
+                        >
+                          <span>{uiText('this_post_failed_to_save_b8c4301')}</span>
+                          {/* biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting */}
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="inline-flex items-center rounded border border-destructive/40 px-1.5 py-0.5 font-medium hover:bg-destructive/10"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              retryDraftSaves();
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                retryDraftSaves();
+                              }
+                            }}
+                          >
+                            {uiText('recreate_draft_96eb4ef')}
+                          </span>
+                        </p>
+                      ) : null}
+
+                      {/* A past moment is not silently "fixed": the persist floor would move a
+                          scheduled post to now + guard, so the card asks for a real time first. */}
+                      {isPastDue ? (
+                        <p
+                          data-slot="past-date-notice"
+                          className="mt-1.5 flex flex-wrap items-center gap-1.5 text-2xs text-warning"
+                        >
+                          <span>{uiText('this_date_has_passed_pick_a_new_time_f0d04d7')}</span>
+                          {/* biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting */}
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="inline-flex items-center rounded border border-warning/40 px-1.5 py-0.5 font-medium hover:bg-warning/10"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setPendingTime(draft.timeLabel);
+                              setTimePickerOpen(true);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setPendingTime(draft.timeLabel);
+                                setTimePickerOpen(true);
+                              }
+                            }}
+                          >
+                            {uiText('pick_a_time_ec11634')}
+                          </span>
+                        </p>
+                      ) : null}
+
                       {lastPublishError ? (
                         <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
                           <p className="text-2xs font-semibold uppercase tracking-wide text-destructive">
-                            Last publish failed
+                            {uiText('last_publish_failed_a078eb3')}
                           </p>
                           <p className="mt-0.5 line-clamp-2 text-2xs text-destructive/90">
                             {lastPublishError}
@@ -658,17 +789,17 @@ export function CalendarDraftCard({
                             className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary"
                             aria-hidden
                           />
-                          {draft.generationStage ?? 'Generating media…'}
+                          {uiText('generating_media_progress')}
                         </p>
                       ) : isStoryboardReady ? (
                         <div className="mt-2 space-y-1">
                           {ugc ? (
                             <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-2xs font-medium text-primary">
-                              UGC · {characterReferenceCount} character
-                              {characterReferenceCount === 1 ? '' : 's'} locked
-                              {productReferenceCount > 0
-                                ? ` · ${productReferenceCount} product${productReferenceCount === 1 ? '' : 's'}`
-                                : ''}
+                              {uiText.rich('sentence_59159959879c', {
+                                characters: characterReferenceCount,
+                                hasProducts: productReferenceCount > 0 ? 'yes' : 'no',
+                                products: productReferenceCount,
+                              })}
                             </span>
                           ) : null}
                           <span className="flex flex-wrap items-center gap-1.5">
@@ -681,7 +812,7 @@ export function CalendarDraftCard({
                             draft.backendDraftId &&
                             !isStreaming ? (
                               <CardStageAction
-                                label="Ready to render"
+                                label={uiText('ready_to_render_6f40bb0')}
                                 onActivate={() => onStitch(draft.id)}
                               />
                             ) : null}
@@ -694,8 +825,8 @@ export function CalendarDraftCard({
                               <CardStageAction
                                 label={
                                   draft.mediaSuggestion?.reel?.composition
-                                    ? 'Edit in AI Studio'
-                                    : 'Generate final media'
+                                    ? uiText('open_in_ai_studio_2de2e41')
+                                    : uiText('generate_final_media_9e103cc')
                                 }
                                 onActivate={() => onRealize(draft.id)}
                               />
@@ -710,7 +841,7 @@ export function CalendarDraftCard({
                                 >
                                   <Image
                                     src={frame.storageUrl as string}
-                                    alt={`Storyboard frame ${index + 1}`}
+                                    alt={uiText('storyboardFrameNumber', { number: index + 1 })}
                                     fill
                                     unoptimized
                                     sizes="36px"
@@ -730,15 +861,18 @@ export function CalendarDraftCard({
                         <p className="mt-1.5">
                           <MediaStagePill mediaStage="failed" />
                         </p>
-                      ) : isTextOnlyDraft ? (
+                      ) : isTextOnlyDraft && !copyGap ? (
                         // The row wraps and the sentence truncates so the action keeps its full
                         // width at the narrowest planner column — it used to render as "En…".
                         <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           <span className="min-w-0 truncate text-2xs italic text-muted-foreground/60">
-                            Text only — no media yet
+                            {uiText('text_only_no_media_yet_2fac4f1')}
                           </span>
                           {onEnrich && draft.backendDraftId ? (
-                            <CardStageAction label="Enrich" onActivate={() => onEnrich(draft.id)} />
+                            <CardStageAction
+                              label={uiText('enrich_2d85f77')}
+                              onActivate={() => onEnrich(draft.id)}
+                            />
                           ) : null}
                         </p>
                       ) : null}
@@ -751,8 +885,8 @@ export function CalendarDraftCard({
                               className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground/70 ml-0.5"
                               title={
                                 carouselSlideCount > 1
-                                  ? `Carousel · ${carouselSlideCount} slides`
-                                  : 'Carousel'
+                                  ? uiText('carouselSlideCount', { count: carouselSlideCount })
+                                  : uiText('carousel_37219fb')
                               }
                             >
                               <GalleryHorizontalEnd className="h-2.5 w-2.5" />
@@ -779,24 +913,26 @@ export function CalendarDraftCard({
 
         {/* Context menu */}
         <ContextMenuContent className="w-56">
-          <ContextMenuLabel>Quick Edit</ContextMenuLabel>
+          <ContextMenuLabel>{uiText('quick_edit_d4e63f5')}</ContextMenuLabel>
           <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
             <Pencil className="mr-2 h-3.5 w-3.5" />
-            Open in editor
+            {uiText('open_in_editor_ea1d0f0')}
           </ContextMenuItem>
           {draft.status !== 'streaming' && draft.status !== 'placeholder' ? (
             <ContextMenuItem onSelect={() => setDuplicatePickerOpen(true)}>
               <Copy className="mr-2 h-3.5 w-3.5" />
-              Duplicate...
+              {uiText('duplicate_7abb570')}
             </ContextMenuItem>
           ) : null}
           <ContextMenuSeparator />
           {/* Platforms change in ONE place, the review panel's selector, which writes the
               group's member rows. A second list here changed only the browser's copy. */}
-          <ContextMenuItem onSelect={() => onSelect(draft.id)}>Change platforms…</ContextMenuItem>
+          <ContextMenuItem onSelect={() => onSelect(draft.id)}>
+            {uiText('change_platforms_4e95a5e')}
+          </ContextMenuItem>
           {QUICK_TIME_OPTIONS.map((time) => (
             <ContextMenuItem key={time} onSelect={() => changeTime(time)}>
-              Time: {time}
+              {uiText.rich('sentence_809ba4d35956', { v0: () => time })}
             </ContextMenuItem>
           ))}
           <ContextMenuItem
@@ -805,7 +941,7 @@ export function CalendarDraftCard({
               setTimePickerOpen(true);
             }}
           >
-            Time: Custom...
+            {uiText('time_custom_df83da4')}
           </ContextMenuItem>
           <ContextMenuItem
             disabled={!canMarkScheduled || isApproving}
@@ -813,7 +949,7 @@ export function CalendarDraftCard({
               if (canMarkScheduled) void approveAndSchedule(draft);
             }}
           >
-            Approve & Schedule
+            {uiText('approve_schedule_aa6cea6')}
           </ContextMenuItem>
           <ContextMenuItem
             disabled={isUnscheduling}
@@ -821,19 +957,19 @@ export function CalendarDraftCard({
               void unschedule(draft);
             }}
           >
-            Move back to draft
+            {uiText('move_back_to_draft_00ade9c')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           {onRegenerate ? (
             <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
               <Zap className="mr-2 h-3.5 w-3.5" />
-              {isFailed ? 'Retry generation' : 'Regenerate'}
+              {isFailed ? uiText('retry_generation_9331330') : uiText('regenerate_1651031')}
             </ContextMenuItem>
           ) : null}
           {isFailed ? (
             <ContextMenuItem onSelect={clearFailure}>
               <X className="mr-2 h-3.5 w-3.5" />
-              Clear failure
+              {uiText('clear_failure_291d2a6')}
             </ContextMenuItem>
           ) : null}
           {canPublish ? (
@@ -854,15 +990,15 @@ export function CalendarDraftCard({
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>
               {isPublishing
-                ? 'Publishing…'
+                ? uiText('publishing_582e0f1')
                 : publishBlockedReason
-                  ? `Publish to ${publishDestination} — needs setup`
-                  : `Publish to ${publishDestination}`}
+                  ? uiText('publishNeedsSetup', { destination: publishDestination })
+                  : uiText('publishDestination', { destination: publishDestination })}
             </ContextMenuItem>
           ) : null}
           {openInStudio && !aiStudioHandoffIssue(draft) ? (
             <ContextMenuItem onSelect={() => openInStudio(draft.id)}>
-              {draft.mediaSuggestion?.reel?.composition ? 'Edit composition' : 'Open in AI Studio'}
+              {uiText('open_in_ai_studio_2de2e41')}
             </ContextMenuItem>
           ) : null}
           <ContextMenuItem
@@ -870,7 +1006,7 @@ export function CalendarDraftCard({
             onSelect={() => requestDraftDeletion([draft.id], bulkDeleteDrafts)}
           >
             <Trash2 className="mr-2 h-3.5 w-3.5" />
-            Delete draft
+            {uiText('delete_draft_4649537')}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -878,7 +1014,7 @@ export function CalendarDraftCard({
       {/* Time picker popover */}
       <PopoverContent side="top" align="start" className="w-56 p-3">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Set posting time
+          {uiText('set_posting_time_4974496')}
         </p>
         <Input
           value={pendingTime}
@@ -886,7 +1022,7 @@ export function CalendarDraftCard({
             setPendingTime(e.target.value);
             setTimeError(null);
           }}
-          placeholder="e.g. 11:15 AM"
+          placeholder={uiText('e_g_11_15_am_6ec4db4')}
           className="h-8 text-xs"
           onKeyDown={(e) => {
             if (e.key === 'Enter') applyCustomTime();
@@ -900,7 +1036,7 @@ export function CalendarDraftCard({
         {timeError && <p className="mt-1 text-2xs text-destructive">{timeError}</p>}
         <div className="mt-2 flex gap-1.5">
           <Button type="button" onClick={applyCustomTime} size="xs" className="flex-1">
-            Set
+            {uiText('set_b6f6f3a')}
           </Button>
           <button
             type="button"
@@ -910,7 +1046,7 @@ export function CalendarDraftCard({
             }}
             className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
           >
-            Cancel
+            {uiText('cancel_19766ed')}
           </button>
         </div>
       </PopoverContent>
@@ -947,7 +1083,7 @@ export function CalendarDraftCard({
       <PopoverAnchor render={cardWithHover} />
       <PopoverContent side="right" align="start" className="w-auto p-3">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Duplicate to...
+          {uiText('duplicate_to_ae1984e')}
         </p>
         <DuplicateDayPicker
           onSelect={(dayId) => {

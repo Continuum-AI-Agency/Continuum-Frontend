@@ -1,3 +1,4 @@
+import type { useTranslations } from 'next-intl';
 // Turning a stored design system into the five things a brand can actually be held to.
 //
 // The existing settings surface renders a design system as CARDS OF PROSE — a title, a
@@ -43,8 +44,22 @@ export interface SpecRow {
 }
 
 // Three decimals: enough to reproduce a measurement, few enough to compare in a column.
-const ratio = (value: number): string => value.toFixed(3);
-const percent = (fraction: number): string => `${(fraction * 100).toFixed(1)} %`;
+const ratio = (value: number, locale?: string): string =>
+  locale
+    ? new Intl.NumberFormat(locale, {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+        useGrouping: false,
+      }).format(value)
+    : value.toFixed(3);
+const percent = (fraction: number, locale?: string): string =>
+  locale
+    ? new Intl.NumberFormat(locale, {
+        style: 'percent',
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }).format(fraction)
+    : `${(fraction * 100).toFixed(1)} %`;
 
 const humanize = (key: string): string => {
   const spaced = key
@@ -80,16 +95,26 @@ const NO_FORMATS =
  * against, not a number to compare down a column. Everything in a `value` is a ratio, a
  * percentage, or the word `none`.
  */
-export function deriveLayoutSpec(snapshot: DesignSystemSnapshot): LayoutSpec {
+export function deriveLayoutSpec(
+  snapshot: DesignSystemSnapshot,
+  translate?: ReturnType<typeof useTranslations<'settings'>>,
+  locale?: string,
+): LayoutSpec {
   const section = sectionNamed(snapshot, 'formats');
-  if (!section) return { absent: NO_FORMATS, baseWidth: null, rows: [] };
+  if (!section)
+    return {
+      absent: translate ? translate('m_3dcfba696f') : NO_FORMATS,
+      baseWidth: null,
+      rows: [],
+    };
 
   const parsed = designFormatsContentSchema.safeParse(section.content);
   if (!parsed.success) {
     return {
-      absent:
-        `The Formats card carries content this build cannot read — ${parsed.error.issues[0]?.message ?? 'invalid shape'}. ` +
-        'Re-import the design system, or correct the card above.',
+      absent: translate
+        ? translate('m_7744906b97')
+        : `The Formats card carries content this build cannot read — ${parsed.error.issues[0]?.message ?? 'invalid shape'}. ` +
+          'Re-import the design system, or correct the card above.',
       baseWidth: null,
       rows: [],
     };
@@ -101,22 +126,32 @@ export function deriveLayoutSpec(snapshot: DesignSystemSnapshot): LayoutSpec {
   for (const format of formats) {
     rows.push({
       label: format.id,
-      note: `${format.width} x ${format.height} — a format's own dimensions are the only pixels in this spec`,
-      value: `${ratio(format.width / format.height)} : 1`,
+      note: translate
+        ? translate('m_7f4524f19b', { v0: String(format.width), v1: String(format.height) })
+        : `${format.width} x ${format.height} — a format's own dimensions are the only pixels in this spec`,
+      value: `${ratio(format.width / format.height, locale)} : 1`,
     });
     rows.push(
       format.safeZone === null
         ? {
-            label: `${format.id} · safe zone`,
-            note: 'a stated decision, not a missing measurement — this format puts no text over imagery',
-            value: 'none',
+            label: translate
+              ? translate('m_afd5be24af', { v0: String(format.id) })
+              : `${format.id} · safe zone`,
+            note: translate
+              ? translate('m_f4dce17243')
+              : 'a stated decision, not a missing measurement — this format puts no text over imagery',
+            value: translate ? translate('m_71f8e7976e') : 'none',
           }
         : {
-            label: `${format.id} · safe zone`,
-            note: 'where a headline may sit, as fractions of the frame — the same box the legibility gate measures',
+            label: translate
+              ? translate('m_afd5be24af', { v0: String(format.id) })
+              : `${format.id} · safe zone`,
+            note: translate
+              ? translate('m_a517007d12')
+              : 'where a headline may sit, as fractions of the frame — the same box the legibility gate measures',
             value:
-              `x ${percent(format.safeZone.x0)} – ${percent(format.safeZone.x1)} · ` +
-              `y ${percent(format.safeZone.y0)} – ${percent(format.safeZone.y1)}`,
+              `x ${percent(format.safeZone.x0, locale)} – ${percent(format.safeZone.x1, locale)} · ` +
+              `y ${percent(format.safeZone.y0, locale)} – ${percent(format.safeZone.y1, locale)}`,
           },
     );
   }
@@ -128,17 +163,41 @@ export function deriveLayoutSpec(snapshot: DesignSystemSnapshot): LayoutSpec {
     const readAt = first === null ? null : readDesignCurve(curve, first.width / first.height);
     rows.push({
       label: humanize(name),
-      note:
-        `measured on ${curve.points.length} real pieces across aspects ` +
-        `${ratio(Math.min(...aspects))}–${ratio(Math.max(...aspects))}; read between them, and ` +
-        'held at the endpoint outside that range rather than extrapolated' +
-        (first && readAt !== null
-          ? ` — at ${first.id} it reads ${curve.unit === 'fraction' ? percent(readAt) : ratio(readAt)}`
-          : ''),
+      note: translate
+        ? translate('m_8e610e1bf9', {
+            v0: String(curve.points.length),
+            v1: String(ratio(Math.min(...aspects), locale)),
+            v2: String(ratio(Math.max(...aspects), locale)),
+            v3: String(
+              first && readAt !== null
+                ? translate('m_852bda6cd5', {
+                    format: first.id,
+                    value:
+                      curve.unit === 'fraction' ? percent(readAt, locale) : ratio(readAt, locale),
+                  })
+                : '',
+            ),
+          })
+        : `measured on ${curve.points.length} real pieces across aspects ` +
+          `${ratio(Math.min(...aspects), locale)}–${ratio(Math.max(...aspects), locale)}; read between them, and ` +
+          'held at the endpoint outside that range rather than extrapolated' +
+          (first && readAt !== null
+            ? ` — at ${first.id} it reads ${curve.unit === 'fraction' ? percent(readAt, locale) : ratio(readAt, locale)}`
+            : ''),
       value:
         curve.unit === 'fraction'
-          ? `measured ${percent(Math.min(...values))} – ${percent(Math.max(...values))} of the base width`
-          : `measured ${ratio(Math.min(...values))} – ${ratio(Math.max(...values))}`,
+          ? translate
+            ? translate('m_ad53e3bacd', {
+                v0: String(percent(Math.min(...values), locale)),
+                v1: String(percent(Math.max(...values), locale)),
+              })
+            : `measured ${percent(Math.min(...values), locale)} – ${percent(Math.max(...values), locale)} of the base width`
+          : translate
+            ? translate('m_867259b58b', {
+                minimum: ratio(Math.min(...values), locale),
+                maximum: ratio(Math.max(...values), locale),
+              })
+            : `measured ${ratio(Math.min(...values), locale)} – ${ratio(Math.max(...values), locale)}`,
     });
   }
 
@@ -199,6 +258,7 @@ const kilobytes = (bytes: number): string => `${(bytes / 1024).toFixed(1)} kB`;
 export function deriveTypeInventory(
   snapshot: DesignSystemSnapshot,
   facesInStore: readonly DesignSystemFontFace[] | null,
+  translate?: ReturnType<typeof useTranslations<'settings'>>,
 ): TypeInventory {
   const faces = facesInStore ?? [];
   const storeUnknown = facesInStore === null;
@@ -212,8 +272,12 @@ export function deriveTypeInventory(
         font.tokens.length > 0
           ? font.tokens.join(', ')
           : snapshot.adherence.fontAllowlist.some((allowed) => sameFamily(allowed, font.family))
-            ? "on the system's font allowlist"
-            : 'declared, with no token pointing at it',
+            ? translate
+              ? translate('m_4b040a0c62')
+              : "on the system's font allowlist"
+            : translate
+              ? translate('m_09b7037dab')
+              : 'declared, with no token pointing at it',
     }));
 
   // A face the store holds that the system never declared is still a real capability —
@@ -223,7 +287,9 @@ export function deriveTypeInventory(
     if (families.some((entry) => sameFamily(entry.family, face.family))) continue;
     families.push({
       family: face.family,
-      usedFor: 'held by the engine, and not declared by this design system',
+      usedFor: translate
+        ? translate('m_3175462fda')
+        : 'held by the engine, and not declared by this design system',
     });
   }
 
@@ -231,9 +297,10 @@ export function deriveTypeInventory(
     return {
       rows: [],
       storeUnknown,
-      absent:
-        'No typeface declared and none held. Import a design system that names its families, ' +
-        'then upload the font files so the engine can set type in them rather than approximate them.',
+      absent: translate
+        ? translate('m_6df5986715')
+        : 'No typeface declared and none held. Import a design system that names its families, ' +
+          'then upload the font files so the engine can set type in them rather than approximate them.',
     };
   }
 
@@ -258,8 +325,12 @@ export function deriveTypeInventory(
         detail: face
           ? `${face.format} · ${kilobytes(face.bytes)}`
           : storeUnknown
-            ? 'the engine could not be asked'
-            : 'no file in the store',
+            ? translate
+              ? translate('m_da4a6f7a8c')
+              : 'the engine could not be asked'
+            : translate
+              ? translate('m_9bdf750eb4')
+              : 'no file in the store',
       });
     }
   }
@@ -289,7 +360,10 @@ const NO_USAGE =
  * part a generator can be held to, and it gets its own right-aligned column so a reader can
  * scan the rules without reading the hexes.
  */
-export function deriveColourUsage(snapshot: DesignSystemSnapshot): ColourRow[] {
+export function deriveColourUsage(
+  snapshot: DesignSystemSnapshot,
+  translate?: ReturnType<typeof useTranslations<'settings'>>,
+): ColourRow[] {
   const tokens = literalHexTokens(snapshot.tokens).slice(0, 24);
   const paletteRules = sectionNamed(snapshot, 'palette')?.rules ?? [];
   const roleByName = new Map(
@@ -318,11 +392,18 @@ export function deriveColourUsage(snapshot: DesignSystemSnapshot): ColourRow[] {
       return {
         name: token.name,
         hex,
-        usage: `Carries the ${role} role wherever the engine narrows this system to five colours.`,
+        usage: translate
+          ? translate('m_819d3d9d1f', { v0: String(role) })
+          : `Carries the ${role} role wherever the engine narrows this system to five colours.`,
         recorded: true,
       };
     }
-    return { name: token.name, hex, usage: NO_USAGE, recorded: false };
+    return {
+      name: token.name,
+      hex,
+      usage: translate ? translate('m_4d60148a5a') : NO_USAGE,
+      recorded: false,
+    };
   });
 }
 
@@ -342,6 +423,31 @@ export interface BrandFacts {
 
 const MAX_FACTS = 40;
 
+const DISPLAY_LABEL_KEYS = {
+  'declared in the source': 'm_c6e5b2676a',
+  'read from prose': 'm_dfb3b51d0d',
+  'harvested from the live site': 'm_9e4a1498dd',
+  'edited by your team': 'm_2771f43005',
+  Palette: 'm_bd6f1035d2',
+  Typography: 'm_f4beb9af58',
+  Spacing: 'm_2acbb30795',
+  Radii: 'm_47fab36454',
+  Shadows: 'm_446d99fcaa',
+  Layout: 'm_972ad8d8a5',
+  Components: 'm_9289473eee',
+  Iconography: 'm_0e483bc132',
+  Motion: 'm_e040db2b7f',
+  Voice: 'm_3091c8446f',
+  Imagery: 'm_8e72e49ebf',
+  Logo: 'm_83fce83274',
+  Formats: 'm_2804d9f16a',
+} as const;
+function displayLabel(value: string, t?: ReturnType<typeof useTranslations<'settings'>>) {
+  return t && Object.hasOwn(DISPLAY_LABEL_KEYS, value)
+    ? t(DISPLAY_LABEL_KEYS[value as keyof typeof DISPLAY_LABEL_KEYS])
+    : value;
+}
+
 const PROVENANCE_LABEL: Record<string, string> = {
   declared: 'declared in the source',
   inferred: 'read from prose',
@@ -358,9 +464,17 @@ const PROVENANCE_LABEL: Record<string, string> = {
  * value we will hand a model with nothing behind it, and hiding that would make the panel
  * an assurance rather than an audit.
  */
-export function deriveBrandFacts(snapshot: DesignSystemSnapshot): BrandFacts {
+export function deriveBrandFacts(
+  snapshot: DesignSystemSnapshot,
+  translate?: ReturnType<typeof useTranslations<'settings'>>,
+): BrandFacts {
   const rows: FactRow[] = [
-    { fact: `The brand is called ${snapshot.brandName}.`, provenance: 'the brand record' },
+    {
+      fact: translate
+        ? translate('m_dbbc80dd31', { v0: String(snapshot.brandName) })
+        : `The brand is called ${snapshot.brandName}.`,
+      provenance: translate ? translate('m_ac776e4e11') : 'the brand record',
+    },
   ];
 
   for (const token of literalHexTokens(snapshot.tokens).slice(0, 16)) {
@@ -372,9 +486,16 @@ export function deriveBrandFacts(snapshot: DesignSystemSnapshot): BrandFacts {
 
   for (const font of snapshot.fonts.slice(0, 8)) {
     rows.push({
-      fact: `${font.family} is a typeface of this system.`,
+      fact: translate
+        ? translate('m_ddf0d70c19', { v0: String(font.family) })
+        : `${font.family} is a typeface of this system.`,
       provenance:
-        font.source ?? (font.tokens.length > 0 ? `declared by ${font.tokens.join(', ')}` : null),
+        font.source ??
+        (font.tokens.length > 0
+          ? translate
+            ? translate('m_dd000e523b', { v0: String(font.tokens.join(', ')) })
+            : `declared by ${font.tokens.join(', ')}`
+          : null),
     });
   }
 
@@ -383,16 +504,31 @@ export function deriveBrandFacts(snapshot: DesignSystemSnapshot): BrandFacts {
   if (formats && parsedFormats?.success) {
     for (const format of parsedFormats.data.formats.slice(0, 8)) {
       rows.push({
-        fact: `${format.id} ships at ${format.width} x ${format.height}.`,
-        provenance: `Formats card · ${PROVENANCE_LABEL[formats.provenance] ?? formats.provenance}`,
+        fact: translate
+          ? translate('m_4badbe55ee', {
+              v0: String(format.id),
+              v1: String(format.width),
+              v2: String(format.height),
+            })
+          : `${format.id} ships at ${format.width} x ${format.height}.`,
+        provenance: translate
+          ? translate('m_88010cfaa8', {
+              v0: displayLabel(
+                PROVENANCE_LABEL[formats.provenance] ?? formats.provenance,
+                translate,
+              ),
+            })
+          : `Formats card · ${PROVENANCE_LABEL[formats.provenance] ?? formats.provenance}`,
       });
     }
   }
 
   if (snapshot.adherence.fontAllowlist.length > 0) {
     rows.push({
-      fact: `No family outside ${snapshot.adherence.fontAllowlist.join(', ')} belongs to this system.`,
-      provenance: "the system's own adherence config",
+      fact: translate
+        ? translate('m_17beac4d2d', { v0: String(snapshot.adherence.fontAllowlist.join(', ')) })
+        : `No family outside ${snapshot.adherence.fontAllowlist.join(', ')} belongs to this system.`,
+      provenance: translate ? translate('m_2c034b6081') : "the system's own adherence config",
     });
   }
 
@@ -457,13 +593,21 @@ function checkerFor(section: DesignSection, adherence: DesignAdherence): string 
 function measurementFor(
   rule: { target: string | null; value: string | null },
   section: DesignSection,
+  translate?: ReturnType<typeof useTranslations<'settings'>>,
 ): string | null {
   if (!isGateableSection(section)) return null;
   if (rule.target && rule.value)
-    return `compiler field ${rule.target} reads ${rule.value} on the rendered piece`;
+    return translate
+      ? translate('m_3b67c4b505', { v0: String(rule.target), v1: String(rule.value) })
+      : `compiler field ${rule.target} reads ${rule.value} on the rendered piece`;
   if (rule.target)
-    return `compiler field ${rule.target} is read off every render and compared with this system`;
-  if (rule.value) return `the rendered piece uses ${rule.value} literally`;
+    return translate
+      ? translate('m_5e03f470c2', { v0: String(rule.target) })
+      : `compiler field ${rule.target} is read off every render and compared with this system`;
+  if (rule.value)
+    return translate
+      ? translate('m_7d0b7d298e', { v0: String(rule.value) })
+      : `the rendered piece uses ${rule.value} literally`;
   return null;
 }
 
@@ -475,19 +619,29 @@ function measurementFor(
  * rather than restated, so a reason this panel shows and a reason the rule bank would
  * refuse cannot drift apart.
  */
-export function deriveRuleLedger(snapshot: DesignSystemSnapshot): RuleLedger {
+export function deriveRuleLedger(
+  snapshot: DesignSystemSnapshot,
+  translate?: ReturnType<typeof useTranslations<'settings'>>,
+): RuleLedger {
   const gating = effectiveRigorTier(snapshot) === 'strict';
   const rules: MeasuredRuleRow[] = [];
   const pending: PendingRuleRow[] = [];
 
   for (const section of snapshot.sections) {
-    const label = DESIGN_SECTION_LABELS[section.section] ?? section.section;
+    const label = displayLabel(
+      DESIGN_SECTION_LABELS[section.section] ?? section.section,
+      translate,
+    );
     for (const rule of section.rules) {
-      const measurement = measurementFor(rule, section.section);
+      const measurement = measurementFor(rule, section.section, translate);
       if (measurement === null) {
         const admission = isGateableSection(section.section)
-          ? `${NOT_MEASURABLE_MARKERS[0]}: no compiler field and no literal is attached, so there is nothing on the render to compare it against`
-          : `${NOT_MEASURABLE_MARKERS[0]}: ${label} is not observable on a rendered pixel — this section can only shape the prompt`;
+          ? translate
+            ? translate('m_e76d8d13c4', { v0: translate('m_008a49f892') })
+            : `${NOT_MEASURABLE_MARKERS[0]}: no compiler field and no literal is attached, so there is nothing on the render to compare it against`
+          : translate
+            ? translate('m_16243ac7bb', { v0: translate('m_008a49f892'), v1: String(label) })
+            : `${NOT_MEASURABLE_MARKERS[0]}: ${label} is not observable on a rendered pixel — this section can only shape the prompt`;
         pending.push({
           reported: rule.statement,
           whyNotMeasurable: notMeasurableReason(admission) ?? admission,
@@ -511,9 +665,11 @@ export function deriveRuleLedger(snapshot: DesignSystemSnapshot): RuleLedger {
     pending,
     absent:
       rules.length === 0 && pending.length === 0
-        ? 'No rules recorded on any card. A rule is what a palette cannot express — "radii ' +
-          'small or zero, editorial means straight" — and it is the part of a design system a ' +
-          'generator can actually be held to. Add one on any card above.'
+        ? translate
+          ? translate('m_45fd1d82f4')
+          : 'No rules recorded on any card. A rule is what a palette cannot express — "radii ' +
+            'small or zero, editorial means straight" — and it is the part of a design system a ' +
+            'generator can actually be held to. Add one on any card above.'
         : null,
   };
 }

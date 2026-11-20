@@ -1,5 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { formatCompetitorNumber } from '@/components/competitor-spy/brandVisuals';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+
 // "What they keep scaling" table for one angle-map dimension (cross-competitor
 // rollup rows). Numbers are computed server-side (SQL angle-map RPC); this
 // table only presents. Expanding a row shows the exemplar ads behind it.
@@ -27,15 +31,17 @@ export function CompetitorPatternTable({
   exemplars: Record<string, GapCompetitorExemplar>;
   funnelRows?: CompetitorAngleMapRow[];
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('competitor');
   const columns: InsightColumn<CompetitorAngleMapRow>[] = useMemo(
     () => [
       {
         id: 'category',
-        header: 'Category',
+        header: localizeCompetitorCopy('Category', uiText),
         cell: (row) => (
           <span className="flex items-center gap-1.5">
             <span className="rounded bg-muted px-1 py-px text-3xs text-muted-foreground">
-              {DIMENSION_LABEL[row.dimension]}
+              {localizeCompetitorCopy(DIMENSION_LABEL[row.dimension], uiText)}
             </span>
             <span className="truncate text-xs text-foreground">{humanize(row.value)}</span>
           </span>
@@ -44,26 +50,32 @@ export function CompetitorPatternTable({
       },
       {
         id: 'competitors',
-        header: 'Competitors',
+        header: localizeCompetitorCopy('Competitors', uiText),
         align: 'right',
-        cell: (row) => <span className="text-xs tabular-nums">{row.competitorCount}</span>,
+        cell: (row) => (
+          <span className="text-xs tabular-nums">
+            {formatCompetitorNumber(row.competitorCount, uiLocale)}
+          </span>
+        ),
         sortValue: (row) => row.competitorCount,
       },
       {
         id: 'ads',
-        header: 'Ads',
+        header: localizeCompetitorCopy('Ads', uiText),
         align: 'right',
         cell: (row) => (
           <span className="text-xs tabular-nums">
-            {row.adCount}
-            <span className="text-muted-foreground"> · {row.activeAdCount} active</span>
+            {formatCompetitorNumber(row.adCount, uiLocale)}
+            <span className="text-muted-foreground">
+              {uiText.rich('sentence_db381b75504e', { v0: () => row.activeAdCount })}
+            </span>
           </span>
         ),
         sortValue: (row) => row.adCount,
       },
       {
         id: 'scale',
-        header: 'Scale',
+        header: localizeCompetitorCopy('Scale', uiText),
         cell: (row) => (
           <span className="flex items-center gap-1.5">
             <span
@@ -72,10 +84,13 @@ export function CompetitorPatternTable({
                 TIER_CLASS[row.tier],
               )}
             >
-              {row.tier}
+              {localizeCompetitorCopy(
+                row.tier === 'scaling' ? 'Scaling' : row.tier === 'testing' ? 'Testing' : 'Fading',
+                uiText,
+              )}
             </span>
             <span className="text-2xs tabular-nums text-muted-foreground">
-              {medianDays(row.medianLongevityDays)}
+              {medianDays(row.medianLongevityDays, uiText)}
             </span>
           </span>
         ),
@@ -83,22 +98,24 @@ export function CompetitorPatternTable({
       },
       {
         id: 'share',
-        header: 'Share',
+        header: localizeCompetitorCopy('Share', uiText),
         align: 'right',
         cell: (row) => (
-          <span className="text-xs tabular-nums">{percent(row.longevityWeightedShare)}</span>
+          <span className="text-xs tabular-nums">
+            {percent(row.longevityWeightedShare, uiLocale)}
+          </span>
         ),
         sortValue: (row) => row.longevityWeightedShare,
       },
       {
         id: 'variants',
-        header: 'Variants',
+        header: localizeCompetitorCopy('Variants', uiText),
         align: 'right',
         cell: (row) => <span className="text-xs tabular-nums">{row.variantFamilies}</span>,
         sortValue: (row) => row.variantFamilies,
       },
     ],
-    [],
+    [uiText, uiLocale],
   );
 
   return (
@@ -109,7 +126,7 @@ export function CompetitorPatternTable({
         defaultSort={{ columnId: 'share', direction: 'desc' }}
         emptyState={
           <p className="px-2 py-3 text-xs text-muted-foreground">
-            Nothing labeled in this dimension yet.
+            {uiText('nothing_labeled_in_this_dimension_yet_729cce7')}
           </p>
         }
         expandedContent={(row) => (
@@ -130,17 +147,21 @@ export function CompetitorPatternTable({
 // Compact funnel-stage distribution (cross-rollup funnel_stage rows) shown
 // above a pattern table — where competitor pressure sits in the funnel.
 function FunnelMixStrip({ rows }: { rows: CompetitorAngleMapRow[] }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('competitor');
   const sorted = [...rows].sort((a, b) => b.longevityWeightedShare - a.longevityWeightedShare);
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-2xs uppercase tracking-wide text-muted-foreground">Funnel mix</span>
+      <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+        {uiText('funnel_mix_1465189')}
+      </span>
       {sorted.map((row) => (
         <span
           className="rounded-full bg-muted px-2 py-0.5 text-2xs tabular-nums text-muted-foreground"
           key={row.value}
         >
           <span className="uppercase">{humanize(row.value)}</span>{' '}
-          {percent(row.longevityWeightedShare)}
+          {percent(row.longevityWeightedShare, uiLocale)}
         </span>
       ))}
     </div>

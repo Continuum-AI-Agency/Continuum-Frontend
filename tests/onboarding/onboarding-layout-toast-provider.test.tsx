@@ -1,10 +1,16 @@
-import { expect, test } from 'bun:test';
+import { expect, mock, test } from 'bun:test';
 import { useQueryClient } from '@tanstack/react-query';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import OnboardingLayout from '@/app/onboarding/layout';
 import { useToast } from '@/components/ui/ToastProvider';
+
+// FeatureMessages is an async server component that loads the route's catalogs; a static
+// render cannot await it, and these tests are about the client providers inside it.
+mock.module('@/i18n/FeatureMessages', () => ({
+  FeatureMessages: ({ children }: { children: React.ReactNode }) => children,
+}));
+const { default: OnboardingLayout } = await import('@/app/[locale]/onboarding/layout');
 
 function ToastConsumer() {
   useToast();

@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { useTranslations } from 'next-intl';
 
 type BrandAvatarSize = 'xs' | 'sm' | 'md' | 'lg';
 
@@ -28,6 +29,8 @@ function deriveInitials(name: string): string {
 }
 
 export function BrandAvatar({ name, logoUrl, size = 'md', className }: BrandAvatarProps) {
+  const tUi = useTranslations('common');
+
   const config = SIZE_CONFIG[size];
   const initials = deriveInitials(name);
   const boxClasses = [
@@ -44,7 +47,7 @@ export function BrandAvatar({ name, logoUrl, size = 'md', className }: BrandAvat
       {logoUrl ? (
         <Image
           src={logoUrl}
-          alt={name ? `${name} logo` : ''}
+          alt={name ? tUi('m_1daa445f91', { v0: String(name) }) : ''}
           width={config.pixels}
           height={config.pixels}
           className="h-full w-full object-cover"

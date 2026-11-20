@@ -531,15 +531,15 @@ describe('canonical EditorProjectV2 assembly operations', () => {
     );
     const audio = withAudio.tracks.find((track) => track.kind === 'audio')?.clips[0];
     if (!audio) throw new Error('Expected audio clip.');
-    const blobsByClipId = new Map([
-      ['clip-a', new Blob(['a'], { type: 'video/mp4' })],
-      ['clip-b', new Blob(['b'], { type: 'video/mp4' })],
-      [audio.id, new Blob(['score'], { type: 'audio/mp4' })],
+    const mediaByClipId = new Map([
+      ['clip-a', 'https://media.example/a.mp4'],
+      ['clip-b', 'https://media.example/b.mp4'],
+      [audio.id, 'https://media.example/score.m4a'],
     ]);
     const plan = buildEditorProjectV2AudioPreviewPlan({
       project: withAudio,
       layout: videoLayout(withAudio, 80),
-      blobsByClipId,
+      mediaByClipId,
     });
     expect(editorProjectV2AudioClipIds(withAudio)).toEqual(['clip-a', 'clip-b', audio.id]);
     expect(plan.events.map((event) => event.kind)).toEqual(['base', 'audio', 'base']);
@@ -549,6 +549,8 @@ describe('canonical EditorProjectV2 assembly operations', () => {
       'asset-clip-b:version-clip-b',
     ]);
     expect(plan.events[1]).toMatchObject({
+      // A URL, read by range when it plays: nothing is downloaded to build the plan.
+      media: 'https://media.example/score.m4a',
       outputStartSec: 4,
       outputEndSec: 10,
       gain: 1,
@@ -569,6 +571,32 @@ describe('canonical EditorProjectV2 assembly operations', () => {
       ),
     });
     expect(editorProjectV2AudioClipIds(soloScore)).toEqual([audio.id]);
+  });
+
+  test('leaves a clip at zero gain out of the mix, so its audio is never read', () => {
+    const initial = projectFixture();
+    const silent = editorProjectV2Schema.parse({
+      ...initial,
+      tracks: initial.tracks.map((track) =>
+        track.kind === 'video'
+          ? {
+              ...track,
+              clips: track.clips.map((clip) =>
+                clip.id === 'clip-b' ? { ...clip, volume: 0 } : clip,
+              ),
+            }
+          : track,
+      ),
+    });
+    const plan = buildEditorProjectV2AudioPreviewPlan({
+      project: silent,
+      layout: videoLayout(silent, 80),
+      mediaByClipId: new Map([
+        ['clip-a', 'https://media.example/a.mp4'],
+        ['clip-b', 'https://media.example/b.mp4'],
+      ]),
+    });
+    expect(plan.events.map((event) => event.id)).toEqual(['clip-a']);
   });
 
   test('projects canonical exact-pinned clips into the durable source-time review surface', () => {
@@ -613,6 +641,39 @@ describe('canonical EditorProjectV2 assembly operations', () => {
     ] as MediaAssetVersion[];
     expect(exactVersionPreviewUrl(versions, 'pinned')).toBe('https://media.example/pinned.mp4');
     expect(exactVersionPreviewUrl(versions, 'missing')).toBeUndefined();
+  });
+
+  test('plays a ready 720p preview_video in place of an MP4 original, and the original otherwise', () => {
+    const proxy = (state: 'ready' | 'pending') => ({
+      state,
+      role: 'preview_video',
+      kind: 'video',
+      signedUrl: 'https://media.example/clip-720.mp4',
+    });
+    const versions = [
+      {
+        id: 'ready',
+        mimeType: 'video/mp4',
+        signedUrl: 'https://media.example/clip.mp4',
+        preview: proxy('ready'),
+      },
+      {
+        id: 'pending',
+        mimeType: 'video/mp4',
+        signedUrl: 'https://media.example/clip.mp4',
+        preview: proxy('pending'),
+      },
+      // The H.264 ladder has no alpha, so a cutout keeps its own file.
+      {
+        id: 'alpha',
+        mimeType: 'video/webm',
+        signedUrl: 'https://media.example/cutout.webm',
+        preview: proxy('ready'),
+      },
+    ] as MediaAssetVersion[];
+    expect(exactVersionPreviewUrl(versions, 'ready')).toBe('https://media.example/clip-720.mp4');
+    expect(exactVersionPreviewUrl(versions, 'pending')).toBe('https://media.example/clip.mp4');
+    expect(exactVersionPreviewUrl(versions, 'alpha')).toBe('https://media.example/cutout.webm');
   });
 });
 

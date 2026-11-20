@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 import type { Trend } from '@/lib/organic/trends';
 import { TrendWorkbench } from './TrendWorkbench';
@@ -266,6 +267,41 @@ describe('TrendWorkbench', () => {
 
       expect(screen.getByTestId('trend-workbench-empty')).toBeTruthy();
       expect(screen.queryByText('No trends match this search.')).toBeNull();
+      expect(screen.queryByTestId('trend-workbench-error')).toBeNull();
+    });
+
+    it('shows a calm first-report state while the first generation runs', () => {
+      render(
+        <TrendWorkbench
+          trends={[]}
+          selectedTrendIds={[]}
+          activePlatforms={['instagram']}
+          onToggleTrend={mock()}
+          onFetch={mock()}
+          isFetching
+        />,
+      );
+
+      expect(screen.getByTestId('trend-workbench-first-run').textContent).toContain(
+        'Generating your first trend report',
+      );
+      expect(screen.queryByTestId('trend-workbench-error')).toBeNull();
+      expect(screen.queryByTestId('trend-workbench-empty')).toBeNull();
+    });
+
+    it('says the first report is on its way while the brand report is not ready', () => {
+      render(
+        <TrendWorkbench
+          trends={[]}
+          selectedTrendIds={[]}
+          activePlatforms={['instagram']}
+          onToggleTrend={mock()}
+          onFetch={mock()}
+          waitingForBrandReport
+        />,
+      );
+
+      expect(screen.getByTestId('trend-workbench-waiting')).toBeTruthy();
       expect(screen.queryByTestId('trend-workbench-error')).toBeNull();
     });
 

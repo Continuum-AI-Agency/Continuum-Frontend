@@ -1,6 +1,8 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
 
 import type { ComputedInsight, InsightSeverity } from '@/lib/paid-media/account-insights.types';
 import { cn } from '@/lib/utils';
@@ -24,26 +26,30 @@ const severityTextClasses: Record<InsightSeverity, string> = {
   neutral: 'text-primary-ink',
 };
 
-const METRIC_LABELS: Record<string, string> = {
-  roas: 'ROAS',
-  conversions: 'Conv',
-  ctr: 'CTR',
-  cpc: 'CPC',
-  cpa: 'CPA',
-  clicks: 'Clicks',
-  spend_efficiency: 'Efficiency',
-  spend: 'Spend',
-  frequency: 'Frequency',
-  spend_concentration: 'Concentration',
-  pace: 'Pace %',
-};
-
 export function InsightCategoryCard({
   title,
   icon: Icon,
   insights,
   accentColor,
 }: InsightCategoryCardProps) {
+  const uiText = useTranslations('scale');
+  const METRIC_LABELS: Record<string, string> = useMemo(
+    () => ({
+      roas: uiText('roas_b81bd97'),
+      conversions: uiText('dashboardConv'),
+      ctr: uiText('ctr_07fce34'),
+      cpc: 'CPC',
+      cpa: 'CPA',
+      clicks: uiText('clicks_921fc98'),
+      spend_efficiency: uiText('efficiency_87b180c'),
+      spend: uiText('spend_85f3d55'),
+      frequency: uiText('dashboardFrequency'),
+      spend_concentration: uiText('dashboardConcentration'),
+      pace: uiText('dashboardPace'),
+    }),
+    [uiText],
+  );
+
   return (
     <div className="rounded-lg border border-border/70 bg-card p-2.5">
       <div className="mb-2 flex items-center gap-2">
@@ -56,7 +62,9 @@ export function InsightCategoryCard({
       </div>
 
       {insights.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Not enough data to surface insights</p>
+        <p className="text-xs text-muted-foreground">
+          {uiText('not_enough_data_to_surface_insights_7faa9ad')}
+        </p>
       ) : (
         <ul className="space-y-2">
           {insights.map((insight, idx) => (

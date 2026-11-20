@@ -1,6 +1,8 @@
 'use client';
 
 import { ChevronsUpDownIcon } from 'lucide-react';
+
+import { useTranslations } from 'next-intl';
 import type { ComponentProps, ReactNode } from 'react';
 import {
   createContext,
@@ -21,6 +23,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useControllableState } from '@/hooks/useControllableState';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { cn } from '@/lib/utils';
 
 const deviceIdRegex = /\(([\da-fA-F]{4}:[\da-fA-F]{4})\)$/;
@@ -164,9 +167,10 @@ export type MicSelectorInputProps = ComponentProps<typeof CommandInput> & {
   onValueChange?: (value: string) => void;
 };
 
-export const MicSelectorInput = ({ ...props }: MicSelectorInputProps) => (
-  <CommandInput placeholder="Search microphones..." {...props} />
-);
+export const MicSelectorInput = ({ ...props }: MicSelectorInputProps) => {
+  const tUi = useTranslations('common');
+  return <CommandInput placeholder={tUi('m_6c3f19ee87')} {...props} />;
+};
 
 export type MicSelectorListProps = Omit<ComponentProps<typeof CommandList>, 'children'> & {
   children: (devices: MediaDeviceInfo[]) => ReactNode;
@@ -180,10 +184,14 @@ export const MicSelectorList = ({ children, ...props }: MicSelectorListProps) =>
 
 export type MicSelectorEmptyProps = ComponentProps<typeof CommandEmpty>;
 
-export const MicSelectorEmpty = ({
-  children = 'No microphone found.',
-  ...props
-}: MicSelectorEmptyProps) => <CommandEmpty {...props}>{children}</CommandEmpty>;
+export const MicSelectorEmpty = ({ children, ...props }: MicSelectorEmptyProps) => {
+  const t = useTranslations('common');
+  return (
+    <CommandEmpty {...props}>
+      {children === undefined ? t('microphoneNotFound') : children}
+    </CommandEmpty>
+  );
+};
 
 export type MicSelectorItemProps = ComponentProps<typeof CommandItem>;
 
@@ -230,13 +238,15 @@ export const MicSelectorLabel = ({ device, className, ...props }: MicSelectorLab
 export type MicSelectorValueProps = ComponentProps<'span'>;
 
 export const MicSelectorValue = ({ className, ...props }: MicSelectorValueProps) => {
+  const tUi = useTranslations('common');
+
   const { data, value } = useContext(MicSelectorContext);
   const currentDevice = data.find((d) => d.deviceId === value);
 
   if (!currentDevice) {
     return (
       <span className={cn('flex-1 text-left', className)} {...props}>
-        Select microphone...
+        {tUi('m_431e3a1377')}
       </span>
     );
   }
@@ -251,6 +261,8 @@ export const MicSelectorValue = ({ className, ...props }: MicSelectorValueProps)
 };
 
 export const useAudioDevices = () => {
+  const getUiErrorMessage = useUiErrorMessage();
+
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -266,14 +278,14 @@ export const useAudioDevices = () => {
 
       setDevices(audioInputs);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to get audio devices';
+      const message = getUiErrorMessage(error);
 
       setError(message);
       console.error('Error getting audio devices:', message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getUiErrorMessage]);
 
   const loadDevicesWithPermission = useCallback(async () => {
     if (loading) {
@@ -298,14 +310,14 @@ export const useAudioDevices = () => {
       setDevices(audioInputs);
       setHasPermission(true);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to get audio devices';
+      const message = getUiErrorMessage(error);
 
       setError(message);
       console.error('Error getting audio devices:', message);
     } finally {
       setLoading(false);
     }
-  }, [loading]);
+  }, [loading, getUiErrorMessage]);
 
   useEffect(() => {
     loadDevicesWithoutPermission();

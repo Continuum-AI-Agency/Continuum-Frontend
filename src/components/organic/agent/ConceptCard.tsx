@@ -1,33 +1,38 @@
 'use client';
 
-import { hasApprovablePreview } from '@continuum/contracts';
 import type { LucideIcon } from 'lucide-react';
 import {
-  CalendarDays,
   ChevronDown,
   Clapperboard,
   GalleryHorizontalEnd,
   ImageIcon,
   ImageOff,
-  List,
-  PencilRuler,
   RectangleVertical,
-  RefreshCw,
   Sparkles,
-  Wand2,
   X,
 } from 'lucide-react';
-import { type ButtonHTMLAttributes, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChatMediaCarousel, ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import type { ChatMedia } from '@/components/chat/media/media';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import { MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Progress } from '@/components/ui/progress';
+import type { UiLocale } from '@/i18n/config';
+import { translateOrganicControlLabel } from '@/lib/ui/organicLifecycleLabels';
 import { cn } from '@/lib/utils';
 import { rankCardMedia, useDraftChatMedia } from '../hooks/useDraftStoryboard';
+import { conceptFormatLabel } from './conceptLabels';
 import { resolveConceptPreviewUrls } from './conceptPreview';
-import { type ConceptStatus, resolvePlanItemStatus } from './conceptStatus';
+import { type ConceptStatus, isFailureKind, resolvePlanItemStatus } from './conceptStatus';
+import {
+  DraftCardActions,
+  DraftIdTag,
+  FailureNotice,
+  hasOpenableDraft,
+  RowAction,
+} from './DraftCardActions';
 import { StatusDetail } from './StatusDetail';
 import type { PipelineCardState, PlanItem, PlanItemStatus } from './types';
 
@@ -49,13 +54,6 @@ const FUNNEL_LABELS: Record<string, string> = {
   middle: 'Mid-funnel',
   bottom: 'Bottom of funnel',
   retention: 'Retention',
-};
-
-export const FORMAT_LABELS: Record<string, string> = {
-  reel: 'Reel',
-  post: 'Post',
-  carousel: 'Carousel',
-  story: 'Story',
 };
 
 const FORMAT_ICONS: Record<string, LucideIcon> = {
@@ -81,17 +79,17 @@ const wellShape = (format: string | null): string =>
 const IMAGE_OUTLINE = 'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10';
 
 /** "Mon 25" — the weekly plan's real ordering key, so a plan reads as a schedule. */
-export function formatDayLabel(iso: string): string {
+export function formatDayLabel(iso: string, locale: UiLocale = 'en'): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+  return d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
 }
 
 /** The exact schedule, kept for inspection depth rather than the scannable strip. */
-function formatExactSchedule(iso: string): string {
+function formatExactSchedule(iso: string, locale: UiLocale = 'en'): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(locale, {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
@@ -128,6 +126,8 @@ function MediaWell({
   onOpen: (index: number) => void;
   onRecover: (media: ChatMedia) => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const shape = wellShape(format);
   const cover = media[0];
 
@@ -149,7 +149,7 @@ function MediaWell({
     );
   }
 
-  const formatLabel = format ? (FORMAT_LABELS[format] ?? format) : null;
+  const formatLabel = format ? conceptFormatLabel(format, uiText) : null;
 
   return (
     <div className={cn('relative', shape)}>
@@ -161,7 +161,9 @@ function MediaWell({
         <HoverCardTrigger
           render={
             <button
-              aria-label={`Open ${formatLabel ?? 'preview'}`}
+              aria-label={uiText('openPreviewLabel', {
+                label: formatLabel ?? uiText('preview_5975cf1'),
+              })}
               className={cn(
                 'block size-full cursor-zoom-in overflow-hidden rounded-md',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -195,7 +197,7 @@ function MediaWell({
             />
           </div>
           <p className="mt-2 text-3xs text-muted-foreground">
-            {[formatLabel, media.length > 1 ? `${media.length} slides` : null]
+            {[formatLabel, media.length > 1 ? uiText('slidesCount', { count: media.length }) : null]
               .filter(Boolean)
               .join(' · ')}
           </p>
@@ -229,38 +231,6 @@ function BriefRow({ label, value }: { label: string; value: string | null | unde
   );
 }
 
-/** A text-weight row action. The plan footer owns the one filled primary. */
-function RowAction({
-  icon: Icon,
-  children,
-  emphasis,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon: LucideIcon;
-  emphasis?: 'primary' | 'danger';
-}) {
-  return (
-    <button
-      type="button"
-      {...props}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        'disabled:pointer-events-none disabled:opacity-40',
-        emphasis === 'primary'
-          ? 'font-medium text-foreground/80 hover:bg-muted/60 hover:text-primary'
-          : emphasis === 'danger'
-            ? 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
-            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-        props.className,
-      )}
-    >
-      <Icon className="h-3 w-3" />
-      {children}
-    </button>
-  );
-}
-
 // --- The row ----------------------------------------------------------------
 
 type Props = {
@@ -272,7 +242,8 @@ type Props = {
   dependsOnLabel?: string | null;
   onGenerate: () => void;
   onDismiss?: () => void;
-  onViewDraft?: (draftId: string, target: 'calendar' | 'list') => void;
+  /** Open the planner on this draft; `null` opens the planner (a draft that is gone). */
+  onOpenDraft?: (draftId: string | null) => void;
   /** Stage-2 "Enrich": sketch the blueprint for a text-ready draft. */
   onEnrichDraft?: (draftId: string) => void;
   /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
@@ -293,14 +264,16 @@ export function ConceptCard({
   dependsOnLabel,
   onGenerate,
   onDismiss,
-  onViewDraft,
+  onOpenDraft,
   onEnrichDraft,
   onGenerateMedia,
   onRetryJob,
 }: Props) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
+  const commonText = useTranslations('common');
   const [dispatched, setDispatched] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [mediaActionSent, setMediaActionSent] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const detailId = useId();
   // Synchronous latch: setDispatched is async and updates too late to stop a fast
@@ -309,7 +282,8 @@ export function ConceptCard({
 
   const caption = pipeline?.preview?.caption ?? null;
   const brief = concept.creativeBrief ?? null;
-  const draftId = pipeline?.draftId ?? concept.draftId ?? null;
+  // A missing draft's old id points at nothing: never fall back to the plan item's copy of it.
+  const draftId = pipeline?.draftMissing ? null : (pipeline?.draftId ?? concept.draftId ?? null);
 
   // A storyboard frame is a still whatever the draft's format is; only realized media may
   // read its kind from the format. Getting this backwards is what put a PNG in a <video>
@@ -325,6 +299,7 @@ export function ConceptCard({
   const { media: previewMedia } = useMemo(
     () =>
       rankCardMedia({
+        translate: uiText,
         idPrefix: `concept:${concept.itemId}`,
         realized: draftMedia.realized,
         preview: previewUrls,
@@ -335,6 +310,7 @@ export function ConceptCard({
         format: concept.format,
       }),
     [
+      uiText,
       concept.itemId,
       concept.format,
       draftMedia.realized,
@@ -355,45 +331,15 @@ export function ConceptCard({
     [previewMedia, caption],
   );
 
-  const state: ConceptStatus = resolvePlanItemStatus({
-    itemStatus: status,
-    pipeline: pipeline ?? null,
-    dispatched,
-  });
+  const state: ConceptStatus = resolvePlanItemStatus(
+    {
+      itemStatus: status,
+      pipeline: pipeline ?? null,
+      dispatched,
+    },
+    (label) => translateOrganicControlLabel(label, commonText),
+  );
   const isFailed = state.kind === 'failed' || state.kind === 'media_failed';
-
-  const hasTextDraft = Boolean(
-    draftId &&
-      (pipeline?.checkpoint?.textReady ||
-        state.kind === 'copy_ready' ||
-        state.kind === 'preview_ready' ||
-        state.kind === 'realizing' ||
-        state.kind === 'realized' ||
-        state.kind === 'media_failed'),
-  );
-  const hasPreviewReady = Boolean(pipeline?.checkpoint?.blueprintReady);
-  const previewRevision = pipeline?.checkpoint?.previewRevision;
-  // Approve-through media actions: Enrich while only text exists, Generate media once
-  // the blueprint landed. Neither shows once media is final/user-supplied or rendering.
-  const mediaSettled =
-    mediaStatus === 'ready' || mediaStatus === 'user_supplied' || mediaStatus === 'generating';
-  const showGenerateMedia = Boolean(
-    onGenerateMedia &&
-      draftId &&
-      hasApprovablePreview(pipeline?.checkpoint) &&
-      hasPreviewReady &&
-      !mediaSettled,
-  );
-  // The invariant: an unsettled row always offers an action. Enrich doubles as the
-  // recovery for a blueprint that landed without a usable approval token, because
-  // re-expanding stamps a fresh previewRevision — which is also the media-failure retry.
-  const showEnrich = Boolean(
-    onEnrichDraft &&
-      draftId &&
-      pipeline?.checkpoint?.textReady &&
-      !mediaSettled &&
-      !showGenerateMedia,
-  );
 
   // Clear the latch when a job fails so the retry action can dispatch again; a
   // successful run swaps the row away from the generate action entirely.
@@ -402,6 +348,7 @@ export function ConceptCard({
   }, [isFailed]);
 
   const failedJobId = isFailed ? (pipeline?.jobId ?? null) : null;
+  const missingJobId = state.kind === 'draft_missing' ? (pipeline?.jobId ?? null) : null;
   const canRetryInPlace = Boolean(failedJobId && onRetryJob);
 
   const handleGenerateClick = () => {
@@ -425,10 +372,14 @@ export function ConceptCard({
   const showAngleBeneath = Boolean(spokenLine) && Boolean(concept.angle);
 
   const metaItems = [
-    formatDayLabel(concept.scheduledAt),
-    concept.format ? (FORMAT_LABELS[concept.format] ?? concept.format) : undefined,
-    OBJECTIVE_LABELS[concept.objective],
-    brief?.funnelStage ? FUNNEL_LABELS[brief.funnelStage] : undefined,
+    formatDayLabel(concept.scheduledAt, uiLocale),
+    concept.format ? conceptFormatLabel(concept.format, uiText) : undefined,
+    uiText('conceptObjective', { objective: concept.objective }),
+    brief?.funnelStage
+      ? Object.hasOwn(FUNNEL_LABELS, brief.funnelStage)
+        ? uiText('conceptFunnel', { stage: brief.funnelStage })
+        : brief.funnelStage
+      : undefined,
   ];
 
   return (
@@ -471,7 +422,11 @@ export function ConceptCard({
               type="button"
               aria-expanded={expanded}
               aria-controls={detailId}
-              aria-label={expanded ? 'Hide creative brief' : 'Show creative brief'}
+              aria-label={
+                expanded
+                  ? uiText('hide_creative_brief_8ff9f8f')
+                  : uiText('show_creative_brief_873b3f2')
+              }
               onClick={() => setExpanded((v) => !v)}
               className="rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -513,24 +468,26 @@ export function ConceptCard({
                 most rationales whole; the disclosure covers the rest. */}
             {concept.rationale && (
               <p className={cn('text-pretty', !expanded && 'line-clamp-3')}>
-                <span className="mr-1.5 font-medium text-foreground/70">Why</span>
+                <span className="mr-1.5 font-medium text-foreground/70">
+                  {uiText('why_d3ae14a')}
+                </span>
                 {concept.rationale}
               </p>
             )}
             {concept.trendTitle && (
               <p className="mt-1 truncate text-2xs text-muted-foreground">
                 <span aria-hidden="true">↑ </span>
-                Trending: {concept.trendTitle}
+                {uiText('trendingTitle', { title: concept.trendTitle })}
               </p>
             )}
           </div>
         )}
 
-        {isFailed && pipeline?.error?.message && (
-          <p className="max-w-[68ch] text-2xs leading-relaxed text-destructive/80 text-pretty">
-            {pipeline.error.message}
-          </p>
-        )}
+        <FailureNotice
+          status={state}
+          error={pipeline?.error ?? null}
+          className="text-2xs leading-relaxed"
+        />
 
         {/* ── Inspection depth ───────────────────────────────────────────── */}
         {expanded && (
@@ -538,15 +495,24 @@ export function ConceptCard({
             id={detailId}
             className="mt-1 max-w-[68ch] divide-y divide-border/40 rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5"
           >
-            <BriefRow label="Scheduled" value={formatExactSchedule(concept.scheduledAt)} />
-            <BriefRow label="Audience" value={brief?.targetAudience ?? concept.audienceSegment} />
-            <BriefRow label="Segment" value={brief ? concept.audienceSegment : null} />
-            <BriefRow label="Tone & voice" value={brief?.toneAndVoice} />
-            <BriefRow label="Objective" value={brief?.contentObjective} />
-            <BriefRow label="Trend use" value={brief?.trendIntegration} />
-            <BriefRow label="Your direction" value={concept.guidancePrompt} />
             <BriefRow
-              label="Production notes"
+              label={uiText('scheduled_4724f34')}
+              value={formatExactSchedule(concept.scheduledAt, uiLocale)}
+            />
+            <BriefRow
+              label={uiText('audience_545c023')}
+              value={brief?.targetAudience ?? concept.audienceSegment}
+            />
+            <BriefRow
+              label={uiText('segment_29ee089')}
+              value={brief ? concept.audienceSegment : null}
+            />
+            <BriefRow label={uiText('tone_voice_3c31340')} value={brief?.toneAndVoice} />
+            <BriefRow label={uiText('objective_3b20adc')} value={brief?.contentObjective} />
+            <BriefRow label={uiText('trend_use_82f5fc2')} value={brief?.trendIntegration} />
+            <BriefRow label={uiText('your_direction_6c885af')} value={concept.guidancePrompt} />
+            <BriefRow
+              label={uiText('production_notes_3146f2a')}
               value={brief?.productionNotes?.length ? brief.productionNotes.join(' · ') : null}
             />
           </dl>
@@ -570,84 +536,60 @@ export function ConceptCard({
         {/* ── Actions ────────────────────────────────────────────────────── */}
         <div className="mt-0.5 flex flex-wrap items-center gap-2">
           {dependsOnLabel && (
-            <p className="text-2xs text-muted-foreground">Follows {dependsOnLabel}</p>
+            <p className="text-2xs text-muted-foreground">
+              {uiText.rich('sentence_48e93d768b45', { v0: () => dependsOnLabel })}
+            </p>
           )}
 
-          <div className="ml-auto flex flex-wrap items-center gap-0.5">
-            {hasTextDraft && draftId && onViewDraft ? (
-              <>
-                <RowAction icon={CalendarDays} onClick={() => onViewDraft(draftId, 'calendar')}>
-                  Calendar
-                </RowAction>
-                <RowAction icon={List} onClick={() => onViewDraft(draftId, 'list')}>
-                  List
-                </RowAction>
-                {showEnrich && (
+          <DraftIdTag draftId={draftId} />
+
+          {state.kind === 'draft_missing' ||
+          hasOpenableDraft(state, draftId, pipeline?.checkpoint) ? (
+            <DraftCardActions
+              variant="row"
+              status={state}
+              draftId={draftId}
+              checkpoint={pipeline?.checkpoint}
+              format={concept.format ?? null}
+              onRetry={missingJobId && onRetryJob ? () => onRetryJob(missingJobId) : undefined}
+              onOpenDraft={onOpenDraft}
+              onEnrichDraft={onEnrichDraft}
+              onGenerateMedia={onGenerateMedia}
+            />
+          ) : state.advancing || state.kind === 'blind' || state.kind === 'queued' ? null : (
+            <DraftCardActions
+              variant="row"
+              status={state}
+              draftId={null}
+              checkpoint={null}
+              format={concept.format ?? null}
+              onRetry={locked ? undefined : handleGenerateClick}
+              leading={
+                <>
                   <RowAction
-                    icon={PencilRuler}
-                    emphasis="primary"
-                    disabled={mediaActionSent}
-                    title={
-                      state.kind === 'media_failed'
-                        ? 'Re-sketch the blueprint and try the media again'
-                        : hasPreviewReady
-                          ? 'Rebuild the blueprint to refresh its preview approval'
-                          : 'Sketch a low-cost blueprint before final media'
-                    }
-                    onClick={() => {
-                      setMediaActionSent(true);
-                      onEnrichDraft?.(draftId);
-                    }}
+                    icon={X}
+                    emphasis="danger"
+                    disabled={locked || !onDismiss}
+                    onClick={onDismiss}
+                    aria-label={uiText('dismiss_this_concept_82c564e')}
                   >
-                    {mediaActionSent
-                      ? 'Enriching…'
-                      : state.kind === 'media_failed'
-                        ? 'Try media again'
-                        : hasPreviewReady
-                          ? 'Rebuild preview'
-                          : 'Enrich'}
+                    {uiText('dismiss_48845bf')}
                   </RowAction>
-                )}
-                {showGenerateMedia && (
-                  <RowAction
-                    icon={Wand2}
-                    emphasis="primary"
-                    disabled={mediaActionSent}
-                    title="Render the final media from the approved blueprint"
-                    onClick={() => {
-                      setMediaActionSent(true);
-                      if (previewRevision) {
-                        onGenerateMedia?.(draftId, concept.format ?? '', previewRevision);
-                      }
-                    }}
-                  >
-                    {mediaActionSent ? 'Generating…' : 'Generate media'}
-                  </RowAction>
-                )}
-              </>
-            ) : state.advancing || state.kind === 'blind' || state.kind === 'queued' ? null : (
-              <>
-                <RowAction
-                  icon={X}
-                  emphasis="danger"
-                  disabled={locked || !onDismiss}
-                  onClick={onDismiss}
-                  aria-label="Dismiss this concept"
-                >
-                  Dismiss
-                </RowAction>
-                <RowAction
-                  icon={isFailed ? RefreshCw : Sparkles}
-                  emphasis="primary"
-                  disabled={locked}
-                  onClick={handleGenerateClick}
-                  aria-label={isFailed ? 'Retry copy draft' : 'Write copy for this concept'}
-                >
-                  {isFailed ? 'Retry' : 'Write copy'}
-                </RowAction>
-              </>
-            )}
-          </div>
+                  {isFailureKind(state.kind) ? null : (
+                    <RowAction
+                      icon={Sparkles}
+                      emphasis="primary"
+                      disabled={locked}
+                      onClick={handleGenerateClick}
+                      aria-label={uiText('write_copy_for_this_concept_f095171')}
+                    >
+                      {uiText('write_copy_9eeac81')}
+                    </RowAction>
+                  )}
+                </>
+              }
+            />
+          )}
         </div>
       </div>
 
@@ -660,7 +602,9 @@ export function ConceptCard({
           onIndexChange={setLightboxIndex}
           onOpenChange={(open) => setLightboxIndex(open ? (lightboxIndex ?? 0) : null)}
           open={lightboxIndex !== null}
-          title={concept.format ? (FORMAT_LABELS[concept.format] ?? concept.format) : 'Preview'}
+          title={
+            concept.format ? conceptFormatLabel(concept.format, uiText) : uiText('preview_324b134')
+          }
         />
       )}
     </article>

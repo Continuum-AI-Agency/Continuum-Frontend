@@ -74,6 +74,11 @@ class FakeVideoElement implements PlaybackVideoElement {
     this.attributes.set(name, value);
   }
 
+  // The paused cue listens for `loadedmetadata`; these tests drive the element directly.
+  addEventListener(): void {}
+
+  removeEventListener(): void {}
+
   /** Loading/seeking settled: the element can now report a trustworthy clock. */
   finishLoad(atSec: number): void {
     this.readyState = 4;
@@ -479,6 +484,62 @@ describe('usePlayheadPlayback — the running loop follows edits made mid-playba
 
     expect(result.current.playheadSec).toBe(1);
     expect(result.current.isPlaying).toBe(false);
+  });
+});
+
+describe('usePlayheadPlayback — ping-pong across a cut', () => {
+  const originalRequestFrame = globalThis.requestAnimationFrame;
+  let pendingFrames: FrameRequestCallback[] = [];
+  const stepFrame = (timestampMs: number): void => {
+    const due = pendingFrames;
+    pendingFrames = [];
+    act(() => {
+      for (const frame of due) frame(timestampMs);
+    });
+  };
+  beforeEach(() => {
+    pendingFrames = [];
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback): number => {
+      pendingFrames.push(callback);
+      return pendingFrames.length;
+    }) as typeof globalThis.requestAnimationFrame;
+  });
+  afterEach(() => {
+    globalThis.requestAnimationFrame = originalRequestFrame;
+  });
+
+  it('warms the next clip on the hidden element and swaps to it at the cut, with no reload', () => {
+    const layout = layoutOf([
+      clipOf({ id: 'a', startSec: 0, durationSec: 2 }),
+      clipOf({ id: 'b', startSec: 2, durationSec: 2 }),
+    ]);
+    const mediaFor = mediaLookup({
+      a: { kind: 'video', url: 'blob:a', trimStartSec: 0 },
+      b: { kind: 'video', url: 'blob:b', trimStartSec: 4 },
+    });
+    const { result } = renderHook(() => usePlayheadPlayback({ layout, mediaFor }));
+    const shown = new FakeVideoElement();
+    const hidden = new FakeVideoElement();
+    result.current.videoRefs[0].current = shown as unknown as HTMLVideoElement;
+    result.current.videoRefs[1].current = hidden as unknown as HTMLVideoElement;
+
+    act(() => result.current.play());
+    stepFrame(0);
+    // Clip b waits on the hidden element, paused on the frame the cut shows.
+    expect(result.current.activeVideo).toBe(0);
+    expect(hidden.src).toBe('blob:b');
+    expect(hidden.currentTime).toBe(4);
+    expect(hidden.paused).toBe(true);
+    hidden.finishLoad(4);
+
+    stepFrame(2010);
+    expect(result.current.activeVideo).toBe(1);
+    expect(result.current.videoRef.current).toBe(hidden as unknown as HTMLVideoElement);
+    // A src swap would have dropped it back to HAVE_NOTHING.
+    expect(hidden.readyState).toBe(4);
+    expect(hidden.paused).toBe(false);
+    expect(shown.paused).toBe(true);
+    act(() => result.current.pause());
   });
 });
 

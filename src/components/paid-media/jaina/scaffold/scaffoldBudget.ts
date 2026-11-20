@@ -1,5 +1,10 @@
+import type { useTranslations } from 'next-intl';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
+import type { UiLocale } from '@/i18n/config';
 import type { CampaignBudgetShare } from '@/lib/paid-media/scaffoldTree';
+import { localizeScaffoldCopy } from './scaffoldPlanView';
+
+type ScaffoldText = ReturnType<typeof useTranslations<'scale'>>;
 
 /**
  * One ad set's opening budget as the card, the outline, the table and the graph node all
@@ -9,10 +14,16 @@ import type { CampaignBudgetShare } from '@/lib/paid-media/scaffoldTree';
 export const formatDailyBudget = (
   minorUnits: number | null | undefined,
   currency: string | null,
+  translate?: ScaffoldText,
+  locale: UiLocale = 'en',
 ): string =>
   typeof minorUnits === 'number'
-    ? `${formatCurrency(minorUnits / 100, currency)}/day`
-    : 'Placeholder budget';
+    ? translate
+      ? translate('helper_34dd8b60efe4', { v0: formatCurrency(minorUnits / 100, currency, locale) })
+      : `${formatCurrency(minorUnits / 100, currency, locale)}/day`
+    : translate
+      ? localizeScaffoldCopy('Placeholder budget', translate)
+      : 'Placeholder budget';
 
 /**
  * A CBO ad set's figure: the fraction first, so it never reads as the ad set's own budget, then
@@ -22,15 +33,23 @@ export const formatDailyBudget = (
 export const formatCampaignBudgetShare = (
   share: CampaignBudgetShare,
   currency: string | null,
+  translate?: ScaffoldText,
+  locale: UiLocale = 'en',
 ): string => {
   const whole = share.adSetCount <= 1;
   const fraction = whole
-    ? 'All of the campaign budget (CBO)'
-    : `≈ 1/${share.adSetCount} of the campaign budget (CBO)`;
+    ? translate
+      ? translate('all_of_the_campaign_budget_cbo_765b37e')
+      : 'All of the campaign budget (CBO)'
+    : translate
+      ? translate('1_count_of_the_campaign_budget_cbo_99e56ed', { count: share.adSetCount })
+      : `≈ 1/${share.adSetCount} of the campaign budget (CBO)`;
   if (typeof share.campaignDailyBudgetMinorUnits !== 'number') return fraction;
   const amount = formatDailyBudget(
     share.campaignDailyBudgetMinorUnits / Math.max(share.adSetCount, 1),
     currency,
+    translate,
+    locale,
   );
   return `${fraction} · ${whole ? '' : '≈ '}${amount}`;
 };

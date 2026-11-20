@@ -16,6 +16,7 @@ import {
   judgeValue,
   READ_JUDGEMENT,
 } from '../reading';
+import { reportDeltaPresentation, reportJudgementLabel } from '../reportChrome';
 import { BlockHeading } from './BlockHeading';
 import { type MetricTile, type MetricTileRead, MetricTiles } from './MetricTiles';
 
@@ -42,7 +43,11 @@ type Figure = {
 };
 
 /** A metric's value printed in its own format — the figure and its prior share this. */
-function printMetric(metric: MetricItemV2, value: MetricItemV2['value']): string {
+function printMetric(
+  metric: MetricItemV2,
+  value: MetricItemV2['value'],
+  reportLocale: string = 'en',
+): string {
   const displayFormat = resolveMetricDisplayFormat({
     label: metric.label,
     format: metric.format,
@@ -50,6 +55,7 @@ function printMetric(metric: MetricItemV2, value: MetricItemV2['value']): string
   });
   const currency = paidCurrencyCodeSchema.safeParse(metric.unit);
   return formatValue(value, displayFormat, {
+    locale: reportLocale,
     ...(currency.success ? { currency: currency.data } : {}),
     percentBasis: metric.percent_basis ?? null,
   });
@@ -62,7 +68,7 @@ function printMetric(metric: MetricItemV2, value: MetricItemV2['value']): string
  */
 function priorLine(metric: MetricItemV2, language: AnswerLanguage): string | null {
   if (metric.prior_value === null || metric.prior_value === undefined) return null;
-  const figure = printMetric(metric, metric.prior_value);
+  const figure = printMetric(metric, metric.prior_value, language);
   const window = metric.prior_label?.trim();
   return window
     ? `${SECTION_LABELS[language].versus} ${figure} · ${window}`
@@ -76,7 +82,7 @@ function readOf(metric: MetricItemV2, language: AnswerLanguage): MetricTileRead 
   return {
     word: METRIC_READ_LABEL[language][metric.read],
     className: JUDGEMENT_TEXT[judgement],
-    title: `${metric.label}: ${JUDGEMENT_LABEL[judgement]}`,
+    title: `${metric.label}: ${reportJudgementLabel(judgement, language)}`,
   };
 }
 
@@ -99,7 +105,7 @@ function toFigure(metric: MetricItemV2, composed: boolean, language: AnswerLangu
   const goodWhenDown = fallsAreGood(metric.label);
   return {
     label: metric.label,
-    value: printMetric(metric, metric.value),
+    value: printMetric(metric, metric.value, language),
     deltaPct,
     goodWhenDown,
     // The contract has carried `severity` with four values all along and this block threw it
@@ -112,16 +118,20 @@ function toFigure(metric: MetricItemV2, composed: boolean, language: AnswerLangu
   };
 }
 
-const toTile = (figure: Figure): MetricTile => ({
+const toTile = (figure: Figure, language: AnswerLanguage): MetricTile => ({
   key: figure.label,
   label: figure.label,
   value: figure.value,
   valueClassName: JUDGEMENT_TEXT[figure.judgement],
   // The colour is the judgement, and a screen reader cannot see it.
-  title: `${figure.label}: ${JUDGEMENT_LABEL[figure.judgement]}`,
+  title: `${figure.label}: ${reportJudgementLabel(figure.judgement, language)}`,
   trailing:
     typeof figure.deltaPct === 'number' ? (
-      <DeltaBadge goodWhenDown={figure.goodWhenDown} value={figure.deltaPct} />
+      <DeltaBadge
+        goodWhenDown={figure.goodWhenDown}
+        value={figure.deltaPct}
+        presentation={reportDeltaPresentation(figure.deltaPct, figure.goodWhenDown, language)}
+      />
     ) : null,
   prior: figure.prior,
   read: figure.read,
@@ -186,7 +196,7 @@ export default function MetricGridBlock({ block }: MetricGridBlockProps) {
         datasetId={block.dataset_id}
         evidenceRefs={block.evidence_refs}
       />
-      <MetricTiles tiles={figures.map(toTile)} />
+      <MetricTiles tiles={figures.map((figure) => toTile(figure, language))} />
     </div>
   );
 }

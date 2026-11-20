@@ -7,7 +7,7 @@ import { beforeEach, expect, mock, test } from 'bun:test';
 // old `switchAction` option no longer exists and passing one proved nothing.
 const switchActiveBrandAction = mock((_brandId: string) => Promise.resolve());
 
-mock.module('@/app/(post-auth)/settings/actions', () => ({ switchActiveBrandAction }));
+mock.module('@/app/[locale]/(post-auth)/settings/actions', () => ({ switchActiveBrandAction }));
 
 const { switchBrand } = await import('../../src/lib/brands/switch-brand');
 

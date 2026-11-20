@@ -1,10 +1,12 @@
 'use client';
-import { TriangleAlert } from 'lucide-react';
 
+import { TriangleAlert } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { BrandGuidelinesEditor } from '@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesEditor';
 import { BrandGuidelinesLibrary } from '@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesLibrary';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   fetchBrandGuidelineAction,
   listBrandGuidelinesAction,
@@ -22,6 +24,8 @@ export function BrandGuidelinesPrimitive({
   brandId,
   initialGuidelines,
 }: BrandGuidelinesPrimitiveProps) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
   const [guidelines, setGuidelines] = useState<BrandGuidelineSummary[]>(
     initialGuidelines ?? EMPTY_LIST,
   );
@@ -54,7 +58,7 @@ export function BrandGuidelinesPrimitive({
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : 'Unable to load brand guidelines.');
+        setError(formatUiError(err));
       })
       .finally(() => {
         if (!mounted) return;
@@ -64,7 +68,7 @@ export function BrandGuidelinesPrimitive({
     return () => {
       mounted = false;
     };
-  }, [brandId, hasInitialGuidelines]);
+  }, [brandId, hasInitialGuidelines, formatUiError]);
 
   useEffect(() => {
     if (!activeGuidelineId) {
@@ -82,7 +86,7 @@ export function BrandGuidelinesPrimitive({
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : 'Unable to load brand guideline.');
+        setError(formatUiError(err));
       })
       .finally(() => {
         if (!mounted) return;
@@ -92,7 +96,7 @@ export function BrandGuidelinesPrimitive({
     return () => {
       mounted = false;
     };
-  }, [brandId, activeGuidelineId]);
+  }, [brandId, activeGuidelineId, formatUiError]);
 
   const handleSaved = (guideline: BrandGuidelineDetail) => {
     setActiveGuideline(guideline);
@@ -138,7 +142,9 @@ export function BrandGuidelinesPrimitive({
           ) : null}
           {isLoadingDetail && activeGuidelineId ? (
             <div className="glass-panel rounded-lg p-6">
-              <span className="text-sm text-muted-foreground">Loading guideline details...</span>
+              <span className="text-sm text-muted-foreground">
+                {uiText('loading_guideline_details_c5b77d0')}
+              </span>
             </div>
           ) : (
             <BrandGuidelinesEditor

@@ -6,6 +6,7 @@ import type {
   BulkContentPlan,
   ChatMediaStripData,
   HeadlessBatchQuote,
+  MediaCostPlan,
   MediaSearchResultsFrame,
   OrganicPostCardData,
   OrganicTrendChartData,
@@ -125,6 +126,8 @@ export type AgentJobState = {
   pct?: number;
   error?: { code?: string; message: string };
   draftId?: string;
+  /** Completed, but its draft row no longer exists (deleted, or never saved). */
+  draftMissing?: boolean;
   placement?: CalendarPlacement;
   uiPostCard?: UiPostCard;
   // Signed 512px storyboard URLs from draft.blueprint_ready, keyed to this job's
@@ -198,6 +201,11 @@ export type PipelineCardState = {
   previewStale?: boolean;
   quality?: PipelineQuality | null;
   draftId?: string | null;
+  /**
+   * The job finished but its draft row is gone (deleted from the calendar, or the write
+   * never landed). `draftId` is null alongside it: the old id points at nothing.
+   */
+  draftMissing?: boolean;
   error?: { code?: string; message: string };
   checkpoint?: CheckpointState;
 };
@@ -209,6 +217,8 @@ export type ToolApproval = {
   input: unknown;
   /** headlessBatchCreate only: the bound, cost and cast step its one card shows. */
   batchPreview?: HeadlessBatchQuote;
+  /** A headless media tool's priced pre-plan: every generation the approval pays for. */
+  costPlan?: MediaCostPlan;
 };
 
 export type ConversationMessage = {
@@ -222,9 +232,17 @@ export type ConversationMessage = {
   // Set when a turn failed; the partial `content` (if any) is preserved so the
   // user keeps what streamed, and a styled error row + Retry can render below it.
   error?: string;
+  /**
+   * Set when the connection to a run that is still going was lost. Retry re-attaches to that run
+   * from `afterSeq` — the run never stopped, so re-sending the question would answer it twice.
+   */
+  resumeRun?: ResumableRun;
   /** The agent's reply to an approval: it has no user turn of its own to retry or regenerate. */
   approvalReply?: boolean;
 };
+
+/** A durable run the client can re-attach to: its id and the last seq this view folded. */
+export type ResumableRun = { runId: string; afterSeq: number };
 
 export type AgentChatInput = {
   brandId: string;

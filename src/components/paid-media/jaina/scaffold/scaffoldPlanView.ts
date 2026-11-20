@@ -1,3 +1,117 @@
+import type { useTranslations } from 'next-intl';
+import { localizeNodeOptionCopy } from '@/CampaignCanvas/types/nodeOptionPresentation';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaffoldText = ReturnType<typeof useTranslations<'scale'>>;
+const scaffoldCopyKeys = {
+  'Composed from your ad-naming schema, like the ad set name.': 'scaffoldDetail_89c7bd235b',
+  'This may exist on Meta without a recorded id. A human must read the ad account before anything is retried — a retry would create duplicates.':
+    'this_may_exist_on_meta_without_a_recorded_id__d199591',
+  Unconfirmed: 'scaffoldDetail_3229d16ca6',
+  Failed: 'failed_031a8f0',
+  Active: 'active_9234069',
+  Activating: 'scaffoldDetail_d7b77185af',
+  'Created (paused)': 'created_paused_43e735c',
+  Creating: 'scaffoldDetail_3b951ebd7c',
+  'Not created': 'not_created_1d18277',
+  'Optimizing for': 'optimizing_for_2378092',
+  Funnel: 'scaffoldDetail_fc063af055',
+  Placement: 'scaffoldDetail_4df9939944',
+  'Meta id': 'scaffoldDetail_12b0559fe9',
+  'Creative id': 'scaffoldDetail_1e96b8128f',
+  'Placeholder budget': 'scaffoldDetail_47769b2c83',
+  'Compiled from the audience group this ad set points at.': 'scaffoldDetail_262774eb42',
+  'Group attached, targeting not compiled yet': 'scaffoldDetail_07467db337',
+  'Its audiences are not published to Meta yet, so no targeting could be compiled. The build step will refuse until they are.':
+    'scaffoldDetail_7e85f331d7',
+  'Declared on the scaffold version; it cannot vary per node.': 'scaffoldDetail_65d3b1a417',
+  'uploaded to Meta': 'scaffoldDetail_f513ddaddf',
+  'attached, not uploaded': 'scaffoldDetail_b8d8bcdc19',
+  'Not attached yet': 'scaffoldDetail_5c7a75f593',
+  'Attach one before the populate step.': 'scaffoldDetail_c66a23686a',
+  'Composed from your brand ad-naming schema and asserted to round-trip. Editing it by hand would break the link back to the components in analytics.':
+    'scaffoldDetail_4114c0bcc4',
+  'No measured CPA on this account, so build uses the placeholder budget.':
+    'scaffoldDetail_477f7da74a',
+  "Sized at propose time from the account's measured CPA.": 'scaffoldDetail_33a018bb97',
+  'A pure function of the optimization goal \u2014 it is not chosen separately.':
+    'scaffoldDetail_e760bc4ba6',
+  'Computed from the optimization goal at build time.': 'scaffoldDetail_1b67218331',
+  'Compiled from an audience group at build time.': 'scaffoldDetail_a8f348f6a9',
+  'Derived from your brand setup and the campaign objective. Shown for review; it is not edited here.':
+    'scaffoldDetail_1b37ed33e0',
+  Status: 'status_920e413',
+  'Ad set': 'ad_set_639a64f',
+  Product: 'product_fb9ef89',
+  Angle: 'angle_1968034',
+  Optimization: 'scaffoldDetail_72244ea575',
+  Billing: 'scaffoldDetail_3ac8bbca9a',
+  Targeting: 'targeting_dfa4ae5',
+  Ads: 'ads_9210f3b',
+
+  'App promotion': 'scaffoldCopy_c0b2a5b322',
+  'Meta insights': 'scaffoldCopy_6120417f2f',
+  'Meta minimum': 'scaffoldCopy_6a05ad1b82',
+  'Meta reach estimate': 'scaffoldCopy_244338197c',
+  'Angle evidence': 'scaffoldCopy_b1503739b9',
+  Derived: 'scaffoldCopy_10809b749b',
+  'Edited on canvas': 'scaffoldCopy_10159e293f',
+  Measured: 'scaffoldCopy_9298c8f4b3',
+  Edited: 'scaffoldCopy_7117f08071',
+  'Broad targeting': 'scaffoldCopy_ad5c99ed03',
+  Sales: 'canvasOption_2',
+  Leads: 'leads_2f10a26',
+  Engagement: 'canvasOption_1',
+  Awareness: 'canvasOption_0',
+  Traffic: 'traffic_4876efb',
+  'Audience group': 'audience_group_8171c17',
+  Budget: 'optimizer_moduleBudget',
+  Objective: 'objective_3b20adc',
+  Audience: 'optimizer_moduleAudience',
+  Creative: 'creative_2c7e633',
+  Optimizer: 'optimizer_2ee6172',
+  'This version predates one-click deploy. Open it on the canvas and save it as a new version to deploy it.':
+    'this_version_predates_one_click_deploy_open_i_929d1e5',
+  'This version was proposed before one-click deploy existed. Ask Jaina to propose it again.':
+    'this_version_was_proposed_before_one_click_de_e2dec70',
+  Name: 'name_dcd1d52',
+  'Campaign budget (CBO)': 'campaign_budget_cbo_b9adab7',
+  'Ad set budgets (ABO)': 'ad_set_budgets_abo_0dd9a54',
+  'Campaign daily budget': 'campaign_daily_budget_6d17831',
+  'Bid strategy': 'bid_strategy_43f45e0',
+  'Optimization goal': 'optimization_goal_b5f886f',
+  'Optimization event': 'optimization_event_e58c5e6',
+  'From the objective': 'from_the_objective_cda1f7f',
+  Pixel: 'pixel_5817280',
+  "The account's pixel": 'the_account_s_pixel_2e0ceb1',
+  'Daily budget': 'daily_budget_7b0a1f0',
+  Location: 'location_15b6197',
+  'From the audience group': 'from_the_audience_group_c64b220',
+  Placements: 'placements_af9851e',
+  Schedule: 'schedule_f4830a1',
+  Image: 'image_1aa4cb0',
+  Video: 'video_d534be8',
+  Carousel: 'carousel_37219fb',
+  'Primary text': 'primary_text_ecf5b5b',
+  Headline: 'headline_c5f5a4c',
+  URL: 'url_e7a241d',
+  'URL tags (UTM)': 'url_tags_utm_1ff3616',
+  None: 'none_dc937b5',
+  'Not set yet': 'not_set_yet_488c9a6',
+  'Set by the campaign': 'set_by_the_campaign_ab9c93e',
+} as const;
+export function localizeScaffoldCopy(source: string, translate: ScaffoldText): string {
+  return Object.hasOwn(scaffoldCopyKeys, source)
+    ? translate(scaffoldCopyKeys[source as keyof typeof scaffoldCopyKeys])
+    : source;
+}
+
+/** A campaign copy's audience: the contract's English label, or its words in the UI language. */
+const copiedAudienceLabel = (sourceAdSetName: string, translate?: ScaffoldText): string =>
+  translate
+    ? translate('copied_from_name_111b01f', { name: sourceAdSetName })
+    : paidScaffoldCopiedAudienceLabel(sourceAdSetName);
+
 // What the scaffold card SAYS, derived in one pure place from the typed plan and the node rows.
 //
 // The plan (`PaidScaffoldPlan`, the same object the proposal frame carries and
@@ -41,8 +155,14 @@ const OBJECTIVE_LABELS: Record<string, string> = {
   OUTCOME_APP_PROMOTION: 'App promotion',
 };
 
-export const objectiveLabel = (objective: string | null | undefined): string =>
-  objective ? (OBJECTIVE_LABELS[objective] ?? objective) : '—';
+export const objectiveLabel = (
+  objective: string | null | undefined,
+  translate?: ScaffoldText,
+): string => {
+  if (!objective) return '—';
+  const label = OBJECTIVE_LABELS[objective] ?? objective;
+  return translate && OBJECTIVE_LABELS[objective] ? localizeScaffoldCopy(label, translate) : label;
+};
 
 const SOURCE_LABELS: Record<string, string> = {
   meta_insights: 'Meta insights',
@@ -54,22 +174,53 @@ const SOURCE_LABELS: Record<string, string> = {
   user: 'Edited on canvas',
 };
 
-export const sourceLabel = (source: string): string =>
-  SOURCE_LABELS[source] ?? source.replace(/_/g, ' ');
+export const sourceLabel = (source: string, translate?: ScaffoldText): string => {
+  const label = SOURCE_LABELS[source];
+  return label
+    ? translate
+      ? localizeScaffoldCopy(label, translate)
+      : label
+    : source.replace(/_/g, ' ');
+};
 
 /** `last_30d` → `last 30d`. The window is shown as given, never re-derived. */
-export const windowLabel = (window: string | null): string | null =>
-  window ? window.replace(/_/g, ' ') : null;
+export const windowLabel = (window: string | null, translate?: ScaffoldText): string | null => {
+  if (!window) return null;
+  const days = /^last_(\d+)d$/.exec(window);
+  return days && translate
+    ? translate('scaffoldWindowDays', { count: Number(days[1]) })
+    : window.replace(/_/g, ' ');
+};
 
 const NUMBER = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+const localizedNumbers = new Map<string, Intl.NumberFormat>();
+function numberFormat(locale: UiLocale, compact = false): Intl.NumberFormat {
+  if (locale === 'en') return compact ? COMPACT : NUMBER;
+  const key = `${locale}:${compact}`;
+  let formatter = localizedNumbers.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      ...(compact ? { notation: 'compact' } : {}),
+      maximumFractionDigits: compact ? 1 : 2,
+    });
+    localizedNumbers.set(key, formatter);
+  }
+  return formatter;
+}
 
 /** A 3-letter upper-case unit is a currency; anything else prints beside the number. */
-export const formatMetricValue = (metric: PaidScaffoldEvidenceMetric): string => {
+export const formatMetricValue = (
+  metric: PaidScaffoldEvidenceMetric,
+  locale: UiLocale = 'en',
+): string => {
   const { value, unit } = metric;
   if (typeof value === 'string') return unit ? `${value} ${unit}` : value;
-  if (unit && /^[A-Z]{3}$/.test(unit)) return formatCurrency(value, unit);
-  const shown = Math.abs(value) >= 100_000 ? COMPACT.format(value) : NUMBER.format(value);
+  if (unit && /^[A-Z]{3}$/.test(unit)) return formatCurrency(value, unit, locale);
+  const shown =
+    Math.abs(value) >= 100_000
+      ? numberFormat(locale, true).format(value)
+      : numberFormat(locale).format(value);
   return unit ? `${shown} ${unit}` : shown;
 };
 
@@ -87,8 +238,18 @@ export const PROVENANCE_LABELS: Record<PaidScaffoldEvidence['provenance'], strin
   user: 'Edited',
 };
 
-export const formatReach = (reach: { lower: number; upper: number } | null): string | null =>
-  reach ? `${COMPACT.format(reach.lower)}–${COMPACT.format(reach.upper)} people` : null;
+export const formatReach = (
+  reach: { lower: number; upper: number } | null,
+  translate?: ScaffoldText,
+  locale: UiLocale = 'en',
+): string | null => {
+  if (!reach) return null;
+  const lower = numberFormat(locale, true).format(reach.lower),
+    upper = numberFormat(locale, true).format(reach.upper);
+  return translate
+    ? translate('scaffoldReachRange', { lower, upper, count: reach.upper })
+    : `${lower}–${upper} people`;
+};
 
 /** One audience as the card lists it, with every ad set it feeds. */
 export type AudienceLine = {
@@ -103,7 +264,11 @@ export type AudienceLine = {
 };
 
 /** Distinct audiences — a group shared by three ad sets is ONE audience, listed once. */
-export const audienceLinesOf = (plan: PaidScaffoldPlan): AudienceLine[] => {
+export const audienceLinesOf = (
+  plan: PaidScaffoldPlan,
+  translate?: ScaffoldText,
+  locale: UiLocale = 'en',
+): AudienceLine[] => {
   const byKey = new Map<string, AudienceLine>();
   for (const adSet of plan.adsets) {
     const audience = adSet.audience;
@@ -122,15 +287,18 @@ export const audienceLinesOf = (plan: PaidScaffoldPlan): AudienceLine[] => {
       key,
       name:
         audience.kind === 'group'
-          ? (audience.group_name ?? 'Audience group')
+          ? (audience.group_name ??
+            (translate ? localizeScaffoldCopy('Audience group', translate) : 'Audience group'))
           : audience.kind === 'copied'
-            ? paidScaffoldCopiedAudienceLabel(audience.source_adset_name)
-            : 'Broad targeting',
+            ? copiedAudienceLabel(audience.source_adset_name, translate)
+            : translate
+              ? localizeScaffoldCopy('Broad targeting', translate)
+              : 'Broad targeting',
       kind: audience.kind,
       summary: audience.targeting_summary,
       members: audience.kind === 'group' ? audience.members.map((member) => member.label) : [],
       memberCount: audience.kind === 'group' ? audience.member_count : 0,
-      reach: formatReach(audience.reach),
+      reach: formatReach(audience.reach, translate, locale),
       adSets: [adSet.name],
     });
   }
@@ -234,30 +402,34 @@ export type ScaffoldSummary = {
   optimizer: string | null;
 };
 
-const optimizerLabel = (plan: PaidScaffoldPlan): string => {
+const optimizerLabel = (plan: PaidScaffoldPlan, translate?: ScaffoldText): string => {
   const { apply_mode: mode, autopilot_scopes: scopes } = plan.optimizer_enrollment;
   const autopilotOn = Object.values(scopes).some(Boolean);
-  return `${mode === 'recommend' ? 'Recommend' : 'Observe'} · autopilot ${autopilotOn ? 'on' : 'off'}`;
+  return translate
+    ? translate('scaffoldOptimizerMode', { mode, enabled: String(autopilotOn) })
+    : `${mode === 'recommend' ? 'Recommend' : 'Observe'} · autopilot ${autopilotOn ? 'on' : 'off'}`;
 };
 
 export const scaffoldSummaryOf = (
   plan: PaidScaffoldPlan | null,
   tree: ScaffoldTree | null,
   fallbackCurrency: string | null,
+  translate?: ScaffoldText,
+  locale: UiLocale = 'en',
 ): ScaffoldSummary => {
   const tiles = creativeTilesOf(tree, plan);
   if (plan) {
     return {
-      objective: objectiveLabel(plan.objective),
+      objective: objectiveLabel(plan.objective, translate),
       dailyBudgetMinorUnits: plan.expected.daily_budget_minor_units,
       budgetHeldByCampaign: plan.budget_mode === 'cbo',
       currency: plan.expected.currency ?? plan.currency ?? fallbackCurrency,
       conversionsPerDay: plan.expected.conversions_per_day,
       cpa: plan.expected.cpa,
-      audiences: audienceLinesOf(plan).length,
+      audiences: audienceLinesOf(plan, translate, locale).length,
       creatives: tiles.filter((tile) => tile.format !== null || tile.reusedCreativeId).length,
       ads: tiles.length,
-      optimizer: optimizerLabel(plan),
+      optimizer: optimizerLabel(plan, translate),
     };
   }
   const objective = tree?.campaign?.choices.objective ?? null;
@@ -268,7 +440,7 @@ export const scaffoldSummaryOf = (
       .filter((id): id is string => Boolean(id)),
   );
   return {
-    objective: objectiveLabel(objective),
+    objective: objectiveLabel(objective, translate),
     dailyBudgetMinorUnits: budget && budget.placeholders === 0 ? budget.totalMinorUnits : null,
     budgetHeldByCampaign: Boolean(tree?.campaign?.budget),
     currency: fallbackCurrency,
@@ -290,22 +462,31 @@ export const deployBlockersOf = (params: {
   planLoaded: boolean;
   tree: ScaffoldTree | null;
   contentHash: string | null;
+  translate?: ScaffoldText;
 }): DeployBlocker[] => {
-  const { plan, planLoaded, tree, contentHash } = params;
+  const { plan, planLoaded, tree, contentHash, translate } = params;
   const blockers: DeployBlocker[] = [];
   if (planLoaded && !plan) {
     // The deploy compiles from the typed plan; the Backend refuses a version without one.
     blockers.push({
       code: 'no_plan',
-      message:
-        'This version predates one-click deploy. Open it on the canvas and save it as a new version to deploy it.',
+      message: translate
+        ? localizeScaffoldCopy(
+            'This version predates one-click deploy. Open it on the canvas and save it as a new version to deploy it.',
+            translate,
+          )
+        : 'This version predates one-click deploy. Open it on the canvas and save it as a new version to deploy it.',
     });
   }
   if (!contentHash) {
     blockers.push({
       code: 'no_content_hash',
-      message:
-        'This version was proposed before one-click deploy existed. Ask Jaina to propose it again.',
+      message: translate
+        ? localizeScaffoldCopy(
+            'This version was proposed before one-click deploy existed. Ask Jaina to propose it again.',
+            translate,
+          )
+        : 'This version was proposed before one-click deploy existed. Ask Jaina to propose it again.',
     });
   }
   // One line per distinct refusal: the compiler raises the same one per ad set, and a list that
@@ -318,7 +499,15 @@ export const deployBlockersOf = (params: {
     else repeats.set(key, { code: blocker.code, message: blocker.message, count: 1 });
   }
   for (const { code, message, count } of repeats.values()) {
-    blockers.push({ code, message: count > 1 ? `${message} (${count} ad sets)` : message });
+    blockers.push({
+      code,
+      message:
+        count > 1
+          ? translate
+            ? translate('scaffoldRepeatedBlocker', { message, count })
+            : `${message} (${count} ad sets)`
+          : message,
+    });
   }
   if (tree) {
     const { adSetsWithoutAudience, adsWithoutCreative } = scaffoldBlockersOf(tree);
@@ -327,13 +516,21 @@ export const deployBlockersOf = (params: {
       const more = adSetsWithoutAudience.length - 3;
       blockers.push({
         code: 'adset_without_audience',
-        message: `${adSetsWithoutAudience.length} ad set${adSetsWithoutAudience.length === 1 ? ' has' : 's have'} no audience (${named}${more > 0 ? ` +${more} more` : ''}). Pick a published audience group or broad targeting on the canvas.`,
+        message: translate
+          ? translate('scaffoldAudienceBlocker', {
+              count: adSetsWithoutAudience.length,
+              names: named,
+              more: Math.max(0, more),
+            })
+          : `${adSetsWithoutAudience.length} ad set${adSetsWithoutAudience.length === 1 ? ' has' : 's have'} no audience (${named}${more > 0 ? ` +${more} more` : ''}). Pick a published audience group or broad targeting on the canvas.`,
       });
     }
     if (adsWithoutCreative > 0) {
       blockers.push({
         code: 'ad_without_creative',
-        message: `${adsWithoutCreative} ad${adsWithoutCreative === 1 ? ' has' : 's have'} no creative attached. Add one from the Library on the canvas.`,
+        message: translate
+          ? translate('scaffoldCreativeBlocker', { count: adsWithoutCreative })
+          : `${adsWithoutCreative} ad${adsWithoutCreative === 1 ? ' has' : 's have'} no creative attached. Add one from the Library on the canvas.`,
       });
     }
   }
@@ -368,36 +565,74 @@ const asRecord = (value: unknown): Record<string, unknown> =>
     : {};
 
 const DATE_TIME = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+const localizedDateTimes = new Map<UiLocale, Intl.DateTimeFormat>();
 
-const dateTimeLabel = (iso: string): string => {
+const dateTimeLabel = (iso: string, locale: UiLocale): string => {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : DATE_TIME.format(date);
+  if (Number.isNaN(date.getTime())) return iso;
+  if (locale === 'en') return DATE_TIME.format(date);
+  let formatter = localizedDateTimes.get(locale);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+    localizedDateTimes.set(locale, formatter);
+  }
+  return formatter.format(date);
 };
 
 /** "Starts Jan 1, 2099, 12:00 PM · no end date". Null on both ends is the default, said in words. */
-export const scheduleLabel = (start: string | null, end: string | null): string =>
-  `${start ? `Starts ${dateTimeLabel(start)}` : 'Starts when activated'} · ${
-    end ? `ends ${dateTimeLabel(end)}` : 'no end date'
-  }`;
+export const scheduleLabel = (
+  start: string | null,
+  end: string | null,
+  translate?: ScaffoldText,
+  locale: UiLocale = 'en',
+): string => {
+  const starts = start
+    ? translate
+      ? translate('starts_date_2b2a96f', { date: dateTimeLabel(start, locale) })
+      : `Starts ${dateTimeLabel(start, locale)}`
+    : translate
+      ? translate('starts_when_activated_efdf093')
+      : 'Starts when activated';
+  const ends = end
+    ? translate
+      ? translate('ends_date_c41d279', { date: dateTimeLabel(end, locale) })
+      : `ends ${dateTimeLabel(end, locale)}`
+    : translate
+      ? translate('no_end_date_4cde242')
+      : 'no end date';
+  return `${starts} · ${ends}`;
+};
 
 /** A bid as one phrase: the strategy, then the amount or floor it needs. Null = uncapped. */
 export const bidLabel = (
   bid: Pick<PaidScaffoldBidPlan, 'strategy' | 'bid_amount_minor_units' | 'roas_floor'> | null,
   currency: string | null,
+  translate?: ScaffoldText,
+  locale: UiLocale = 'en',
 ): string => {
-  const strategy = bidStrategyLabel(bid?.strategy);
+  const label = bidStrategyLabel(bid?.strategy);
+  const strategy = translate ? localizeNodeOptionCopy(label, translate) : label;
   if (typeof bid?.bid_amount_minor_units === 'number') {
-    return `${strategy} · ${formatCurrency(bid.bid_amount_minor_units / 100, currency)}`;
+    return `${strategy} · ${formatCurrency(bid.bid_amount_minor_units / 100, currency, locale)}`;
   }
   if (typeof bid?.roas_floor === 'number') return `${strategy} · ${bid.roas_floor}x`;
   return strategy;
 };
 
-const goalLabel = (goal: string | null): string | null =>
-  goal ? (OPTIMIZATION_GOALS.find((entry) => entry.value === goal)?.label ?? goal) : null;
+const goalLabel = (goal: string | null, translate?: ScaffoldText): string | null => {
+  const label = goal ? OPTIMIZATION_GOALS.find((entry) => entry.value === goal)?.label : undefined;
+  if (!label) return goal;
+  return translate ? localizeNodeOptionCopy(label, translate) : label;
+};
+
+/** A pixel event as a person reads it, in the UI language when a translator is given. */
+const eventLabel = (event: string | null | undefined, translate?: ScaffoldText): string | null => {
+  const label = conversionEventLabel(event);
+  return label && translate ? localizeNodeOptionCopy(label, translate) : label;
+};
 
 /** Advantage+ or the manual surfaces, flattened the way the table and the canvas say them. */
-const placementLabelOf = (payload: Record<string, unknown>): string => {
+const placementLabelOf = (payload: Record<string, unknown>, translate?: ScaffoldText): string => {
   const placement = asRecord(payload.placement);
   const strings = (key: string) =>
     Array.isArray(placement[key])
@@ -414,7 +649,11 @@ const placementLabelOf = (payload: Record<string, unknown>): string => {
         })
       : [];
   // A row with no placement choice builds on Meta's automatic placement.
-  return labels.length > 0 ? labels.join(', ') : 'Advantage+';
+  return labels.length > 0
+    ? labels
+        .map((label) => (translate ? localizeNodeOptionCopy(label, translate) : label))
+        .join(', ')
+    : 'Advantage+';
 };
 
 const FORMAT_LABELS = { image: 'Image', video: 'Video', carousel: 'Carousel' } as const;
@@ -435,8 +674,14 @@ export const scaffoldFieldGroupsOf = (params: {
   plan: PaidScaffoldPlan | null;
   rows: readonly PaidScaffoldNodeRow[] | null;
   currency: string | null;
+  /** Words the lines in the UI language; without it they read in English. */
+  translate?: ScaffoldText;
+  locale?: UiLocale;
 }): ScaffoldFieldGroup[] => {
-  const { plan, currency } = params;
+  const { plan, currency, translate } = params;
+  const locale = params.locale ?? 'en';
+  const word = (source: string): string =>
+    translate ? localizeScaffoldCopy(source, translate) : source;
   const planAdSets = new Map((plan?.adsets ?? []).map((entry) => [entry.path_key, entry]));
   const planAds = new Map((plan?.ads ?? []).map((entry) => [entry.path_key, entry]));
   // No rows yet (a live frame before the read lands): the plan's own nodes, values and all.
@@ -482,28 +727,38 @@ export const scaffoldFieldGroupsOf = (params: {
       lines.push({
         key,
         label,
-        value: value ?? NOT_SET,
+        value: value ?? word(NOT_SET),
         provenance: effectiveFieldProvenance(stored, hasValue),
       });
     };
     const payload = asRecord(row.payload);
     const pathKey = row.pathKey ?? '';
     const name = row.name ?? '';
-    add('name', 'Name', name || null);
+    add('name', word('Name'), name || null);
 
     if (row.level === 'campaign') {
       const objective = plan?.objective ?? (payload.objective as string | undefined) ?? null;
-      add('objective', 'Objective', objective ? objectiveLabel(objective) : null);
-      add('budget_mode', 'Budget', cbo ? 'Campaign budget (CBO)' : 'Ad set budgets (ABO)', true);
+      add('objective', word('Objective'), objective ? objectiveLabel(objective, translate) : null);
+      add(
+        'budget_mode',
+        word('Budget'),
+        word(cbo ? 'Campaign budget (CBO)' : 'Ad set budgets (ABO)'),
+        true,
+      );
       if (cbo) {
         const figure =
           row.campaignDailyBudgetMinorUnits ?? plan?.campaign_daily_budget_minor_units ?? null;
         add(
           'campaign_daily_budget_minor_units',
-          'Campaign daily budget',
-          figure === null ? null : formatDailyBudget(figure, currency),
+          word('Campaign daily budget'),
+          figure === null ? null : formatDailyBudget(figure, currency, translate, locale),
         );
-        add('bid_strategy', 'Bid strategy', bidLabel(campaignBid, currency), true);
+        add(
+          'bid_strategy',
+          word('Bid strategy'),
+          bidLabel(campaignBid, currency, translate, locale),
+          true,
+        );
       }
     }
 
@@ -511,23 +766,36 @@ export const scaffoldFieldGroupsOf = (params: {
       const planAdSet = planAdSets.get(pathKey);
       add(
         'optimization_goal',
-        'Optimization goal',
-        goalLabel(planAdSet?.optimization_goal ?? (payload.optimization_goal as string) ?? null),
+        word('Optimization goal'),
+        goalLabel(
+          planAdSet?.optimization_goal ?? (payload.optimization_goal as string) ?? null,
+          translate,
+        ),
       );
       const promoted = planAdSet?.promoted_object ?? {};
-      const event = conversionEventLabel(row.customEventType);
-      const derivedEvent = conversionEventLabel(promoted.custom_event_type);
+      const event = eventLabel(row.customEventType, translate);
+      const derivedEvent = eventLabel(promoted.custom_event_type, translate);
       add(
         'custom_event_type',
-        'Optimization event',
-        event ?? (derivedEvent ? `${derivedEvent} (from the objective)` : 'From the objective'),
+        word('Optimization event'),
+        event ??
+          (derivedEvent
+            ? translate
+              ? translate('event_from_the_objective_c4644c7', { event: derivedEvent })
+              : `${derivedEvent} (from the objective)`
+            : word('From the objective')),
         true,
       );
-      add('pixel_id', 'Pixel', row.pixelId ?? promoted.pixel_id ?? "The account's pixel", true);
+      add(
+        'pixel_id',
+        word('Pixel'),
+        row.pixelId ?? promoted.pixel_id ?? word("The account's pixel"),
+        true,
+      );
       if (cbo) {
         add(
           'daily_budget_minor_units',
-          'Daily budget',
+          word('Daily budget'),
           formatCampaignBudgetShare(
             {
               adSetCount: rows.filter((entry) => entry.level === 'adset').length,
@@ -537,20 +805,31 @@ export const scaffoldFieldGroupsOf = (params: {
                 null,
             },
             currency,
+            translate,
+            locale,
           ),
           true,
         );
         const ownCap =
           typeof row.bidAmountMinorUnits === 'number'
-            ? ` · own cap ${formatCurrency(row.bidAmountMinorUnits / 100, currency)}`
-            : '';
-        add('bid_strategy', 'Bid strategy', `Set by the campaign${ownCap}`, true);
+            ? formatCurrency(row.bidAmountMinorUnits / 100, currency, locale)
+            : null;
+        add(
+          'bid_strategy',
+          word('Bid strategy'),
+          ownCap === null
+            ? word('Set by the campaign')
+            : translate
+              ? translate('set_by_the_campaign_own_cap_amount_fb3d1b1', { amount: ownCap })
+              : `Set by the campaign · own cap ${ownCap}`,
+          true,
+        );
       } else {
         const figure = row.dailyBudgetMinorUnits ?? planAdSet?.daily_budget_minor_units ?? null;
         add(
           'daily_budget_minor_units',
-          'Daily budget',
-          figure === null ? null : formatDailyBudget(figure, currency),
+          word('Daily budget'),
+          figure === null ? null : formatDailyBudget(figure, currency, translate, locale),
         );
         const bid: PaidScaffoldBidPlan | null = row.bidStrategy
           ? {
@@ -559,7 +838,7 @@ export const scaffoldFieldGroupsOf = (params: {
               roas_floor: row.roasFloor ?? null,
             }
           : (planAdSet?.bid ?? null);
-        add('bid_strategy', 'Bid strategy', bidLabel(bid, currency), true);
+        add('bid_strategy', word('Bid strategy'), bidLabel(bid, currency, translate, locale), true);
       }
       const audience = planAdSet?.audience;
       const groupVersion =
@@ -568,40 +847,42 @@ export const scaffoldFieldGroupsOf = (params: {
           : (payload.audience_group_version_id as string | undefined);
       const copied = audience?.kind === 'copied' ? audience : null;
       const broad =
-        !copied &&
-        (audience?.kind === 'broad' || (!groupVersion && Boolean(payload.targeting)));
+        !copied && (audience?.kind === 'broad' || (!groupVersion && Boolean(payload.targeting)));
       const audienceKey = groupVersion ? 'audience_group_version_id' : 'broad_targeting';
       const audienceKeys = ['audience_group_version_id', 'broad_targeting'];
       add(
         audienceKey,
-        'Audience',
+        word('Audience'),
         groupVersion
           ? audience?.kind === 'group'
-            ? (audience.group_name ?? 'Audience group')
-            : 'Audience group'
+            ? (audience.group_name ?? word('Audience group'))
+            : word('Audience group')
           : copied
-            ? paidScaffoldCopiedAudienceLabel(copied.source_adset_name)
+            ? copiedAudienceLabel(copied.source_adset_name, translate)
             : broad
-              ? 'Broad targeting'
+              ? word('Broad targeting')
               : null,
         undefined,
         [audienceKey, ...audienceKeys],
       );
-      const location = audience?.targeting_summary ?? targetingSummary(payload.targeting);
+      const location =
+        audience?.targeting_summary ?? targetingSummary(payload.targeting, translate, locale);
       add(
         'location',
-        'Location',
-        location ?? (groupVersion ? 'From the audience group' : null),
+        word('Location'),
+        location ?? (groupVersion ? word('From the audience group') : null),
         undefined,
         [audienceKey, ...audienceKeys],
       );
-      add('placement_mode', 'Placements', placementLabelOf(payload), true);
+      add('placement_mode', word('Placements'), placementLabelOf(payload, translate), true);
       add(
         'start_time',
-        'Schedule',
+        word('Schedule'),
         scheduleLabel(
           row.startTime ?? planAdSet?.schedule?.start_time ?? null,
           row.endTime ?? planAdSet?.schedule?.end_time ?? null,
+          translate,
+          locale,
         ),
         true,
         ['start_time', 'end_time'],
@@ -620,16 +901,23 @@ export const scaffoldFieldGroupsOf = (params: {
             ? 'image'
             : (planAd?.creative?.format ?? null);
       const cardCount = cards || planAd?.creative?.cards.length || 0;
-      const reused = typeof payload.source_creative_id === 'string' ? payload.source_creative_id : null;
+      const reused =
+        typeof payload.source_creative_id === 'string' ? payload.source_creative_id : null;
       add(
         'creative',
-        'Creative',
+        word('Creative'),
         reused
-          ? `The source ad's creative · ${reused}`
+          ? translate
+            ? translate('the_source_ad_s_creative_id_469cba4', { id: reused })
+            : `The source ad's creative · ${reused}`
           : format
             ? format === 'carousel'
-              ? `Carousel · ${cardCount} card${cardCount === 1 ? '' : 's'}`
-              : FORMAT_LABELS[format]
+              ? translate
+                ? translate('carousel_count_plural_one_card_other_cards_8226239', {
+                    count: cardCount,
+                  })
+                : `Carousel · ${cardCount} card${cardCount === 1 ? '' : 's'}`
+              : word(FORMAT_LABELS[format])
             : null,
       );
       const creative = asRecord(payload.creative);
@@ -637,10 +925,15 @@ export const scaffoldFieldGroupsOf = (params: {
         typeof creative[key] === 'string' && (creative[key] as string).trim()
           ? (creative[key] as string)
           : null;
-      add('message', 'Primary text', text('message'));
-      add('headline', 'Headline', text('headline'));
-      add('link', 'URL', text('link_url') ?? text('link'));
-      add('url_tags', 'URL tags (UTM)', row.urlTags ?? planAd?.url_tags ?? 'None', true);
+      add('message', word('Primary text'), text('message'));
+      add('headline', word('Headline'), text('headline'));
+      add('link', word('URL'), text('link_url') ?? text('link'));
+      add(
+        'url_tags',
+        word('URL tags (UTM)'),
+        row.urlTags ?? planAd?.url_tags ?? word('None'),
+        true,
+      );
     }
 
     return { pathKey, level: row.level ?? 'ad', name, lines };
@@ -648,3 +941,28 @@ export const scaffoldFieldGroupsOf = (params: {
 
   return rows.map(groupOf);
 };
+
+const scaffoldChoiceWords: Readonly<Record<string, string>> = {
+  OFFSITE_CONVERSIONS: 'Website conversions',
+  CONVERSIONS: 'Website conversions',
+  VALUE: 'Conversion value',
+  LANDING_PAGE_VIEWS: 'Landing page views',
+  LINK_CLICKS: 'Link clicks',
+  LEAD_GENERATION: 'Leads',
+  QUALITY_LEAD: 'Quality leads',
+  CONVERSATIONS: 'Conversations',
+  POST_ENGAGEMENT: 'Post engagement',
+  PAGE_LIKES: 'Page likes',
+  EVENT_RESPONSES: 'Event responses',
+  THRUPLAY: 'ThruPlays',
+  AD_RECALL_LIFT: 'Ad recall lift',
+  REACH: 'Reach',
+  IMPRESSIONS: 'Impressions',
+};
+export function scaffoldChoiceLabel(value: string, translate: ScaffoldText): string {
+  return Object.hasOwn(OBJECTIVE_LABELS, value)
+    ? objectiveLabel(value, translate)
+    : scaffoldChoiceWords[value]
+      ? localizeNodeOptionCopy(scaffoldChoiceWords[value], translate)
+      : value;
+}

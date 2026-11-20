@@ -22,6 +22,20 @@ export function Video(props: LoomixPlayerProps) {
     props.captions ??
     (corsReadable(props.src, process.env.NEXT_PUBLIC_SUPABASE_URL) ? CORS_ONLY : undefined);
 
+  // Loomix's glass reads a first frame off a paused video and asks for it with
+  // `preload = 'auto'`, which buffers the film far past that frame before anyone presses play.
+  // `metadata` and the seek Loomix already makes paint the same frame.
+  useEffect(() => {
+    const video = host.current?.querySelector('video');
+    if (!video) return;
+    Object.defineProperty(video, 'preload', {
+      configurable: true,
+      get: () => video.getAttribute('preload') ?? '',
+      set: (value: string) =>
+        video.setAttribute('preload', value === 'auto' && video.paused ? 'metadata' : value),
+    });
+  }, [props.src]);
+
   useEffect(() => {
     const video = host.current?.querySelector('video');
 

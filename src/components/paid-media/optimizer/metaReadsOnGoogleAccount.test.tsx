@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // PP-DT-E-optimizer-meta-reads-on-google-account (deep test 2026-10-31, lane E). Scale selects a
 // Google customer on its Google platform, and every Optimizer view under it posted that id to

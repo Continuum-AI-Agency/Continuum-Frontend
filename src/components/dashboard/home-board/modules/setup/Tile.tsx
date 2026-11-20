@@ -9,24 +9,27 @@
 // setupModel.ts's header (the bench anchor).
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { lazy } from 'react';
 import { buttonVariants } from '@/components/ui/button';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
 import { cn } from '@/lib/utils';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
 import type { HomeTileProps } from '../../types';
 import { GoalLearned } from './GoalLearned';
-import { SETUP_MISSING, setupTileView } from './setupModel';
+import { setupTileView } from './setupModel';
 
 const Module = lazy(() => import('./Module'));
 
 export default function SetupTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
   const { setup } = ctx;
   const view = setupTileView(setup);
   // `!setup` repeats what the view already says, for the type of the expanded module's prop.
   if (view.state === 'missing' || !setup) {
     return (
       <HomeTileFrame state="missing" tile={tile}>
-        <TileMissing>{SETUP_MISSING}</TileMissing>
+        <TileMissing>{uiText('this_brand_s_setup_steps_could_not_be_read_1b781a5')}</TileMissing>
       </HomeTileFrame>
     );
   }
@@ -36,7 +39,11 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
   const share = view.total > 0 ? (view.done / view.total) * 100 : 0;
   return (
     <HomeTileFrame
-      badge={view.remaining.length === 0 ? 'Setup done' : `${view.remaining.length} left`}
+      badge={
+        view.remaining.length === 0
+          ? uiText('setup_done_5c92b0a')
+          : uiText('count_left_796ea0b', { count: view.remaining.length })
+      }
       expanded={
         <Module
           brandBookRefreshedAt={ctx.brandBookRefreshedAt}
@@ -44,7 +51,7 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
           setup={setup}
         />
       }
-      expandedDescription="Connect an account and finish the Brand Book so every module has something to read."
+      expandedDescription={uiText('connect_an_account_and_finish_the_brand_book__9c285e3')}
       state="ready"
       tile={tile}
     >
@@ -55,11 +62,19 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
           data-total={view.total}
           data-value={view.done}
         >
-          {view.done} of {view.total}{' '}
-          <span className="font-normal text-muted-foreground text-xs">setup steps</span>
+          {uiText.rich('done_of_total_muted_setup_steps_muted_5fc2359', {
+            done: view.done,
+            total: view.total,
+            muted: (chunks) => (
+              <span className="font-normal text-muted-foreground text-xs">{chunks}</span>
+            ),
+          })}
         </p>
         <div
-          aria-label={`${view.done} of ${view.total} setup steps done`}
+          aria-label={uiText('done_of_total_setup_steps_done_230a764', {
+            done: view.done,
+            total: view.total,
+          })}
           className="h-2 w-full overflow-hidden rounded-full bg-muted"
           role="img"
         >
@@ -67,7 +82,9 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
         </div>
         {next ? (
           <div className="flex min-w-0 items-center gap-2" data-testid="home-setup-next">
-            <span className="min-w-0 flex-1 truncate text-xs">{next.label}</span>
+            <span className="min-w-0 flex-1 truncate text-xs">
+              {localizeDashboardCopy(next.label, uiText)}
+            </span>
             <Link
               className={cn(
                 buttonVariants({ size: 'xs', variant: 'default' }),
@@ -84,7 +101,7 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
             {later.map((step) => (
               <li className="flex min-w-0 items-center gap-2" key={step.id}>
                 <span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">
-                  {step.label}
+                  {localizeDashboardCopy(step.label, uiText)}
                 </span>
                 <Link
                   className={cn(
@@ -94,7 +111,7 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
                   data-testid="home-setup-step-link"
                   href={step.href}
                 >
-                  {step.cta}
+                  {localizeDashboardCopy(step.cta, uiText)}
                 </Link>
               </li>
             ))}

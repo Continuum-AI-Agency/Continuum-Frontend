@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FigmaImportedAsset } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import * as figmaClient from '@/lib/library/figma';
 
 // The client's own HTTP shape is pinned in lib/library/figma.test.ts; here only the two calls the

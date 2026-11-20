@@ -84,7 +84,9 @@ describe('ai-studio-bridge', () => {
     };
     expect(aiStudioHandoffIssue(draft)).toBeNull();
     expect(aiStudioHandoffIssue({ ...draft, updatedAt: null })).toContain('Save');
-    expect(aiStudioHandoffIssue({ ...draft, format: 'Reel' })).toContain('format');
+    expect(aiStudioHandoffIssue({ ...draft, format: 'Reel' })).toBe(
+      'AI Studio edits TikTok photo posts only, not a TikTok video. Edit it here in the Calendar instead.',
+    );
     expect(
       aiStudioHandoffIssue({
         ...draft,
@@ -94,7 +96,28 @@ describe('ai-studio-bridge', () => {
     expect(aiStudioHandoffIssue({ ...draft, platforms: ['tiktok', 'instagram'] })).toContain(
       'one platform',
     );
-    expect(aiStudioHandoffIssue({ ...draft, platforms: ['youtube'] })).toContain('not supported');
+    expect(aiStudioHandoffIssue({ ...draft, platforms: ['youtube'] })).toBe(
+      'AI Studio opens Instagram, LinkedIn and TikTok posts only. Edit this YouTube post here in the Calendar.',
+    );
+  });
+
+  it('explains a LinkedIn Reel instead of calling it "not supported", and names the way out', () => {
+    const draft = {
+      status: 'draft',
+      platforms: ['linkedin'],
+      format: 'Post',
+      backendDraftId: 'server-1',
+      updatedAt: '2026-11-13T00:00:00Z',
+    };
+    expect(aiStudioHandoffIssue(draft)).toBeNull();
+    const reel = aiStudioHandoffIssue({ ...draft, format: 'Reel' });
+    expect(reel).toBe(
+      'AI Studio edits LinkedIn posts only, not a LinkedIn video post. Edit it here in the Calendar, or change its format to Post to open it in AI Studio.',
+    );
+    expect(reel).not.toContain('not supported');
+    expect(aiStudioHandoffIssue({ ...draft, format: 'Carousel' })).toContain(
+      'not a LinkedIn carousel',
+    );
   });
 
   it('returns concept output behavior spec', () => {

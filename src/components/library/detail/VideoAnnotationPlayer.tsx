@@ -37,9 +37,12 @@ import {
   SquareDashedBottom,
   X,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import {
   type FrameRate,
   frameAtMs,
@@ -110,6 +113,8 @@ type Props = {
   /** With `assetVersionId` and `brandId`, loads the version's proxy ladder and scrub sprite. */
   assetId?: string;
   assetVersionId?: string | null;
+  /** The asset's poster. With a known duration, the stage rests on it and reads no file until engaged. */
+  posterUrl?: string | null;
 };
 
 // Stepping still works on a file whose container cannot be read; it just says
@@ -173,12 +178,37 @@ export function VideoAnnotationPlayer({
   onTimeChange,
   assetId,
   assetVersionId,
+  posterUrl,
 }: Props) {
+  const decimalLocale = useUiLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const laneRef = useRef<HTMLDivElement>(null);
   const { containerRef, containerSize, contentRect, setNaturalSize } = useStageGeometry();
-  const measuredRate = useFrameRate(src);
-  const startTimecode = useStartTimecode(src) ?? null;
+  // Rate and start timecode are read off the file itself, megabytes of ranged reads, and only
+  // matter once the person plays, scrubs or steps. A press or key on the player, or play, is
+  // that person; a seek is not, since the stage seeks on its own when it swaps quality rungs.
+  const [engaged, setEngaged] = useState(false);
+  // Resting: the poster stands in and no byte of the film is read. It needs the duration from the
+  // asset (the comment lane draws from it) and the poster's shape (the stage's geometry), so a
+  // video with neither still reads its metadata to show them.
+  const resting = Boolean(posterUrl) && Boolean(durationMsHint) && !engaged;
+  useEffect(() => {
+    if (!resting || !posterUrl) return;
+    const still = document.createElement('img');
+    still.onload = () => {
+      // The file's own size wins once it has loaded.
+      if (!videoRef.current?.videoWidth)
+        setNaturalSize({ width: still.naturalWidth, height: still.naturalHeight });
+    };
+    still.src = posterUrl;
+  }, [resting, posterUrl, setNaturalSize]);
+  const measuredRate = useFrameRate(engaged ? src : null);
+  const startTimecode = useStartTimecode(engaged ? src : null) ?? null;
   const timecodeMode = useTimecodeDisplay();
   const stageTime = (ms: number) => formatStageTime(ms, timecodeMode, measuredRate, startTimecode);
   const stageRange = (from: number, to: number | null) =>
@@ -323,8 +353,8 @@ export function VideoAnnotationPlayer({
     if (!video || !src) return;
     downloadVideoStill(video, fileStem(src, playback?.fileName)).catch((error: unknown) => {
       console.error('[VideoAnnotationPlayer] still capture failed', error);
-      toast.error('Could not save the still', {
-        description: error instanceof Error ? error.message : undefined,
+      toast.error(translateUi('could_not_save_the_still_29583684'), {
+        description: uiErrorText(error),
       });
     });
   };
@@ -580,6 +610,8 @@ export function VideoAnnotationPlayer({
   return (
     <div
       className="flex size-full flex-col"
+      onPointerDownCapture={() => setEngaged(true)}
+      onKeyDownCapture={() => setEngaged(true)}
       data-testid="video-annotation-player"
       data-current-ms={currentMs}
       data-current-frame={currentFrame}
@@ -600,7 +632,8 @@ export function VideoAnnotationPlayer({
           // Signed Storage URLs answer CORS; without this the still's canvas is tainted.
           crossOrigin="anonymous"
           playsInline
-          preload="metadata"
+          poster={posterUrl ?? undefined}
+          preload={resting ? 'none' : 'metadata'}
           loop={loop}
           className="absolute inset-0 size-full object-contain"
           onLoadedMetadata={(e) => {
@@ -625,7 +658,10 @@ export function VideoAnnotationPlayer({
             publishTime(ms);
           }}
           onSeeked={(e) => publishTime(msFromSeconds(e.currentTarget.currentTime, measuredRate))}
-          onPlay={() => setPlaying(true)}
+          onPlay={() => {
+            setEngaged(true);
+            setPlaying(true);
+          }}
           onPause={() => setPlaying(false)}
           onEnded={stopShuttle}
           // A proxy that will not play falls back to the original before calling it lost.
@@ -639,7 +675,7 @@ export function VideoAnnotationPlayer({
             <div className="flex flex-col items-center gap-2 text-center">
               <ImageOff className="size-8 text-muted-foreground/40" aria-hidden />
               <span className="text-xs">
-                Video preview unavailable. Timeline comments remain available.
+                {translateUi('video_preview_unavailable_timeline__41f64ba9')}
               </span>
             </div>
           </div>
@@ -678,7 +714,7 @@ export function VideoAnnotationPlayer({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label={playing ? 'Pause' : 'Play'}
+            aria-label={playing ? translateUi('pause_858e4ba7') : translateUi('play_436e6101')}
             onClick={() => (playing || shuttle ? pause() : void videoRef.current?.play())}
           >
             {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -691,7 +727,7 @@ export function VideoAnnotationPlayer({
             data-testid="timecode-mode"
             data-mode={timecodeMode}
             className="h-6 px-1.5 text-2xs text-muted-foreground"
-            title="Show time as m:ss, source timecode, or frames"
+            title={translateUi('show_time_as_m_ss_source_timecode_o_5016cc71')}
             onClick={() => setTimecodeDisplay(nextTimecodeDisplay(timecodeMode))}
           >
             {TIMECODE_MODE_LABELS[timecodeMode]}
@@ -701,7 +737,9 @@ export function VideoAnnotationPlayer({
             {timecodeMode === 'clock' ? formatTimecode(durationMs) : stageTime(durationMs)}
             <span className="ml-1.5 text-muted-foreground/70" data-testid="player-frame">
               f{currentFrame} ·{' '}
-              {measuredRate ? `${framesPerSecond(measuredRate).toFixed(2)} fps` : '~30 fps'}
+              {measuredRate
+                ? `${formatDecimal(framesPerSecond(measuredRate), 2, decimalLocale)} fps`
+                : '~30 fps'}
             </span>
             {shuttle ? (
               <span className="ml-1.5 font-medium text-primary">
@@ -767,7 +805,9 @@ export function VideoAnnotationPlayer({
                 <button
                   type="button"
                   data-testid="range-handle-in"
-                  aria-label={`Range start ${formatTimecode(range.inMs)}`}
+                  aria-label={translateUi('range_start_value0_ca129d75', {
+                    value0: String(formatTimecode(range.inMs)),
+                  })}
                   onPointerDown={dragHandle('in')}
                   onKeyDown={nudgeHandle('in')}
                   className="pointer-events-auto absolute -top-1.5 left-0 h-4 w-2 -translate-x-1/2 cursor-ew-resize rounded-sm bg-amber-500 ring-1 ring-background"
@@ -776,7 +816,9 @@ export function VideoAnnotationPlayer({
                   <button
                     type="button"
                     data-testid="range-handle-out"
-                    aria-label={`Range end ${formatTimecode(range.outMs)}`}
+                    aria-label={translateUi('range_end_value0_ba8201be', {
+                      value0: String(formatTimecode(range.outMs)),
+                    })}
                     onPointerDown={dragHandle('out')}
                     onKeyDown={nudgeHandle('out')}
                     className="pointer-events-auto absolute -top-1.5 right-0 h-4 w-2 translate-x-1/2 cursor-ew-resize rounded-sm bg-amber-500 ring-1 ring-background"
@@ -786,7 +828,7 @@ export function VideoAnnotationPlayer({
             ) : null}
             <input
               type="range"
-              aria-label="Seek"
+              aria-label={translateUi('seek_67ae3405')}
               min={0}
               max={Math.max(durationMs, 1)}
               step={1}
@@ -799,7 +841,7 @@ export function VideoAnnotationPlayer({
           {playback && playback.rungs.length > 0 ? (
             <select
               data-testid="player-quality"
-              aria-label="Playback quality"
+              aria-label={translateUi('playback_quality_78d1c797')}
               value={quality}
               className={SELECT_CLASS}
               onChange={(event) => {
@@ -808,18 +850,18 @@ export function VideoAnnotationPlayer({
                 event.currentTarget.blur();
               }}
             >
-              <option value="auto">Auto</option>
+              <option value="auto">{translateUi('auto_02862497')}</option>
               {playback.rungs.map((rung) => (
                 <option key={rung.role} value={rung.role}>
                   {rung.label}
                 </option>
               ))}
-              <option value="original">Original</option>
+              <option value="original">{translateUi('original_88d759ea')}</option>
             </select>
           ) : null}
           <select
             data-testid="player-speed"
-            aria-label="Playback speed"
+            aria-label={translateUi('playback_speed_afec2b22')}
             value={speed}
             className={SELECT_CLASS}
             onChange={(event) => {
@@ -839,8 +881,16 @@ export function VideoAnnotationPlayer({
             size="icon"
             data-testid="player-loop"
             aria-pressed={loop}
-            aria-label={range?.outMs != null ? 'Loop the marked range' : 'Loop'}
-            title={range?.outMs != null ? 'Loop the marked range' : 'Loop'}
+            aria-label={
+              range?.outMs != null
+                ? translateUi('loop_the_marked_range_612e973c')
+                : translateUi('loop_f2f6a018')
+            }
+            title={
+              range?.outMs != null
+                ? translateUi('loop_the_marked_range_612e973c')
+                : translateUi('loop_f2f6a018')
+            }
             className={cn(loop && 'bg-accent text-accent-foreground')}
             onClick={() => setLoop((on) => !on)}
           >
@@ -851,8 +901,8 @@ export function VideoAnnotationPlayer({
             variant="ghost"
             size="icon"
             data-testid="player-download-still"
-            aria-label="Download still"
-            title="Download this frame as a PNG"
+            aria-label={translateUi('download_still_c4247cf2')}
+            title={translateUi('download_this_frame_as_a_png_5bfd4f35')}
             onClick={saveStill}
           >
             <Camera className="size-4" />
@@ -864,12 +914,16 @@ export function VideoAnnotationPlayer({
               variant="outline"
               size="sm"
               onClick={openComposer}
-              title="Comment (C) — mark a range first with I and O"
+              title={translateUi('comment_c_mark_a_range_first_with_i_c4b17425')}
             >
               <MessageSquarePlus className="size-3.5" />
               {range
-                ? `Comment on ${stageRange(range.inMs, range.outMs)}`
-                : `Comment at ${stageTime(currentMs)}`}
+                ? translateUi('comment_on_value0_6337c8a1', {
+                    value0: String(stageRange(range.inMs, range.outMs)),
+                  })
+                : translateUi('comment_at_value0_a86e186d', {
+                    value0: String(stageTime(currentMs)),
+                  })}
             </Button>
           ) : (
             <Button
@@ -878,10 +932,10 @@ export function VideoAnnotationPlayer({
               size="sm"
               onClick={markOut}
               disabled={draftInMs === null || currentMs <= draftInMs}
-              title="Extend this comment into a range ending at the playhead (O)"
+              title={translateUi('extend_this_comment_into_a_range_en_d752de91')}
             >
-              <SquareDashedBottom className="size-3.5" />
-              End at {stageTime(currentMs)}
+              <SquareDashedBottom className="size-3.5" /> {translateUi('end_at_d55048a0')}{' '}
+              {stageTime(currentMs)}
             </Button>
           )}
         </div>
@@ -890,7 +944,9 @@ export function VideoAnnotationPlayer({
           <div className="mt-2 rounded-lg border border-border bg-muted/30 p-2.5">
             <CommentComposer
               placeholder={
-                draftOutMs === null ? 'Comment at this moment...' : 'Comment on this passage...'
+                draftOutMs === null
+                  ? translateUi('comment_at_this_moment_3d40196d')
+                  : translateUi('comment_on_this_passage_732f4d5e')
               }
               busy={posting}
               autoFocus
@@ -906,8 +962,8 @@ export function VideoAnnotationPlayer({
                     {draftOutMs !== null && (
                       <button
                         type="button"
-                        aria-label="Clear the end point and comment on a single moment"
-                        title="Back to a single moment"
+                        aria-label={translateUi('clear_the_end_point_and_comment_on__7e76d128')}
+                        title={translateUi('back_to_a_single_moment_a7fdba3a')}
                         onClick={() => setRange((prev) => (prev ? { ...prev, outMs: null } : prev))}
                         className="-mr-0.5 rounded-sm p-0.5 text-primary/70 transition-colors hover:text-primary"
                       >
@@ -916,8 +972,10 @@ export function VideoAnnotationPlayer({
                     )}
                   </span>
                   {drawing.shapes.length > 0
-                    ? `${drawing.shapes.length} mark${drawing.shapes.length === 1 ? '' : 's'}`
-                    : 'Draw on the frame'}
+                    ? translateUi('value0_mark_value1_a889e162', {
+                        count: Number(drawing.shapes.length),
+                      })
+                    : translateUi('draw_on_the_frame_1baf3744')}
                 </span>
               }
               onSubmit={(body, extras) => {

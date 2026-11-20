@@ -1,0 +1,62 @@
+import { redirect } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
+import { Suspense } from 'react';
+import { ProductGate } from '@/components/billing/ProductGate';
+import { resolveInitialCanvasRoomId } from '@/lib/ai-studio/canvas-room.server.ts';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import AIStudioClient from './AIStudioClient';
+
+// TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+export const instant = false;
+
+function AIStudioSkeleton() {
+  const t = useTranslations('studio');
+  return (
+    <div className="fixed inset-x-0 top-0 flex h-dvh items-center justify-center bg-slate-950 text-white md:left-[var(--app-sidebar-width,5.5rem)]">
+      <div className="rounded-lg border border-white/10 bg-slate-900/70 px-6 py-4">
+        {t('loadingStudio')}
+      </div>
+    </div>
+  );
+}
+
+type AIStudioPageProps = {
+  searchParams: Promise<{ roomId?: string; focusNodeId?: string }>;
+};
+
+export default async function AIStudioPage({ searchParams }: AIStudioPageProps) {
+  const t = await getTranslations('studio');
+
+  const { roomId, focusNodeId } = await searchParams;
+  const { activeBrandId, brandSummaries } = await getActiveBrandContext();
+
+  if (!activeBrandId) {
+    redirect('/onboarding');
+  }
+
+  const denied = await ProductGate('ai-studio');
+  if (denied) return denied;
+
+  const brandName =
+    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? t('untitledBrand');
+
+  // Guarantee a workspace exists before the canvas mounts so realtime connects on
+  // first paint (no perpetual "Connecting…" spinner) and the MCP co-pilot can target
+  // the same live room the user lands in.
+  const initialRoomId = await resolveInitialCanvasRoomId(activeBrandId, roomId);
+
+  // AIStudioClient uses dynamic({ ssr: false }) for StudioCanvas internally,
+  // so ClientOnly is redundant — Suspense handles the loading state.
+  return (
+    <Suspense fallback={<AIStudioSkeleton />}>
+      <AIStudioClient
+        brandProfileId={activeBrandId}
+        brandName={brandName}
+        initialRoomId={initialRoomId}
+        focusNodeId={focusNodeId}
+      />
+    </Suspense>
+  );
+}

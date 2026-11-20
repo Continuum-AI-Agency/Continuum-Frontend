@@ -22,6 +22,12 @@
  *   4. QUEUE        — a second turn on the SAME session is fenced (agent.run_queued, no seq)
  *                     rather than interleaving into one conversation history.
  *   5. PARALLEL     — two DIFFERENT sessions run at the same time.
+ *   6. RECONCILE    — the seq-0 frame names the user row the turn persisted before it ran,
+ *                     so the client's optimistic bubble becomes that row instead of vanishing
+ *                     (or doubling) when the transcript is reloaded.
+ *   7. REPLAY       — re-attaching with after_seq = the last seq the client folded returns the
+ *                     very next frame and the terminal one. The client used to send
+ *                     lastSeq + 1 against an exclusive cursor and skip a frame per resume.
  *
  * Prerequisites (see e2e/README.md):
  *   bun run supabase:start && bun run supabase:hydrate && bun run supabase:env:local
@@ -29,6 +35,7 @@
  * Run with: bun run agent:runs:bench
  */
 
+import { runStatusFromFrameType } from '@continuum/contracts';
 import { createClient } from '@supabase/supabase-js';
 import { mintAccessTokenForEmail } from './support/auth';
 
@@ -171,6 +178,31 @@ const assistantMessage = async (sessionId: string): Promise<string> => {
   return (data?.[0]?.content as string | undefined) ?? '';
 };
 
+const userMessageIds = async (sessionId: string): Promise<string[]> => {
+  const { data } = await admin
+    .schema('organic')
+    .from('organic_chat_messages')
+    .select('id')
+    .eq('session_id', sessionId)
+    .eq('role', 'user')
+    .order('id', { ascending: true });
+  return (data ?? []).map((row) => String((row as { id: number | string }).id));
+};
+
+const replayAfter = async (token: string, runId: string, afterSeq: number): Promise<Frame[]> => {
+  const response = await fetch(
+    `${API}/api/organic/agent/runs/${runId}/events?after_seq=${afterSeq}`,
+    {
+      headers: { Accept: 'application/x-ndjson', Authorization: `Bearer ${token}` },
+    },
+  );
+  if (!response.ok) throw new Error(`replay failed: ${response.status} ${await response.text()}`);
+  return (await response.text())
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => JSON.parse(line) as Frame);
+};
+
 const cleanup = async (sessionIds: string[]) => {
   for (const sessionId of sessionIds) {
     const { data: runs } = await admin
@@ -253,6 +285,32 @@ async function main() {
     'the assistant turn persisted WHOLE, not truncated at the disconnect',
     persisted.length >= abandoned.text.length && persisted.length > 0,
     `client had ${abandoned.text.length} chars; DB holds ${persisted.length}`,
+  );
+
+  console.log('\n=== 6. RECONCILE: the seq-0 frame names the persisted user row ===');
+  const started = abandoned.frames.find((f) => f.type === 'agent.chat_started');
+  const persistedUserIds = await userMessageIds(sessionA);
+  check(
+    'agent.chat_started carries the id of the user row persisted before the run',
+    typeof started?.data?.userMessageId === 'string' &&
+      persistedUserIds.includes(String(started.data.userMessageId)),
+    `frame says ${String(started?.data?.userMessageId)}; rows ${persistedUserIds.join(',')}`,
+  );
+
+  console.log('\n=== 7. REPLAY: re-attach from the last folded seq ===');
+  const replayed = await replayAfter(accessToken, abandoned.runId, abandoned.lastSeq);
+  check(
+    'replay resumes at the very next frame — none skipped',
+    replayed[0]?.seq === abandoned.lastSeq + 1,
+    `client folded seq ${abandoned.lastSeq}; replay starts at ${String(replayed[0]?.seq)}`,
+  );
+  check(
+    'replay carries the terminal frame, so a re-attached turn can finish',
+    replayed.some((f) => runStatusFromFrameType(f.type) !== null),
+    replayed
+      .map((f) => f.type)
+      .slice(-3)
+      .join(', '),
   );
 
   console.log('\n=== 2. QUEUE: a second turn on the SAME session is fenced ===');

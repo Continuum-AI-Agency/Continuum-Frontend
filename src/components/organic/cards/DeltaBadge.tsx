@@ -5,6 +5,8 @@
 // available so cards stay clean.
 
 import { Minus, TrendingDown, TrendingUp } from 'lucide-react';
+import { useLocale } from 'next-intl';
+import { formatDecimal } from '@/lib/format/decimal';
 
 import type { MetricComparison } from '@/lib/schemas/organicMetrics';
 import { cn } from '@/lib/utils';
@@ -17,6 +19,7 @@ export function DeltaBadge({
   comparison?: MetricComparison | null;
   className?: string;
 }) {
+  const uiLocale = useLocale();
   const pct = comparison?.percentageChange;
   if (pct === undefined || Number.isNaN(pct)) return null;
 
@@ -26,7 +29,7 @@ export function DeltaBadge({
   // unwieldy swing (e.g. +8800%); cap the label so the badge never forces
   // its sibling label out of a narrow secondary row.
   const magnitude = Math.abs(pct);
-  const label = magnitude > 999 ? '>999%' : `${magnitude.toFixed(1)}%`;
+  const label = magnitude > 999 ? '>999%' : `${formatDecimal(magnitude, 1, uiLocale)}%`;
 
   return (
     <span

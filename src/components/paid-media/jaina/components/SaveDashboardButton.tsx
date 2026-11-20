@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // "Save as dashboard": keep this report's visible blocks under a name. The creation flow
 // stays conversational — a person asked Jaina for an analysis and liked it; this is the
 // one affordance that turns that exact output into something they come back to.
@@ -42,6 +45,8 @@ export function SaveDashboardButton({
   sourcePrompt,
   disabled,
 }: SaveDashboardButtonProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const scope = useJainaBrandScope();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -73,18 +78,18 @@ export function SaveDashboardButton({
         spec: plan.spec,
       });
       setState('saved');
-      setMessage('Saved. It is listed under Saved dashboards above the chat.');
+      setMessage(uiText('saved_it_is_listed_under_saved_dashboards_abo_4990147'));
       setTimeout(() => setOpen(false), 900);
     } catch (error) {
       setState('error');
-      setMessage(error instanceof Error ? error.message : 'Could not save the dashboard.');
+      setMessage(formatUiError(error));
     }
   };
 
   return (
     <>
       <Button
-        aria-label="Save the visible modules as a dashboard"
+        aria-label={uiText('save_the_visible_modules_as_a_dashboard_a0b7645')}
         disabled={disabled || blocks.length === 0}
         onClick={() => {
           setName(defaultTitle);
@@ -97,27 +102,27 @@ export function SaveDashboardButton({
         variant="outline"
       >
         <LayoutDashboardIcon className="size-3.5" />
-        Save as dashboard
+        {uiText('save_as_dashboard_f6c0cc6')}
       </Button>
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Save as dashboard</DialogTitle>
+            <DialogTitle>{uiText('save_as_dashboard_f6c0cc6')}</DialogTitle>
             <DialogDescription>
               {plan.ok
-                ? `Keeps these ${plan.blocks.length} module${plan.blocks.length === 1 ? '' : 's'}, with the window they cover, exactly as they are, for the whole brand. Refreshing means asking Jaina the same question again.`
-                : 'A dashboard states the period its figures cover.'}
+                ? uiText('template_52bf2cdbe0c8', { count: plan.blocks.length })
+                : uiText('a_dashboard_states_the_period_its_figures_cov_232fb65')}
             </DialogDescription>
           </DialogHeader>
           <Input
-            aria-label="Dashboard name"
+            aria-label={uiText('dashboard_name_df31dcc')}
             id="dashboard-name"
             maxLength={120}
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void submit();
             }}
-            placeholder="Weekly account health"
+            placeholder={uiText('weekly_account_health_39afcb2')}
             value={name}
           />
           {message ? (
@@ -131,14 +136,14 @@ export function SaveDashboardButton({
           ) : null}
           <DialogFooter>
             <Button onClick={() => setOpen(false)} type="button" variant="ghost">
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
             <Button
               disabled={!plan.ok || state === 'saving'}
               onClick={() => void submit()}
               type="button"
             >
-              {state === 'saving' ? 'Saving…' : 'Save'}
+              {state === 'saving' ? uiText('saving_23e3929') : uiText('save_1509f56')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HomeBoardTile, HomeOrganicWeekData } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeBoardContext } from '../../types';
 import { DRAFT_ROWS, NOW, POSTS } from './__fixtures__/organicWeek';
 import { buildOrganicWeek } from './organicWeekModel';
@@ -70,11 +71,11 @@ mock.module('@/lib/home/homeAccounts', () => ({
 }));
 
 const { default: OrganicTile } = await import('./Tile');
-const {
-  default: OrganicWeekModule,
-  BEST_TIME_COLD,
-  PER_POST_NOT_READABLE,
-} = await import('./Module');
+const { default: OrganicWeekModule } = await import('./Module');
+
+const BEST_TIME_COLD = 'Best time not read yet — open Organic to read it.';
+const PER_POST_NOT_READABLE =
+  "Reach per post this week and the week's top post are not readable yet.";
 
 afterEach(() => {
   cleanup();
@@ -178,7 +179,6 @@ describe('Organic week module (expanded)', () => {
     );
     const line = getByTestId('home-organic-best-time');
     expect(line.textContent).toBe(BEST_TIME_COLD);
-    expect(BEST_TIME_COLD).toBe('Best time not read yet — open Organic to read it.');
     expect(line.querySelector('a')?.getAttribute('href')).toBe('/organic?tab=metrics');
   });
 

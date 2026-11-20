@@ -7,6 +7,7 @@
 
 import type { AccountCandidate, BoardModuleSize, PlatformCard } from '@continuum/contracts';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { type CSSProperties, type ReactNode, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -153,9 +154,10 @@ export function LensHeadline({
 
 /** The window a lens covers, beside its title, so two windows on one board never read as one. */
 export function LensWindowTag({ days, testId }: { days: number; testId: string }) {
+  const uiText = useTranslations('scale');
   return (
     <span className="whitespace-nowrap text-muted-foreground text-xs" data-testid={testId}>
-      Last {days} days
+      {uiText('days_plural_one_last_day_other_last_days_e696416', { days })}
     </span>
   );
 }

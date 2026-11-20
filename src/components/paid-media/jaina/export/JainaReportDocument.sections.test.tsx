@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { CheckpointBlockV2, CheckpointReportV2 } from '@/lib/jaina/schemas';
 
 mock.module('../blocks/BlockRenderer', () => ({

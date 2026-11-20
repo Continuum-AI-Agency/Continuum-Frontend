@@ -14,7 +14,15 @@ import type {
   RenderApprovalDecisionResponse,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
+import { ApiError } from '@/lib/api/errors';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const PACKAGE = '99999999-9999-4999-8999-999999999991';
@@ -335,14 +343,18 @@ test('an approve answers "publishing", and the list keeps re-reading until the o
   expect(fetchRenderApprovals.mock.calls.length).toBeGreaterThanOrEqual(3);
 }, 20_000);
 
-test('a refused decision shows the backend’s reason and leaves the buttons in place', async () => {
+test('a forbidden decision shows localized permission guidance and leaves the buttons in place', async () => {
   decideRenderApproval.mockImplementationOnce(async () => {
-    throw new Error('Only an active approver in one of this package’s rooms can decide it.');
+    throw new ApiError(
+      'Only an active approver in one of this package’s rooms can decide it.',
+      403,
+      'FORBIDDEN',
+    );
   });
   renderApprovals();
   fireEvent.click(await screen.findByRole('button', { name: 'Approve and publish paused' }));
   await waitFor(() => expect(toasts).toHaveLength(1));
-  expect(toasts).toEqual(['Only an active approver in one of this package’s rooms can decide it.']);
+  expect(toasts).toEqual(['You do not have permission to perform this action.']);
   expect(screen.getAllByRole('button', { name: 'Approve and publish paused' })).toHaveLength(1);
 });
 
@@ -396,7 +408,7 @@ test('Reject all says how many it could not decide, and why', async () => {
   fireEvent.click(within(pack).getByRole('button', { name: 'Reject all' }));
   await waitFor(() => expect(toasts).toHaveLength(1));
   expect(toasts).toEqual([
-    'Rejected 1. Nothing was published. 1 not decided: This batch is already approved.',
+    'Rejected 1. Nothing was published. 1 not decided. This item already has a decision.',
   ]);
 });
 

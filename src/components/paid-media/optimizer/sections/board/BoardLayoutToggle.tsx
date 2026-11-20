@@ -6,13 +6,14 @@
 
 import { SparklesIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { BoardLayout } from './boardLayout';
 
-const OPTIONS: { value: BoardLayout; label: string }[] = [
-  { value: 'adaptive', label: 'Adaptive' },
-  { value: 'today', label: 'Today' },
-];
+const OPTIONS = [
+  { value: 'adaptive', label: 'adaptive_ceb6931' },
+  { value: 'today', label: 'today_2b065c7' },
+] as const satisfies readonly { value: BoardLayout; label: string }[];
 
 export function BoardLayoutToggle({
   value,
@@ -21,10 +22,11 @@ export function BoardLayoutToggle({
   value: BoardLayout;
   onChange: (next: BoardLayout) => void;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   return (
     <ToggleGroup
-      aria-label="Overview layout"
+      aria-label={uiText('overview_layout_969722f')}
       className="shrink-0"
       data-testid="board-layout-toggle"
       onValueChange={(next) => {
@@ -56,7 +58,7 @@ export function BoardLayoutToggle({
             {option.value === 'adaptive' ? (
               <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
             ) : null}
-            {option.label}
+            {uiText(option.label)}
           </span>
         </ToggleGroupItem>
       ))}

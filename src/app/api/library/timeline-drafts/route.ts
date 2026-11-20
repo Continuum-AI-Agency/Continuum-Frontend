@@ -57,6 +57,7 @@ type PoolAssetRow = {
   file_name: string;
   title: string | null;
   mime_type?: string;
+  updated_at: string | null;
 };
 
 type Caller = { supabase: SupabaseClient; userId: string };
@@ -102,7 +103,7 @@ async function loadPoolMedia(
 
   const { data, error } = await mediaSchema(supabase)
     .from('assets')
-    .select('id, kind, bucket, storage_path, duration_ms, file_name, title, mime_type')
+    .select('id, kind, bucket, storage_path, duration_ms, file_name, title, mime_type, updated_at')
     .in('id', assetIds)
     .eq('brand_id', brandId)
     .is('deleted_at', null);
@@ -114,7 +115,7 @@ async function loadPoolMedia(
   const rows = (data ?? []) as unknown as PoolAssetRow[];
   const rowById = new Map(rows.map((row) => [row.id, row]));
   const signedUrlMap = await mintSignedUrls(
-    rows.map((row) => ({ path: row.storage_path, bucket: row.bucket })),
+    rows.map((row) => ({ path: row.storage_path, bucket: row.bucket, version: row.updated_at })),
   );
 
   return assetIds.map((assetId) => {

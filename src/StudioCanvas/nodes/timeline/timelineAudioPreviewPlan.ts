@@ -21,7 +21,8 @@ export interface TimelinePreviewAudioEvent {
   sourceKey: string;
   sourceNodeId: string;
   kind: TimelinePreviewAudioKind;
-  blob: Blob;
+  /** The bytes, or a URL the engine reads by HTTP range when it plays. */
+  media: Blob | string;
   outputStartSec: number;
   outputEndSec: number;
   sourceStartSec: number;
@@ -124,7 +125,7 @@ export function buildTimelinePreviewAudioPlan(input: {
       sourceKey: sourceKeyFor(item, poolById, media.blob),
       sourceNodeId: item.sourceNodeId,
       kind: 'base',
-      blob: media.blob,
+      media: media.blob,
       outputStartSec: clip.startSec,
       outputEndSec: clip.startSec + clip.durationSec,
       sourceStartSec,
@@ -156,7 +157,7 @@ export function buildTimelinePreviewAudioPlan(input: {
       sourceKey: sourceKeyFor(item, poolById, media.blob),
       sourceNodeId: item.sourceNodeId,
       kind: 'overlay',
-      blob: media.blob,
+      media: media.blob,
       outputStartSec,
       outputEndSec: outputStartSec + (sourceEndSec - sourceStartSec),
       sourceStartSec,
@@ -193,7 +194,7 @@ export function buildTimelinePreviewAudioPlan(input: {
       sourceKey: sourceKeyFor(item, poolById, media.blob),
       sourceNodeId: item.sourceNodeId,
       kind: 'audio',
-      blob: media.blob,
+      media: media.blob,
       outputStartSec,
       outputEndSec: outputStartSec + durationSec,
       sourceStartSec,

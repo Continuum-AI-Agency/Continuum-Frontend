@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { pluralize } from '@/lib/format/pluralize';
 import type { BrandInsightsTrend } from '@/lib/schemas/brandInsights';
 
@@ -18,23 +19,28 @@ export function BrandTrendsPeek({
   weekLabel,
   isStale = false,
 }: BrandTrendsPeekProps) {
+  const tUi = useTranslations('common');
+
   const signalCount = trends.length + eventCount + questionCount;
 
   return (
     <div className="flex flex-col gap-2 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-muted-foreground text-2xs font-semibold tracking-wide uppercase">
-          Brand insights
+          {tUi('m_3c32f0af0c')}
         </p>
         {weekLabel ? (
-          <p className="text-muted-foreground shrink-0 text-xs">Week of {weekLabel}</p>
+          <p className="text-muted-foreground shrink-0 text-xs">
+            {tUi('m_7f262e0a5d')}
+            {weekLabel}
+          </p>
         ) : null}
       </div>
 
       {signalCount === 0 ? (
         <div className="border-t pt-2">
-          <p className="text-sm">No trend signals for this week.</p>
-          <p className="text-muted-foreground mt-0.5 text-xs">Click to open and generate them.</p>
+          <p className="text-sm">{tUi('m_913d8eb018')}</p>
+          <p className="text-muted-foreground mt-0.5 text-xs">{tUi('m_3973a13771')}</p>
         </div>
       ) : (
         <>
@@ -48,7 +54,7 @@ export function BrandTrendsPeek({
               </li>
             ))}
             {trends.length === 0 ? (
-              <li className="text-muted-foreground text-sm">No trends this week.</li>
+              <li className="text-muted-foreground text-sm">{tUi('m_136d4e3ef2')}</li>
             ) : null}
           </ul>
 
@@ -57,7 +63,7 @@ export function BrandTrendsPeek({
               {pluralize(trends.length, 'trend')} · {pluralize(eventCount, 'event')} ·{' '}
               {pluralize(questionCount, 'question')}
             </span>
-            <span className="shrink-0">{isStale ? 'Needs a refresh' : 'Click to open'}</span>
+            <span className="shrink-0">{isStale ? tUi('m_d21640a743') : tUi('m_f724b8f0f8')}</span>
           </div>
         </>
       )}

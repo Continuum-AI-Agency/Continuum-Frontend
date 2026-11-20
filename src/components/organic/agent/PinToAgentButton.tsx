@@ -1,6 +1,7 @@
 'use client';
 
 import { MessageSquarePlus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { enqueueAgentMentions } from '@/lib/agent/mention-queue-store';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
@@ -21,11 +22,14 @@ type PinToAgentButtonProps = {
  */
 export function PinToAgentButton({
   suggestions,
-  label = 'Add to agent',
+  label: providedLabel,
   className,
   iconOnly = false,
   stopPropagation = true,
 }: PinToAgentButtonProps) {
+  const uiText = useTranslations('organic');
+  const label = providedLabel ?? uiText('agentPinDefault');
+
   return (
     <Button
       type="button"

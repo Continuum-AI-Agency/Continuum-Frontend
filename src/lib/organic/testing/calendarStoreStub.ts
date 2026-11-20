@@ -21,6 +21,7 @@ const EMPTY_COLLECTIONS: Record<string, unknown> = {
   backlogDrafts: [],
   selectedDraftIds: [],
   pendingServerDeletes: [],
+  saveFailedDraftIds: [],
   eventHistory: [],
   pendingDraftEdits: {},
 };

@@ -225,7 +225,38 @@ function secondaryDescriptors(post: OrganicPost, excludeKeys: Set<string>): Metr
 
 // Returns the adaptive primary metrics (2-3) followed by the available secondary
 // metrics. Primary set is chosen by media type.
-export function getCardMetricSet(post: OrganicPost): MetricDescriptor[] {
+const CARD_LABEL_KEYS = {
+  views: 'cardMetric_views',
+  reach: 'cardMetric_reach',
+  engagement: 'cardMetric_engagement',
+  hook: 'cardMetric_hook',
+  watch: 'cardMetric_watch',
+  totalWatch: 'cardMetric_totalWatch',
+  likes: 'cardMetric_likes',
+  comments: 'cardMetric_comments',
+  shares: 'cardMetric_shares',
+  saved: 'cardMetric_saved',
+} as const;
+const CARD_TOOLTIP_KEYS = {
+  views: 'cardTooltip_views',
+  reach: 'cardTooltip_reach',
+  engagement: 'cardTooltip_engagement',
+  hook: 'cardTooltip_hook',
+  watch: 'cardTooltip_watch',
+  totalWatch: 'cardTooltip_totalWatch',
+  likes: 'cardTooltip_likes',
+  comments: 'cardTooltip_comments',
+  shares: 'cardTooltip_shares',
+  saved: 'cardTooltip_saved',
+} as const;
+export type CardMetricMessageKey =
+  | (typeof CARD_LABEL_KEYS)[MetricIconKey]
+  | (typeof CARD_TOOLTIP_KEYS)[MetricIconKey];
+
+export function getCardMetricSet(
+  post: OrganicPost,
+  translate?: (key: CardMetricMessageKey) => string,
+): MetricDescriptor[] {
   const kind = resolveCardMediaKind(post);
 
   let primary: MetricDescriptor[];
@@ -267,5 +298,12 @@ export function getCardMetricSet(post: OrganicPost): MetricDescriptor[] {
   }
 
   const primaryKeys = new Set(primary.map((d) => d.key));
-  return [...primary, ...secondaryDescriptors(post, primaryKeys)];
+  const metrics = [...primary, ...secondaryDescriptors(post, primaryKeys)];
+  return translate
+    ? metrics.map((metric) => ({
+        ...metric,
+        label: translate(CARD_LABEL_KEYS[metric.iconKey]),
+        tooltip: translate(CARD_TOOLTIP_KEYS[metric.iconKey]),
+      }))
+    : metrics;
 }

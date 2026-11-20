@@ -6,6 +6,7 @@ import type {
   OnboardingInspirationSelection,
   OnboardingInspirationsStreamFrame,
 } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { streamInspirations } from '@/lib/onboarding/inspirationsClient';
@@ -38,6 +39,8 @@ export function CompetitorInspirationsScreen({
   onContinue,
   onBack,
 }: Props) {
+  const tUi = useTranslations('onboarding');
+
   const [order, setOrder] = useState<string[]>([]);
   const [cards, setCards] = useState<Record<string, CompetitorCard>>({});
   const [phase, setPhase] = useState<Phase>('loading');
@@ -120,13 +123,8 @@ export function CompetitorInspirationsScreen({
   return (
     <div className="mx-auto flex w-full max-w-[1700px] flex-1 flex-col px-4 pb-28 md:px-8">
       <header className="py-6">
-        <h1 className="text-2xl font-semibold text-foreground">
-          Inspirations from competitor success
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Top organic posts and paid ads from the competitors we found in your brand profile. Pick
-          one to guide your first generations — or just continue.
-        </p>
+        <h1 className="text-2xl font-semibold text-foreground">{tUi('m_ad95585b01')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{tUi('m_ea048a8550')}</p>
       </header>
 
       {phase === 'loading' ? (
@@ -145,23 +143,23 @@ export function CompetitorInspirationsScreen({
               onSelect={onSelect}
             />
           ))}
-          {phase === 'streaming' ? <LoadingRow label="Finding more inspirations…" /> : null}
+          {phase === 'streaming' ? <LoadingRow label={tUi('m_58fd4e9365')} /> : null}
         </div>
       )}
 
       <footer className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-between gap-3 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:px-8">
         <Button variant="outline" size="sm" onClick={onBack}>
-          ← Back
+          {tUi('m_c32ae9f4a7')}
         </Button>
         <div className="flex items-center gap-2">
           {/* Always-enabled escape hatch: competitor discovery can be slow or fail
               (it waits on strategic analysis). The user must never be locked here —
               creatives are generated from brand guidelines regardless. */}
           <Button variant="ghost" size="sm" onClick={onContinue}>
-            Skip
+            {tUi('m_3da474537a')}
           </Button>
           <Button variant="default" size="sm" onClick={onContinue}>
-            Continue to generations →
+            {tUi('m_89f2bc2b2b')}
           </Button>
         </div>
       </footer>
@@ -178,6 +176,8 @@ function CompetitorSection({
   selected: SelectedInspiration | null;
   onSelect: (selection: SelectedInspiration) => void;
 }) {
+  const tUi = useTranslations('onboarding');
+
   return (
     <section>
       <div className="mb-3 flex items-baseline gap-2">
@@ -187,9 +187,9 @@ function CompetitorSection({
         ) : null}
       </div>
 
-      <InspirationRow label="Organic posts">
+      <InspirationRow label={tUi('m_ab97eb7152')}>
         {competitor.organicPosts.length === 0 ? (
-          <EmptyHint>No organic posts available.</EmptyHint>
+          <EmptyHint>{tUi('m_902c529766')}</EmptyHint>
         ) : (
           competitor.organicPosts.map((post) => (
             <PostCard
@@ -203,9 +203,9 @@ function CompetitorSection({
         )}
       </InspirationRow>
 
-      <InspirationRow label="Paid ads">
+      <InspirationRow label={tUi('m_31fea397c1')}>
         {competitor.paidAds.length === 0 ? (
-          <EmptyHint>No paid ads available.</EmptyHint>
+          <EmptyHint>{tUi('m_b2efc89e9c')}</EmptyHint>
         ) : (
           competitor.paidAds.map((ad) => (
             <AdCard
@@ -234,9 +234,11 @@ function InspirationRow({ label, children }: { label: string; children: React.Re
 }
 
 function InspirationTag() {
+  const tUi = useTranslations('onboarding');
+
   return (
     <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-white">
-      Inspiration
+      {tUi('m_2868202fbd')}
     </span>
   );
 }
@@ -252,6 +254,8 @@ function PostCard({
   selected: SelectedInspiration | null;
   onSelect: (selection: SelectedInspiration) => void;
 }) {
+  const tUi = useTranslations('onboarding');
+
   const isSelected = Boolean(post.imageUrl && selected?.imageUrl === post.imageUrl);
   const selectable = Boolean(post.imageUrl);
   return (
@@ -270,13 +274,13 @@ function PostCard({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={post.imageUrl}
-          alt={`${competitorName} inspiration`}
+          alt={tUi('m_b6b7275ba1', { v0: String(competitorName) })}
           className="aspect-square w-full object-cover"
           loading="lazy"
         />
       ) : (
         <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
-          No image
+          {tUi('m_fc5e5bdcd5')}
         </div>
       )}
       <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
@@ -300,6 +304,8 @@ function AdCard({
   selected: SelectedInspiration | null;
   onSelect: (selection: SelectedInspiration) => void;
 }) {
+  const tUi = useTranslations('onboarding');
+
   const isSelected = Boolean(ad.imageUrl && selected?.imageUrl === ad.imageUrl);
   const selectable = Boolean(ad.imageUrl);
   return (
@@ -315,7 +321,7 @@ function AdCard({
     >
       <InspirationTag />
       <p className="mt-5 line-clamp-3 text-xs font-medium text-foreground">
-        {ad.headline ?? 'Untitled ad'}
+        {ad.headline ?? tUi('m_e1a4e128b7')}
       </p>
       <p className="line-clamp-4 text-xs text-muted-foreground">{ad.bodyText ?? ''}</p>
       {ad.permalink ? (
@@ -326,7 +332,7 @@ function AdCard({
           onClick={(e) => e.stopPropagation()}
           className="text-2xs font-semibold uppercase tracking-wide text-primary hover:underline"
         >
-          View ad ↗
+          {tUi('m_f756b535f4')}
         </a>
       ) : null}
     </button>
@@ -342,34 +348,32 @@ function LoadingRow({ label }: { label: string }) {
 }
 
 function LoadingState() {
+  const tUi = useTranslations('onboarding');
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20 text-center">
       <div className="h-10 w-10 animate-spin rounded-full border-2 border-muted border-t-primary" />
-      <p className="text-sm text-muted-foreground">
-        Analyzing your competitors and pulling their best work…
-      </p>
+      <p className="text-sm text-muted-foreground">{tUi('m_d768416b82')}</p>
     </div>
   );
 }
 
 function EmptyState() {
+  const tUi = useTranslations('onboarding');
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 py-20 text-center">
-      <p className="text-sm text-muted-foreground">
-        We couldn&apos;t surface competitor inspirations yet. You can continue and explore them
-        later from the dashboard.
-      </p>
+      <p className="text-sm text-muted-foreground">{tUi('m_0b0b8fd053')}</p>
     </div>
   );
 }
 
 function ErrorState() {
+  const tUi = useTranslations('onboarding');
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 py-20 text-center">
-      <p className="text-sm text-muted-foreground">
-        Something interrupted the inspirations pull. You can continue — your generations will still
-        work.
-      </p>
+      <p className="text-sm text-muted-foreground">{tUi('m_4ce20c8283')}</p>
     </div>
   );
 }

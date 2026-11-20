@@ -1,6 +1,7 @@
 'use client';
 
 import { Loader2, RefreshCw, Search, Workflow } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { ACCESS_PRODUCTS, formatDate } from '@/components/admin/adminUserListUtils';
 import type { AdminBrandOption } from '@/components/admin/adminUserTypes';
@@ -34,6 +35,8 @@ type BrandsTabProps = {
 const PRODUCT_LABEL = new Map(ACCESS_PRODUCTS.map(({ product, label }) => [product, label]));
 
 export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: BrandsTabProps) {
+  const uiText = useTranslations('admin');
+  const uiLocale = useLocale();
   const [query, setQuery] = useState('');
   // billing-cutover: list_brands sends `access` once billing is live, the tier until then.
   const billingLive = brands.some((brand) => brand.access);
@@ -48,33 +51,35 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
     <div className="space-y-3" data-testid="admin-brands-panel">
       <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-foreground">Brands</h2>
+          <h2 className="text-base font-semibold text-foreground">{uiText('brands_ec26be2')}</h2>
           <p className="text-xs text-muted-foreground">
-            {query
-              ? `${visibleBrands.length} of ${brands.length} brands`
-              : `${brands.length} brands`}
-            {' · '}
-            Duplicate names are common, so the owner email is what tells two apart.
+            {uiText('m_ca63c28ccd', {
+              filtered: query ? 'yes' : 'no',
+              shown: visibleBrands.length,
+              total: brands.length,
+            })}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative w-full sm:w-[260px]">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search brands, owners, or ids"
+              placeholder={uiText('search_brands_owners_or_ids_829f168')}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               className="h-9 pl-9"
-              aria-label="Search brands"
+              aria-label={uiText('search_brands_50539c7')}
             />
           </div>
           <Button variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
-            {isLoading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-            Refresh
+            {uiText.rich('sentence_33ac68602e96', {
+              v0: () =>
+                isLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-4" />
+                ),
+            })}
           </Button>
         </div>
       </div>
@@ -84,14 +89,14 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-surface">
               <TableRow>
-                <TableHead>Brand</TableHead>
-                <TableHead>Owner</TableHead>
+                <TableHead>{uiText('brand_090ed43')}</TableHead>
+                <TableHead>{uiText('owner_4b1b8aa')}</TableHead>
                 <TableHead className={billingLive ? 'w-56' : 'w-20'}>
-                  {billingLive ? 'Access' : 'Tier'}
+                  {billingLive ? uiText('access_ec5ba0a') : uiText('tier_cb9e866')}
                 </TableHead>
-                <TableHead className="w-24">Members</TableHead>
-                <TableHead className="w-24">Canvases</TableHead>
-                <TableHead className="w-36">Created</TableHead>
+                <TableHead className="w-24">{uiText('members_1044a4c')}</TableHead>
+                <TableHead className="w-24">{uiText('canvases_811c4ef')}</TableHead>
+                <TableHead className="w-36">{uiText('created_d70b9e2')}</TableHead>
                 <TableHead className="w-36" />
               </TableRow>
             </TableHeader>
@@ -99,7 +104,9 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
               {visibleBrands.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
-                    {brands.length === 0 ? 'No brands loaded.' : `No brands match "${query}".`}
+                    {brands.length === 0
+                      ? uiText('no_brands_loaded_838eec9')
+                      : uiText('m_bd1be91937', { v0: String(query) })}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -111,7 +118,9 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
                           <span className="truncate text-sm font-semibold text-foreground">
                             {brand.brand_name}
                           </span>
-                          {brand.active ? null : <Badge variant="outline">Inactive</Badge>}
+                          {brand.active ? null : (
+                            <Badge variant="outline">{uiText('inactive_ac7c949')}</Badge>
+                          )}
                         </div>
                         <p className="truncate font-mono text-xs text-muted-foreground">
                           {brand.id}
@@ -119,27 +128,31 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {brand.ownerEmail ?? 'No owner'}
+                      {brand.ownerEmail ?? uiText('no_owner_4339bb4')}
                     </TableCell>
                     <TableCell>
                       {brand.access ? (
                         <div className="flex flex-wrap gap-1">
                           {brand.access.billingModel === 'contract' ? (
-                            <Badge variant="secondary">Contract</Badge>
+                            <Badge variant="secondary">{uiText('contract_a6f5b0e')}</Badge>
                           ) : null}
                           {brand.access.products.length === 0 ? (
-                            <span className="text-xs text-muted-foreground">None</span>
+                            <span className="text-xs text-muted-foreground">
+                              {uiText('none_dc937b5')}
+                            </span>
                           ) : (
                             brand.access.products.map((grant) => (
                               <Badge key={grant.product} variant="outline">
                                 {PRODUCT_LABEL.get(grant.product) ?? grant.product}
-                                {grant.source === 'stripe' ? ' · Stripe' : ''}
+                                {grant.source === 'stripe' ? uiText('m_df3c870cc6') : ''}
                               </Badge>
                             ))
                           )}
                         </div>
                       ) : (
-                        <Badge variant="secondary">T{brand.tier ?? 0}</Badge>
+                        <Badge variant="secondary">
+                          {uiText.rich('sentence_f5d07d8dcc49', { v0: () => brand.tier ?? 0 })}
+                        </Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-sm tabular-nums text-foreground">
@@ -149,7 +162,7 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
                       {brand.workflowCount ?? 0}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(brand.created_at)}
+                      {formatDate(brand.created_at, uiLocale, uiText)}
                     </TableCell>
                     <TableCell>
                       <Button
@@ -159,7 +172,7 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
                         disabled={(brand.workflowCount ?? 0) === 0}
                       >
                         <Workflow className="size-4" />
-                        Canvases
+                        {uiText('canvases_811c4ef')}
                       </Button>
                     </TableCell>
                   </TableRow>

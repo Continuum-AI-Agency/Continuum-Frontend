@@ -1,4 +1,5 @@
 import { mock } from 'bun:test';
+import { render } from '@/i18n/__tests__/render';
 
 // ─── Module mocks (hoisted by bun before imports) ────────────────────────────
 //
@@ -10,7 +11,7 @@ import { mock } from 'bun:test';
 let mockSwitchActionThrows = false;
 let mockSessionUser: { user_metadata?: Record<string, unknown> } | null = null;
 
-mock.module('@/app/(post-auth)/settings/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/settings/actions', () => ({
   switchActiveBrandAction: async (_brandId: string) => {
     if (mockSwitchActionThrows) throw new Error('Switch failed');
   },
@@ -27,7 +28,7 @@ mock.module('@/components/ui/ToastProvider', () => ({
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { act, render } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import React from 'react';
 import { ActiveBrandProvider, useActiveBrandContext } from './ActiveBrandProvider';
 

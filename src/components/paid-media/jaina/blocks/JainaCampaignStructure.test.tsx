@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The compiled designs carry a durable bucket and path, never a signed url: the surface signs
 // on demand, and an unsignable picture is drawn as the outline instead of a blank box.

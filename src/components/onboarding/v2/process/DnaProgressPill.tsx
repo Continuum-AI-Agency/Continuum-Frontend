@@ -1,20 +1,23 @@
 import { Check, Loader2, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { useProcessingChoreography } from './useProcessingChoreography';
 
 export function DnaProgressPill() {
+  const tUi = useTranslations('onboarding');
+
   const { steps, progressPercent, allComplete, latestSparkLabel } = useProcessingChoreography();
   const inFlight = steps.find((s) => s.status === 'running');
   const headlineLabel = allComplete
-    ? 'Your Brand DNA is ready'
+    ? tUi('m_a6e51885c5')
     : latestSparkLabel
       ? latestSparkLabel
       : inFlight
         ? inFlight.label
-        : 'Preparing your Brand DNA…';
+        : tUi('m_90a3be2b1c');
 
   return (
     <Card

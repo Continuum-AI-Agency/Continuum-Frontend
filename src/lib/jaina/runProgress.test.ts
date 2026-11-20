@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import type { JainaUIMessage } from '@continuum/contracts';
 import {
+  ANALYST_MAX_SECONDS,
+  ANALYST_MEDIAN_SECONDS,
   createRunProgressTracker,
   formatEta,
   JAINA_TURN_BUDGET_SECONDS,
@@ -23,6 +25,7 @@ const row = (kind: string, id: string, status: string) => ({
 });
 
 const signals = (overrides: Partial<JainaRunSignals> = {}): JainaRunSignals => ({
+  analyst: false,
   planned: false,
   questionClass: null,
   expectedDuration: null,
@@ -293,5 +296,113 @@ describe('createRunProgressTracker', () => {
     const b = tracker.observe(signals({ planned: true }), at(10));
     expect(b.fraction).toBeGreaterThanOrEqual(a.fraction);
     expect(b.elapsedSeconds).toBe(a.elapsedSeconds);
+  });
+});
+
+describe('analyst-mode turns (one free tool loop, timed by its reads)', () => {
+  const analystMessage = (reads: number, extra: unknown[] = []) =>
+    message([
+      row('notice', 'analyst', 'running'),
+      row('drill', 'analyst:meta:act_521', reads > 0 ? 'running' : 'completed'),
+      ...Array.from({ length: reads }, (_, index) => ({
+        type: 'dynamic-tool',
+        toolName: 'get_key_metrics',
+        toolCallId: `c${index}`,
+        state: 'output-available',
+        input: {},
+        output: {},
+      })),
+      ...extra,
+    ]);
+
+  it('recognises the turn by its opening notice, and its account rows as reading', () => {
+    const read = readRunSignals(analystMessage(3));
+    expect(read).toMatchObject({
+      analyst: true,
+      analysisRows: true,
+      readingLayers: true,
+      toolCalls: 3,
+    });
+    expect(routeOf(read)).toBe('analyst');
+    expect(readRunSignals(message([row('notice', 'analysis', 'running')])).analyst).toBe(false);
+  });
+
+  /** The experiment's median turn: a read every ~8 s for 150 s, then the answer streams. */
+  const medianTurn = (tracker: ReturnType<typeof createRunProgressTracker>, until: number) => {
+    const seen = [];
+    for (let second = 1; second <= until; second += 1) {
+      const reads = Math.min(19, Math.floor(second / 8));
+      seen.push(
+        tracker.observe(
+          signals({
+            analyst: true,
+            analysisRows: true,
+            readingLayers: true,
+            toolCalls: reads,
+            answerStreaming: second > 150,
+          }),
+          at(second),
+        ),
+      );
+    }
+    return seen;
+  };
+
+  it('is shown from the notice on, reads, and does not call itself late at 30 s', () => {
+    const tracker = createRunProgressTracker({
+      startedAtMs: 0,
+      question: '¿Por qué subió el costo?',
+    });
+    const seen = medianTurn(tracker, 30);
+    expect(seen.every((progress) => progress.visible && progress.route === 'analyst')).toBe(true);
+    expect(seen.some((progress) => progress.exceeded)).toBe(false);
+    expect(seen.at(-1)?.stage).toBe('reading');
+    expect(seen.at(-1)?.label).toMatch(
+      /^Leyendo los datos de la cuenta · 3 consultas · ~\d+ min restantes?$/,
+    );
+  });
+
+  it('runs a median turn to the end without ever saying it is late, the bar only moving forward', () => {
+    const tracker = createRunProgressTracker({
+      startedAtMs: 0,
+      question: '¿Por qué subió el costo?',
+    });
+    const seen = medianTurn(tracker, ANALYST_MEDIAN_SECONDS);
+    expect(seen.some((progress) => progress.exceeded)).toBe(false);
+    for (let index = 1; index < seen.length; index += 1)
+      expect(seen[index]!.fraction).toBeGreaterThanOrEqual(seen[index - 1]!.fraction);
+    expect(seen.at(-1)?.stage).toBe('writing');
+    expect(seen.at(-1)?.label.startsWith('Redactando la respuesta · ')).toBe(true);
+    expect(seen.at(-1)!.fraction).toBeLessThan(RUNNING_FRACTION_CAP);
+    expect(seen.at(-1)!.fraction).toBeGreaterThan(0.5);
+    const done = tracker.observe(
+      signals({ analyst: true, finished: true }),
+      at(ANALYST_MEDIAN_SECONDS + 1),
+    );
+    expect(done).toMatchObject({ stage: 'done', fraction: 1, visible: false });
+  });
+
+  it('a slow turn quotes a shrinking estimate up to the longest measured turn, and only then is late', () => {
+    const tracker = createRunProgressTracker({
+      startedAtMs: 0,
+      question: '¿Por qué subió el costo?',
+    });
+    const reading = (second: number, toolCalls: number) =>
+      tracker.observe(
+        signals({ analyst: true, analysisRows: true, readingLayers: true, toolCalls }),
+        at(second),
+      );
+    reading(0, 0);
+    const early = reading(200, 25);
+    const later = reading(280, 30);
+    expect(early.exceeded).toBe(false);
+    expect(later.exceeded).toBe(false);
+    expect(later.etaSeconds!).toBeLessThan(early.etaSeconds!);
+    const late = reading(ANALYST_MAX_SECONDS, 34);
+    expect(late.exceeded).toBe(true);
+    expect(late.label).toBe(
+      'Leyendo los datos de la cuenta · 34 consultas · Tardando más de lo esperado…',
+    );
+    expect(reading(ANALYST_MAX_SECONDS + 60, 36).fraction).toBeGreaterThan(late.fraction);
   });
 });

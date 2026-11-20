@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { restoreAccountLocale } from '@/i18n/server';
 import { finalizeInviteAcceptance } from '@/lib/invites/finalize';
 import { normalizeInviteBrandId, normalizeInviteToken } from '@/lib/invites/params';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (otp) {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       token_hash: otp,
       type: otpType === 'magiclink' ? 'magiclink' : 'invite',
     });
@@ -41,6 +42,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // through and let finalize decide between an existing session and /login.
     if (error) {
       console.warn('[invite/callback] could not redeem the sign-in token:', error.message);
+    } else if (data?.user) {
+      await restoreAccountLocale(data.user.user_metadata);
     }
   }
 

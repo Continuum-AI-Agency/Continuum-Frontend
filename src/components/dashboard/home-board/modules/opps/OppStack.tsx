@@ -5,15 +5,20 @@
 // in the Optimizer's queue below it.
 
 import type { HomeOpportunitiesData } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { oppConfidenceLine, oppImpactLine } from './oppsStack';
 
 export function OppStack({ stack }: { stack: HomeOpportunitiesData }) {
+  const uiText = useTranslations('dashboard');
   return (
     <section className="space-y-2" data-testid="home-opps-stack">
       <h4 className="font-medium text-sm">
-        Biggest first
+        {uiText('biggest_first_cb82eb8')}
         {stack.goal ? (
-          <span className="font-normal text-muted-foreground"> · priced in {stack.goal.label}</span>
+          <span className="font-normal text-muted-foreground">
+            {' · '}
+            {uiText('priced_in_goal_ed2025b', { goal: stack.goal.label })}
+          </span>
         ) : null}
       </h4>
       <ul className="space-y-3">
@@ -40,7 +45,10 @@ export function OppStack({ stack }: { stack: HomeOpportunitiesData }) {
       </ul>
       {stack.total > stack.opportunities.length ? (
         <p className="text-2xs text-muted-foreground">
-          The {stack.opportunities.length} biggest of {stack.total}.
+          {uiText('the_shown_biggest_of_total_051fc4a', {
+            shown: stack.opportunities.length,
+            total: stack.total,
+          })}
         </p>
       ) : null}
     </section>

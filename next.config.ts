@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
 
 const distDir = process.env.NEXT_DIST_DIR?.trim();
 const tsconfigPath = process.env.NEXT_TSCONFIG_PATH?.trim();
@@ -154,4 +155,16 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const withNextIntl = createNextIntlPlugin({
+  experimental: {
+    messages: {
+      path: './messages',
+      format: 'json',
+      locales: ['en', 'pt-BR', 'es'],
+      sourceLocale: 'en',
+      precompile: true,
+    },
+  },
+});
+
+export default withNextIntl(nextConfig);

@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { type PresentationCommand, presentationDocumentSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const doc = presentationDocumentSchema.parse({
   schemaVersion: 1,

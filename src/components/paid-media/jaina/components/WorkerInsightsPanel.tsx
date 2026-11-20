@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import type { ToolResultEventData } from '@/lib/jaina/schemas';
 
 type SpawnWorkerOutput = {
@@ -44,6 +45,7 @@ type WorkerInsightsPanelProps = {
 };
 
 export function WorkerInsightsPanel({ results }: WorkerInsightsPanelProps) {
+  const uiText = useTranslations('scale');
   const workers = results
     .map((r) => r.output as SpawnWorkerOutput | undefined)
     .filter((o): o is SpawnWorkerOutput => !!o && typeof o === 'object');
@@ -67,19 +69,19 @@ export function WorkerInsightsPanel({ results }: WorkerInsightsPanelProps) {
       {workers.map((worker, i) => {
         const sections = [
           {
-            label: 'Evidence',
+            label: uiText('evidence_03867ae'),
             items: worker.evidence ?? [],
             labelClass: 'text-muted-foreground/70',
             bulletClass: 'text-muted-foreground/40',
           },
           {
-            label: 'Insights',
+            label: uiText('insights_2a932f9'),
             items: worker.insights ?? [],
             labelClass: 'text-amber-500/80',
             bulletClass: 'text-amber-500/60',
           },
           {
-            label: 'Recommendations',
+            label: uiText('recommendations_0738ee0'),
             items: worker.recommendations ?? [],
             labelClass: 'text-[#5A48F9]/80',
             bulletClass: 'text-[#5A48F9]/60',

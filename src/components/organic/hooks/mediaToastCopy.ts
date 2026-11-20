@@ -6,7 +6,24 @@ export type MediaReadyToastCopy = {
   description: string;
 };
 
-export function formatMediaReadyToast(ready: number, failed: number): MediaReadyToastCopy {
+export type MediaToastKey =
+  | 'mediaToastFailedTitle'
+  | 'mediaToastReadyTitle'
+  | 'mediaToastAllFailed'
+  | 'mediaToastReady';
+export function formatMediaReadyToast(
+  ready: number,
+  failed: number,
+  translate?: (key: MediaToastKey, values?: { ready?: number; failed?: number }) => string,
+): MediaReadyToastCopy {
+  if (translate)
+    return {
+      title: translate(ready <= 0 ? 'mediaToastFailedTitle' : 'mediaToastReadyTitle'),
+      description:
+        ready <= 0
+          ? translate('mediaToastAllFailed', { failed })
+          : translate('mediaToastReady', { ready, failed }),
+    };
   if (ready <= 0) {
     return {
       title: 'Media generation failed',

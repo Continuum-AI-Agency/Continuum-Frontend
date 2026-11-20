@@ -1,8 +1,10 @@
 import { Home } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { BackButton } from './BackButton';
 
 export function BrandedNotFound() {
+  const uiText = useTranslations('public');
   return (
     <main className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-[#101111] px-6 py-16 text-zinc-100">
       <div
@@ -20,7 +22,9 @@ export function BrandedNotFound() {
           <span>Continuum AI</span>
         </div>
 
-        <p className="mb-8 font-mono text-xs uppercase text-zinc-400">Status / 404</p>
+        <p className="mb-8 font-mono text-xs uppercase text-zinc-400">
+          {uiText('status_404_7fb49e8')}
+        </p>
 
         <h1
           className="select-none bg-[linear-gradient(180deg,#f7f7f7_0%,#cfcfcf_28%,#7a7a7a_62%,#2f3030_100%)] bg-clip-text text-8xl font-black leading-none text-transparent drop-shadow-[0_24px_24px_rgba(0,0,0,0.5)] sm:text-[10rem] lg:text-[13rem]"
@@ -37,11 +41,10 @@ export function BrandedNotFound() {
               textShadow: '0 2px 18px rgba(0,0,0,0.72)',
             }}
           >
-            We can&apos;t find that page.
+            {uiText('we_can_t_find_that_page_0a75fb1')}
           </h2>
           <p className="mt-4 font-mono text-sm leading-6 text-zinc-400">
-            The link may be old, or the page may have moved. Check the URL or head back to somewhere
-            you know.
+            {uiText('the_link_may_be_old_or_the_page_may_have_move_67da537')}
           </p>
         </div>
 
@@ -52,7 +55,7 @@ export function BrandedNotFound() {
             className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-zinc-100 px-3 text-sm font-medium text-zinc-950 transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-[#7c6fff]"
           >
             <Home aria-hidden="true" className="size-4" />
-            Take me home
+            {uiText('goHome')}
           </Link>
         </div>
       </section>

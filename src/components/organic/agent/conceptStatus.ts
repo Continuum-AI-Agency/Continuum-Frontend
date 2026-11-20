@@ -34,6 +34,7 @@ export type ConceptStatusKind =
   | 'realizing'
   | 'realized'
   | 'media_failed'
+  | 'draft_missing'
   | 'failed'
   | 'cancelled';
 
@@ -80,6 +81,7 @@ const PHASE_KIND: Record<Exclude<OrganicLifecyclePhase, 'draft_ready'>, ConceptS
   scheduled: 'copy_ready',
   published: 'realized',
   media_failed: 'media_failed',
+  draft_missing: 'draft_missing',
   failed: 'failed',
   cancelled: 'cancelled',
 };
@@ -95,9 +97,14 @@ type ConceptStatusInput = {
   status: OrganicGenerationStatus;
   stage?: PipelineStage | null;
   checkpoint?: CheckpointState | null;
+  /** The job finished but its draft row is gone: outranks every status. */
+  draftMissing?: boolean | null;
 };
 
-export function resolveConceptStatus(input: ConceptStatusInput): ConceptStatus {
+export function resolveConceptStatus(
+  input: ConceptStatusInput,
+  localizeLabel: (label: string) => string = (label) => label,
+): ConceptStatus {
   const checkpoint = input.checkpoint ?? null;
   // A failure that already produced a blueprint is a MEDIA failure, not a dead job:
   // the words are saved and only the image is missing, so the row keeps the copy and
@@ -111,6 +118,7 @@ export function resolveConceptStatus(input: ConceptStatusInput): ConceptStatus {
     status: input.status,
     stage: input.stage ?? null,
     mediaStage,
+    draftMissing: input.draftMissing ?? null,
   });
 
   const kind: ConceptStatusKind =
@@ -122,7 +130,7 @@ export function resolveConceptStatus(input: ConceptStatusInput): ConceptStatus {
 
   return {
     kind,
-    label: resolved.label,
+    label: localizeLabel(resolved.label),
     tone: conceptTone(resolved.tone, resolved.advancing, mediaStage),
     diagnostic: resolved.diagnostic,
     advancing: resolved.advancing,
@@ -149,19 +157,22 @@ function conceptTone(
  * The plan row's status, folding in the pre-dispatch case: an untouched plan item is
  * still a *concept*, not a generation, so the generation vocabulary must not describe it.
  */
-export function resolvePlanItemStatus(input: {
-  itemStatus: PlanItemStatus;
-  pipeline?: PipelineCardState | null;
-  /** The card dispatched locally and is waiting for its first frame. */
-  dispatched?: boolean;
-}): ConceptStatus {
+export function resolvePlanItemStatus(
+  input: {
+    itemStatus: PlanItemStatus;
+    pipeline?: PipelineCardState | null;
+    /** The card dispatched locally and is waiting for its first frame. */
+    dispatched?: boolean;
+  },
+  localizeLabel: (label: string) => string = (label) => label,
+): ConceptStatus {
   const { itemStatus, pipeline, dispatched } = input;
   const pipelineStatus = pipeline?.status;
 
   if (itemStatus === 'pending' && !pipeline && !dispatched) {
     return {
       kind: 'concept',
-      label: 'Concept',
+      label: localizeLabel('Concept'),
       tone: 'neutral',
       diagnostic: null,
       advancing: false,
@@ -170,7 +181,7 @@ export function resolvePlanItemStatus(input: {
   if (itemStatus === 'cancelled' && !pipeline) {
     return {
       kind: 'cancelled',
-      label: 'Cancelled',
+      label: localizeLabel('Cancelled'),
       tone: 'neutral',
       diagnostic: null,
       advancing: false,
@@ -190,9 +201,20 @@ export function resolvePlanItemStatus(input: {
               ? 'queued'
               : 'running';
 
-  return resolveConceptStatus({
-    status,
-    stage: pipeline?.currentStage ?? null,
-    checkpoint: pipeline?.checkpoint ?? null,
-  });
+  return resolveConceptStatus(
+    {
+      status,
+      stage: pipeline?.currentStage ?? null,
+      checkpoint: pipeline?.checkpoint ?? null,
+      draftMissing: pipeline?.draftMissing ?? null,
+    },
+    localizeLabel,
+  );
+}
+
+/** The phases that are a failure the user must act on, each with its own next action. */
+export function isFailureKind(
+  kind: ConceptStatusKind,
+): kind is 'failed' | 'media_failed' | 'draft_missing' {
+  return kind === 'failed' || kind === 'media_failed' || kind === 'draft_missing';
 }

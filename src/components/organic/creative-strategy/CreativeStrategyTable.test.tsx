@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { CreativeInsight } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { CreativeStrategyTable } from './CreativeStrategyTable';
 
 // The row action menus route via next/navigation; stub it for the DOM render.

@@ -22,6 +22,70 @@ import {
   sheetMatchLevel,
 } from '@continuum/contracts';
 
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type AttributionText = ReturnType<typeof useTranslations<'scale'>>;
+const attributionCopyKeys = {
+  "Each platform's own": 'attributionCopy_e02eaf8333',
+  Spreadsheet: 'attributionCopy_f3befcc6b1',
+  'Ad set or ad group — ID': 'attributionCopy_ea8b41ebd8',
+  'Ad set or ad group — name': 'attributionCopy_0c06321a08',
+  'Campaign — ID': 'attributionCopy_ec822c737c',
+  'Campaign — name': 'attributionCopy_d98dd12d19',
+  'UTM campaign': 'attributionCopy_3d38b14409',
+  'UTM content': 'attributionCopy_e40104183a',
+  'Sheets day number': 'attributionCopy_bacfc50fb6',
+  'Ad set or campaign': 'attributionCopy_57cba2367b',
+  Date: 'attributionCopy_99c40ab405',
+  Conversions: 'conversions_236c262',
+  'Value (optional)': 'attributionCopy_1ed511d927',
+  'Platform (optional)': 'attributionCopy_d56f36901c',
+  'What the ad set or campaign column holds': 'attributionCopy_b948beca14',
+  'Meta counts with its pixel and lead forms, Google with its conversions. Each platform is judged by its own count.':
+    'attributionCopy_0f34d0f122',
+  "One count for every platform, by source and medium. GA4 arrives 24–48 h late: the Optimizer moves money with the platform's count and reports with GA4.":
+    'attributionCopy_b1bb449b5f',
+  'A sheet with a date, an ad set or campaign, and a conversions count, read every morning. For clients who count leads in their CRM.':
+    'attributionCopy_13319adb8f',
+  "The source in use can't be read yet; results use each platform's own count.":
+    'attributionCopy_d975bb2548',
+  "Reading spreadsheets isn't available yet. Your mapping is not lost — come back once it is.":
+    'attributionCopy_d0d59c69e3',
+  'That is not a Google Sheets link.': 'attributionCopy_7967a9297d',
+  "Saving a spreadsheet source isn't available yet.": 'attributionCopy_2a0125fed9',
+  'Check the column mapping and timezone before continuing.': 'attributionCopy_e3e3443578',
+  'The spreadsheet request could not be completed. Check the connection and try again.':
+    'attributionCopy_313569b198',
+  'The last read failed. Check the sheet connection and try again.': 'attributionCopy_aaf636fb59',
+  'Check the date, conversion count, and mapped columns for this row.':
+    'attributionCopy_413d91eee5',
+} as const;
+
+export function attributionCopy(source: string, translate: AttributionText): string {
+  return Object.hasOwn(attributionCopyKeys, source)
+    ? translate(attributionCopyKeys[source as keyof typeof attributionCopyKeys])
+    : source;
+}
+const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
+const percentFormatters = new Map<UiLocale, Intl.NumberFormat>();
+export function formatAttributionPercent(ratio: number, locale: UiLocale = 'en'): string {
+  const rounded = Math.round(ratio * 100);
+  if (locale === 'en') return `${rounded}%`;
+  let formatter = percentFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
+    percentFormatters.set(locale, formatter);
+  }
+  return formatter.format(rounded === 0 ? 0 : rounded / 100);
+}
+
+export function coverageBarExplanation(translate: AttributionText, locale: UiLocale): string {
+  return translate('attributionCoverageExplained', {
+    threshold: formatAttributionPercent(SHEET_COVERAGE_THRESHOLD, locale),
+  });
+}
+
 const SOURCE_NAMES: Record<AttributionKind, string> = {
   platform: "Each platform's own",
   ga4: 'GA4',
@@ -30,17 +94,33 @@ const SOURCE_NAMES: Record<AttributionKind, string> = {
 
 /** The source's name. The RPC's own labels are written for another audience (and in Spanish),
  *  so the screen names the kind. */
-export function attributionSourceName(kind: AttributionKind): string {
-  return SOURCE_NAMES[kind];
+export function attributionSourceName(kind: AttributionKind, translate?: AttributionText): string {
+  return translate ? attributionCopy(SOURCE_NAMES[kind], translate) : SOURCE_NAMES[kind];
 }
 
 /** "just now", "12 min ago", "3 h ago", "2 days ago". Null in, null out. */
-export function formatReadAge(iso: string | null, now: Date): string | null {
+export function formatReadAge(
+  iso: string | null,
+  now: Date,
+  locale: UiLocale = 'en',
+  translate?: AttributionText,
+): string | null {
   if (!iso) return null;
   const read = Date.parse(iso);
   if (Number.isNaN(read)) return null;
   const minutes = Math.max(0, Math.floor((now.getTime() - read) / 60_000));
-  if (minutes < 1) return 'just now';
+  if (minutes < 1) return translate ? translate('just_now_7ddb44d') : 'just now';
+  if (locale !== 'en') {
+    const hours = Math.floor(minutes / 60);
+    const value = minutes < 60 ? minutes : hours < 48 ? hours : Math.floor(hours / 24);
+    const unit = minutes < 60 ? 'minute' : hours < 48 ? 'hour' : 'day';
+    let formatter = relativeFormatters.get(locale);
+    if (!formatter) {
+      formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'always', style: 'short' });
+      relativeFormatters.set(locale, formatter);
+    }
+    return formatter.format(-value, unit);
+  }
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 48) return `${hours} h ago`;
@@ -76,7 +156,35 @@ const FALLBACK_REASONS = {
   error: "its last read failed, so each platform's own count is used",
 } as const;
 
-export function attributionHeader(metrics: PortfolioMetrics, now: Date): AttributionHeader {
+export function attributionHeader(
+  metrics: PortfolioMetrics,
+  now: Date,
+  translate?: AttributionText,
+  locale: UiLocale = 'en',
+): AttributionHeader {
+  if (translate) {
+    const { used, configured, fallback_reason } = metrics.attribution;
+    const source = usedSource(metrics);
+    const parts = [
+      translate('attributionHeaderSource', { source: attributionSourceName(used, translate) }),
+    ];
+    const age = formatReadAge(source?.refreshed_at ?? metrics.read_at, now, locale, translate);
+    if (age) parts.push(translate('attributionHeaderRead', { age }));
+    if (source) parts.push(formatAttributionPercent(source.coverage_pct, locale));
+    const fallback =
+      fallback_reason === 'none'
+        ? null
+        : fallback_reason === 'coverage'
+          ? translate('attributionFallbackCoverage', {
+              source: attributionSourceName(configured, translate),
+              threshold: formatAttributionPercent(SHEET_COVERAGE_THRESHOLD, locale),
+            })
+          : translate('attributionFallbackError', {
+              source: attributionSourceName(configured, translate),
+            });
+    return { line: parts.join(' · '), used, fallback };
+  }
+
   const { used, configured, fallback_reason } = metrics.attribution;
   const source = usedSource(metrics);
   const parts = [`Attribution: ${attributionSourceName(used)}`];
@@ -97,7 +205,22 @@ function entityWords(kind: SheetMatchKeyKind): string {
 }
 
 /** "38 of 42 rows matched · 9 of 10 ad sets with spend covered (90%)" */
-export function matchCheckLine(report: SheetSyncReport, kind: SheetMatchKeyKind): string {
+export function matchCheckLine(
+  report: SheetSyncReport,
+  kind: SheetMatchKeyKind,
+  translate?: AttributionText,
+  locale: UiLocale = 'en',
+): string {
+  if (translate)
+    return translate('attributionMatchCheck', {
+      matched: report.rowsMatched,
+      read: report.rowsRead,
+      covered: report.coverage.covered,
+      spending: report.coverage.spending,
+      entity: sheetMatchLevel(kind),
+      percentage: formatAttributionPercent(report.coverage.ratio, locale),
+    });
+
   const { covered, spending, ratio } = report.coverage;
   return `${report.rowsMatched} of ${report.rowsRead} rows matched · ${covered} of ${spending} ${entityWords(kind)} with spend covered (${percent(ratio)})`;
 }
@@ -176,12 +299,22 @@ export type ConfigBuild =
   | { ok: false; missing: string[] };
 
 /** The draft as a SheetAttributionConfig, or the roles still to pick, by their on-screen names. */
-export function buildSheetConfig(location: SheetLocation, draft: SheetMappingDraft): ConfigBuild {
+export function buildSheetConfig(
+  location: SheetLocation,
+  draft: SheetMappingDraft,
+  translate?: AttributionText,
+): ConfigBuild {
   const missing: string[] = REQUIRED_ROLES.filter((role) => draft.columns[role] === null).map(
-    (role) => COLUMN_ROLE_LABELS[role],
+    (role) =>
+      translate ? attributionCopy(COLUMN_ROLE_LABELS[role], translate) : COLUMN_ROLE_LABELS[role],
   );
-  if (!draft.matchKeyKind) missing.push('What the ad set or campaign column holds');
-  if (!draft.dateFormat) missing.push('Date format');
+  if (!draft.matchKeyKind)
+    missing.push(
+      translate
+        ? attributionCopy('What the ad set or campaign column holds', translate)
+        : 'What the ad set or campaign column holds',
+    );
+  if (!draft.dateFormat) missing.push(translate ? translate('date_format_43123f5') : 'Date format');
   if (missing.length > 0) return { ok: false, missing };
 
   const optional = (role: SheetColumnRole) => {
@@ -206,7 +339,12 @@ export function buildSheetConfig(location: SheetLocation, draft: SheetMappingDra
     timezone: draft.timezone,
   });
   if (!parsed.success) {
-    return { ok: false, missing: parsed.error.issues.map((issue) => issue.message) };
+    return {
+      ok: false,
+      missing: translate
+        ? [attributionCopy('Check the column mapping and timezone before continuing.', translate)]
+        : parsed.error.issues.map((issue) => issue.message),
+    };
   }
   return { ok: true, config: parsed.data };
 }

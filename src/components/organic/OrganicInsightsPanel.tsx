@@ -1,6 +1,7 @@
 'use client';
 
 import { HeartIcon, LayoutGridIcon, RotateCw, TrendingUpIcon, UsersIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
@@ -19,28 +20,16 @@ type OrganicInsightsPanelProps = {
   rangePreset: OrganicDateRangePreset;
 };
 
-const CATEGORY_CONFIG: ReadonlyArray<{
-  key: 'growth' | 'content' | 'engagement' | 'audience';
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  accent: string;
-}> = [
-  { key: 'growth', title: 'Growth', icon: TrendingUpIcon, accent: 'bg-emerald-500/90' },
-  { key: 'content', title: 'Content', icon: LayoutGridIcon, accent: 'bg-violet-500/90' },
-  { key: 'engagement', title: 'Engagement', icon: HeartIcon, accent: 'bg-rose-500/90' },
-  { key: 'audience', title: 'Audience', icon: UsersIcon, accent: 'bg-amber-500/90' },
-];
-
-const METRIC_LABELS: Record<string, string> = {
-  reach_conversion: 'REACH/FOLLOW',
-  non_follower_ratio: 'DISCOVERY',
-  content_efficiency: 'CONTENT MIX',
-  posting_frequency: 'FREQUENCY',
-  engagement_rate: 'ENG. RATE',
-  save_share_ratio: 'SAVES/SHARES',
-  geo_concentration: 'GEOGRAPHY',
-  demographic_skew: 'DEMOGRAPHICS',
-};
+const METRIC_LABELS = {
+  reach_conversion: 'insight_reach_follow',
+  non_follower_ratio: 'insight_discovery',
+  content_efficiency: 'insight_content_mix',
+  posting_frequency: 'insight_frequency',
+  engagement_rate: 'insight_engagement_rate',
+  save_share_ratio: 'insight_saves_shares',
+  geo_concentration: 'insight_geography',
+  demographic_skew: 'insight_demographics',
+} as const;
 
 export function OrganicInsightsPanel({
   brandId,
@@ -48,6 +37,39 @@ export function OrganicInsightsPanel({
   platform,
   rangePreset,
 }: OrganicInsightsPanelProps) {
+  const uiText = useTranslations('organic');
+  const CATEGORY_CONFIG: ReadonlyArray<{
+    key: 'growth' | 'content' | 'engagement' | 'audience';
+    title: string;
+    icon: React.ComponentType<{ className?: string }>;
+    accent: string;
+  }> = [
+    {
+      key: 'growth',
+      title: uiText('growth_66b06e9'),
+      icon: TrendingUpIcon,
+      accent: 'bg-emerald-500/90',
+    },
+    {
+      key: 'content',
+      title: uiText('content_47bd290'),
+      icon: LayoutGridIcon,
+      accent: 'bg-violet-500/90',
+    },
+    {
+      key: 'engagement',
+      title: uiText('engagement_ea68771'),
+      icon: HeartIcon,
+      accent: 'bg-rose-500/90',
+    },
+    {
+      key: 'audience',
+      title: uiText('audience_545c023'),
+      icon: UsersIcon,
+      accent: 'bg-amber-500/90',
+    },
+  ];
+
   const { insights, expiresAt, isLoading, error, refresh } = useOrganicInsights({
     brandId,
     integrationAccountId,
@@ -58,14 +80,14 @@ export function OrganicInsightsPanel({
   const stalenessLabel = React.useMemo(() => {
     if (!expiresAt) return null;
     const remaining = new Date(expiresAt).getTime() - Date.now();
-    if (remaining <= 0) return 'Stale';
+    if (remaining <= 0) return uiText('insightStale');
     const hours = Math.floor(remaining / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
-    if (days > 0) return `Fresh for ${days}d ${hours % 24}h`;
-    if (hours > 0) return `Fresh for ${hours}h`;
+    if (days > 0) return uiText('insightFreshDays', { days: days, hours: hours % 24 });
+    if (hours > 0) return uiText('insightFreshHours', { hours: hours });
     const mins = Math.ceil(remaining / (1000 * 60));
-    return `Fresh for ${mins}m`;
-  }, [expiresAt]);
+    return uiText('insightFreshMinutes', { minutes: mins });
+  }, [expiresAt, uiText]);
 
   const grouped = React.useMemo(() => {
     const map = new Map<string, OrganicComputedInsight[]>();
@@ -83,7 +105,7 @@ export function OrganicInsightsPanel({
       <div className="rounded-lg border border-subtle bg-surface">
         <div className="p-3">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-base font-semibold">Organic Insights</h3>
+            <h3 className="text-base font-semibold">{uiText('organic_insights_0b43f6f')}</h3>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {CATEGORY_CONFIG.map((cat) => (
@@ -112,14 +134,19 @@ export function OrganicInsightsPanel({
       <div className="p-3">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold">Organic Insights</h3>
+            <h3 className="text-base font-semibold">{uiText('organic_insights_0b43f6f')}</h3>
             {stalenessLabel ? (
               <Pill variant={stalenessLabel === 'Stale' ? 'destructive' : 'success'}>
                 {stalenessLabel}
               </Pill>
             ) : null}
           </div>
-          <Button variant="ghost" size="icon-sm" onClick={refresh} aria-label="Refresh insights">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={refresh}
+            aria-label={uiText('refresh_insights_aadd88a')}
+          >
             <RotateCw />
           </Button>
         </div>
@@ -160,6 +187,7 @@ function InsightCategoryCard({
   platform?: string;
   rangePreset?: string;
 }) {
+  const uiText = useTranslations('organic');
   return (
     <div className="rounded-lg border border-subtle bg-surface-subtle p-3">
       <div className="flex items-center gap-2 mb-2">
@@ -171,7 +199,9 @@ function InsightCategoryCard({
       </div>
 
       {insights.length === 0 ? (
-        <span className="text-xs text-muted-foreground">No insights available</span>
+        <span className="text-xs text-muted-foreground">
+          {uiText('no_insights_available_64e5ad4')}
+        </span>
       ) : (
         <div className="flex flex-col gap-2">
           {insights.slice(0, 3).map((insight, i) => {
@@ -194,13 +224,16 @@ function InsightCategoryCard({
                   />
                   <div className="min-w-0 flex-1 pr-7">
                     <div className="flex items-center gap-1 mb-1">
-                      {insight.metric && METRIC_LABELS[insight.metric] ? (
+                      {insight.metric &&
+                      METRIC_LABELS[insight.metric as keyof typeof METRIC_LABELS] ? (
                         <Pill variant="muted" className="shrink-0">
-                          {METRIC_LABELS[insight.metric]}
+                          {uiText(METRIC_LABELS[insight.metric as keyof typeof METRIC_LABELS])}
                         </Pill>
                       ) : null}
                       <Pill variant={insight.source === 'llm' ? 'violet' : 'muted'}>
-                        {insight.source === 'llm' ? 'AI' : 'Computed'}
+                        {insight.source === 'llm'
+                          ? uiText('ai_11fb682')
+                          : uiText('computed_7a15102')}
                       </Pill>
                     </div>
                     <span className="block text-xs leading-snug">{insight.text}</span>
@@ -215,7 +248,7 @@ function InsightCategoryCard({
                     <PinToAgentButton
                       suggestions={suggestion}
                       iconOnly
-                      label="Add insight to agent"
+                      label={uiText('add_insight_to_agent_0334275')}
                       className="opacity-0 group-hover/insight:opacity-100 max-sm:opacity-100"
                     />
                   </div>

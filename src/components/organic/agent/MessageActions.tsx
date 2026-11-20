@@ -1,6 +1,7 @@
 'use client';
 
 import { CheckIcon, CopyIcon, RefreshCwIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ export function MessageActions({
   disabled,
   className,
 }: MessageActionsProps) {
+  const uiText = useTranslations('organic');
   const [copied, setCopied] = React.useState(false);
   const resetRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -57,7 +59,7 @@ export function MessageActions({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label={copied ? 'Copied' : 'Copy message'}
+                aria-label={copied ? uiText('copied_8d525e5') : uiText('copy_message_457efe5')}
                 className="text-muted-foreground hover:text-foreground"
                 onClick={handleCopy}
               >
@@ -69,7 +71,9 @@ export function MessageActions({
               </Button>
             }
           />
-          <TooltipContent>{copied ? 'Copied' : 'Copy'}</TooltipContent>
+          <TooltipContent>
+            {copied ? uiText('copied_8d525e5') : uiText('copy_e21f935')}
+          </TooltipContent>
         </Tooltip>
 
         {onRegenerate ? (
@@ -80,7 +84,7 @@ export function MessageActions({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Regenerate response"
+                  aria-label={uiText('regenerate_response_dd7c31a')}
                   className="text-muted-foreground hover:text-foreground"
                   disabled={disabled}
                   onClick={onRegenerate}
@@ -89,7 +93,7 @@ export function MessageActions({
                 </Button>
               }
             />
-            <TooltipContent>Regenerate</TooltipContent>
+            <TooltipContent>{uiText('regenerate_1651031')}</TooltipContent>
           </Tooltip>
         ) : null}
       </div>

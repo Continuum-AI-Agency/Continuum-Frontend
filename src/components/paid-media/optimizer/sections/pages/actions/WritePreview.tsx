@@ -17,7 +17,9 @@ import {
   TriangleAlertIcon,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
+import type { UiLocale } from '@/i18n/config';
 import { cn } from '@/lib/utils';
 import { formatCurrency, formatPercent } from '../../../format';
 import type { OptimizerActionFeedRow } from '../../../useOptimizerData';
@@ -58,9 +60,9 @@ const AFTER_COLOR: Record<WriteBar['direction'], string> = {
   flat: BOARD_COLOR.mid,
 };
 
-function signedMoney(value: number, currency: string | null): string {
-  if (Math.abs(value) < 0.005) return formatCurrency(0, currency);
-  return `${value > 0 ? '+' : '−'}${formatCurrency(Math.abs(value), currency)}`;
+function signedMoney(value: number, currency: string | null, uiLocale: UiLocale): string {
+  if (Math.abs(value) < 0.005) return formatCurrency(0, currency, uiLocale);
+  return `${value > 0 ? '+' : '−'}${formatCurrency(Math.abs(value), currency, uiLocale)}`;
 }
 
 /** One entity's before → after: the name, the two bars, and the figures written beside them. */
@@ -74,6 +76,7 @@ function BarRow({
   index: number;
 }) {
   const reduce = useReducedMotion();
+  const uiLocale = useLocale();
   return (
     // Narrow: the name and the figures share a line when they fit (the figures wrap under the
     // name when they do not) and the bars take the full width below. Wide: three columns.
@@ -111,15 +114,19 @@ function BarRow({
         />
       </div>
       <span className="ml-auto flex shrink-0 items-center justify-end gap-1.5 whitespace-nowrap font-mono text-xs tabular-nums">
-        <span className="text-muted-foreground">{formatCurrency(bar.before, currency)}</span>
+        <span className="text-muted-foreground">
+          {formatCurrency(bar.before, currency, uiLocale)}
+        </span>
         <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-        <span className="font-semibold text-foreground">{formatCurrency(bar.after, currency)}</span>
+        <span className="font-semibold text-foreground">
+          {formatCurrency(bar.after, currency, uiLocale)}
+        </span>
         {bar.deltaPct != null ? (
           <span
             className="rounded-md border border-border px-1 font-medium text-foreground"
             data-testid="write-bar-delta"
           >
-            {formatPercent(bar.deltaPct, { signed: true })}
+            {formatPercent(bar.deltaPct, { signed: true }, uiLocale)}
           </span>
         ) : null}
       </span>
@@ -164,28 +171,30 @@ export function BarLegend({
   bars: readonly WriteBar[];
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const net = netDelta(bars);
   const directions = new Set(bars.map((bar) => bar.direction));
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
       <span className="inline-flex items-center gap-1.5">
         <Swatch color="color-mix(in srgb, var(--muted-foreground) 30%, transparent)" />
-        Before
+        {uiText('before_9bb7250')}
       </span>
       {directions.has('up') ? (
         <span className="inline-flex items-center gap-1.5">
           <Swatch color={BOARD_COLOR.search} />
-          After, up
+          {uiText('after_up_97a4344')}
         </span>
       ) : null}
       {directions.has('down') ? (
         <span className="inline-flex items-center gap-1.5">
           <Swatch color={BOARD_COLOR.pmax} />
-          After, down
+          {uiText('after_down_96e7d55')}
         </span>
       ) : null}
       <span className="font-medium text-foreground tabular-nums" data-testid="write-net">
-        Net {signedMoney(net, currency)}/day
+        {uiText('writePreviewNet', { amount: signedMoney(net, currency, uiLocale) })}
       </span>
     </div>
   );
@@ -207,10 +216,11 @@ const CHECK_TONE: Record<GuardrailState, string> = {
 
 /** The guardrails as a checklist: each one's state as a mark, its rule and what it found. */
 export function GuardrailChecklist({ checks }: { checks: readonly GuardrailCheck[] }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   return (
     <ul
-      aria-label="Guardrails"
+      aria-label={uiText('guardrails_443f975')}
       className="grid grid-cols-[repeat(auto-fit,minmax(min(14rem,100%),1fr))] gap-x-4 gap-y-2"
       data-testid="write-checks"
     >
@@ -245,10 +255,6 @@ export function GuardrailChecklist({ checks }: { checks: readonly GuardrailCheck
   );
 }
 
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
 /** The footer: the one action the write's state allows, and why it is held when it is. */
 function WriteStateFooter({
   state,
@@ -265,6 +271,7 @@ function WriteStateFooter({
   onApprove: (keys: string[]) => void;
   onApply: () => void;
 }) {
+  const uiText = useTranslations('scale');
   if (state.kind === 'none') return null;
   return (
     <div
@@ -282,11 +289,11 @@ function WriteStateFooter({
             type="button"
           >
             <SendIcon aria-hidden="true" className="size-3.5" />
-            Approve {plural(state.keys.length, 'move', 'moves')}
+            {uiText('writePreviewApprove', { count: state.keys.length })}
           </Button>
           {state.approved > 0 ? (
             <span className="text-muted-foreground text-xs">
-              {plural(state.approved, 'more is', 'more are')} approved and wait for Apply
+              {uiText('writePreviewApprovedWaiting', { count: state.approved })}
             </span>
           ) : null}
         </>
@@ -294,7 +301,7 @@ function WriteStateFooter({
         <>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 font-medium text-foreground text-xs">
             <Clock3Icon aria-hidden="true" className="size-3.5" />
-            Queued: approved, not written yet
+            {uiText('queued_approved_not_written_yet_aad9cfb')}
           </span>
           <Button
             className="h-8 px-3 text-sm"
@@ -303,7 +310,7 @@ function WriteStateFooter({
             size="sm"
             type="button"
           >
-            Apply now
+            {uiText('apply_now_3f0c928')}
           </Button>
         </>
       )}
@@ -315,7 +322,12 @@ function WriteStateFooter({
 }
 
 /** Autopilot's own next run, when it is armed: what is queued without anyone pressing a thing. */
+const RUN_WHEN_CODES = new Set(['shortly', 'tonight', 'today', 'tomorrow']);
+
 function AutopilotRunLine({ run, now }: { run: AutopilotRun; now: Date }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const when = runWhenWords(run.at, now);
   return (
     <p
       className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs"
@@ -323,12 +335,12 @@ function AutopilotRunLine({ run, now }: { run: AutopilotRun; now: Date }) {
     >
       <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
         <Clock3Icon aria-hidden="true" className="size-3.5" />
-        Queued for {runWhenWords(run.at, now)}
+        {uiText('writePreviewQueuedFor', {
+          when: RUN_WHEN_CODES.has(when) ? when : 'date',
+          date: new Date(run.at).toLocaleDateString(uiLocale, { month: 'short', day: 'numeric' }),
+        })}
       </span>
-      <span>
-        Autopilot writes the Meta ad sets' budgets inside these guardrails on its own; a bigger move
-        {run.othersWait ? ', and every move on another platform,' : ''} waits here for a person.
-      </span>
+      <span>{uiText('writePreviewAutopilotRun', { others: run.othersWait ? 'yes' : 'no' })}</span>
     </p>
   );
 }
@@ -374,12 +386,13 @@ export function BudgetWritePreview({
   onApply,
   now = new Date(),
 }: BudgetWritePreviewProps) {
+  const uiText = useTranslations('scale');
   const bars = writeBars(moves);
   if (bars.length === 0 && !autopilotRun) return null;
-  const count = plural(bars.length, 'budget move', 'budget moves');
+  const count = uiText('writePreviewBudgetMoves', { count: bars.length });
   return (
     <section
-      aria-label="Change preview"
+      aria-label={uiText('change_preview_af66834')}
       className={cn(
         '@container flex flex-col gap-3 rounded-xl border bg-card p-4 text-card-foreground',
         boardPaletteClass,
@@ -387,9 +400,9 @@ export function BudgetWritePreview({
       data-testid="write-preview"
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <p className="font-semibold text-sm tracking-tight">Change preview</p>
+        <p className="font-semibold text-sm tracking-tight">{uiText('change_preview_af66834')}</p>
         <span className="text-muted-foreground text-xs">
-          {bars.length > 0 ? `${count}, before and after` : 'Autopilot budget moves'}
+          {bars.length > 0 ? count : uiText('autopilot_budget_moves_6d372d7')}
         </span>
         <span className="ml-auto">
           <PlatformChips platforms={platforms} />
@@ -397,7 +410,7 @@ export function BudgetWritePreview({
       </header>
       {bars.length > 0 ? (
         <>
-          <BeforeAfterBars bars={bars} currency={currency} label={`${count}, before and after`} />
+          <BeforeAfterBars bars={bars} currency={currency} label={count} />
           <BarLegend bars={bars} currency={currency} />
         </>
       ) : null}
@@ -430,7 +443,9 @@ export function AppliedWriteRow({
   currency: string | null;
   entityNames?: ActionEntityNames;
 }) {
-  const change = readActionChange(row);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const change = readActionChange(row, uiText, uiLocale, currency);
   const entity = actionEntity(row, entityNames);
   const platform = actionPlatform(row);
   const receipt = readReceiptTrace(row);
@@ -479,18 +494,18 @@ export function AppliedWriteRow({
               data-figure-role="change"
             >
               <span className="text-muted-foreground">
-                {formatCurrency(bars[0].before, currency)}
+                {formatCurrency(bars[0].before, currency, uiLocale)}
               </span>
               <ArrowRightIcon
                 aria-hidden="true"
                 className="size-3 shrink-0 text-muted-foreground"
               />
               <span className="font-semibold text-foreground">
-                {formatCurrency(bars[0].after, currency)}
+                {formatCurrency(bars[0].after, currency, uiLocale)}
               </span>
               {bars[0].deltaPct != null ? (
                 <span className="rounded-md border border-border px-1 font-medium text-foreground">
-                  {formatPercent(bars[0].deltaPct, { signed: true })}
+                  {formatPercent(bars[0].deltaPct, { signed: true }, uiLocale)}
                 </span>
               ) : null}
             </span>
@@ -501,21 +516,23 @@ export function AppliedWriteRow({
             data-figure-role="change"
           >
             <span className="text-muted-foreground">
-              {printChangeValue(change, change.before, currency)}
+              {printChangeValue(change, change.before, currency, uiLocale)}
             </span>
             <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
             <span className="font-semibold text-foreground">
-              {printChangeValue(change, change.after, currency)}
+              {printChangeValue(change, change.after, currency, uiLocale)}
             </span>
           </p>
         )}
         <p className="flex flex-wrap items-center gap-x-1.5 text-muted-foreground text-xs">
-          <time dateTime={row.ts}>{formatWhen(row.ts)}</time>
-          <span>· {actorLabel(row)}</span>
+          <time dateTime={row.ts}>{formatWhen(row.ts, uiText, uiLocale)}</time>
+          <span>· {actorLabel(row, uiText)}</span>
           <PlatformChip platform={platform} />
         </p>
         {row.justification ? (
-          <p className="text-muted-foreground text-xs leading-relaxed">Why: {row.justification}</p>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {uiText('sentence_b8fcef5f90e9', { v0: row.justification })}
+          </p>
         ) : null}
         {receipt ? <ReceiptToken platform={platform} value={receipt} /> : null}
       </div>

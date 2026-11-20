@@ -1,9 +1,11 @@
 'use client';
-import { Check, RotateCw, X } from 'lucide-react';
 
+import { Check, RotateCw, X } from 'lucide-react';
+import { useFormatter, useTranslations } from 'next-intl';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Progress } from '@/components/ui/progress';
 import type { GridStatus } from '@/lib/organic/store';
+import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
 import { cn } from '@/lib/utils';
 
 type StageVariant = 'teal' | 'warning' | 'violet' | 'success';
@@ -14,14 +16,6 @@ const stageVariants: Record<string, StageVariant> = {
   drafting: 'violet',
   matching: 'teal',
   finalizing: 'success',
-};
-
-const stageLabels: Record<string, string> = {
-  analyzing: 'Analyzing',
-  optimizing: 'Optimizing',
-  drafting: 'Drafting',
-  matching: 'Matching',
-  finalizing: 'Finalizing',
 };
 
 interface GenerationProgressPanelProps {
@@ -39,6 +33,8 @@ export function GenerationProgressPanel({
   stage,
   error,
 }: GenerationProgressPanelProps) {
+  const uiText = useTranslations('organic');
+  const format = useFormatter();
   if (status === 'idle') {
     return null;
   }
@@ -47,7 +43,7 @@ export function GenerationProgressPanel({
   const isComplete = status === 'complete';
   const isCompleteWithErrors = status === 'complete_with_errors';
   const stageVariant: StageVariant | 'muted' = stage ? (stageVariants[stage] ?? 'muted') : 'muted';
-  const stageLabel = stage ? stageLabels[stage] : 'Processing';
+  const stageLabel = uiText('generationStage', { stage: stage ?? 'none' });
 
   return (
     <div
@@ -79,12 +75,12 @@ export function GenerationProgressPanel({
               <div className="flex flex-col gap-1">
                 <span className="text-base font-semibold">
                   {isError
-                    ? 'Generation Failed'
+                    ? uiText('generation_failed_727a473')
                     : isComplete
-                      ? 'Generation Complete'
+                      ? uiText('generation_complete_23cb330')
                       : isCompleteWithErrors
-                        ? 'Generation Complete with Failures'
-                        : 'Generating Content'}
+                        ? uiText('generation_complete_with_failures_a5c209a')
+                        : uiText('generating_content_4866594')}
                 </span>
                 {!isError && !isComplete && !isCompleteWithErrors && stage && (
                   <Pill variant={stageVariant} className="w-fit">
@@ -95,7 +91,13 @@ export function GenerationProgressPanel({
             </div>
 
             {!isError && (
-              <span className="text-xl font-semibold text-muted-foreground">{percent}%</span>
+              <span className="text-xl font-semibold text-muted-foreground">
+                {format.number(percent / 100, {
+                  style: 'percent',
+                  maximumFractionDigits: 20,
+                  useGrouping: false,
+                })}
+              </span>
             )}
           </div>
 
@@ -119,7 +121,7 @@ export function GenerationProgressPanel({
               role="alert"
               aria-live="assertive"
             >
-              <span className="text-sm text-destructive">{error}</span>
+              <span className="text-sm text-destructive">{friendlyStreamError(error, uiText)}</span>
             </div>
           )}
         </div>

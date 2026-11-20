@@ -1,8 +1,9 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { formatMetric, metricLabel } from './formatters';
+import { useApprovalFormatters } from './formatters';
 
 const PRIMARY_ORDER = [
   'roas',
@@ -15,16 +16,18 @@ const PRIMARY_ORDER = [
   'clicks',
 ];
 
-const METRIC_HINTS: Record<string, string> = {
-  roas: 'Return on ad spend — revenue divided by spend.',
-  account_avg_roas: "Mean ROAS across the parent ad account over the rule's evaluation window.",
-  spend: "Total amount spent during the rule's evaluation window.",
-  impressions: 'How many times the ad was rendered.',
-  clicks: 'Number of clicks recorded during the evaluation window.',
-  ctr: 'Click-through rate — clicks divided by impressions.',
-  cpc: 'Cost per click.',
-  cpm: 'Cost per thousand impressions.',
-};
+const getMETRIC_HINTS = (
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+): Record<string, string> => ({
+  roas: tUi('m_bb6795fa39'),
+  account_avg_roas: tUi('m_4c8df4be05'),
+  spend: tUi('m_d0f63db13b'),
+  impressions: tUi('m_0a850913b5'),
+  clicks: tUi('m_9588cf3b00'),
+  ctr: tUi('m_314997e737'),
+  cpc: tUi('m_5737c839fb'),
+  cpm: tUi('m_27dfacc0a9'),
+});
 
 // Pairs of [actual, threshold] — for each pair we render a delta chip on the threshold tile
 // so the reviewer can read "value vs benchmark" without doing math.
@@ -36,6 +39,11 @@ type Props = {
 };
 
 export function EvidenceStrip({ facts, className }: Props) {
+  const { formatMetric, metricLabel } = useApprovalFormatters();
+  const tUi = useTranslations('common');
+  const uiLocale = useLocale();
+  const METRIC_HINTS = getMETRIC_HINTS(tUi);
+
   const numericFacts = toNumericFacts(facts);
 
   if (Object.keys(numericFacts).length === 0) {
@@ -46,13 +54,13 @@ export function EvidenceStrip({ facts, className }: Props) {
           className,
         )}
       >
-        No evidence metrics for this action.
+        {tUi('m_c3d9cc7646')}
       </div>
     );
   }
 
   const entries = orderEntries(numericFacts);
-  const deltas = computeDeltas(numericFacts);
+  const deltas = computeDeltas(numericFacts, tUi, uiLocale);
 
   return (
     <TooltipProvider delay={200}>
@@ -128,7 +136,11 @@ function orderEntries(facts: Record<string, number>): Array<[string, number]> {
 
 type Delta = { label: string; direction: 'up' | 'down' | 'flat' };
 
-function computeDeltas(facts: Record<string, number>): Record<string, Delta> {
+function computeDeltas(
+  facts: Record<string, number>,
+  t: ReturnType<typeof useTranslations<'common'>>,
+  locale: string,
+): Record<string, Delta> {
   const out: Record<string, Delta> = {};
   for (const [actualKey, benchmarkKey] of DELTA_PAIRS) {
     const actual = facts[actualKey];
@@ -138,11 +150,17 @@ function computeDeltas(facts: Record<string, number>): Record<string, Delta> {
     const pct = Math.round(ratio * 100);
     if (pct === 0) {
       // Annotate the actual tile so the reviewer sees the comparison immediately.
-      out[actualKey] = { label: '≈ avg', direction: 'flat' };
+      out[actualKey] = { label: t('m_3d35c75467'), direction: 'flat' };
       continue;
     }
     out[actualKey] = {
-      label: `${pct > 0 ? '+' : ''}${pct}% vs avg`,
+      label: t('m_644defb39b', {
+        value: new Intl.NumberFormat(locale, {
+          style: 'percent',
+          signDisplay: 'exceptZero',
+          maximumFractionDigits: 0,
+        }).format(ratio),
+      }),
       direction: pct < 0 ? 'down' : 'up',
     };
   }

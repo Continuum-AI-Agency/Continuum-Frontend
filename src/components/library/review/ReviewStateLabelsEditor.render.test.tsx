@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // Only the save call is replaced — every other export is the real module, so this mock
 // changes nothing for other test files sharing the process.
@@ -82,7 +88,13 @@ describe('ReviewStateLabelsEditor', () => {
         Response.json({
           labels: [{ state: 'approved', label: 'Client OK', color: '#123456', position: 4 }],
           customStates: [
-            { id: signedId, label: 'Signed', color: '#8B5CF6', baseStatus: 'approved', position: 0 },
+            {
+              id: signedId,
+              label: 'Signed',
+              color: '#8B5CF6',
+              baseStatus: 'approved',
+              position: 0,
+            },
           ],
         }),
       ),
@@ -120,8 +132,8 @@ describe('ReviewStateLabelsEditor', () => {
     saved.length = 0;
     await act(async () => earlierOnClick?.());
     expect(saved).toHaveLength(1);
-    expect((saved[0] as { customStates: { label: string; baseStatus: string }[] }).customStates).toEqual([
-      expect.objectContaining({ label: 'Signed', baseStatus: 'approved' }),
-    ]);
+    expect(
+      (saved[0] as { customStates: { label: string; baseStatus: string }[] }).customStates,
+    ).toEqual([expect.objectContaining({ label: 'Signed', baseStatus: 'approved' })]);
   });
 });

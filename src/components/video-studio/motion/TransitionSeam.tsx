@@ -6,6 +6,7 @@ import {
   type VideoEditorOpInput,
 } from '@continuum/contracts';
 import { Blend } from 'lucide-react';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -65,6 +66,9 @@ export function TransitionSeam({
   leftPx: number;
   onApply: (input: TransitionInput) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const uiText = useTranslations('common');
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<TransitionType>(knownType(existing?.transitionType));
   const [durationSec, setDurationSec] = useState(existing?.durationSec ?? DEFAULT_TRANSITION_SEC);
@@ -95,7 +99,10 @@ export function TransitionSeam({
             type="button"
             data-seam={fromClip.id}
             data-transition={existing?.transitionType ?? 'cut'}
-            aria-label={`Transition between ${fromClip.label} and ${toClip.label}`}
+            aria-label={translateUi('transition_between_value0_and_value_52144cb4', {
+              value0: String(fromClip.label),
+              value1: String(toClip.label),
+            })}
             className={cn(
               // Straddles the lane's bottom border: the clips' edge trim handles keep the
               // lane's middle, where a press at the seam would otherwise land on this.
@@ -111,7 +118,7 @@ export function TransitionSeam({
         <Blend className="size-2.5" />
       </PopoverTrigger>
       <PopoverContent side="top" className="w-60 space-y-3 p-3" data-testid="transition-popover">
-        <p className="text-xs font-semibold">Transition</p>
+        <p className="text-xs font-semibold">{translateUi('transition_2fe70464')}</p>
         <div className="grid grid-cols-2 gap-1">
           {SEAM_TRANSITIONS.map((candidate) => (
             <button
@@ -132,7 +139,7 @@ export function TransitionSeam({
           ))}
         </div>
         <SliderField
-          label="Duration"
+          label={uiText('duration_4fc52a3')}
           value={Math.min(maxSec, durationSec)}
           min={0.1}
           max={maxSec}
@@ -143,11 +150,11 @@ export function TransitionSeam({
         <div className="flex justify-end gap-1">
           {existing ? (
             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => apply('cut')}>
-              Remove
+              {uiText('remove_c3812fc')}
             </Button>
           ) : null}
           <Button size="sm" className="h-7 text-xs" onClick={() => apply(type)}>
-            Apply
+            {uiText('apply_31e392d')}
           </Button>
         </div>
       </PopoverContent>

@@ -14,6 +14,7 @@
 
 import { type HomeOpportunitiesData, homeOpportunitiesReadSchema } from '@continuum/contracts';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { lazy, useMemo } from 'react';
 import { useOptimizerPortfolios } from '@/components/paid-media/optimizer/useOptimizerData';
 import { buttonVariants } from '@/components/ui/button';
@@ -23,21 +24,17 @@ import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
 import { readyDataOf } from '../../homeRead';
 import type { HomeTileProps } from '../../types';
 import { useHomeGoalRead } from '../../useHomeGoalRead';
-import {
-  OPPS_MISSING,
-  OPTIMIZER_LINKS,
-  oppsViewOf,
-  portfolioDecisionsHref,
-  waitingLine,
-} from './oppsModel';
+import { OPTIMIZER_LINKS, oppsViewOf, portfolioDecisionsHref } from './oppsModel';
 import { oppImpactLine, oppLeadOf } from './oppsStack';
-import { ROW_LINK, ROW_LINK_LIST, TileReadError } from './tileParts';
+import { ROW_LINK, ROW_LINK_LIST, TileReadError, useWaitingLine } from './tileParts';
 
 const Module = lazy(() => import('./Module'));
 
 const ROWS_AT_SIZE = { l: 4, m: 2, s: 0 } as const;
 
 export default function OppsTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
+  const waitingLine = useWaitingLine();
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const { hasAnswer, isError, refetch, brandPortfolios } = portfolios;
   const stack = readyDataOf(
@@ -56,7 +53,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
     return isError ? (
       <HomeTileFrame state="error" tile={tile}>
         <TileReadError onRetry={() => void refetch()}>
-          The Optimizer's portfolios could not be read, so this tile cannot say what waits.
+          {uiText('the_optimizer_s_portfolios_could_not_be_read__fdb237b')}
         </TileReadError>
       </HomeTileFrame>
     ) : (
@@ -69,9 +66,9 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
   if (view.state === 'missing') {
     return (
       <HomeTileFrame state="missing" tile={tile}>
-        <TileMissing>{OPPS_MISSING}</TileMissing>
+        <TileMissing>{uiText('no_portfolio_groups_these_campaigns_yet_creat_b9ae8d3')}</TileMissing>
         <Link className={cn(ROW_LINK, 'mt-2 inline-block text-xs')} href={OPTIMIZER_LINKS.create}>
-          Create a portfolio
+          {uiText('create_a_portfolio_2283fad')}
         </Link>
       </HomeTileFrame>
     );
@@ -82,9 +79,9 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
 
   return (
     <HomeTileFrame
-      badge={`${view.waiting} waiting`}
+      badge={uiText('count_waiting_15c46d8', { count: view.waiting })}
       expanded={<Module brandId={ctx.brandId} portfolios={view.portfolios} stack={stack} />}
-      expandedDescription="The decisions waiting in each portfolio, with the Optimizer's own approve and dismiss."
+      expandedDescription={uiText('the_decisions_waiting_in_each_portfolio_with__6f41cd7')}
       state="ready"
       tile={tile}
     >
@@ -98,7 +95,9 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
             {view.waiting}
           </span>
           <span className="text-muted-foreground text-xs">
-            {view.waiting === 1 ? 'decision waiting' : 'decisions waiting'}
+            {uiText('count_plural_one_decision_waiting_other_decis_1806179', {
+              count: view.waiting,
+            })}
           </span>
         </p>
         {lead ? (
@@ -116,7 +115,9 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
           </p>
         ) : null}
         {view.waiting === 0 ? (
-          <p className="text-muted-foreground text-xs">Nothing waits for a decision right now.</p>
+          <p className="text-muted-foreground text-xs">
+            {uiText('nothing_waits_for_a_decision_right_now_e5b7556')}
+          </p>
         ) : rows.length > 0 ? (
           <ul className={ROW_LINK_LIST} data-testid="home-tile-opps-portfolios">
             {rows.map((portfolio) => (
@@ -138,7 +139,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
           </ul>
         ) : first ? (
           <p className="truncate text-muted-foreground text-xs">
-            {first.name}: {waitingLine(first)}
+            {uiText('name_waiting_05e70dd', { name: first.name, waiting: waitingLine(first) })}
           </p>
         ) : null}
         <div>
@@ -147,7 +148,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
             data-testid="home-tile-opps-review"
             href={OPTIMIZER_LINKS.actions}
           >
-            Review decisions
+            {uiText('review_decisions_5f2eb70')}
           </Link>
         </div>
       </div>

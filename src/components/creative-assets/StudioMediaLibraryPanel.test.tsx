@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaAsset, OnboardingInspirationsStreamFrame } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { SourceFilterValue } from '@/lib/media/filters';
 
 // Ticket #251 — the Inspiration folder was a plain `source = 'inspiration'`
@@ -131,6 +137,22 @@ describe('StudioMediaLibraryPanel — Inspiration folder (#251)', () => {
     expect(queryByTestId('studio-inspiration-empty')).toBeNull();
     // A populated folder still offers the tester's "regenerate" affordance.
     expect(getByTestId('studio-inspiration-regenerate')).toBeTruthy();
+  });
+
+  it('paints each tile from its still, lazily, never the original file', async () => {
+    listPages = [
+      [{ ...asset('a'), thumbnailUrl: 'https://example.test/a-480.webp' } as MediaAsset],
+    ];
+    const { getByTestId, getAllByRole } = render(
+      <StudioMediaLibraryPanel brandProfileId="brand-1" />,
+    );
+    await settle();
+    await selectInspiration(getByTestId);
+    await settle();
+
+    const [tile] = getAllByRole('img');
+    expect(tile?.getAttribute('src')).toBe('https://example.test/a-480.webp');
+    expect(tile?.getAttribute('loading')).toBe('lazy');
   });
 
   it('explains why the folder is empty instead of blaming the whole library', async () => {

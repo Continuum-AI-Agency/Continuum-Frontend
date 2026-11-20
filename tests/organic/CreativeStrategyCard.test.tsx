@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import type { CreativeInsight, CreativeStrategyReport } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import React from 'react';
-
 import type { CreativeStrategyReadState } from '@/hooks/useCreativeStrategyReport';
+import { render } from '@/i18n/__tests__/render';
 
 // The card reads a materialized row under RLS; the network hop is not what these
 // tests are about. Everything below is the rendered hierarchy of a ready report.

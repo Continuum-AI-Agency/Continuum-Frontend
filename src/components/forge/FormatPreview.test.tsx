@@ -6,8 +6,18 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ApiRenderOutput } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
 import { useState } from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
+import commonEs from '../../../messages/common/es.json';
+import commonPt from '../../../messages/common/pt-BR.json';
+import forgeEs from '../../../messages/forge/es.json';
+import forgePt from '../../../messages/forge/pt-BR.json';
 import {
   FormatPreview,
   fileForFormat,
@@ -251,4 +261,35 @@ describe('previewFormats', () => {
       { id: '16:9', label: '16:9', ratio: '16:9', width: null, height: null },
     ]);
   });
+});
+
+describe('FormatPreview locale-independent frame states', () => {
+  for (const entry of [
+    {
+      locale: 'pt-BR' as const,
+      messages: { common: commonPt, forge: forgePt },
+      none: 'Sem layout medido para este formato',
+      estimate: 'Estimativa · estrutura',
+    },
+    {
+      locale: 'es' as const,
+      messages: { common: commonEs, forge: forgeEs },
+      none: 'Sin diseño medido para este formato',
+      estimate: 'Estimación · estructura',
+    },
+  ]) {
+    test(`${entry.locale}: localizes chrome while keeping canonical modes and source names`, () => {
+      const wrap = (frame: (format: PreviewFormat) => PreviewFrame) => (
+        <NextIntlClientProvider locale={entry.locale} timeZone="UTC" messages={entry.messages}>
+          <Harness frame={frame} />
+        </NextIntlClientProvider>
+      );
+      const view = render(wrap(() => ({ mode: 'none' })));
+      expect(screen.getByText(entry.none)).toBeTruthy();
+      expect(screen.getByRole('button', { name: `${COMP} 16:9` })).toBeTruthy();
+      view.rerender(wrap(() => ({ mode: 'estimate', node: <svg aria-label="source geometry" /> })));
+      expect(screen.getByText(entry.estimate)).toBeTruthy();
+      expect(screen.getByLabelText('source geometry')).toBeTruthy();
+    });
+  }
 });

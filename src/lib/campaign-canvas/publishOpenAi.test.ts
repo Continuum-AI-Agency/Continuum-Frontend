@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'bun:test';
+import { createTranslator } from 'next-intl';
 import type { CampaignCanvasEdge, CampaignCanvasNode } from '@/CampaignCanvas/types';
+import en from '../../../messages/scale/en.json';
+import es from '../../../messages/scale/es.json';
+import pt from '../../../messages/scale/pt-BR.json';
 import { executeOpenAiPublish, seedExistingIds } from './executeOpenAiPublish';
 import { buildHydratedOpenAiGraph } from './hydrateOpenAi';
-import { captureOpenAiBaseline, planOpenAiPublish } from './publishOpenAi';
+import {
+  captureOpenAiBaseline,
+  describeOpenAiPublishStep,
+  planOpenAiPublish,
+} from './publishOpenAi';
 
 const campaignNode = (data: Record<string, unknown> = {}): CampaignCanvasNode =>
   ({
@@ -299,3 +307,39 @@ describe('executeOpenAiPublish', () => {
     expect(outcome.idsByNodeId.c1).toBe('cmpn_new');
   });
 });
+
+for (const locale of ['en', 'pt-BR', 'es'] as const) {
+  it(`localizes OpenAI publish guidance without changing the published plan (${locale})`, () => {
+    const translate = createTranslator({
+      locale,
+      namespace: 'scale',
+      messages: { scale: { en, 'pt-BR': pt, es }[locale] },
+    });
+    const input = {
+      nodes: [campaignNode(), adGroupNode(), adNode()],
+      edges: [edge('c1', 'g1'), edge('g1', 'a1')],
+    };
+    const original = planOpenAiPublish(input);
+    const localized = planOpenAiPublish({
+      ...input,
+      translateIssue: (code, label) =>
+        translate('openai_publish_issue', { code, label: label ?? '' }),
+    });
+    expect(localized.steps).toEqual(original.steps);
+    const source = JSON.stringify(localized.steps);
+    const text = describeOpenAiPublishStep(localized.steps[0], (kind, values) =>
+      translate('openai_publish_step', { ...values, kind: kind.replaceAll('-', '_') }),
+    );
+    expect(text).toContain('Spring launch');
+    expect(JSON.stringify(localized.steps)).toBe(source);
+    const blocked = planOpenAiPublish({
+      nodes: [campaignNode({ lifetimeSpendLimitMicros: 0 })],
+      edges: [],
+      translateIssue: (code, label) =>
+        translate('openai_publish_issue', { code, label: label ?? '' }),
+    });
+    expect(blocked.issues).toContain(
+      translate('openai_publish_issue', { code: 'lifetimeBudget', label: 'Spring launch' }),
+    );
+  });
+}

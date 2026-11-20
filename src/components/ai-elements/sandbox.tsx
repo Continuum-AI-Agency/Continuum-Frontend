@@ -2,6 +2,7 @@
 
 import type { ToolUIPart } from 'ai';
 import { ChevronDownIcon, Code } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,19 +26,22 @@ export interface SandboxHeaderProps {
   className?: string;
 }
 
-export const SandboxHeader = ({ className, title, state, ...props }: SandboxHeaderProps) => (
-  <CollapsibleTrigger
-    className={cn('flex w-full items-center justify-between gap-4 p-3', className)}
-    {...props}
-  >
-    <div className="flex items-center gap-2">
-      <Code className="size-4 text-muted-foreground" />
-      <span className="font-medium text-sm">{title}</span>
-      {getStatusBadge(state)}
-    </div>
-    <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-  </CollapsibleTrigger>
-);
+export const SandboxHeader = ({ className, title, state, ...props }: SandboxHeaderProps) => {
+  const tUi = useTranslations('common');
+  return (
+    <CollapsibleTrigger
+      className={cn('flex w-full items-center justify-between gap-4 p-3', className)}
+      {...props}
+    >
+      <div className="flex items-center gap-2">
+        <Code className="size-4 text-muted-foreground" />
+        <span className="font-medium text-sm">{title}</span>
+        {getStatusBadge(state, tUi)}
+      </div>
+      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+    </CollapsibleTrigger>
+  );
+};
 
 export type SandboxContentProps = ComponentProps<typeof CollapsibleContent>;
 

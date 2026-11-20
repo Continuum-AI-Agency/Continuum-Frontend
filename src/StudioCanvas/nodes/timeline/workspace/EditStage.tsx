@@ -147,7 +147,11 @@ export const EditStage = memo(function EditStage({
   useEffect(() => store.publish(playback.playheadSec, playback.isPlaying));
   const sec = playback.playheadSec;
   const active = orderedVideoClips(main).find((clip) => activeAt(clip, sec));
-  const activeEffects = active ? clipEffectSpecFromEditorClip(active, project) : undefined;
+  // One object per clip, not per render: the shader preview re-renders whenever it changes.
+  const activeEffects = useMemo(
+    () => (active ? clipEffectSpecFromEditorClip(active, project) : undefined),
+    [active, project],
+  );
   const activeT = active
     ? Math.max(0, Math.min(1, (sec - active.timelineStartSec) / active.durationSec))
     : 0;
@@ -205,7 +209,8 @@ export const EditStage = memo(function EditStage({
     >
       <div style={{ width: box.width, height: box.height + CONTROLS_PX }}>
         <TimelinePreview
-          videoRef={playback.videoRef}
+          videoRefs={playback.videoRefs}
+          activeVideo={playback.activeVideo}
           showVideo={Boolean(active)}
           isEmpty={!main || main.clips.length === 0}
           isPlaying={playback.isPlaying}

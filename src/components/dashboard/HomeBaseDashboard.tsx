@@ -1,10 +1,11 @@
 'use client';
 
 import { motion, useReducedMotion } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import React from 'react';
 import { FirstRunSetup } from '@/components/dashboard/first-run/FirstRunSetup';
 import type { DashboardSetupState } from '@/components/dashboard/first-run/setupState';
+import { useRouter } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -18,35 +19,29 @@ type Props = {
 
 type DashboardView = 'overview' | 'paid' | 'organic' | 'all';
 
-const DASHBOARD_VIEWS: Record<
-  DashboardView,
-  {
-    label: string;
-    title: string;
-    microcopy: string;
-  }
-> = {
+// Catalog keys, not text: the view's label, title and microcopy are said in the UI language.
+const DASHBOARD_VIEWS = {
   overview: {
-    label: 'Overview',
-    title: 'Your Home',
-    microcopy: 'What moves your goal first, read from your paid, organic and creative results.',
+    label: 'overview_d4b1ea5',
+    title: 'your_home_5840e59',
+    microcopy: 'what_moves_your_goal_first_read_from_your_pai_a5bf26c',
   },
   organic: {
-    label: 'Organic',
-    title: 'Social metrics & Trend signals',
-    microcopy: 'Social performance, audience insights, and trend signals.',
+    label: 'organic_89b8cb6',
+    title: 'social_metrics_trend_signals_43be161',
+    microcopy: 'social_performance_audience_insights_and_tren_a7026ec',
   },
   paid: {
-    label: 'Paid',
-    title: 'Performance & DCO actions',
-    microcopy: 'Ad performance, budget pacing, and DCO actions.',
+    label: 'paid_fb81b96',
+    title: 'performance_dco_actions_1a8f40c',
+    microcopy: 'ad_performance_budget_pacing_and_dco_actions_bcde198',
   },
   all: {
-    label: 'All',
-    title: 'Organic & paid',
-    microcopy: 'Organic reach beside paid spend for the same period.',
+    label: 'all_a52ace4',
+    title: 'organic_paid_22671bf',
+    microcopy: 'organic_reach_beside_paid_spend_for_the_same__e5fe985',
   },
-};
+} as const satisfies Record<DashboardView, { label: string; title: string; microcopy: string }>;
 
 export function HomeBaseDashboard({
   activeView,
@@ -54,6 +49,7 @@ export function HomeBaseDashboard({
   setup,
   brandBookRefreshedAt = null,
 }: Props) {
+  const uiText = useTranslations('dashboard');
   const router = useRouter();
   const [, startTransition] = React.useTransition();
   const shouldReduceMotion = useReducedMotion();
@@ -98,22 +94,22 @@ export function HomeBaseDashboard({
           <>
             <div className="flex min-w-0 flex-col">
               <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {activeConfig.title}
+                {uiText(activeConfig.title)}
               </h1>
               <p className="min-w-0 truncate text-xs text-muted-foreground">
-                {activeConfig.microcopy}
+                {uiText(activeConfig.microcopy)}
               </p>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
               <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Dashboard view
+                {uiText('dashboard_view_f9d4b29')}
               </span>
               {/* The segments touch, so the row caps each pad at its own edge: under a coarse
                   pointer a 44 px pad reached into the next segment's drawn box. */}
               <nav
                 className="hit-area-row inline-flex rounded-md border border-border bg-background p-0.5"
-                aria-label="Dashboard view options"
+                aria-label={uiText('dashboard_view_options_f3d55db')}
               >
                 {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
                   const config = DASHBOARD_VIEWS[view];
@@ -124,7 +120,7 @@ export function HomeBaseDashboard({
                       key={view}
                       type="button"
                       data-tour-id={view === 'paid' ? 'dashboard-paid-toggle' : undefined}
-                      title={config.microcopy}
+                      title={uiText(config.microcopy)}
                       onClick={() => handleViewChange(view)}
                       className={cn(
                         'hit-area h-6 rounded px-2.5 text-xs font-medium transition-colors active:scale-[0.96]',
@@ -135,7 +131,7 @@ export function HomeBaseDashboard({
                       style={{ transitionProperty: 'background-color, color, scale' }}
                       aria-pressed={isActive}
                     >
-                      {config.label}
+                      {uiText(config.label)}
                     </button>
                   );
                 })}
@@ -144,7 +140,7 @@ export function HomeBaseDashboard({
           </>
         ) : (
           <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Get started
+            {uiText('get_started_61e8d44')}
           </h1>
         )}
       </div>
@@ -159,7 +155,7 @@ export function HomeBaseDashboard({
         {firstRunSetup ? (
           <div className="flex items-center gap-2 px-[var(--card-pad)]">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Your live data
+              {uiText('your_live_data_a338995')}
             </span>
             <span className="h-px flex-1 bg-border/70" aria-hidden="true" />
           </div>

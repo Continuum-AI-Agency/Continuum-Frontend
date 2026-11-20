@@ -1,15 +1,9 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  cleanup,
-  fireEvent,
-  render as renderInDom,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { render as renderInDom } from '@/i18n/__tests__/render';
 import * as http from '@/lib/api/http';
 import * as oneShotPost from '@/lib/organic/oneShotPost';
 import { publishAccountsKey } from '@/lib/organic/publishTargets';

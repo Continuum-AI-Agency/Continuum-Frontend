@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // One top-creative thumbnail in the "What's Working" table: a signed-URL-safe
 // image with its real metric shown inline beneath it (so it reads as a ranked
@@ -9,14 +10,17 @@ import type { ReactNode } from 'react';
 import { LeaderboardThumbnail } from '@/components/dashboard/briefing/LeaderboardThumbnail';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import type { ExemplarView } from '@/lib/organic/creative-strategy-rows';
+import { formatMetricValue } from '@/lib/organic/creative-strategy-rows';
 import { ExemplarQuickLook } from './ExemplarQuickLook';
 
 function ThumbImage({ exemplar, seed }: { exemplar: ExemplarView; seed: string }) {
+  const uiText = useTranslations('organic');
+
   if (exemplar.thumbnailUrl) {
     return (
       <LeaderboardThumbnail
         src={exemplar.thumbnailUrl}
-        alt={exemplar.snippet ?? `Top ${exemplar.kind}`}
+        alt={exemplar.snippet ?? uiText('topContentKind', { kind: exemplar.kind })}
         fallbackSeed={seed}
         className="size-11"
       />
@@ -33,21 +37,22 @@ function ThumbImage({ exemplar, seed }: { exemplar: ExemplarView; seed: string }
 }
 
 export function ExemplarThumb({ exemplar, seed }: { exemplar: ExemplarView; seed: string }) {
-  const ariaLabel = [
-    exemplar.permalinkUrl ? 'Open' : 'Top',
-    exemplar.kind,
-    exemplar.metricValueLabel ? `· ${exemplar.metricName} ${exemplar.metricValueLabel}` : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
+  const value = formatMetricValue(exemplar.metric, uiLocale) ?? exemplar.metricValueLabel;
+  const ariaLabel = uiText('exemplarAria', {
+    open: exemplar.permalinkUrl ? 'yes' : 'no',
+    kind: exemplar.kind,
+    hasMetric: value ? 'yes' : 'no',
+    metric: exemplar.metricName ?? '',
+    value: value ?? '',
+  });
 
   const inner = (
     <span className="flex flex-col items-center gap-0.5">
       <ThumbImage exemplar={exemplar} seed={seed} />
       {exemplar.metricValueLabel ? (
-        <span className="text-2xs font-medium tabular-nums text-muted-foreground">
-          {exemplar.metricValueLabel}
-        </span>
+        <span className="text-2xs font-medium tabular-nums text-muted-foreground">{value}</span>
       ) : null}
     </span>
   );

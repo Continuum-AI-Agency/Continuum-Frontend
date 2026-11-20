@@ -1,3 +1,6 @@
+import type { useTranslations } from 'next-intl';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
+import type { UiLocale } from '@/i18n/config';
 // One copy of the run-row vocabulary. The legacy `AutomationDetailSheet` and the
 // workspace's Runs tab render the same rows; the labels, pill variants and
 // duration arithmetic live here so the two surfaces cannot drift apart.
@@ -36,20 +39,41 @@ export const AUTOMATION_RUN_TRIGGER_LABEL: Record<AutomationRunTrigger, string> 
 };
 
 /** Wall-clock time the run took, or null while it has not finished. */
-export function formatAutomationRunDuration(run: AutomationRun): string | null {
+export function formatAutomationRunDuration(
+  run: AutomationRun,
+  locale: UiLocale = 'en',
+): string | null {
   if (!run.startedAt || !run.completedAt) return null;
   const seconds = Math.round((Date.parse(run.completedAt) - Date.parse(run.startedAt)) / 1000);
+  if (locale !== 'en') {
+    const unit = (value: number, kind: 'second' | 'minute') =>
+      new Intl.NumberFormat(locale, {
+        style: 'unit',
+        unit: kind,
+        unitDisplay: 'narrow',
+        maximumFractionDigits: 0,
+      }).format(value);
+    return seconds < 60
+      ? unit(seconds, 'second')
+      : `${unit(Math.floor(seconds / 60), 'minute')} ${unit(seconds % 60, 'second')}`;
+  }
   if (seconds < 60) return `${seconds}s`;
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
 /** The one-line summary under a run's status pill. */
-export function describeAutomationRun(run: AutomationRun): string {
-  const duration = formatAutomationRunDuration(run);
+export function describeAutomationRun(
+  run: AutomationRun,
+  locale: UiLocale = 'en',
+  translate?: ReturnType<typeof useTranslations<'automations'>>,
+): string {
+  const duration = formatAutomationRunDuration(run, locale);
   return [
-    new Date(run.enqueuedAt).toLocaleString(),
+    formatAutomationRunTime(run.enqueuedAt, locale, translate),
     duration,
-    AUTOMATION_RUN_TRIGGER_LABEL[run.trigger],
+    translate
+      ? localizeAutomationsCopy(AUTOMATION_RUN_TRIGGER_LABEL[run.trigger], translate)
+      : AUTOMATION_RUN_TRIGGER_LABEL[run.trigger],
   ]
     .filter((part): part is string => Boolean(part))
     .join(' · ');
@@ -64,4 +88,17 @@ export function sortAutomationRunsNewestFirst(runs: readonly AutomationRun[]): A
   return [...runs].sort(
     (left, right) => Date.parse(right.enqueuedAt) - Date.parse(left.enqueuedAt),
   );
+}
+
+export function formatAutomationRunTime(
+  iso: string,
+  locale: UiLocale = 'en',
+  translate?: ReturnType<typeof useTranslations<'automations'>>,
+): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? translate
+      ? translate('m_a5cbe209d8')
+      : 'Invalid Date'
+    : date.toLocaleString(locale);
 }

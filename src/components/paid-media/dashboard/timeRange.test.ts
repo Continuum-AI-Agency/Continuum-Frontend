@@ -30,12 +30,10 @@ describe('paid-media time range utilities', () => {
   });
 
   it('falls back to default custom range when custom dates are invalid', () => {
-    expect(normalizeCustomRange({ since: 'invalid', until: '2026-03-11' }, fixedNow, UTC)).toEqual(
-      {
-        since: '2026-03-04',
-        until: '2026-03-10',
-      },
-    );
+    expect(normalizeCustomRange({ since: 'invalid', until: '2026-03-11' }, fixedNow, UTC)).toEqual({
+      since: '2026-03-04',
+      until: '2026-03-10',
+    });
   });
 
   it('resolves rolling presets into N complete days ending yesterday', () => {

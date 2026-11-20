@@ -2,6 +2,7 @@
 
 import { useDroppable } from '@dnd-kit/core';
 import {
+  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   GalleryHorizontalEnd,
@@ -11,6 +12,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -29,13 +31,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { formatCalendarDate, weekdayLabels } from '@/lib/organic/calendarLabels';
 import { isCarouselMediaType } from '@/lib/organic/carousel';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { EMPTY_SELECTION, selectionWithin } from '../hooks/useCalendarSelection';
 import { AddPostContextMenu } from './AddPostContextMenu';
 import { AddPostMenu } from './AddPostMenu';
-import { formatDayId } from './calendar-utils';
+import { formatDayId, formatWallClockLabel } from './calendar-utils';
 import { CardTargets, StatusDot } from './DraftCardBadges';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { draftStatusPresentation, statusFrameClasses } from './draft-card-styles';
@@ -58,8 +61,6 @@ const PLATFORM_CHIP_COLORS: Record<string, string> = {
   tiktok: 'bg-neutral-900 text-neutral-50',
   youtube: 'bg-red-700 text-neutral-50',
 };
-
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 type OrganicMonthlyCalendarProps = {
   days: OrganicCalendarDay[];
@@ -125,12 +126,14 @@ const DraftChip = React.memo(function DraftChip({
   onRegenerate?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
+  const uiText = useTranslations('organic');
   const platform = draft.platforms[0] ?? 'instagram';
   const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
   const { setNodeRef, listeners, setActivatorNodeRef, activatorAttributes, isDragging, style } =
     useDraftDragHandle(draft.id);
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
-  const { label: statusLabel } = draftStatusPresentation(draft.status);
+  const { label: statusLabel } = draftStatusPresentation(draft.status, uiText);
+  const saveFailed = useCalendarStore((state) => state.saveFailedDraftIds.includes(draft.id));
 
   // Drag start has to close an open preview, not merely refuse to open a new one: the
   // 272px card otherwise sits under the cursor for the whole drag.
@@ -189,13 +192,21 @@ const DraftChip = React.memo(function DraftChip({
                       // declared in :root, not @theme), so these rings drew in currentColor.
                       isSelected && 'ring-1 ring-primary ring-offset-1',
                       isMultiSelected && !isSelected && 'ring-1 ring-primary/50',
+                      saveFailed && !isSelected && 'ring-1 ring-destructive/60',
                     )}
                     // The chip is coloured by PLATFORM, so without the dot and this title the
                     // month grid was the one surface that named no status at all.
-                    title={`${statusLabel} · ${draft.title || 'Untitled'}`}
+                    title={`${saveFailed ? uiText('this_post_failed_to_save_open_it_to_recreate_cdc7e1a') : statusLabel} · ${draft.title || uiText('untitled_f59ab8d')}`}
+                    data-save-failed={saveFailed ? '' : undefined}
                   >
-                    <StatusDot status={draft.status} />
-                    <span className="min-w-0 flex-1 truncate">{draft.title || 'Untitled'}</span>
+                    {saveFailed ? (
+                      <AlertTriangle className="size-3 shrink-0 text-destructive" aria-hidden />
+                    ) : (
+                      <StatusDot status={draft.status} />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">
+                      {draft.title || uiText('untitled_f59ab8d')}
+                    </span>
                     <CardTargets draft={draft} className="max-w-[50%] text-3xs font-normal" />
                   </button>
                 </div>
@@ -206,14 +217,16 @@ const DraftChip = React.memo(function DraftChip({
         <ContextMenuContent className="w-48">
           <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
             <Pencil className="mr-2 h-3.5 w-3.5" />
-            Open in editor
+            {uiText('open_in_editor_ea1d0f0')}
           </ContextMenuItem>
           {onRegenerate && draft.status !== 'streaming' && (
             <>
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
                 <Zap className="mr-2 h-3.5 w-3.5" />
-                {draft.status === 'failed' ? 'Retry generation' : 'Regenerate'}
+                {draft.status === 'failed'
+                  ? uiText('retry_generation_9331330')
+                  : uiText('regenerate_1651031')}
               </ContextMenuItem>
             </>
           )}
@@ -225,7 +238,7 @@ const DraftChip = React.memo(function DraftChip({
                 onSelect={() => onDelete(draft.id)}
               >
                 <Trash2 className="mr-2 h-3.5 w-3.5" />
-                Delete
+                {uiText('delete_e2d0a54')}
               </ContextMenuItem>
             </>
           )}
@@ -253,6 +266,8 @@ const PostedContentChip = React.memo(function PostedContentChip({
   isSelected: boolean;
   onSelect: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const colorClass = PLATFORM_CHIP_COLORS[post.platform] ?? 'bg-emerald-700 text-neutral-50';
   const isCarousel = isCarouselMediaType(post.mediaType);
   const router = useRouter();
@@ -281,11 +296,16 @@ const PostedContentChip = React.memo(function PostedContentChip({
               setPreviewOpen(false);
               onSelect(post, metricsHref);
             }}
-            title={isCarousel ? `Carousel · ${post.title}` : post.title}
+            title={isCarousel ? uiText('carouselTitle', { title: post.title }) : post.title}
           >
-            <span className="shrink-0 text-2xs font-bold uppercase">{post.timeLabel}</span>
+            <span className="shrink-0 text-2xs font-bold uppercase">
+              {formatWallClockLabel(post.timeLabel, uiLocale)}
+            </span>
             {isCarousel ? (
-              <GalleryHorizontalEnd className="size-2.5 shrink-0" aria-label="Carousel" />
+              <GalleryHorizontalEnd
+                className="size-2.5 shrink-0"
+                aria-label={uiText('carousel_37219fb')}
+              />
             ) : null}
             <span className="truncate">{post.title}</span>
           </button>
@@ -364,6 +384,7 @@ const MonthDayCell = React.memo(function MonthDayCell({
   onRegenerate,
   onDeleteDraft,
 }: MonthDayCellProps) {
+  const uiText = useTranslations('organic');
   const { setNodeRef, isOver } = useDroppable({
     id: `planner-cell::${dayId}`,
     data: { type: 'planner-cell', dayId },
@@ -405,7 +426,7 @@ const MonthDayCell = React.memo(function MonthDayCell({
         <AddPostMenu dayId={dayId} onCreatePost={onCreatePost} align="start">
           <button
             type="button"
-            aria-label="Add post"
+            aria-label={uiText('add_post_b6d5095')}
             className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
           >
             <Plus className="size-3 text-muted-foreground" />
@@ -440,13 +461,16 @@ const MonthDayCell = React.memo(function MonthDayCell({
             type="button"
             data-day-overflow={dayId}
             className="pl-1 text-left text-xs text-muted-foreground underline-offset-2 hover:underline"
-            aria-label={`Show all ${drafts.length + posts.length} posts for ${dayId}`}
+            aria-label={uiText('showAllDayPosts', {
+              count: drafts.length + posts.length,
+              date: dayId,
+            })}
             onClick={(event) => {
               event.stopPropagation();
               onOpenDay(dayId);
             }}
           >
-            +{overflowCount} more
+            {uiText.rich('sentence_70c322a9a74f', { v0: () => overflowCount })}
           </button>
         )}
       </div>
@@ -482,6 +506,8 @@ export function OrganicMonthlyCalendar({
   postedContent,
   brandName,
 }: OrganicMonthlyCalendarProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const todayId = brandTodayId ?? formatDayId(new Date());
   const selectedDraftIdSet = React.useMemo(
     () => (selectedDraftIds?.length ? new Set(selectedDraftIds) : EMPTY_SELECTION),
@@ -523,24 +549,28 @@ export function OrganicMonthlyCalendar({
 
   const currentMonth = monthAnchorDate.getMonth();
   const currentYear = monthAnchorDate.getFullYear();
-  const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(
-    new Date(currentYear, currentMonth, 1),
-  );
+  const monthLabel = formatCalendarDate(new Date(currentYear, currentMonth, 1, 12), uiLocale, {
+    month: 'long',
+    year: 'numeric',
+  });
+  const dayLabels = React.useMemo(() => weekdayLabels(uiLocale), [uiLocale]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-card/50 p-2">
       <header className="mb-2 flex shrink-0 items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">{monthLabel}</h2>
+        <h2 translate="no" className="text-lg font-semibold tracking-tight text-foreground">
+          {monthLabel}
+        </h2>
         <div className="flex items-center gap-1">
           <Button type="button" variant="outline" size="sm" onClick={onToday}>
-            Today
+            {uiText('today_2b065c7')}
           </Button>
           <Button
             type="button"
             variant="outline"
             size="icon-sm"
             onClick={onPreviousMonth}
-            aria-label="Previous month"
+            aria-label={uiText('previous_month_6a27695')}
           >
             <ChevronLeft className="size-4" />
           </Button>
@@ -549,17 +579,18 @@ export function OrganicMonthlyCalendar({
             variant="outline"
             size="icon-sm"
             onClick={onNextMonth}
-            aria-label="Next month"
+            aria-label={uiText('next_month_74e5321')}
           >
             <ChevronRight className="size-4" />
           </Button>
         </div>
       </header>
 
-      <div className="grid shrink-0 grid-cols-7 border-b border-border/30 pb-1">
-        {DAY_LABELS.map((label) => (
+      <div translate="no" className="grid shrink-0 grid-cols-7 border-b border-border/30 pb-1">
+        {dayLabels.map((label, index) => (
           <div
-            key={label}
+            // biome-ignore lint/suspicious/noArrayIndexKey: the seven weekday columns are positional
+            key={index}
             className="py-1 text-center text-2xs font-semibold uppercase tracking-wide text-muted-foreground"
           >
             {label}
@@ -613,16 +644,18 @@ export function OrganicMonthlyCalendar({
       <Dialog open={openDayId !== null} onOpenChange={(open) => !open && setOpenDayId(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle translate="no">
               {openDayId
-                ? new Date(`${openDayId}T12:00:00`).toLocaleDateString('en-US', {
+                ? formatCalendarDate(openDayId, uiLocale, {
                     weekday: 'long',
                     month: 'long',
                     day: 'numeric',
                   })
-                : 'Posts'}
+                : uiText('posts_a80811c')}
             </DialogTitle>
-            <DialogDescription>All planned and published posts for this day.</DialogDescription>
+            <DialogDescription>
+              {uiText('all_planned_and_published_posts_for_this_day_8b49572')}
+            </DialogDescription>
           </DialogHeader>
           {openDayId && (
             <div className="flex flex-col gap-2">
@@ -637,12 +670,14 @@ export function OrganicMonthlyCalendar({
                     setOpenDayId(null);
                   }}
                 >
-                  <span className="shrink-0 text-xs text-muted-foreground">{draft.timeLabel}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatWallClockLabel(draft.timeLabel, uiLocale)}
+                  </span>
                   <span className="min-w-0 flex-1 whitespace-normal break-words text-sm">
-                    {draft.title || 'Untitled'}
+                    {draft.title || uiText('untitled_f59ab8d')}
                   </span>
                   <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-2xs">
-                    {draftStatusPresentation(draft.status).label}
+                    {draftStatusPresentation(draft.status, uiText).label}
                   </span>
                 </Button>
               ))}
@@ -657,12 +692,14 @@ export function OrganicMonthlyCalendar({
                     setOpenDayId(null);
                   }}
                 >
-                  <span className="shrink-0 text-xs text-muted-foreground">{post.timeLabel}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatWallClockLabel(post.timeLabel, uiLocale)}
+                  </span>
                   <span className="min-w-0 flex-1 whitespace-normal break-words text-sm">
                     {post.title}
                   </span>
                   <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-2xs">
-                    Published
+                    {uiText('published_2ef42ec')}
                   </span>
                 </Button>
               ))}

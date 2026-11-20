@@ -1,22 +1,23 @@
 'use client';
 
 import { Heart, MessageCircle } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import React from 'react';
-
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import type { UiLocale } from '@/i18n/config';
 import type { OrganicComment } from '@/lib/schemas/organicMetrics';
 import { cn } from '@/lib/utils';
 
 type SortMode = 'recency' | 'likes';
 
-function formatCommentDate(timestamp: string | undefined) {
+function formatCommentDate(timestamp: string | undefined, locale: UiLocale) {
   if (!timestamp) return '';
   const d = new Date(timestamp);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
 function userInitial(username: string | undefined) {
@@ -25,6 +26,8 @@ function userInitial(username: string | undefined) {
 }
 
 function CommentRow({ comment }: { comment: OrganicComment }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   return (
     <div className="flex gap-2 px-2 py-1.5">
       <Avatar className="h-5 w-5 shrink-0 mt-0.5">
@@ -35,7 +38,7 @@ function CommentRow({ comment }: { comment: OrganicComment }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-1">
           <span className="text-2xs font-semibold truncate leading-none">
-            {comment.username ?? 'unknown'}
+            {comment.username ?? uiText('unknown_b23a6a8')}
           </span>
           <div className="flex items-center gap-1 shrink-0">
             {(comment.likeCount ?? 0) > 0 && (
@@ -51,7 +54,7 @@ function CommentRow({ comment }: { comment: OrganicComment }) {
               </Badge>
             )}
             <span className="text-3xs text-muted-foreground tabular-nums">
-              {formatCommentDate(comment.timestamp)}
+              {formatCommentDate(comment.timestamp, uiLocale)}
             </span>
           </div>
         </div>
@@ -64,6 +67,7 @@ function CommentRow({ comment }: { comment: OrganicComment }) {
 }
 
 export function PostCommentsPanel({ comments }: { comments: OrganicComment[] | undefined }) {
+  const uiText = useTranslations('organic');
   const [sortBy, setSortBy] = React.useState<SortMode>('recency');
 
   const sorted = React.useMemo(() => {
@@ -84,7 +88,7 @@ export function PostCommentsPanel({ comments }: { comments: OrganicComment[] | u
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">
-          Comments ({comments.length})
+          {uiText.rich('sentence_1c0f27a99531', { v0: () => comments.length })}
         </span>
         <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
           {(['recency', 'likes'] as SortMode[]).map((mode) => (

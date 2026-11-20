@@ -1,6 +1,7 @@
 'use client';
 
 import { curveNatural } from '@visx/curve';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { Area } from './area';
 import { AreaChart } from './area-chart';
@@ -61,10 +62,13 @@ export function AreaChartLoading({
   gridShimmerSpeed,
   gridShimmerSync = false,
   loadingStyle = 'pulse',
-  label = 'Loading',
+  label: uiProvidedLabel,
   aspectRatio = '2 / 1',
   className = '',
 }: AreaChartLoadingProps) {
+  const defaultUiText = useTranslations('common');
+  const label = uiProvidedLabel ?? defaultUiText('loading_dc38088');
+
   const data = useMemo(
     () =>
       generateChartSkeletonData({

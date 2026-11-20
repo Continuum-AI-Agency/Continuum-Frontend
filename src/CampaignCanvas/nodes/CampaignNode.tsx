@@ -1,4 +1,5 @@
 'use client';
+
 import {
   AlertCircle,
   CheckCircle2,
@@ -9,6 +10,7 @@ import {
   Trash2,
   XCircle,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import React, { memo, useCallback } from 'react';
 import {
   Node,
@@ -37,12 +39,17 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { EditableLabel } from '../components/EditableLabel';
 import { NodeProvenance } from '../components/NodeProvenance';
-import { useCampaignStore } from '../stores/useCampaignStore';
 import { usePersonEdit } from '../hooks/usePersonEdit';
+import { useCampaignStore } from '../stores/useCampaignStore';
 import type { CampaignData, CampaignNodeProps } from '../types';
+import { localizedNodeOptions } from '../types/nodeOptionPresentation';
 import { OBJECTIVES, SPECIAL_CATEGORIES } from '../types/nodeOptions';
 
 export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'campaign'>) => {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const specialCategoriesView = localizedNodeOptions(SPECIAL_CATEGORIES, uiText, uiLocale);
+  const objectivesView = localizedNodeOptions(OBJECTIVES, uiText, uiLocale);
   const { duplicateNode, removeNode, addConnectedNode } = useCampaignStore();
   // Context-menu edits are a person's: they relabel what they change 'user_gave'.
   const updateNodeData = usePersonEdit();
@@ -96,7 +103,7 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
                   <Layout className="h-4 w-4" />
                 </div>
                 <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Campaign
+                  {uiText('campaign_268286d')}
                 </NodeTitle>
               </div>
 
@@ -120,18 +127,19 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
             </h3>
             <div className="flex flex-col gap-0.5">
               <NodeDescription className="text-xs text-muted-foreground">
-                {OBJECTIVES.find((o) => o.value === data.objective)?.label || 'No Objective Set'}
+                {objectivesView.find((o) => o.value === data.objective)?.label ||
+                  uiText('no_objective_set_10d3226')}
               </NodeDescription>
               <div className="flex items-center gap-1.5 mt-1">
                 <Badge variant="outline" className="text-3xs px-1 py-0 uppercase opacity-70">
-                  {data.buyingType || 'AUCTION'}
+                  {data.buyingType || uiText('auction_ae6062b')}
                 </Badge>
                 {data.specialAdCategories?.length ? (
                   <Badge
                     variant="outline"
                     className="text-3xs px-1 py-0 uppercase text-blue-500 border-blue-500/30"
                   >
-                    Special Cat.
+                    {uiText('special_cat_7d724cd')}
                   </Badge>
                 ) : null}
               </div>
@@ -142,30 +150,38 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
         </Node>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-64">
-        <ContextMenuLabel>Campaign Actions</ContextMenuLabel>
+        <ContextMenuLabel>{uiText('campaign_actions_6d62b9f')}</ContextMenuLabel>
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleAddAdSet}>
-            <Plus className="mr-2 h-4 w-4 text-primary" />
-            Add Ad Set
-            <ContextMenuItemInfo description="An ad set defines audience, budget, and delivery settings for its ads." />
+            {uiText.rich('sentence_c2d7c04594e2', {
+              v0: () => <Plus className="mr-2 h-4 w-4 text-primary" />,
+              v1: () => (
+                <ContextMenuItemInfo
+                  description={uiText('an_ad_set_defines_audience_budget_and_deliver_54bd2f8')}
+                />
+              ),
+            })}
           </ContextMenuItem>
         </ContextMenuGroup>
 
         <ContextMenuSeparator />
-        <ContextMenuLabel>Configurations</ContextMenuLabel>
+        <ContextMenuLabel>{uiText('configurations_ae53d36')}</ContextMenuLabel>
 
         <ContextMenuGroup>
           <ContextMenuSub>
             <ContextMenuSubTrigger>
-              <Layout className="mr-2 h-4 w-4" />
-              Set Objective
-              <ContextMenuItemInfo
-                className="ml-2 mr-4"
-                description="Campaign objective tells delivery which business outcome to optimize toward."
-              />
+              {uiText.rich('sentence_53cb67569052', {
+                v0: () => <Layout className="mr-2 h-4 w-4" />,
+                v1: () => (
+                  <ContextMenuItemInfo
+                    className="ml-2 mr-4"
+                    description={uiText('campaign_objective_tells_delivery_which_busin_5a4c308')}
+                  />
+                ),
+              })}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-              {OBJECTIVES.map((obj) => (
+              {objectivesView.map((obj) => (
                 <ContextMenuCheckboxItem
                   key={obj.value}
                   checked={data.objective === obj.value}
@@ -180,15 +196,18 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
 
           <ContextMenuSub>
             <ContextMenuSubTrigger>
-              <Settings className="mr-2 h-4 w-4" />
-              Special Categories
-              <ContextMenuItemInfo
-                className="ml-2 mr-4"
-                description="Special Ad Categories are required for regulated ad verticals."
-              />
+              {uiText.rich('sentence_2fd823cf52a8', {
+                v0: () => <Settings className="mr-2 h-4 w-4" />,
+                v1: () => (
+                  <ContextMenuItemInfo
+                    className="ml-2 mr-4"
+                    description={uiText('special_ad_categories_are_required_for_regula_6032a7d')}
+                  />
+                ),
+              })}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
-              {SPECIAL_CATEGORIES.map((cat) => (
+              {specialCategoriesView.map((cat) => (
                 <ContextMenuCheckboxItem
                   key={cat.value}
                   checked={data.specialAdCategories?.includes(cat.value)}
@@ -206,24 +225,32 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
 
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleDuplicate}>
-            <Copy className="mr-2 h-4 w-4" /> Duplicate
-            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
-            <ContextMenuItemInfo
-              className="ml-2"
-              description="A duplicate is an exact copy you can modify as a campaign variant."
-            />
+            {uiText.rich('sentence_cbb73dcd8c7a', {
+              v0: () => <Copy className="mr-2 h-4 w-4" />,
+              v1: () => <ContextMenuShortcut>⌘D</ContextMenuShortcut>,
+              v2: () => (
+                <ContextMenuItemInfo
+                  className="ml-2"
+                  description={uiText('a_duplicate_is_an_exact_copy_you_can_modify_a_5f52bb8')}
+                />
+              ),
+            })}
           </ContextMenuItem>
         </ContextMenuGroup>
 
         <ContextMenuSeparator />
 
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
-          <Trash2 className="mr-2 h-4 w-4" /> Delete
-          <ContextMenuShortcut>⌫</ContextMenuShortcut>
-          <ContextMenuItemInfo
-            className="ml-2"
-            description="Delete removes this campaign object from the current graph."
-          />
+          {uiText.rich('sentence_cab0f08ddea5', {
+            v0: () => <Trash2 className="mr-2 h-4 w-4" />,
+            v1: () => <ContextMenuShortcut>⌫</ContextMenuShortcut>,
+            v2: () => (
+              <ContextMenuItemInfo
+                className="ml-2"
+                description={uiText('delete_removes_this_campaign_object_from_the__d24d306')}
+              />
+            ),
+          })}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

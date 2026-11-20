@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { BrandTrendsTabs } from '@/components/brand-insights/BrandTrendsTabs';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
 
 // The three signal feeds sit behind tabs rather than stacked accordions. Asserting on rendered
 // output keeps this honest across primitive swaps. Note this targets BrandTrendsTabs directly, not

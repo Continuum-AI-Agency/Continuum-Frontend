@@ -1,6 +1,7 @@
 'use client';
 
 import MapLibreGL, { type MarkerOptions, type PopupOptions } from 'maplibre-gl';
+import { useTranslations } from 'next-intl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Loader2, Locate, Maximize, Minus, Plus, X } from 'lucide-react';
 import {
@@ -508,6 +509,7 @@ function MarkerPopup({
   closeButton = false,
   ...popupOptions
 }: MarkerPopupProps) {
+  const uiText = useTranslations('common');
   const { marker, map } = useMarkerContext();
   const container = useMemo(() => document.createElement('div'), []);
   const prevPopupOptions = useRef(popupOptions);
@@ -564,10 +566,10 @@ function MarkerPopup({
           type="button"
           onClick={handleClose}
           className="absolute top-1 right-1 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          aria-label="Close popup"
+          aria-label={uiText('m_1b60006cd7')}
         >
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{uiText('close_7d9eb7a')}</span>
         </button>
       )}
       {children}
@@ -752,6 +754,7 @@ function MapControls({
   className,
   onLocate,
 }: MapControlsProps) {
+  const uiText = useTranslations('common');
   const { map } = useMap();
   const [waitingForLocation, setWaitingForLocation] = useState(false);
 
@@ -808,10 +811,10 @@ function MapControls({
     >
       {showZoom && (
         <ControlGroup>
-          <ControlButton onClick={handleZoomIn} label="Zoom in">
+          <ControlButton onClick={handleZoomIn} label={uiText('zoom_in_0e47f09')}>
             <Plus className="size-4" />
           </ControlButton>
-          <ControlButton onClick={handleZoomOut} label="Zoom out">
+          <ControlButton onClick={handleZoomOut} label={uiText('zoom_out_bc7b631')}>
             <Minus className="size-4" />
           </ControlButton>
         </ControlGroup>
@@ -825,7 +828,7 @@ function MapControls({
         <ControlGroup>
           <ControlButton
             onClick={handleLocate}
-            label="Find my location"
+            label={uiText('m_812175f491')}
             disabled={waitingForLocation}
           >
             {waitingForLocation ? (
@@ -838,7 +841,7 @@ function MapControls({
       )}
       {showFullscreen && (
         <ControlGroup>
-          <ControlButton onClick={handleFullscreen} label="Toggle fullscreen">
+          <ControlButton onClick={handleFullscreen} label={uiText('m_751fc48b06')}>
             <Maximize className="size-4" />
           </ControlButton>
         </ControlGroup>
@@ -848,6 +851,8 @@ function MapControls({
 }
 
 function CompassButton({ onClick }: { onClick: () => void }) {
+  const tUi = useTranslations('common');
+
   const { map } = useMap();
   const compassRef = useRef<SVGSVGElement>(null);
 
@@ -873,8 +878,9 @@ function CompassButton({ onClick }: { onClick: () => void }) {
   }, [map]);
 
   return (
-    <ControlButton onClick={onClick} label="Reset bearing to north">
+    <ControlButton onClick={onClick} label={tUi('m_f134874be4')}>
       <svg
+        aria-hidden="true"
         ref={compassRef}
         viewBox="0 0 24 24"
         className="size-5 transition-transform duration-200"
@@ -913,6 +919,7 @@ function MapPopup({
   closeButton = false,
   ...popupOptions
 }: MapPopupProps) {
+  const uiText = useTranslations('common');
   const { map } = useMap();
   const popupOptionsRef = useRef(popupOptions);
   const onCloseRef = useRef(onClose);
@@ -983,10 +990,10 @@ function MapPopup({
           type="button"
           onClick={handleClose}
           className="absolute top-1 right-1 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          aria-label="Close popup"
+          aria-label={uiText('m_1b60006cd7')}
         >
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{uiText('close_7d9eb7a')}</span>
         </button>
       )}
       {children}

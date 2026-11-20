@@ -1,3 +1,6 @@
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+import { type GoogleText, googleCopy } from '../googlePresentation';
 // The Quality Score map (P6 view 5) from keyword_quality: how the account's spend spreads over
 // the 1–10 scores, each keyword with its three components (presentation standard §10: never the
 // 1–10 alone), and the waste — spend on a keyword at Quality Score ≤ G11_MAX_QUALITY_SCORE that
@@ -59,9 +62,15 @@ const COMPONENT_WORDS: Readonly<Record<string, string>> = {
   ABOVE_AVERAGE: 'Above avg',
 };
 
-function componentCell(value: string | null): Cell {
+function componentCell(value: string | null, uiTranslate?: GoogleText): Cell {
   if (!value) return missing(NOT_SCORED);
-  return shown(COMPONENT_WORDS[value] ?? value.toLowerCase().replaceAll('_', ' '));
+  return shown(
+    COMPONENT_WORDS[value]
+      ? googleCopy(COMPONENT_WORDS[value], uiTranslate)
+      : uiTranslate
+        ? uiTranslate('googleControlCode', { code: value })
+        : value.toLowerCase().replaceAll('_', ' '),
+  );
 }
 
 /** True: low score, no conversion. False: scored above the line, unscored, or it converted.
@@ -74,7 +83,11 @@ export function isWaste(keyword: KeywordQuality): boolean | null {
   return keyword.metrics.conversions === 0;
 }
 
-export function buildQualityScoreMap(read: GoogleKeywordQualityRead): QualityScoreMapModel {
+export function buildQualityScoreMap(
+  read: GoogleKeywordQualityRead,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: GoogleText,
+): QualityScoreMapModel {
   const buckets: QsBucket[] = Array.from({ length: 10 }, (_, index) => ({
     score: index + 1,
     keywords: 0,
@@ -105,20 +118,22 @@ export function buildQualityScoreMap(read: GoogleKeywordQualityRead): QualitySco
       (keyword): QsRow => ({
         id: `${keyword.criterion_id}:${keyword.ad_group}`,
         keyword: keyword.keyword,
-        matchType: keyword.match_type.toLowerCase(),
+        matchType: uiTranslate
+          ? uiTranslate('googleControlCode', { code: keyword.match_type })
+          : keyword.match_type.toLowerCase(),
         where: `${keyword.campaign} · ${keyword.ad_group}`,
         score:
           keyword.quality_score === null
             ? missing(NOT_SCORED)
             : shown(String(keyword.quality_score)),
-        expectedCtr: componentCell(keyword.expected_ctr),
-        adRelevance: componentCell(keyword.ad_relevance),
-        landingPage: componentCell(keyword.landing_page_experience),
+        expectedCtr: componentCell(keyword.expected_ctr, uiTranslate),
+        adRelevance: componentCell(keyword.ad_relevance, uiTranslate),
+        landingPage: componentCell(keyword.landing_page_experience, uiTranslate),
         spend: keyword.metrics.spend,
         conversions:
           keyword.metrics.conversions === null
             ? missing(CONVERSIONS_NOT_COUNTED)
-            : shown(resultsText(keyword.metrics.conversions)),
+            : shown(resultsText(keyword.metrics.conversions, uiLocale)),
         waste: isWaste(keyword) === true,
       }),
     );
@@ -129,7 +144,7 @@ export function buildQualityScoreMap(read: GoogleKeywordQualityRead): QualitySco
     average:
       read.average_quality_score === null
         ? missing('No keyword has a Quality Score yet')
-        : shown(read.average_quality_score.toFixed(1)),
+        : shown(formatDecimal(read.average_quality_score, 1, uiLocale)),
     scored: read.scored_keywords,
     total: read.total_keywords,
     rows,

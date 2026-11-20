@@ -1,4 +1,9 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import {
+  accountDetectorComparison,
+  accountDetectorLabel,
+} from '@/lib/paid-media/accountPresentation';
 
 // A compiled optimizer card, shown inside a Jaina answer.
 //
@@ -31,9 +36,10 @@ import { signHyperframeAsset } from '@/lib/organic/hyperframeSign';
 type FrameState = 'loading' | 'ready' | 'unreachable';
 
 function Frame({ brandId, frame }: { brandId: string; frame: JainaHyperframe }) {
+  const uiText = useTranslations('scale');
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<FrameState>('loading');
-  const label = ACCOUNT_DETECTOR_META[frame.detector].label;
+  const label = accountDetectorLabel(frame.detector, uiText);
 
   useEffect(() => {
     let live = true;
@@ -76,7 +82,7 @@ function Frame({ brandId, frame }: { brandId: string; frame: JainaHyperframe }) 
         ) : (
           <div className="absolute inset-0 grid place-items-center p-4">
             <p className="text-center text-xs text-muted-foreground">
-              {state === 'loading' ? 'Drawing…' : HYPERFRAME_UNREACHABLE_NOTE}
+              {state === 'loading' ? uiText('drawing_eb683f4') : HYPERFRAME_UNREACHABLE_NOTE}
             </p>
           </div>
         )}
@@ -89,6 +95,7 @@ function Frame({ brandId, frame }: { brandId: string; frame: JainaHyperframe }) 
 export type JainaOptimizerHyperframesProps = { sets: JainaHyperframeSet[] };
 
 export function JainaOptimizerHyperframes({ sets }: JainaOptimizerHyperframesProps) {
+  const uiText = useTranslations('scale');
   const scope = useJainaBrandScope();
   const brandId = scope?.brandId ?? null;
   if (!brandId || sets.length === 0) return null;
@@ -105,8 +112,8 @@ export function JainaOptimizerHyperframes({ sets }: JainaOptimizerHyperframesPro
           </div>
           <p className="mt-1.5 text-xs text-muted-foreground">
             {set.read_day
-              ? `compiled from the read of ${set.read_day}`
-              : 'compiled from a stored read'}
+              ? uiText('template_b7436955a282', { v0: set.read_day })
+              : uiText('compiled_from_a_stored_read_28b8b67')}
           </p>
         </section>
       ))}

@@ -1,5 +1,6 @@
 import { mock } from 'bun:test';
 import { Window } from 'happy-dom';
+import { unstable_isUnrecognizedActionError } from 'next/dist/client/components/unrecognized-action-error';
 
 // Mock server-only to allow testing components that import server files
 mock.module('server-only', () => {
@@ -151,16 +152,22 @@ mock.module('next/navigation', () => {
     }),
     useSearchParams: () => new URLSearchParams(),
     usePathname: () => '',
+    useParams: () => ({ locale: 'en' }),
     useSelectedLayoutSegment: () => null,
     useSelectedLayoutSegments: () => [],
     redirect: (url: string) => {
       console.log(`Redirecting to ${url}`);
+    },
+    permanentRedirect: (url: string) => {
+      console.log(`Redirecting permanently to ${url}`);
     },
     notFound: () => {
       console.log('Not found');
     },
     // Server actions rethrow Next's control-flow errors with it; nothing here throws one.
     unstable_rethrow: () => {},
+    // The real predicate: a stale tab's Server Action failure is recognised here as in a browser.
+    unstable_isUnrecognizedActionError,
   };
 });
 

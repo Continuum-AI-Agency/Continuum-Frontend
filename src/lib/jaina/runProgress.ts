@@ -7,19 +7,22 @@
 // answer's text streams last. Each stage gets a typical duration measured on real production
 // runs, and the estimate is "what is left of this stage, plus every stage after it".
 //
+// An analyst-mode turn (the Backend's free tool loop, opened by the `analyst` notice) has no plan
+// and no hypotheses: it reads, then writes. It is timed as such — see ANALYST_PLAN.
+//
 // Three promises the reader is owed, each enforced here rather than in the component:
 //   - the bar only moves forward, and never reaches 100% before the turn has actually finished;
 //   - when a stage outlasts its estimate the label stops quoting a number and says so
 //     ("Tardando más de lo esperado…"), while the bar keeps creeping instead of freezing;
 //   - it is only shown for a turn that will take a while: a quick answer never flashes a bar.
 
-import type { JainaUIMessage } from '@continuum/contracts';
+import { isAnalystNotice, type JainaUIMessage } from '@continuum/contracts';
 import { readsAsSpanish } from '../../components/paid-media/jaina/answerLanguage';
 
 export type RunProgressLanguage = 'es' | 'en';
 
 /** Which kind of turn this is, as far as the parts received so far can tell. */
-export type JainaRunRoute = 'pending' | 'analysis' | 'answer';
+export type JainaRunRoute = 'pending' | 'analysis' | 'answer' | 'analyst';
 
 export type JainaRunStage =
   | 'starting'
@@ -32,6 +35,8 @@ export type JainaRunStage =
 
 /** What the parts of the streaming message say, with no notion of time. */
 export type JainaRunSignals = {
+  /** The turn opened with the analyst notice: one free tool loop, timed by its reads. */
+  analyst: boolean;
   planned: boolean;
   questionClass: string | null;
   expectedDuration: string | null;
@@ -76,7 +81,11 @@ export type JainaRunProgress = {
 // a clarification question); those never show the bar.
 // ---------------------------------------------------------------------------------------------
 
-type StagePlan = ReadonlyArray<readonly [JainaRunStage, number]>;
+/**
+ * A stage, its typical seconds, and — for a stage whose spread is wide — the seconds after which
+ * it really is late. Without a ceiling a stage is late at STAGE_OVERRUN_FACTOR × its estimate.
+ */
+type StagePlan = ReadonlyArray<readonly [JainaRunStage, number, number?]>;
 
 const STARTING_SECONDS = 4;
 
@@ -110,6 +119,33 @@ const ANSWER_SECONDS: Record<string, number> = {
   compare: 92,
 };
 const DEFAULT_ANSWER_SECONDS = 74;
+
+/**
+ * Analyst mode, from experiment 1 (2026-11-10, free gemini-3.8-flash over Jaina's reads, the 25 dev
+ * questions): 165 s median and 323 s max per turn, a median 19 reads (max 41). Nearly all of it is
+ * reading — the answer streams once, at the end. So the reading stage carries the median and is
+ * only late past the longest measured turn; the writing stage gets a minute before it is.
+ */
+export const ANALYST_MEDIAN_SECONDS = 165;
+export const ANALYST_MAX_SECONDS = 323;
+/** The experiment's median reads per turn: the pace a turn's own reads are measured against. */
+export const ANALYST_TYPICAL_READS = 19;
+const ANALYST_WRITING_SECONDS = 15;
+const ANALYST_PLAN: StagePlan = [
+  ['starting', STARTING_SECONDS],
+  [
+    'reading',
+    ANALYST_MEDIAN_SECONDS - ANALYST_WRITING_SECONDS,
+    ANALYST_MAX_SECONDS - ANALYST_WRITING_SECONDS,
+  ],
+  ['writing', ANALYST_WRITING_SECONDS, 60],
+];
+/**
+ * Past its typical seconds and short of its ceiling, a stage is quoted this share of the time left
+ * to the ceiling: a turn already slower than the median is likely slower still, and the estimate
+ * glides down instead of collapsing to "almost done".
+ */
+const CEILING_SHARE = 0.45;
 
 const answerPlan = (analyzingSeconds: number): StagePlan => [
   ['starting', STARTING_SECONDS],
@@ -166,6 +202,7 @@ export function readRunSignals(
     questionClass: null,
     expectedDuration: null,
     language: null,
+    analyst: false,
     analysisRows: false,
     readingLayers: false,
     hypothesesTotal: 0,
@@ -189,7 +226,12 @@ export function readRunSignals(
       }
       case 'data-jaina-analysis-progress': {
         const row = asRecord(part.data);
-        if (!row || row.kind === 'notice') break;
+        if (!row) break;
+        if (row.kind === 'notice') {
+          if (typeof row.id === 'string' && isAnalystNotice({ kind: 'notice', id: row.id }))
+            signals.analyst = true;
+          break;
+        }
         signals.analysisRows = true;
         if (typeof row.id !== 'string') break;
         if (row.kind === 'hypothesis') hypotheses.set(row.id, String(row.status));
@@ -215,6 +257,7 @@ export function readRunSignals(
 }
 
 export function routeOf(signals: JainaRunSignals): JainaRunRoute {
+  if (signals.analyst) return 'analyst';
   // Hypotheses are what make a turn long; a short plan also reads layers (a lookup does), and
   // timing those as the hypothesis analysis would call a one-minute answer late after thirty
   // seconds. Measured on run_4e62dff5040443868e0b8b7595f46e3e (lookup, 14 layer rows, 71s).
@@ -226,6 +269,8 @@ export function routeOf(signals: JainaRunSignals): JainaRunRoute {
 function stageOf(signals: JainaRunSignals, route: JainaRunRoute): JainaRunStage {
   if (signals.finished) return 'done';
   if (signals.answerStreaming) return 'writing';
+  // The loop thinks before its first read; that is reading time too, not a late start.
+  if (route === 'analyst') return 'reading';
   if (route === 'analysis') {
     if (signals.hypothesesTotal === 0) return 'reading';
     return signals.hypothesesSettled < signals.hypothesesTotal ? 'testing' : 'concluding';
@@ -235,6 +280,7 @@ function stageOf(signals: JainaRunSignals, route: JainaRunRoute): JainaRunStage 
 }
 
 function stagePlanOf(route: JainaRunRoute, questionClass: string | null): StagePlan {
+  if (route === 'analyst') return ANALYST_PLAN;
   if (route === 'analysis')
     return (questionClass && ANALYSIS_PLANS[questionClass]) || DEFAULT_ANALYSIS_PLAN;
   return answerPlan((questionClass && ANSWER_SECONDS[questionClass]) || DEFAULT_ANSWER_SECONDS);
@@ -288,7 +334,10 @@ function activityOf(
   if (stage === 'testing' && signals.hypothesesTotal > 0)
     return `${base} (${signals.hypothesesSettled} ${language === 'es' ? 'de' : 'of'} ${signals.hypothesesTotal})`;
   if (stage === 'analyzing' && signals.readingLayers) return ACTIVITY[language].reading;
-  if (stage === 'analyzing' && signals.toolCalls > 0) {
+  if (
+    (stage === 'analyzing' || (stage === 'reading' && signals.analyst)) &&
+    signals.toolCalls > 0
+  ) {
     const reads = language === 'es' ? 'consultas' : 'reads';
     const one = language === 'es' ? 'consulta' : 'read';
     return `${base} · ${signals.toolCalls} ${signals.toolCalls === 1 ? one : reads}`;
@@ -359,11 +408,24 @@ export function createRunProgressTracker(options: {
       // to show at all; before that it is invisible, so its estimate is never read.
       const plan = stagePlanOf(route === 'pending' ? 'answer' : route, signals.questionClass);
       const index = plan.findIndex(([name]) => name === stage);
-      const [, prior] = plan[Math.max(0, index)] ?? ['starting', STARTING_SECONDS];
+      const [, prior, ceiling] = plan[Math.max(0, index)] ?? ['starting', STARTING_SECONDS];
       const later = plan.slice(index + 1).reduce((sum, [, seconds]) => sum + seconds, 0);
       const inStage = (now - stageEnteredAt) / 1000;
 
       let stageRemaining = Math.max(0, prior - inStage);
+      if (ceiling !== undefined)
+        stageRemaining = Math.max(stageRemaining, CEILING_SHARE * (ceiling - inStage), 0);
+      if (
+        route === 'analyst' &&
+        stage === 'reading' &&
+        signals.toolCalls > 0 &&
+        signals.toolCalls < ANALYST_TYPICAL_READS
+      ) {
+        // The reads made so far say how fast this account answers; average that pace with the
+        // prior, as the hypotheses do below, so one slow read cannot swing the estimate alone.
+        const paced = (inStage * (ANALYST_TYPICAL_READS - signals.toolCalls)) / signals.toolCalls;
+        stageRemaining = (stageRemaining + paced) / 2;
+      }
       if (
         stage === 'testing' &&
         signals.hypothesesSettled > 0 &&
@@ -379,10 +441,12 @@ export function createRunProgressTracker(options: {
       const isLastTimedStage = index === plan.length - 1 || stage === 'concluding';
       // An unplanned turn still waiting for its plan has no estimate of its own to outrun: it is
       // quoted as an ordinary answer until the plan says otherwise.
+      // A stage with a ceiling is late only past it; any other once its estimate is spent.
       const stageOverrun =
         route !== 'pending' &&
-        stageRemaining === 0 &&
-        (isLastTimedStage || inStage > prior * STAGE_OVERRUN_FACTOR);
+        (ceiling !== undefined
+          ? inStage > ceiling
+          : stageRemaining === 0 && (isLastTimedStage || inStage > prior * STAGE_OVERRUN_FACTOR));
       const budgetLeft = JAINA_TURN_BUDGET_SECONDS - elapsed;
       const rawEta = Math.min(stageRemaining + later, budgetLeft);
       const exceeded = stageOverrun || rawEta <= 0;

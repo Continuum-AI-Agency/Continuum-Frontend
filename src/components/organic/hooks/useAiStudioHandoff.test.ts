@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { renderHook, waitFor } from '@testing-library/react';
-
+import { waitFor } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import {
   buildAiStudioStorageKey,
   plannerAiStudioHandoffSchema,

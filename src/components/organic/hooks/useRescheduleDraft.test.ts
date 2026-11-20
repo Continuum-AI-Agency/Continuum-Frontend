@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { movePlannerDraftToDay, plannerInstantFromDayTime } from '@continuum/contracts';
-import { act, renderHook } from '@testing-library/react';
-
+import { act } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useCalendarStore } from '@/lib/organic/store';
 
 type RequestOptions = {

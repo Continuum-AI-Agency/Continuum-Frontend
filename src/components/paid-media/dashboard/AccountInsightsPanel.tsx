@@ -9,13 +9,16 @@ import {
   UsersIcon,
   WalletIcon,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { useMemo } from 'react';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAccountInsights } from '@/hooks/useAccountInsights';
 import type { ComputedInsight, InsightCategory } from '@/lib/paid-media/account-insights.types';
+import { dashboardFreshness } from './dashboardPresentation';
 import { InsightCategoryCard } from './InsightCategoryCard';
 import type { PaidMediaTimeRange } from './timeRange';
 
@@ -24,44 +27,6 @@ type AccountInsightsPanelProps = {
   adAccountId: string;
   timeRange: PaidMediaTimeRange;
 };
-
-const CATEGORY_CONFIG: ReadonlyArray<{
-  key: InsightCategory;
-  title: string;
-  icon: typeof BarChart3Icon;
-  accent: string;
-}> = [
-  {
-    key: 'formats',
-    title: 'Formats',
-    icon: LayoutGridIcon,
-    accent: 'bg-violet-500/90',
-  },
-  {
-    key: 'placements',
-    title: 'Placement / Platform',
-    icon: MapPinIcon,
-    accent: 'bg-blue-500/90',
-  },
-  {
-    key: 'audiences',
-    title: 'Audiences',
-    icon: UsersIcon,
-    accent: 'bg-amber-500/90',
-  },
-  {
-    key: 'creative',
-    title: 'Creative / Visual',
-    icon: PaletteIcon,
-    accent: 'bg-rose-500/90',
-  },
-  {
-    key: 'budget',
-    title: 'Budget Pace',
-    icon: WalletIcon,
-    accent: 'bg-emerald-500/90',
-  },
-];
 
 function groupByCategory(insights: ComputedInsight[]): Record<InsightCategory, ComputedInsight[]> {
   const grouped: Record<InsightCategory, ComputedInsight[]> = {
@@ -84,6 +49,48 @@ export function AccountInsightsPanel({
   adAccountId,
   timeRange,
 }: AccountInsightsPanelProps) {
+  const uiText = useTranslations('scale');
+  const CATEGORY_CONFIG: ReadonlyArray<{
+    key: InsightCategory;
+    title: string;
+    icon: typeof BarChart3Icon;
+    accent: string;
+  }> = useMemo(
+    () => [
+      {
+        key: 'formats',
+        title: uiText('formats_9f01769'),
+        icon: LayoutGridIcon,
+        accent: 'bg-violet-500/90',
+      },
+      {
+        key: 'placements',
+        title: uiText('placement_platform_b564342'),
+        icon: MapPinIcon,
+        accent: 'bg-blue-500/90',
+      },
+      {
+        key: 'audiences',
+        title: uiText('audiences_9e3922b'),
+        icon: UsersIcon,
+        accent: 'bg-amber-500/90',
+      },
+      {
+        key: 'creative',
+        title: uiText('creative_visual_bad9617'),
+        icon: PaletteIcon,
+        accent: 'bg-rose-500/90',
+      },
+      {
+        key: 'budget',
+        title: uiText('budget_pace_d212d0e'),
+        icon: WalletIcon,
+        accent: 'bg-emerald-500/90',
+      },
+    ],
+    [uiText],
+  );
+
   const { insights, expiresAt, isLoading, error, refresh } = useAccountInsights({
     brandId,
     adAccountId,
@@ -93,17 +100,10 @@ export function AccountInsightsPanel({
   const grouped = React.useMemo(() => groupByCategory(insights), [insights]);
   const hasAnyInsights = insights.length > 0;
 
-  const stalenessLabel = React.useMemo(() => {
-    if (!expiresAt) return null;
-    const remaining = new Date(expiresAt).getTime() - Date.now();
-    if (remaining <= 0) return 'Stale';
-    const hours = Math.floor(remaining / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    if (days > 0) return `Fresh for ${days}d ${hours % 24}h`;
-    if (hours > 0) return `Fresh for ${hours}h`;
-    const mins = Math.ceil(remaining / (1000 * 60));
-    return `Fresh for ${mins}m`;
-  }, [expiresAt]);
+  const stalenessLabel = React.useMemo(
+    () => dashboardFreshness(expiresAt, uiText),
+    [expiresAt, uiText],
+  );
 
   return (
     <Card className="overflow-hidden border-border/70">
@@ -111,7 +111,7 @@ export function AccountInsightsPanel({
         title={
           <span className="flex items-center gap-2">
             <BarChart3Icon className="size-4 text-muted-foreground" />
-            Account Insights
+            {uiText('account_insights_0c870a9')}
           </span>
         }
         meta={
@@ -127,6 +127,7 @@ export function AccountInsightsPanel({
             size="sm"
             className="h-7 w-7 p-0"
             onClick={refresh}
+            aria-label={uiText('refresh_0e91610')}
             disabled={isLoading}
           >
             <RotateCw className={isLoading ? 'size-3.5 animate-spin' : 'size-3.5'} />
@@ -156,7 +157,7 @@ export function AccountInsightsPanel({
             <p className="py-4 text-center text-xs text-destructive">{error}</p>
           ) : !hasAnyInsights ? (
             <p className="py-4 text-center text-xs text-muted-foreground">
-              No insights for this range yet.
+              {uiText('no_insights_for_this_range_yet_9873d82')}
             </p>
           ) : (
             <div

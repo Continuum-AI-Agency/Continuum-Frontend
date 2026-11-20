@@ -12,6 +12,7 @@ import {
 } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
 import { Share2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -32,6 +33,8 @@ const handleStyle = (locked: StudioEmittedModality | null): React.CSSProperties 
 });
 
 export function RouterNode({ data, selected }: NodeProps<ReactFlowNode<RouterNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const locked = data.lockedType;
 
   return (
@@ -44,14 +47,18 @@ export function RouterNode({ data, selected }: NodeProps<ReactFlowNode<RouterNod
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <NodeTitleBar icon={Share2} label="Router">
-          <NodeBadge>{locked ? MODALITY_LABEL[locked] : 'Unset'}</NodeBadge>
+        <NodeTitleBar icon={Share2} label={translateUi('router_065d8e6c')}>
+          <NodeBadge>{locked ? MODALITY_LABEL[locked] : translateUi('unset_8d2dd4e8')}</NodeBadge>
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/30 p-0">
           <ModalityPreview
             modality={locked}
             data={data}
-            emptyLabel={locked ? 'Nothing through yet' : 'Connect a source'}
+            emptyLabel={
+              locked
+                ? translateUi('nothing_through_yet_2eaa4f98')
+                : translateUi('connect_a_source_97918e01')
+            }
           />
         </NodeContent>
       </CanvasNode>

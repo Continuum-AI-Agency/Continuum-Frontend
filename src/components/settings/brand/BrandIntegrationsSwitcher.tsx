@@ -5,6 +5,7 @@
 'use client';
 
 import { Plug, Plus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { AssignmentsDialog } from '@/components/integrations/AssignmentsDialog';
 import type { PlatformKey } from '@/components/onboarding/platforms';
@@ -51,6 +52,8 @@ export function BrandIntegrationsSwitcher({
   members,
   currentUserId,
 }: BrandIntegrationsSwitcherProps) {
+  const tUi = useTranslations('settings');
+
   const { activeBrandId } = useActiveBrandContext();
   const { integrations, isLoading, refresh } = useBrandIntegrations(activeBrandId, initialSummary);
   const [assignmentsOpen, setAssignmentsOpen] = useState(false);
@@ -83,18 +86,20 @@ export function BrandIntegrationsSwitcher({
         return {
           id:
             account.externalAccountId ?? account.alias ?? account.integrationAccountId.slice(0, 6),
-          title: account.name || account.alias || 'Unnamed account',
+          title: account.name || account.alias || tUi('m_5c0de372dc'),
           icon: PLATFORM_ICONS[platformKey] ?? Plug,
           status: statusFor(account.status),
           subtitle: isTeammate
-            ? `Tagged by ${getMemberDisplayName(members, account.ownerUserId)}`
+            ? tUi('m_2895be94f7', {
+                v0: String(getMemberDisplayName(members, account.ownerUserId)),
+              })
             : undefined,
         };
       });
     });
 
     return { tabs, data, hasAny: tabs.length > 0 };
-  }, [resolvedSummary, members, currentUserId]);
+  }, [resolvedSummary, members, currentUserId, tUi]);
 
   const assignedIds = useMemo(
     () => extractAssignedIntegrationAccountIds(resolvedSummary),
@@ -112,7 +117,7 @@ export function BrandIntegrationsSwitcher({
       disabled={!activeBrandId || isLoading}
     >
       <Plus className="h-4 w-4" />
-      Assign accounts
+      {tUi('m_4abf45a49c')}
     </Button>
   );
 
@@ -130,9 +135,9 @@ export function BrandIntegrationsSwitcher({
       ) : (
         <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-5 py-10 text-center">
           <Plug className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden />
-          <p className="text-sm font-medium text-foreground">No integrations assigned</p>
+          <p className="text-sm font-medium text-foreground">{tUi('m_7dd6f2b491')}</p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
-            Assign provider accounts to this brand to surface them across the app.
+            {tUi('m_29e259077a')}
           </p>
           <div className="mt-4 inline-block">{assignButton}</div>
         </div>

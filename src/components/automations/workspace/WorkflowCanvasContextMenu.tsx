@@ -19,6 +19,7 @@ import {
   Trash2,
   Unplug,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ReactElement, ReactNode } from 'react';
 import {
   ContextMenu,
@@ -33,7 +34,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
-import { AUTOMATION_NODE_CATALOG } from './automationNodeCatalog';
+import { AUTOMATION_NODE_CATALOG, localizedAutomationNodeCatalog } from './automationNodeCatalog';
 
 export type WorkflowMenuTarget =
   | { kind: 'pane'; position: { x: number; y: number } }
@@ -84,6 +85,7 @@ export function WorkflowCanvasContextMenu({
   onToggleNode,
   onUnpublish,
 }: WorkflowCanvasContextMenuProps) {
+  const uiText = useTranslations('automations');
   const promptNode =
     node?.type === 'instruction' ||
     node?.type === 'agent' ||
@@ -97,14 +99,14 @@ export function WorkflowCanvasContextMenu({
       <ContextMenuContent className="automation-workflow-popover w-64 rounded-lg p-1.5">
         {target.kind === 'pane' ? (
           <>
-            <ContextMenuLabel>Canvas</ContextMenuLabel>
+            <ContextMenuLabel>{uiText('canvas_3824a9f')}</ContextMenuLabel>
             <ContextMenuSub>
               <ContextMenuSubTrigger disabled={locked}>
                 <Plus className="mr-2 size-4" aria-hidden="true" />
-                Add node here
+                {uiText('add_node_here_91627a3')}
               </ContextMenuSubTrigger>
               <ContextMenuSubContent className="automation-workflow-popover w-56 rounded-lg p-1.5">
-                {AUTOMATION_NODE_CATALOG.map((group) => (
+                {localizedAutomationNodeCatalog(uiText).map((group) => (
                   <ContextMenuSub key={group.category}>
                     <ContextMenuSubTrigger>{group.label}</ContextMenuSubTrigger>
                     <ContextMenuSubContent className="automation-workflow-popover w-64 rounded-lg p-1.5">
@@ -127,33 +129,33 @@ export function WorkflowCanvasContextMenu({
             </ContextMenuSub>
             <ContextMenuItem onSelect={onOpenLibrary}>
               <Search className="mr-2 size-4" aria-hidden="true" />
-              Search all nodes
+              {uiText('m_33fb3ac6c0')}
               <ContextMenuShortcut>N</ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={onSelectAll}>
               <Crosshair className="mr-2 size-4" aria-hidden="true" />
-              Select all
+              {uiText('m_913afff1fa')}
               <ContextMenuShortcut>⌘A</ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuItem onSelect={onFitView}>
               <Focus className="mr-2 size-4" aria-hidden="true" />
-              Fit workflow
+              {uiText('m_05e2160184')}
               <ContextMenuShortcut>F</ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuItem onSelect={onResetZoom}>
               <Eye className="mr-2 size-4" aria-hidden="true" />
-              Reset zoom
+              {uiText('m_e5737972ce')}
               <ContextMenuShortcut>0</ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={onOpenLibrary}>
               <PanelLeft className="mr-2 size-4" aria-hidden="true" />
-              Open node library
+              {uiText('open_node_library_e2b630d')}
             </ContextMenuItem>
             <ContextMenuItem onSelect={onOpenInspector}>
               <PanelRight className="mr-2 size-4" aria-hidden="true" />
-              Open inspector
+              {uiText('open_inspector_21dadf3')}
             </ContextMenuItem>
           </>
         ) : null}
@@ -167,16 +169,18 @@ export function WorkflowCanvasContextMenu({
               ) : (
                 <PanelRight className="mr-2 size-4" aria-hidden="true" />
               )}
-              {promptNode ? 'Edit prompt and inputs' : 'Inspect and configure'}
+              {promptNode
+                ? uiText('edit_prompt_and_inputs_b344ed0')
+                : uiText('inspect_and_configure_99efdc2')}
               <ContextMenuShortcut>↵</ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuSub>
               <ContextMenuSubTrigger disabled={locked}>
                 <ArrowRight className="mr-2 size-4" aria-hidden="true" />
-                Add connected step
+                {uiText('add_connected_step_fce7fb7')}
               </ContextMenuSubTrigger>
               <ContextMenuSubContent className="automation-workflow-popover w-60 rounded-lg p-1.5">
-                {AUTOMATION_NODE_CATALOG.map((group) => (
+                {localizedAutomationNodeCatalog(uiText).map((group) => (
                   <ContextMenuSub key={group.category}>
                     <ContextMenuSubTrigger>{group.label}</ContextMenuSubTrigger>
                     <ContextMenuSubContent className="automation-workflow-popover w-64 rounded-lg p-1.5">
@@ -200,12 +204,12 @@ export function WorkflowCanvasContextMenu({
             <ContextMenuSeparator />
             <ContextMenuItem disabled={locked} onSelect={() => onDuplicateNode(node.id)}>
               <Copy className="mr-2 size-4" aria-hidden="true" />
-              Duplicate
+              {uiText('m_972d57379d')}
               <ContextMenuShortcut>⌘D</ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuItem disabled={locked} onSelect={() => onToggleNode(node.id)}>
               <Power className="mr-2 size-4" aria-hidden="true" />
-              {node.disabled ? 'Enable node' : 'Disable node'}
+              {node.disabled ? uiText('enable_node_d9e2181') : uiText('disable_node_91a6e06')}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -214,7 +218,7 @@ export function WorkflowCanvasContextMenu({
               onSelect={() => onDeleteNode(node.id)}
             >
               <Trash2 className="mr-2 size-4" aria-hidden="true" />
-              Delete node
+              {uiText('delete_node_b50c024')}
               <ContextMenuShortcut>⌫</ContextMenuShortcut>
             </ContextMenuItem>
           </>
@@ -222,18 +226,18 @@ export function WorkflowCanvasContextMenu({
 
         {target.kind === 'edge' ? (
           <>
-            <ContextMenuLabel>Connection</ContextMenuLabel>
+            <ContextMenuLabel>{uiText('connection_639a40e')}</ContextMenuLabel>
             <ContextMenuItem onSelect={onOpenInspector}>
               <Eye className="mr-2 size-4" aria-hidden="true" />
-              Inspect connection
+              {uiText('inspect_connection_3c0650e')}
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => onSelectEdgeSource(target.edgeId)}>
               <ArrowUpFromLine className="mr-2 size-4" aria-hidden="true" />
-              Go to source step
+              {uiText('go_to_source_step_7b45559')}
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => onSelectEdgeTarget(target.edgeId)}>
               <ArrowDownToLine className="mr-2 size-4" aria-hidden="true" />
-              Go to next step
+              {uiText('go_to_next_step_8f37efe')}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -242,7 +246,7 @@ export function WorkflowCanvasContextMenu({
               onSelect={() => onDeleteEdge(target.edgeId)}
             >
               <Unplug className="mr-2 size-4" aria-hidden="true" />
-              Delete connection
+              {uiText('m_dfa71a6fbc')}
               <ContextMenuShortcut>⌫</ContextMenuShortcut>
             </ContextMenuItem>
           </>
@@ -253,8 +257,10 @@ export function WorkflowCanvasContextMenu({
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={onUnpublish}>
               <LockOpen className="mr-2 size-4" aria-hidden="true" />
-              Unpublish to edit
-              <ContextMenuItemInfo description="Stops this automation and unlocks the current version." />
+              {uiText('unpublish_to_edit_ef91531')}
+              <ContextMenuItemInfo
+                description={uiText('stops_this_automation_and_unlocks_the_current_e5c7267')}
+              />
             </ContextMenuItem>
           </>
         ) : null}

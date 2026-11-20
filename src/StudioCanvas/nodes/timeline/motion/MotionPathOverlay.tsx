@@ -1,9 +1,12 @@
 'use client';
 
 import type { EditorOverlayClip } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { motionPathPoints } from './motionPath';
 
 export function MotionPathOverlay({ clip }: { clip: EditorOverlayClip }) {
+  const translateUi = useUiTranslations('studio');
+
   const points = motionPathPoints(clip);
   if (points.length < 2) return null;
   const d = points
@@ -15,9 +18,9 @@ export function MotionPathOverlay({ clip }: { clip: EditorOverlayClip }) {
       preserveAspectRatio="none"
       className="pointer-events-none absolute inset-0 h-full w-full"
       role="img"
-      aria-label="Motion path"
+      aria-label={translateUi('motion_path_bcf3b890')}
     >
-      <title>Motion path</title>
+      <title>{translateUi('motion_path_bcf3b890')}</title>
       <path
         d={d}
         fill="none"

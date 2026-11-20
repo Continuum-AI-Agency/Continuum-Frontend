@@ -76,7 +76,7 @@ export async function GET(request: Request) {
 
   const rows = (data ?? []) as unknown as MediaAssetRow[];
   const signedUrls = await mintSignedUrls(
-    rows.map((row) => ({ path: row.storage_path, bucket: row.bucket })),
+    rows.map((row) => ({ path: row.storage_path, bucket: row.bucket, version: row.updated_at })),
   );
 
   return NextResponse.json({

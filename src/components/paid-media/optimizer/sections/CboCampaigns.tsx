@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // Surfaces the account's CBO ("Advantage Campaign Budget") campaigns as
 // not-yet-optimizable, with a one-click "Convert to ad-set budgets". The
 // Optimizer stays ad-set-level only: it never reallocates a campaign budget.
@@ -55,6 +57,8 @@ import {
 } from '../preview/convertPreview';
 import { useConvertCbo, useCyclePreview } from '../useOptimizerData';
 
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 type CboCampaignsProps = {
   brandId: string;
   accountId: string;
@@ -70,18 +74,19 @@ type CboCampaignsProps = {
 function softFailMessage(
   reason: string | null | undefined,
   error: string | null | undefined,
+  uiText: ScaleCopy,
 ): string {
   switch (reason) {
     case 'not_permitted':
-      return "This ad account isn't assigned to this brand. Assign it in Settings → Integrations, then try again.";
+      return uiText('this_ad_account_isn_t_assigned_to_this_brand__eaa9335');
     case 'no_adsets':
-      return 'This campaign has no ad sets to convert yet.';
+      return uiText('this_campaign_has_no_ad_sets_to_convert_yet_64f21e3');
     case 'no_token':
-      return 'Reconnect Meta to preview the conversion.';
+      return uiText('reconnect_meta_to_preview_the_conversion_ca03b51');
     case 'preview_changed':
-      return 'The budgets changed since this preview, so nothing was written. The new budgets are below — Apply again to approve them.';
+      return uiText('the_budgets_changed_since_this_preview_so_not_5028990');
     default:
-      return error?.trim() || "Couldn't compute the conversion preview. Try again in a moment.";
+      return error?.trim() || uiText('couldn_t_compute_the_conversion_preview_try_a_6999dab');
   }
 }
 
@@ -136,19 +141,22 @@ export function CboCampaigns({
   sections,
   snapshots,
 }: CboCampaignsProps) {
+  const uiText = useTranslations('scale');
   if (sections.length === 0) return null;
 
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2">
         <MegaphoneIcon className="size-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold tracking-tight">Campaigns using CBO</h3>
-        <span className="text-xs text-muted-foreground">not yet optimizable</span>
+        <h3 className="text-sm font-semibold tracking-tight">
+          {uiText('campaigns_using_cbo_0a67190')}
+        </h3>
+        <span className="text-xs text-muted-foreground">
+          {uiText('not_yet_optimizable_058ba94')}
+        </span>
       </div>
       <p className="text-xs text-muted-foreground">
-        These campaigns budget at the campaign level (Advantage Campaign Budget), so their ad sets
-        aren&rsquo;t optimizable yet. Convert one to ad-set budgets and the optimizer will manage
-        its ad sets.
+        {uiText('these_campaigns_budget_at_the_campaign_level__4b6ea64')}
       </p>
       <div className="space-y-2">
         {sections.map((section) => (
@@ -179,9 +187,10 @@ function CboCampaignRow({
   section: CampaignSection;
   snapshots: AdSetSnapshot[];
 }) {
+  const uiText = useTranslations('scale');
   const convert = useConvertCbo(brandId);
   const applyNoteId = useId();
-  const adsetLabel = `${section.totalCount} ad set${section.totalCount === 1 ? '' : 's'}`;
+  const adsetLabel = uiText('adset_count', { count: section.totalCount });
 
   // Fire a fresh dryRun preview each time the dialog opens (snapshots may change).
   const requestPreview = () => {
@@ -220,7 +229,7 @@ function CboCampaignRow({
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold tracking-tight">{section.campaignName}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {adsetLabel} · uses Advantage Campaign Budget (CBO)
+          {uiText.rich('sentence_b47703db2cc5', { v0: adsetLabel })}
         </p>
       </div>
 
@@ -235,19 +244,17 @@ function CboCampaignRow({
               onClick={requestPreview}
             >
               <SplitIcon className="size-3.5" />
-              Convert to ad-set budgets
+              {uiText('convert_to_ad_set_budgets_28729cf')}
             </Button>
           }
         />
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Convert &ldquo;{section.campaignName}&rdquo; to ad-set budgets
+              {uiText.rich('sentence_7050df37716b', { v0: section.campaignName })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Converting removes the campaign&rsquo;s Advantage Campaign Budget and gives each ad
-              set its own daily budget, so the optimizer can manage them. Below is what those
-              budgets would be.
+              {uiText('converting_removes_the_campaign_s_advantage_c_9e63466')}
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -267,12 +274,12 @@ function CboCampaignRow({
               a `title` (a native tooltip is unreliable and unreachable by keyboard). */}
           {approvable ? (
             <p className="text-xs text-muted-foreground" id={applyNoteId}>
-              Nothing changes on Meta until you click Apply, and Apply writes exactly these budgets.
+              {uiText('nothing_changes_on_meta_until_you_click_apply_fbf77fb')}
             </p>
           ) : null}
 
           <AlertDialogFooter>
-            <AlertDialogCancel>Close</AlertDialogCancel>
+            <AlertDialogCancel>{uiText('close_7d9eb7a')}</AlertDialogCancel>
             {stage.kind === 'converted' ? null : (
               <Button
                 aria-describedby={approvable ? applyNoteId : undefined}
@@ -281,7 +288,7 @@ function CboCampaignRow({
                 onClick={apply}
                 type="button"
               >
-                Apply
+                {uiText('apply_31e392d')}
               </Button>
             )}
           </AlertDialogFooter>
@@ -308,6 +315,7 @@ function ConvertedPreview({
   budgets: ConvertBudget[];
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const [open, setOpen] = useState(false);
   const cyclePreview = useCyclePreview();
   const ranRef = useRef(false);
@@ -342,12 +350,19 @@ function ConvertedPreview({
         aria-expanded={open}
         className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <ChevronDownIcon
-          className={`size-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
-          aria-hidden="true"
-        />
-        Preview as converted
-        <span className="font-normal text-muted-foreground">— what the optimizer would do</span>
+        {uiText.rich('sentence_6fe8c2e1375d', {
+          v0: () => (
+            <ChevronDownIcon
+              className={`size-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
+          ),
+          v1: () => (
+            <span className="font-normal text-muted-foreground">
+              {uiText('what_the_optimizer_would_do_600f2e8')}
+            </span>
+          ),
+        })}
       </button>
       {open ? (
         <div className="border-t border-border/60 p-3">
@@ -374,11 +389,11 @@ function ConvertedPreviewBody({
   isPending: boolean;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
   if (!hasSnapshots) {
     return (
       <p className="text-xs text-muted-foreground">
-        No converted ad sets to preview — this campaign&rsquo;s ad sets aren&rsquo;t in the current
-        metrics read.
+        {uiText('no_converted_ad_sets_to_preview_this_campaign_a04f295')}
       </p>
     );
   }
@@ -386,7 +401,7 @@ function ConvertedPreviewBody({
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
         <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-        Running the optimizer over the converted ad sets…
+        {uiText('running_the_optimizer_over_the_converted_ad_s_2ae509c')}
       </p>
     );
   }
@@ -394,15 +409,14 @@ function ConvertedPreviewBody({
   if (outcome.status === 'unavailable') {
     return (
       <p className="text-xs text-muted-foreground">
-        Preview isn&rsquo;t available yet — the optimizer preview service isn&rsquo;t live for this
-        account.
+        {uiText('preview_isn_t_available_yet_the_optimizer_pre_69abaa6')}
       </p>
     );
   }
   if (outcome.status === 'error') {
     return (
       <p className="text-xs text-muted-foreground">
-        Couldn&rsquo;t run the preview just now. Try reopening in a moment.
+        {uiText('couldn_t_run_the_preview_just_now_try_reopeni_01b0c35')}
       </p>
     );
   }
@@ -423,8 +437,8 @@ function ConvertedPreviewBody({
       <ReallocationFlow items={flowItems} currency={currency} />
       <p className="text-xs text-muted-foreground">
         {recCount === 0
-          ? 'No action recommendations raised on the converted ad sets.'
-          : `${recCount} action recommendation${recCount === 1 ? '' : 's'} raised on the converted ad sets.`}
+          ? uiText('no_action_recommendations_raised_on_the_conve_3992d68')
+          : uiText('template_f6e762d3d09b', { count: recCount })}
       </p>
     </div>
   );
@@ -439,12 +453,15 @@ function ConvertDialogBody({
   currency: string | null;
   section: CampaignSection;
 }) {
+  const uiText = useTranslations('scale');
   switch (stage.kind) {
     case 'working':
       return (
         <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-          {stage.applying ? 'Converting the campaign on Meta…' : 'Computing per-ad-set budgets…'}
+          {stage.applying
+            ? uiText('converting_the_campaign_on_meta_fad51b4')
+            : uiText('computing_per_ad_set_budgets_3b8d97f')}
         </p>
       );
     case 'failed':
@@ -452,27 +469,24 @@ function ConvertDialogBody({
       // ledger allows one convert per campaign per UTC day, so a second Apply cannot write
       // twice.
       return stage.applying ? (
-        <InlineError>
-          Couldn&rsquo;t confirm the conversion. Check the campaign in Meta Ads Manager before
-          trying again.
-        </InlineError>
+        <InlineError>{uiText('couldn_t_confirm_the_conversion_check_the_cam_28efd57')}</InlineError>
       ) : (
-        <InlineError>
-          Couldn&rsquo;t compute the conversion preview. Try again in a moment.
-        </InlineError>
+        <InlineError>{uiText('couldn_t_compute_the_conversion_preview_try_a_6999dab')}</InlineError>
       );
     case 'refused':
-      return <InlineError>{softFailMessage(stage.reason, stage.error)}</InlineError>;
+      return <InlineError>{softFailMessage(stage.reason, stage.error, uiText)}</InlineError>;
     case 'changed':
       return (
         <div className="space-y-2">
-          <InlineError>{softFailMessage('preview_changed', undefined)}</InlineError>
+          <InlineError>{softFailMessage('preview_changed', undefined, uiText)}</InlineError>
           <BudgetPreview budgets={stage.budgets} currency={currency} section={section} />
         </div>
       );
     case 'preview':
       return stage.budgets.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No ad sets to convert in this campaign.</p>
+        <p className="text-sm text-muted-foreground">
+          {uiText('no_ad_sets_to_convert_in_this_campaign_8847a31')}
+        </p>
       ) : (
         <BudgetPreview budgets={stage.budgets} currency={currency} section={section} />
       );
@@ -492,20 +506,29 @@ function BudgetPreview({
   currency: string | null;
   section: CampaignSection;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const rows = convertPreviewRows(section, budgets);
   const totals = convertPreviewTotals(section, rows);
 
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        Campaign budget today{' '}
-        <span className="font-medium text-foreground tabular-nums">
-          {formatCurrency(totals.campaignBudgetToday, currency)}
-        </span>{' '}
-        → {totals.adsetCount} ad-set budget{totals.adsetCount === 1 ? '' : 's'} totaling{' '}
-        <span className="font-medium text-foreground tabular-nums">
-          {formatCurrency(totals.newDailyTotal, currency)}/d
-        </span>
+        {uiText.rich('sentence_f82affe02f0f', {
+          budget: () => (
+            <span className="font-medium text-foreground tabular-nums">
+              {formatCurrency(totals.campaignBudgetToday, currency, uiLocale)}
+            </span>
+          ),
+          count: totals.adsetCount,
+          total: () => (
+            <span className="font-medium text-foreground tabular-nums">
+              {uiText.rich('sentence_24e8fe03aac9', {
+                v0: formatCurrency(totals.newDailyTotal, currency, uiLocale),
+              })}
+            </span>
+          ),
+        })}
       </p>
       <BudgetList currency={currency} rows={rows} />
     </div>
@@ -513,6 +536,8 @@ function BudgetPreview({
 }
 
 function BudgetList({ rows, currency }: { rows: ConvertPreviewRow[]; currency: string | null }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <ul className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/70">
       {rows.map((row) => (
@@ -521,16 +546,20 @@ function BudgetList({ rows, currency }: { rows: ConvertPreviewRow[]; currency: s
             <span className="block truncate text-sm">{row.name}</span>
             <span className="block text-xs text-muted-foreground tabular-nums">
               {row.spend14 == null
-                ? 'no trailing-14d read'
-                : `${formatCurrency(row.spend14, currency)} spend · ${
-                    row.cpa == null
-                      ? 'no tracked results'
-                      : `${formatCurrency(row.cpa, currency)} CPA`
-                  } · 14d`}
+                ? uiText('no_trailing_14d_read_0519917')
+                : uiText('template_3ea51726ffca', {
+                    v0: formatCurrency(row.spend14, currency, uiLocale),
+                    v1:
+                      row.cpa == null
+                        ? uiText('no_tracked_results_5f6ef21')
+                        : `${formatCurrency(row.cpa, currency, uiLocale)} CPA`,
+                  })}
             </span>
           </span>
           <span className="shrink-0 text-sm font-medium tabular-nums">
-            {formatCurrency(row.newDailyBudget, currency)}/d
+            {uiText.rich('sentence_24e8fe03aac9', {
+              v0: formatCurrency(row.newDailyBudget, currency, uiLocale),
+            })}
           </span>
         </li>
       ))}
@@ -549,6 +578,7 @@ function ConvertOutcome({
   currency: string | null;
   section: CampaignSection;
 }) {
+  const uiText = useTranslations('scale');
   const rows = convertPreviewRows(section, response.adset_budgets);
 
   return (
@@ -557,8 +587,8 @@ function ConvertOutcome({
         <CheckCircle2Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />
         <span>
           {response.deduped
-            ? 'This campaign was already converted today, so nothing was written again. The optimizer picks its ad sets up on its next cycle.'
-            : 'Converted. The campaign budget was removed and each ad set now holds its own daily budget. The optimizer picks them up on its next cycle.'}
+            ? uiText('this_campaign_was_already_converted_today_so__92db7e3')
+            : uiText('converted_the_campaign_budget_was_removed_and_763cea0')}
         </span>
       </p>
       {rows.length > 0 ? <BudgetList currency={currency} rows={rows} /> : null}
@@ -570,10 +600,11 @@ function ConvertOutcome({
 /** The edge reads the campaign and its ad sets back after the write (PP-DT-A-convert-edge-no-
  *  readback); Meta's own answer only says the request was accepted. */
 function ReadBackNote({ response }: { response: ConvertCboResponse }) {
+  const uiText = useTranslations('scale');
   if (response.verified === true) {
     return (
       <p className="text-xs text-muted-foreground">
-        Read back from Meta: the campaign holds no budget and every ad set holds its new one.
+        {uiText('read_back_from_meta_the_campaign_holds_no_bud_8f5d6f2')}
       </p>
     );
   }
@@ -581,8 +612,8 @@ function ReadBackNote({ response }: { response: ConvertCboResponse }) {
     return (
       <InlineError>
         {response.read_back?.verdict === 'mismatch'
-          ? 'Meta accepted the change, but reading the campaign back shows other budgets than these. Check it in Meta Ads Manager.'
-          : 'Meta accepted the change, but the campaign could not be read back to confirm it. Check it in Meta Ads Manager.'}
+          ? uiText('meta_accepted_the_change_but_reading_the_camp_2a705b5')
+          : uiText('meta_accepted_the_change_but_the_campaign_cou_18f1489')}
       </InlineError>
     );
   }

@@ -187,6 +187,12 @@ export const agentChatStartedFrameSchema = z.object({
     runId: z.string().min(1),
     sessionId: z.string().min(1),
     agent: agentKindSchema,
+    /**
+     * Server id of the user message this turn persisted before it started. The client's
+     * optimistic bubble adopts it, so a reload or a merged history page reconciles with the
+     * bubble instead of dropping or duplicating it. Absent on turns with no user message.
+     */
+    userMessageId: z.string().min(1).optional(),
   }),
 });
 export type AgentChatStartedFrame = z.infer<typeof agentChatStartedFrameSchema>;

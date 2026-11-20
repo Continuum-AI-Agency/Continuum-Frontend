@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { MetricGridBlockV2 } from '@/lib/jaina/schemas';
 import type { AnswerLanguage } from '../answerLanguage';
 import { AnswerLanguageProvider } from '../answerLanguageContext';
@@ -199,7 +200,7 @@ describe('MetricGridBlock — the J2 tile: this period, the prior, and the read'
   it('prints the prior period under the figure, in the metric’s own format and window', () => {
     renderIn('es', [j2({})]);
     expect(screen.getByTestId('metric-prior').textContent).toBe(
-      'vs $35.10 MXN · 1 al 27 de agosto',
+      'vs $35,10 MXN · 1 al 27 de agosto',
     );
   });
 
@@ -229,8 +230,8 @@ describe('MetricGridBlock — the J2 tile: this period, the prior, and the read'
     expect(reads[2].className).not.toContain('text-muted-foreground');
     expect(reads[3].className).toContain('text-muted-foreground');
     // The colour is the judgement, and a screen reader cannot see it.
-    expect(reads[0].getAttribute('title')).toBe('Conversaciones: good');
-    expect(reads[1].getAttribute('title')).toBe('Costo por conversación: a problem');
+    expect(reads[0].getAttribute('title')).toBe('Conversaciones: bueno');
+    expect(reads[1].getAttribute('title')).toBe('Costo por conversación: un problema');
   });
 
   it('says the read in English when the answer is English', () => {
@@ -265,6 +266,6 @@ describe('MetricGridBlock — the J2 tile: this period, the prior, and the read'
     renderIn('es', [j2({ prior_value: null, prior_label: null, read: null })]);
     expect(screen.queryByTestId('metric-read')).toBeNull();
     expect(screen.queryByTestId('metric-prior')).toBeNull();
-    expect(screen.getByRole('img', { name: 'Up 4%, a problem' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Sube 4%, un problema' })).toBeTruthy();
   });
 });

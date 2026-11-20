@@ -4,6 +4,7 @@
 
 import type { PlatformCard } from '@continuum/contracts';
 import { CheckIcon, CopyIcon, InfoIcon } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,8 @@ function Facts({ facts }: { facts: AccountFindingCard['facts'] }) {
 }
 
 function Bars({ card }: { card: AccountFindingCard }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const bars = card.bars ?? [];
   if (bars.length === 0) return null;
   const geometry = accountBarGeometry(bars);
@@ -70,12 +73,18 @@ function Bars({ card }: { card: AccountFindingCard }) {
                   {accountBarValueLabel(bar.value, card.unit, card.currency)}
                 </span>
                 {bar.share != null ? (
-                  <span data-testid="account-finding-bar-share"> · {percentLabel(bar.share)}</span>
+                  <span data-testid="account-finding-bar-share">
+                    {' '}
+                    · {percentLabel(bar.share, uiLocale)}
+                  </span>
                 ) : null}
                 {bar.target_share != null ? (
                   <span data-testid="account-finding-bar-target">
                     {' '}
-                    · target {percentLabel(bar.target_share)}
+                    ·{' '}
+                    {uiText('sentence_dde108a60475', {
+                      v0: percentLabel(bar.target_share, uiLocale),
+                    })}
                   </span>
                 ) : null}
               </span>
@@ -139,6 +148,7 @@ function Checklist({ items }: { items: AccountFindingCard['checklist'] }) {
 }
 
 function CopyTerms({ theme, terms }: { theme: string; terms: readonly string[] }) {
+  const uiText = useTranslations('scale');
   const [copied, setCopied] = useState(false);
   const copy = () => {
     void navigator.clipboard?.writeText(negativesClipboardText(terms))?.catch(() => {});
@@ -147,7 +157,7 @@ function CopyTerms({ theme, terms }: { theme: string; terms: readonly string[] }
   };
   return (
     <Button
-      aria-label={`Copy the ${theme} negatives`}
+      aria-label={uiText('accountFindingCopyNegatives', { theme })}
       className="gap-1.5"
       data-testid="account-finding-copy"
       onClick={copy}
@@ -160,12 +170,14 @@ function CopyTerms({ theme, terms }: { theme: string; terms: readonly string[] }
       ) : (
         <CopyIcon aria-hidden="true" className="size-3.5" />
       )}
-      {copied ? 'Copied' : 'Copy'}
+      {copied ? uiText('copied_8d525e5') : uiText('copy_e21f935')}
     </Button>
   );
 }
 
 function Negatives({ groups }: { groups: NonNullable<AccountFindingCard['negatives']> }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   if (groups.length === 0) return null;
   return (
     <div className="space-y-2" data-testid="account-finding-negatives">
@@ -179,7 +191,11 @@ function Negatives({ groups }: { groups: NonNullable<AccountFindingCard['negativ
             <h4 className="min-w-0 truncate font-medium text-foreground text-sm">
               {group.theme}{' '}
               <span className="font-normal text-muted-foreground">
-                · {countLabel(group.terms.length)} {group.terms.length === 1 ? 'term' : 'terms'}
+                ·{' '}
+                {uiText('accountFindingTermCount', {
+                  label: countLabel(group.terms.length, uiLocale),
+                  count: group.terms.length,
+                })}
               </span>
             </h4>
             <CopyTerms terms={group.terms} theme={group.theme} />

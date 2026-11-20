@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, CopyIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import {
   createContext,
@@ -429,6 +430,8 @@ FilePathButton.displayName = 'FilePathButton';
 
 export const StackTraceFrames = memo(
   ({ className, showInternalFrames = true, ...props }: StackTraceFramesProps) => {
+    const tUi = useTranslations('common');
+
     const { trace, onFilePathClick } = useStackTrace();
 
     const framesToShow = showInternalFrames
@@ -445,7 +448,7 @@ export const StackTraceFrames = memo(
             )}
             key={`${frame.raw}-${index}`}
           >
-            <span className="text-muted-foreground">at </span>
+            <span className="text-muted-foreground">{tUi('m_3bcaf6f0bb')}</span>
             {frame.functionName && (
               <span className={frame.isInternal ? '' : 'text-foreground'}>
                 {frame.functionName}{' '}
@@ -464,7 +467,7 @@ export const StackTraceFrames = memo(
           </div>
         ))}
         {framesToShow.length === 0 && (
-          <div className="text-muted-foreground text-xs">No stack frames</div>
+          <div className="text-muted-foreground text-xs">{tUi('m_312e619962')}</div>
         )}
       </div>
     );

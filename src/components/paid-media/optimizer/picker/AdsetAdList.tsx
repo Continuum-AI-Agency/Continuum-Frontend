@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Display-only list of the ads inside one ad set (provenance). Lazy: the read is
 // disabled until the ad-set node is expanded (adsetId gates the hook). Ads are not
@@ -17,6 +18,7 @@ type AdsetAdListProps = {
 };
 
 export function AdsetAdList({ brandId, accountId, adsetId }: AdsetAdListProps) {
+  const uiText = useTranslations('scale');
   const { data: ads, isLoading, isError } = useOptimizerAdsetAds(brandId, accountId, adsetId);
 
   if (isLoading) {
@@ -31,13 +33,17 @@ export function AdsetAdList({ brandId, accountId, adsetId }: AdsetAdListProps) {
   if (isError) {
     return (
       <p className="px-2 py-1.5 pl-9 text-xs text-warning">
-        Couldn&rsquo;t load the ads in this ad set.
+        {uiText('couldn_t_load_the_ads_in_this_ad_set_9ef70fd')}
       </p>
     );
   }
 
   if (ads.length === 0) {
-    return <p className="px-2 py-1.5 pl-9 text-xs text-muted-foreground">No ads in this ad set.</p>;
+    return (
+      <p className="px-2 py-1.5 pl-9 text-xs text-muted-foreground">
+        {uiText('no_ads_in_this_ad_set_c872e4c')}
+      </p>
+    );
   }
 
   return (

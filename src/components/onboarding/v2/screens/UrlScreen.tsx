@@ -16,6 +16,7 @@ import {
   WarningCircle,
   X,
 } from '@phosphor-icons/react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useId, useRef, useState } from 'react';
 import { FacebookIcon, InstagramIcon } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
@@ -44,24 +45,33 @@ import { cn } from '@/lib/utils';
 
 type Mode = 'website' | 'social' | 'description' | 'documents';
 
-const MODE_OPTIONS: Array<{ mode: Mode; label: string; icon: ReactNode }> = [
-  { mode: 'website', label: 'Website', icon: <Globe aria-hidden /> },
-  { mode: 'social', label: 'Social profile', icon: <InstagramIcon aria-hidden /> },
-  { mode: 'description', label: 'Description', icon: <TextAlignLeft aria-hidden /> },
-  { mode: 'documents', label: 'Brand documents', icon: <Files aria-hidden /> },
-];
+type OnboardingText = ReturnType<typeof useTranslations<'onboarding'>>;
 
-const HELP: Record<Mode | 'empty', string> = {
-  empty: 'Press Enter to analyze. Shift + Enter adds a new line.',
-  website: 'We’ll read your site to understand your brand.',
-  social: 'We’ll read your public Instagram profile or Facebook Page.',
-  description: 'A few sentences is plenty: what you sell, and who it’s for.',
-  documents: 'You’ll add a brand guide, deck, or product doc on the next step.',
-};
+function getModeOptions(
+  tUi: OnboardingText,
+): Array<{ mode: Mode; label: string; icon: ReactNode }> {
+  return [
+    { mode: 'website', label: tUi('m_2e8a57cc5c'), icon: <Globe aria-hidden /> },
+    { mode: 'social', label: tUi('m_ab88a9270a'), icon: <InstagramIcon aria-hidden /> },
+    { mode: 'description', label: tUi('description_526e008'), icon: <TextAlignLeft aria-hidden /> },
+    { mode: 'documents', label: tUi('m_5552971562'), icon: <Files aria-hidden /> },
+  ];
+}
+
+function getHelp(tUi: OnboardingText): Record<Mode | 'empty', string> {
+  return {
+    empty: tUi('press_enter_to_analyze_shift_enter_adds_a_new_7300967'),
+    website: tUi('we_ll_read_your_site_to_understand_your_brand_5613478'),
+    social: tUi('we_ll_read_your_public_instagram_profile_or_f_ac4255e'),
+    description: tUi('a_few_sentences_is_plenty_what_you_sell_and_w_8b3581e'),
+    documents: tUi('you_ll_add_a_brand_guide_deck_or_product_doc__a33e3d1'),
+  };
+}
 
 // Says what will happen with what was given — including a link kept as context beside files, and
 // a post or group link before Enter rejects it.
 function helpFor(
+  tUi: OnboardingText,
   mode: Mode | null,
   detected: DetectedIntake | null,
   fileCount: number,
@@ -69,12 +79,14 @@ function helpFor(
 ): string {
   if (fileCount > 0) {
     return detected?.kind === 'website' || detected?.kind === 'instagram'
-      ? `We’ll read these files on the next step, with ${new URL(detected.url).hostname.replace(/^www\./, '')} as context.`
-      : 'We’ll read these files on the next step.';
+      ? tUi('we_ll_read_these_files_on_the_next_step_with__64d2a2b', {
+          host: new URL(detected.url).hostname.replace(/^www\./, ''),
+        })
+      : tUi('we_ll_read_these_files_on_the_next_step_867683e');
   }
   if (detected?.kind === 'unsupported_social' && !overridden)
-    return 'That looks like a post or group. Use an Instagram profile or a Facebook business Page.';
-  return HELP[mode ?? 'empty'];
+    return tUi('that_looks_like_a_post_or_group_use_an_instag_9c79b6c');
+  return getHelp(tUi)[mode ?? 'empty'];
 }
 
 function modeOf(detected: DetectedIntake | null): Mode | null {
@@ -103,6 +115,7 @@ export function UrlScreen({
   retrying,
   onRetry,
 }: UrlScreenProps) {
+  const tUi = useTranslations('onboarding');
   const ids = useId();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,21 +157,19 @@ export function UrlScreen({
 
   const validate = (): string | null => {
     const value = text.trim();
-    if (!mode) return 'Paste a link, add brand files, or describe your business.';
-    if (mode !== 'website' && !brandName.trim()) return 'Enter your brand name.';
+    if (!mode) return tUi('paste_a_link_add_brand_files_or_describe_your_b67d908');
+    if (mode !== 'website' && !brandName.trim()) return tUi('m_174c608886');
     if ((mode === 'website' || mode === 'social') && value.length > 2048)
-      return 'That link is too long.';
+      return tUi('that_link_is_too_long_6f7583b');
     if (
       mode === 'website' &&
       (!resolveWebsiteDraftUrl(value) || onboardingSocialInputSchema.safeParse(value).success)
     )
-      return 'Enter your website address, or describe your business instead.';
+      return tUi('enter_your_website_address_or_describe_your_b_422a0b8');
     if (mode === 'social' && !onboardingSocialInputSchema.safeParse(value).success)
-      return 'Use an Instagram profile or a Facebook business Page link, not a post or group.';
-    if (mode === 'description' && !value)
-      return 'Tell us what your business does and who it serves.';
-    if (mode === 'description' && value.length > 8000)
-      return 'Keep your business description within 8,000 characters.';
+      return tUi('use_an_instagram_profile_or_a_facebook_busine_00b16b5');
+    if (mode === 'description' && !value) return tUi('m_763ec0d993');
+    if (mode === 'description' && value.length > 8000) return tUi('m_1bb1dfefec');
     return null;
   };
 
@@ -203,10 +214,10 @@ export function UrlScreen({
     <div className="flex flex-1 items-center justify-center px-4 py-12 md:px-8">
       <div className="w-full max-w-xl">
         <h1 className="mb-3 text-balance text-center text-3xl font-bold leading-tight tracking-tight text-foreground md:text-5xl">
-          Start with your brand
+          {tUi('m_fa0801b70a')}
         </h1>
         <p className="mx-auto mb-8 max-w-md text-balance text-center text-muted-foreground">
-          Paste a link, drop in brand files, or describe what you do. You don’t need a website.
+          {tUi('paste_a_link_drop_in_brand_files_or_describe__b52528f')}
         </p>
         <form
           className="space-y-4"
@@ -216,7 +227,7 @@ export function UrlScreen({
           }}
         >
           <Label htmlFor={`${ids}-source`} className="sr-only">
-            Website, social profile, or a description of your business
+            {tUi('website_social_profile_or_a_description_of_yo_9cef0ed')}
           </Label>
           <InputGroup
             data-testid="intake-composer"
@@ -251,7 +262,7 @@ export function UrlScreen({
                     <span className="min-w-0 truncate">{file.name}</span>
                     <button
                       type="button"
-                      aria-label={`Remove ${file.name}`}
+                      aria-label={tUi('remove_name_e6a3c4a', { name: file.name })}
                       disabled={busy}
                       onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
                       className="rounded-full p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -271,8 +282,8 @@ export function UrlScreen({
               disabled={busy}
               placeholder={
                 override === 'description'
-                  ? 'What does your business do, and who is it for?'
-                  : 'Paste your website or social handle, drop brand files, or describe your business'
+                  ? tUi('what_does_your_business_do_and_who_is_it_for_898c042')
+                  : tUi('paste_your_website_or_social_handle_drop_bran_decca3c')
               }
               className="max-h-60 min-h-14 px-4 text-base md:text-base"
               aria-invalid={Boolean(fieldError)}
@@ -293,7 +304,7 @@ export function UrlScreen({
               <div className="flex min-w-0 items-center gap-1">
                 <InputGroupButton
                   size="icon-sm"
-                  aria-label="Attach brand files"
+                  aria-label={tUi('attach_brand_files_7cf6aef')}
                   disabled={busy}
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -322,11 +333,11 @@ export function UrlScreen({
                 {busy ? (
                   <>
                     <CircleNotch className="size-4 animate-spin motion-reduce:animate-none" />
-                    Reading your source…
+                    {tUi('m_684d0f51f0')}
                   </>
                 ) : (
                   <>
-                    {mode === 'documents' ? 'Continue to documents' : 'Analyze my brand'}
+                    {mode === 'documents' ? tUi('m_dbdb94fca1') : tUi('m_604407d0dd')}
                     <ArrowRight className="size-4" aria-hidden />
                   </>
                 )}
@@ -348,7 +359,7 @@ export function UrlScreen({
 
           {mode && mode !== 'website' ? (
             <div className="space-y-1.5">
-              <Label htmlFor={`${ids}-brand-name`}>Brand name</Label>
+              <Label htmlFor={`${ids}-brand-name`}>{tUi('m_6b4b8b5df0')}</Label>
               <Input
                 id={`${ids}-brand-name`}
                 value={brandName}
@@ -358,7 +369,7 @@ export function UrlScreen({
                 }}
                 autoComplete="organization"
                 disabled={busy}
-                aria-invalid={fieldError === 'Enter your brand name.'}
+                aria-invalid={fieldError !== null && !brandName.trim()}
               />
             </div>
           ) : null}
@@ -378,7 +389,7 @@ export function UrlScreen({
                         onClick={onRetry}
                         disabled={busy}
                       >
-                        Try again
+                        {tUi('m_042c862e44')}
                       </Button>
                     ) : null}
                     {mode !== 'description' ? (
@@ -389,7 +400,7 @@ export function UrlScreen({
                         onClick={describeInstead}
                         disabled={busy}
                       >
-                        Describe it instead
+                        {tUi('describe_it_instead_7f0757e')}
                       </Button>
                     ) : null}
                   </div>
@@ -398,7 +409,7 @@ export function UrlScreen({
             </div>
           ) : (
             <p id={helpId} className="text-sm text-muted-foreground">
-              {helpFor(mode, detected, files.length, Boolean(override))}
+              {helpFor(tUi, mode, detected, files.length, Boolean(override))}
             </p>
           )}
         </form>
@@ -420,7 +431,8 @@ function SourceChip({
   disabled: boolean;
   onChoose: (mode: Mode) => void;
 }) {
-  const { icon, label, detail } = describeSource(mode, detected, fileCount);
+  const tUi = useTranslations('onboarding');
+  const { icon, label, detail } = describeSource(tUi, mode, detected, fileCount);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -435,12 +447,12 @@ function SourceChip({
             <span className="text-foreground">{label}</span>
             {detail ? <span className="min-w-0 truncate">{detail}</span> : null}
             <CaretDown aria-hidden />
-            <span className="sr-only">. Change source type</span>
+            <span className="sr-only">{tUi('change_source_type_75b58d9')}</span>
           </button>
         }
       />
       <DropdownMenuContent align="start" className="min-w-48">
-        {MODE_OPTIONS.map((option) => (
+        {getModeOptions(tUi).map((option) => (
           <DropdownMenuItem
             key={option.mode}
             onClick={() => onChoose(option.mode)}
@@ -456,6 +468,7 @@ function SourceChip({
 }
 
 function describeSource(
+  tUi: OnboardingText,
   mode: Mode | null,
   detected: DetectedIntake | null,
   fileCount: number,
@@ -463,13 +476,15 @@ function describeSource(
   if (mode === 'documents') {
     return {
       icon: <Files aria-hidden />,
-      label: 'Brand documents',
-      detail: fileCount ? `${fileCount} file${fileCount === 1 ? '' : 's'}` : null,
+      label: tUi('m_5552971562'),
+      detail: fileCount
+        ? tUi('count_plural_one_file_other_files_e60f4a2', { count: fileCount })
+        : null,
     };
   }
   if (mode === 'website') {
     const host = detected?.kind === 'website' ? new URL(detected.url).hostname : null;
-    return { icon: <Globe aria-hidden />, label: 'Website', detail: host };
+    return { icon: <Globe aria-hidden />, label: tUi('m_2e8a57cc5c'), detail: host };
   }
   if (mode === 'social') {
     if (detected?.kind === 'instagram') {
@@ -477,10 +492,14 @@ function describeSource(
       return { icon: <InstagramIcon aria-hidden />, label: 'Instagram', detail: `@${handle}` };
     }
     if (detected?.kind === 'facebook')
-      return { icon: <FacebookIcon aria-hidden />, label: 'Facebook Page', detail: null };
-    return { icon: <InstagramIcon aria-hidden />, label: 'Social profile', detail: null };
+      return {
+        icon: <FacebookIcon aria-hidden />,
+        label: tUi('facebook_page_f50b9de'),
+        detail: null,
+      };
+    return { icon: <InstagramIcon aria-hidden />, label: tUi('m_ab88a9270a'), detail: null };
   }
   if (mode === 'description')
-    return { icon: <TextAlignLeft aria-hidden />, label: 'Description', detail: null };
-  return { icon: <Globe aria-hidden />, label: 'Detects as you type', detail: null };
+    return { icon: <TextAlignLeft aria-hidden />, label: tUi('description_526e008'), detail: null };
+  return { icon: <Globe aria-hidden />, label: tUi('detects_as_you_type_18d2fc3'), detail: null };
 }

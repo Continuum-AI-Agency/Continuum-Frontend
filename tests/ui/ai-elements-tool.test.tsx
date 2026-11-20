@@ -1,7 +1,5 @@
 import { expect, test } from 'bun:test';
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-
 import {
   Tool,
   ToolContent,
@@ -9,6 +7,7 @@ import {
   ToolInput,
   ToolOutput,
 } from '@/components/ai-elements/tool';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
 
 test('Tool renders header, input, and output sections', () => {
   const html = renderToStaticMarkup(

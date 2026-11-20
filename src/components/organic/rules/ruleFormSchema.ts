@@ -32,57 +32,123 @@ import {
 } from '@continuum/contracts';
 import { z } from 'zod';
 
-export const ruleFormSchema = z
-  .object({
-    postScope: commentTriggerPostScopeSchema,
-    platformPostIds: z.array(z.string().min(1)).max(200),
-    keywords: z.array(z.string().min(1).max(MAX_KEYWORD_LENGTH)).max(MAX_KEYWORDS_PER_RULE),
-    matchMode: commentTriggerMatchModeSchema,
-    replyMessage: z
-      .string()
-      .min(1, 'The direct message cannot be empty')
-      .max(MAX_REPLY_MESSAGE_LENGTH),
-    publicReplyMessages: z
-      .array(z.string().min(1, 'A public reply cannot be empty'))
-      .max(MAX_PUBLIC_REPLY_VARIATIONS),
-    linkButtonLabel: z.string().max(MAX_LINK_BUTTON_LABEL_LENGTH),
-    destinationUrl: z.string(),
-    enabled: z.boolean(),
-    activeFrom: z.string(),
-    activeUntil: z.string(),
-  })
-  .refine((form) => form.matchMode === 'any_comment' || form.keywords.length > 0, {
-    message: 'Add at least one trigger word',
-    path: ['keywords'],
-  })
-  .refine((form) => form.postScope === 'all_posts' || form.platformPostIds.length > 0, {
-    message: 'Pick at least one post, or switch to all posts',
-    path: ['platformPostIds'],
-  })
-  .refine(
-    (form) =>
-      form.activeFrom === '' ||
-      form.activeUntil === '' ||
-      Date.parse(form.activeFrom) <= Date.parse(form.activeUntil),
-    { message: 'The end date is before the start date', path: ['activeWindow'] },
-  )
-  .refine((form) => form.destinationUrl === '' || isHttpUrl(form.destinationUrl), {
-    message: 'Enter a full web address starting with https://',
-    path: ['destinationUrl'],
-  })
-  // A button shrinks the room the message has, and Instagram refuses the WHOLE
-  // message past its limit rather than trimming it — so an over-long body with a
-  // button means the commenter receives nothing at all. The complaint goes on the
-  // message, not the label, because the message is what has to get shorter.
-  .refine(
-    (form) =>
-      form.linkButtonLabel.trim() === '' ||
-      form.replyMessage.length <= MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON,
-    {
-      message: `With a button, Instagram caps the message at ${MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON} characters. Shorten it, or clear the button text to send the link in the message.`,
-      path: ['replyMessage'],
-    },
+export type RuleValidationKey =
+  | 'ruleDmEmpty'
+  | 'rulePublicReplyEmpty'
+  | 'ruleKeywordRequired'
+  | 'rulePostRequired'
+  | 'ruleDateOrder'
+  | 'ruleUrl'
+  | 'ruleMessageButtonLimit'
+  | 'ruleMaxCharacters'
+  | 'ruleMaxEntries'
+  | 'ruleValueRequired';
+export type RuleValidationTranslator = (
+  key: RuleValidationKey,
+  values?: { limit: number },
+) => string;
+const validationEnglish = {
+  ruleDmEmpty: 'The direct message cannot be empty',
+  rulePublicReplyEmpty: 'A public reply cannot be empty',
+  ruleKeywordRequired: 'Add at least one trigger word',
+  rulePostRequired: 'Pick at least one post, or switch to all posts',
+  ruleDateOrder: 'The end date is before the start date',
+  ruleUrl: 'Enter a full web address starting with https://',
+  ruleMessageButtonLimit:
+    'With a button, Instagram caps the message at {limit, number} characters. Shorten it, or clear the button text to send the link in the message.',
+  ruleMaxCharacters: 'Use at most {limit, number} characters.',
+  ruleMaxEntries: 'Use at most {limit, number} entries.',
+  ruleValueRequired: 'Enter a value.',
+};
+
+export function createRuleFormSchema(
+  translate: RuleValidationTranslator = (key, values) =>
+    validationEnglish[key].replace(/\{limit, number\}/g, String(values?.limit ?? '')),
+) {
+  return (
+    z
+      .object({
+        postScope: commentTriggerPostScopeSchema,
+        platformPostIds: z
+          .array(z.string().min(1, translate('ruleValueRequired')))
+          .max(200, translate('ruleMaxEntries', { limit: 200 })),
+        keywords: z
+          .array(
+            z
+              .string()
+              .min(1, translate('ruleValueRequired'))
+              .max(
+                MAX_KEYWORD_LENGTH,
+                translate('ruleMaxCharacters', { limit: MAX_KEYWORD_LENGTH }),
+              ),
+          )
+          .max(
+            MAX_KEYWORDS_PER_RULE,
+            translate('ruleMaxEntries', { limit: MAX_KEYWORDS_PER_RULE }),
+          ),
+        matchMode: commentTriggerMatchModeSchema,
+        replyMessage: z
+          .string()
+          .min(1, translate('ruleDmEmpty'))
+          .max(
+            MAX_REPLY_MESSAGE_LENGTH,
+            translate('ruleMaxCharacters', { limit: MAX_REPLY_MESSAGE_LENGTH }),
+          ),
+        publicReplyMessages: z
+          .array(z.string().min(1, translate('rulePublicReplyEmpty')))
+          .max(
+            MAX_PUBLIC_REPLY_VARIATIONS,
+            translate('ruleMaxEntries', { limit: MAX_PUBLIC_REPLY_VARIATIONS }),
+          ),
+        linkButtonLabel: z
+          .string()
+          .max(
+            MAX_LINK_BUTTON_LABEL_LENGTH,
+            translate('ruleMaxCharacters', { limit: MAX_LINK_BUTTON_LABEL_LENGTH }),
+          ),
+        destinationUrl: z.string(),
+        enabled: z.boolean(),
+        activeFrom: z.string(),
+        activeUntil: z.string(),
+      })
+      .refine((form) => form.matchMode === 'any_comment' || form.keywords.length > 0, {
+        message: translate('ruleKeywordRequired'),
+        path: ['keywords'],
+      })
+      .refine((form) => form.postScope === 'all_posts' || form.platformPostIds.length > 0, {
+        message: translate('rulePostRequired'),
+        path: ['platformPostIds'],
+      })
+      .refine(
+        (form) =>
+          form.activeFrom === '' ||
+          form.activeUntil === '' ||
+          Date.parse(form.activeFrom) <= Date.parse(form.activeUntil),
+        { message: translate('ruleDateOrder'), path: ['activeWindow'] },
+      )
+      .refine((form) => form.destinationUrl === '' || isHttpUrl(form.destinationUrl), {
+        message: translate('ruleUrl'),
+        path: ['destinationUrl'],
+      })
+      // A button shrinks the room the message has, and Instagram refuses the WHOLE
+      // message past its limit rather than trimming it — so an over-long body with a
+      // button means the commenter receives nothing at all. The complaint goes on the
+      // message, not the label, because the message is what has to get shorter.
+      .refine(
+        (form) =>
+          form.linkButtonLabel.trim() === '' ||
+          form.replyMessage.length <= MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON,
+        {
+          message: translate('ruleMessageButtonLimit', {
+            limit: MAX_REPLY_MESSAGE_LENGTH_WITH_BUTTON,
+          }),
+          path: ['replyMessage'],
+        },
+      )
   );
+}
+
+export const ruleFormSchema = createRuleFormSchema();
 
 /** Mirrors the contract's destination rule so the form refuses what the server would. */
 function isHttpUrl(raw: string): boolean {

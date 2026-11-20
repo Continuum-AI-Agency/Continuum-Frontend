@@ -5,12 +5,14 @@
 // No projection: where the goal stands, never where it would land.
 
 import { HOME_OBJECTIVE_METRICS } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { formatFigure } from '@/lib/home/format';
 import { cn } from '@/lib/utils';
 import { goalDayLabel, goalWindowLabel } from './goalModel';
 import { type GoalTargetStatus, goalPaceWords } from './goalTargetModel';
 
 type Compared = Extract<GoalTargetStatus, { kind: 'compared' }>;
+type DashboardText = ReturnType<typeof useTranslations<'dashboard'>>;
 
 type Tone = 'ok' | 'warn' | 'neutral';
 
@@ -45,34 +47,59 @@ export function goalTargetFigure(target: Compared['target']): string {
 
 /** Where the goal stands: its period, the complete days, what they owe and the pace; once the
  *  period is over, how much of the target it reached. */
-export function goalPaceLine(status: Compared): string {
+export function goalPaceLine(status: Compared, uiText: DashboardText): string {
   const { period, target } = status;
   const dates = goalWindowLabel({ since: period.since, until: period.until });
   if (period.phase === 'ended')
-    return `${dates} · ended · ${percentOf(status.progress)}% of target`;
+    return uiText('dates_ended_percent_of_target_a5998ed', {
+      dates,
+      percent: percentOf(status.progress),
+    });
   const owed = formatFigure(status.expectedToDate, unitOf({ target }), target.currency);
   const pace = status.paceRatio === null ? null : goalPaceWords(status.paceRatio);
-  return [`${dates} · day ${period.elapsedDays} of ${period.days}`, `expected ${owed} by now`, pace]
+  return [
+    uiText('dates_day_day_of_days_da8e5e0', {
+      dates,
+      day: period.elapsedDays,
+      days: period.days,
+    }),
+    uiText('expected_amount_by_now_75ff82c', { amount: owed }),
+    pace,
+  ]
     .filter(Boolean)
     .join(' · ');
 }
 
 /** What a target that is not held against the figure says instead; null for the others. */
-export function goalTargetNote(status: GoalTargetStatus): string | null {
+export function goalTargetNote(
+  status: GoalTargetStatus,
+  uiText: DashboardText,
+  locale: string,
+): string | null {
   switch (status.kind) {
     case 'unreadable':
-      return 'Couldn’t read this goal’s target just now. The figure is real.';
+      return uiText('couldn_t_read_this_goal_s_target_just_now_the_94a7cf2');
     case 'not-running':
-      return `Target ${goalTargetFigure(status.target)}. ${
-        status.period.phase === 'upcoming'
-          ? `Its period starts ${goalDayLabel(status.period.since)}, so there is nothing to compare yet.`
-          : 'Its period started today, so no day of it is complete yet.'
-      }`;
+      return status.period.phase === 'upcoming'
+        ? uiText('target_target_its_period_starts_day_so_there__644c176', {
+            target: goalTargetFigure(status.target),
+            day: goalDayLabel(status.period.since),
+          })
+        : uiText('target_target_its_period_started_today_so_no__8a74c13', {
+            target: goalTargetFigure(status.target),
+          });
     case 'mismatch': {
-      const figures = status.figureCurrencies.filter(Boolean).join(' and ');
-      return `This target is in ${status.target.currency} and these figures are ${
-        figures ? `in ${figures}` : 'in an unknown currency'
-      }, so they are not compared.`;
+      const figures = new Intl.ListFormat(locale, { type: 'conjunction' }).format(
+        status.figureCurrencies.filter((code): code is string => Boolean(code)),
+      );
+      return figures
+        ? uiText('this_target_is_in_currency_and_these_figures__7e6ff0a', {
+            currency: status.target.currency ?? '',
+            figures,
+          })
+        : uiText('this_target_is_in_currency_and_these_figures__77a035d', {
+            currency: status.target.currency ?? '',
+          });
     }
     default:
       return null;
@@ -80,10 +107,11 @@ export function goalTargetNote(status: GoalTargetStatus): string | null {
 }
 
 export function GoalProgressBar({ status, label }: { status: Compared; label: string }) {
+  const uiText = useTranslations('dashboard');
   const percent = percentOf(status.progress);
   return (
     <div
-      aria-label={`${label} against its target`}
+      aria-label={uiText('goal_against_its_target_688fe46', { goal: label })}
       aria-valuemax={100}
       aria-valuemin={0}
       aria-valuenow={Math.min(100, percent)}
@@ -103,6 +131,7 @@ const RING_RADIUS = 84;
 export function GoalRing({ status }: { status: Compared }) {
   const share = Math.min(1, status.progress);
   const expected = Math.min(1, status.expectedToDate / status.target.target);
+  const uiText = useTranslations('dashboard');
   const running = status.period.phase === 'running';
   return (
     <div className="relative mx-auto aspect-square w-full max-w-48" data-testid="home-goals-ring">
@@ -147,7 +176,7 @@ export function GoalRing({ status }: { status: Compared }) {
           {formatFigure(status.actual, unitOf(status), status.amount.currency)}
         </span>
         <span className="max-w-full truncate text-muted-foreground text-xs">
-          of {goalTargetFigure(status.target)}
+          {uiText('of_target_de39515', { target: goalTargetFigure(status.target) })}
         </span>
       </div>
     </div>

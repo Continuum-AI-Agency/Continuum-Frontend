@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { formatDayId } from './calendar-utils';
 import { resolvePlannerInitialDates, usePlannerDateAnchors } from './planner-date-anchor';
 

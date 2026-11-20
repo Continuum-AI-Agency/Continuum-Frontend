@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { render } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { OrganicAccountProfileHeader } from './OrganicAccountProfileHeader';
 
