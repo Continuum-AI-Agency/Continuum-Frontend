@@ -35,6 +35,20 @@ describe('localized UI errors', () => {
     );
     expect(uiErrorMessage(new Error('Draft is locked'), t)).toBe('Draft is locked');
   });
+  it('never shows a library string, a stack or JSON as the reason', () => {
+    const t = createTranslator({ locale: 'es', messages: es });
+    const generic = uiErrorMessage(null, t);
+    expect(uiErrorMessage(new Error('Could not load: TypeError: Failed to fetch'), t)).toBe(
+      generic,
+    );
+    expect(uiErrorMessage(new Error('{"code":"PGRST116"}'), t)).toBe(generic);
+    expect(
+      uiErrorMessage(
+        new ApiError('x', 400, undefined, { message: 'TypeError: x is undefined' }),
+        t,
+      ),
+    ).toBe(uiErrorMessage(new ApiError('', 400), t));
+  });
   it('retains application messages already translated at their origin', () => {
     expect(
       uiErrorMessage(new LocalizedUiError('Revisa la pista seleccionada.'), () => 'fallback'),

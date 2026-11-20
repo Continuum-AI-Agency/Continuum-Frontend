@@ -1,4 +1,5 @@
 import { ApiError, isFetchFailure } from '@/lib/api/errors';
+import { isPlainSentence } from '@/lib/api/loadFailure';
 
 export type UiErrorKey =
   | 'unexpectedError'
@@ -76,8 +77,8 @@ const BACKEND_CODE = /^[a-z][a-z0-9_]*$/;
 /** What the Backend itself said: its `message`, or a 4xx's legacy `{ error: "<sentence>" }`. */
 function backendSentence(error: ApiError): string {
   const { message, error: said } = error.payload ?? {};
-  if (typeof message === 'string' && message.trim()) return message.trim();
-  return typeof said === 'string' && error.status < 500 && !BACKEND_CODE.test(said.trim())
+  if (isPlainSentence(message)) return message.trim();
+  return isPlainSentence(said) && error.status < 500 && !BACKEND_CODE.test(said.trim())
     ? said.trim()
     : '';
 }
@@ -85,7 +86,8 @@ function backendSentence(error: ApiError): string {
 /**
  * The reason to show a person: an application message translated at its origin, a known code
  * reworded, the Backend's own sentence, any other error's sentence whole, and only then the
- * generic copy for its status. `fallback` stands in when there is no sentence.
+ * generic copy for its status. A "sentence" is what `isPlainSentence` accepts: never a library
+ * string, a stack or JSON. `fallback` stands in when there is no sentence.
  */
 export function uiErrorSentence(
   error: unknown,
@@ -99,10 +101,9 @@ export function uiErrorSentence(
     if (said) return said;
   }
   if (key !== 'unexpectedError') return translate(key);
-  const sentence =
-    error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
-      ? error.message.trim()
-      : '';
+  const message =
+    error && typeof error === 'object' && 'message' in error ? error.message : undefined;
+  const sentence = isPlainSentence(message) ? message.trim() : '';
   return sentence || fallback || translate(key);
 }
 
