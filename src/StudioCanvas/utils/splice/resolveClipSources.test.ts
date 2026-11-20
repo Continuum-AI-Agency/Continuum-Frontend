@@ -168,7 +168,7 @@ describe('resolveTimelineInputPool — every source the validator admits', () =>
     [
       'omniGen',
       { id: 'omni', type: 'omniGen', data: { generatedVideo: clip } },
-      { kind: 'video', label: 'Omni 1.1 Flash (Edit)', previewUrl: clip },
+      { kind: 'video', label: 'Omni 1.2 Flash (Edit)', previewUrl: clip },
     ],
   ])('lists %s with its real kind, label and preview', (_name, source, expected) => {
     const node = { ...source, position: { x: 0, y: 0 } } as unknown as StudioNode;
