@@ -16,6 +16,7 @@ import { type FormEvent, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { goalTargetRequest } from './goalTargetModel';
 import type { GoalTargetsApi } from './useGoalTargets';
 
@@ -50,6 +51,7 @@ export function GoalTargetForm({
   targets: Pick<GoalTargetsApi, 'save' | 'remove'>;
 }) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const id = useId();
   const isMoney = HOME_OBJECTIVE_METRICS[objective.metric].unit === 'currency';
   const [target, setTarget] = useState(existing ? String(existing.target) : '');
@@ -62,6 +64,7 @@ export function GoalTargetForm({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (draft) return;
     const built = goalTargetRequest({
       brandId,
       objective,
@@ -82,6 +85,7 @@ export function GoalTargetForm({
   };
 
   const remove = async () => {
+    if (draft) return;
     setBusy(true);
     const result = await targets.remove({
       scope: HOME_PROFILE_BRAND_SCOPE,
@@ -206,13 +210,13 @@ export function GoalTargetForm({
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <Button className="h-7 text-xs" disabled={busy} size="sm" type="submit">
+        <Button className="h-7 text-xs" disabled={busy || draft} size="sm" type="submit">
           {uiText('save_target_769075e')}
         </Button>
         {existing ? (
           <Button
             className="h-7 text-xs"
-            disabled={busy}
+            disabled={busy || draft}
             onClick={remove}
             size="sm"
             type="button"

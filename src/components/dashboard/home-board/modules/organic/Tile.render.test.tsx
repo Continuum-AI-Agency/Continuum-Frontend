@@ -4,7 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
-import { render } from '@/i18n/__tests__/render';
+import { englishMessages, render } from '@/i18n/__tests__/render';
+import { HOME_DRAFT_READ_ONLY, HomePresentationContext } from '../../HomePresentationContext';
 import type { HomeBoardContext } from '../../types';
 import { DRAFT_ROWS, NOW, POSTS } from './__fixtures__/organicWeek';
 import { buildOrganicWeek } from './organicWeekModel';
@@ -162,6 +163,22 @@ describe('Organic week tile', () => {
 });
 
 describe('Organic week module (expanded)', () => {
+  it('keeps draft inspection available without approving or scheduling', () => {
+    const { getAllByTestId } = render(
+      withQueries(
+        <HomePresentationContext value="dots">
+          <OrganicWeekModule brandId="b1" organicAccounts={ACCOUNTS} />
+        </HomePresentationContext>,
+      ),
+    );
+    for (const button of getAllByTestId('home-organic-approve')) {
+      expect(button.hasAttribute('disabled')).toBe(true);
+      expect(button.getAttribute('title')).toBe(englishMessages.dashboard[HOME_DRAFT_READ_ONLY]);
+      fireEvent.click(button);
+    }
+    expect(approved).toHaveLength(0);
+  });
+
   it('approves a waiting draft inline, with the calendar hook', async () => {
     const { getAllByTestId } = render(
       withQueries(<OrganicWeekModule brandId="b1" organicAccounts={ACCOUNTS} />),

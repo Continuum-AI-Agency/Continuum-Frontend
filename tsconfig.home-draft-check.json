@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "types": [
+      "bun",
+      "next"
+    ]
+  },
+  "include": [
+    "e2e/support/homeDraftDots.ts",
+    "playwright.home-draft.config.ts",
+    "scripts/home-draft-bench.ts",
+    "e2e/home-board.bench.spec.ts",
+    "src/i18n/types.d.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

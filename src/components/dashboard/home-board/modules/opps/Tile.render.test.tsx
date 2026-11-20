@@ -6,6 +6,7 @@ import type {
 } from '@continuum/contracts';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { render } from '@/i18n/__tests__/render';
+import { HomePresentationContext } from '../../HomePresentationContext';
 import type { HomeReadLoad } from '../../homeRead';
 import { homeContext, tileOf } from './__fixtures__/homeContext';
 import {
@@ -82,6 +83,27 @@ const frame = () => screen.getByTestId('home-tile-opps');
 const ctx = homeContext(EASY_FIT_META_BRAND_ID);
 
 describe('Opportunities tile', () => {
+  it('keeps draft inspection in its sheet rather than linking to business controls', () => {
+    render(
+      <HomePresentationContext value="dots">
+        <OppsTile ctx={ctx} tile={tileOf('opps')} />
+      </HomePresentationContext>,
+    );
+    expect(screen.queryByTestId('home-tile-opps-review')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByTestId('home-tile-opps-open')).toBeTruthy();
+  });
+
+  it('does not send a missing draft to the portfolio creation flow', () => {
+    portfoliosRead = { hasAnswer: true, isError: false, brandPortfolios: [] };
+    render(
+      <HomePresentationContext value="dots">
+        <OppsTile ctx={ctx} tile={tileOf('opps')} />
+      </HomePresentationContext>,
+    );
+    expect(screen.queryByRole('link', { name: 'Create a portfolio' })).toBeNull();
+    expect(frame().getAttribute('data-module-state')).toBe('missing');
+  });
   it('headlines the waiting decisions with the raw count optimizer_list_portfolios gives', () => {
     render(<OppsTile ctx={ctx} tile={tileOf('opps', 'l')} />);
     expect(frame().getAttribute('data-module-state')).toBe('ready');

@@ -12,7 +12,10 @@ import { useTranslations } from 'next-intl';
 import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { HomeDots } from '../../HomeDots';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
+import { healthDotItems } from '../../homeDotItems';
 import type { HomeTileProps } from '../../types';
 import { useHomeRead } from '../../useHomeRead';
 import { CheckIcon, FixLink } from './DoctorParts';
@@ -25,6 +28,7 @@ const FAILING_SHOWN: Record<HomeTileProps['tile']['size'], number> = { s: 1, m: 
 
 export default function HealthTile({ ctx, tile }: HomeTileProps) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const reads = useDoctorReads(ctx.brandId, ctx.adAccounts);
   const hygiene = useHomeRead<HomeAccountHygieneData>({
     name: 'accountHygiene',
@@ -89,7 +93,7 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
       state="ready"
       tile={tile}
     >
-      <div className="flex min-w-0 flex-col gap-2">
+      <div className={draft ? 'flex min-w-0 flex-1 flex-col gap-2' : 'flex min-w-0 flex-col gap-2'}>
         <p
           className="font-semibold text-2xl tabular-nums tracking-tight"
           data-failing={view.failing}
@@ -97,28 +101,41 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
           data-total={view.total}
           data-value={view.passing}
         >
-          {uiText.rich('passing_of_total_muted_checks_pass_muted_c95638c', {
-            passing: view.passing,
-            total: view.total,
-            muted: (chunks) => (
-              <span className="font-normal text-muted-foreground text-xs">{chunks}</span>
-            ),
-          })}
+          {uiText.rich(
+            draft
+              ? 'passing_of_total_muted_readable_checks_pass_m_cf3e660'
+              : 'passing_of_total_muted_checks_pass_muted_c95638c',
+            {
+              passing: view.passing,
+              total: view.total,
+              muted: (chunks) => (
+                <span className="font-normal text-muted-foreground text-xs">{chunks}</span>
+              ),
+            },
+          )}
         </p>
-        <div
-          aria-label={uiText('passing_of_total_checks_pass_9db0c64', {
-            passing: view.passing,
-            total: view.total,
-          })}
-          className="h-2 w-full overflow-hidden rounded-full bg-muted"
-          role="img"
-        >
-          <div
-            className={view.failing === 0 ? 'h-full bg-emerald-500' : 'h-full bg-amber-500'}
-            style={{ width: `${passShare}%` }}
+        {draft ? (
+          <HomeDots
+            items={healthDotItems(view.checks, uiText)}
+            label={uiText('account_checks_hollow_dots_have_not_been_read_42c8970')}
+            named
           />
-        </div>
-        {shown.length > 0 ? (
+        ) : (
+          <div
+            aria-label={uiText('passing_of_total_checks_pass_9db0c64', {
+              passing: view.passing,
+              total: view.total,
+            })}
+            className="h-2 w-full overflow-hidden rounded-full bg-muted"
+            role="img"
+          >
+            <div
+              className={view.failing === 0 ? 'h-full bg-emerald-500' : 'h-full bg-amber-500'}
+              style={{ width: `${passShare}%` }}
+            />
+          </div>
+        )}
+        {draft ? null : shown.length > 0 ? (
           <ul className="hit-area-column space-y-1.5" data-testid="home-health-failing">
             {shown.map((check) => (
               <li className="flex min-w-0 items-start gap-2" key={check.id}>

@@ -24,6 +24,7 @@ import { useOrganicSnapshot } from '@/lib/home/homeAccounts';
 import { type SnapshotAccountRef, summableRollups } from '@/lib/organic/brandOrganicSnapshot';
 import { organicPlatformLabel } from '@/lib/organic/platforms';
 import { cn } from '@/lib/utils';
+import { HOME_DRAFT_READ_ONLY, useHomeDraft } from '../../HomePresentationContext';
 import type { OrganicWeekDay, WaitingDraft } from './organicWeekModel';
 import { reachRowsOf, topPostLine } from './organicWeekRead';
 import { homeOrganicDraftsKey, useOrganicWeek } from './useOrganicWeek';
@@ -73,6 +74,7 @@ function WaitingItem({
   onApprove: () => void;
 }) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   return (
     <li
       className="flex min-w-0 flex-col gap-1 rounded-lg border border-dashed p-2 text-xs"
@@ -93,6 +95,7 @@ function WaitingItem({
         disabled={disabled}
         onClick={onApprove}
         size="sm"
+        title={draft ? uiText(HOME_DRAFT_READ_ONLY) : undefined}
         type="button"
         variant="outline"
       >
@@ -112,6 +115,7 @@ function DayColumn({
   onApprove: (card: OrganicCalendarDraft) => void;
 }) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const empty = day.published.length + day.scheduled.length + day.waiting.length === 0;
   return (
     <section
@@ -143,7 +147,7 @@ function DayColumn({
           {day.waiting.map((item) => (
             <WaitingItem
               busy={pendingId === item.card.id}
-              disabled={pendingId !== null}
+              disabled={draft || pendingId !== null}
               item={item}
               key={item.card.id}
               onApprove={() => onApprove(item.card)}
@@ -265,6 +269,7 @@ export default function OrganicWeekModule({
 }) {
   const uiText = useTranslations('dashboard');
   const uiLocale = useLocale();
+  const draft = useHomeDraft();
   const load = useOrganicWeek(brandId, organicAccounts);
   const read = useOrganicWeekRead(brandId, organicAccounts.length > 0);
   const { approveAndSchedule } = useApproveScheduleDraft();
@@ -272,6 +277,7 @@ export default function OrganicWeekModule({
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const approve = async (card: OrganicCalendarDraft) => {
+    if (draft) return;
     setPendingId(card.id);
     try {
       if (await approveAndSchedule(card)) {

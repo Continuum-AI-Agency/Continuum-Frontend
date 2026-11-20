@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { HOME_DRAFT_READ_ONLY, useHomeDraft } from '../../HomePresentationContext';
 import type { HomeBoardContext } from '../../types';
 import { briefView } from '../brief/briefModel';
 import { useBriefReads } from '../brief/useBriefReads';
@@ -46,6 +47,7 @@ function SlideBody({ slide }: { slide: StorySlide }) {
 
 export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const today = new Date();
   const { reads } = useBriefReads(ctx.brandId, ctx.adAccounts);
   const brief = briefView(reads, today);
@@ -129,18 +131,31 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
         ))}
       </ol>
       <div className="flex flex-col gap-1.5 border-t pt-4">
-        <Button className="self-start" onClick={() => setReportOpen(true)} size="sm" type="button">
+        <Button
+          className="self-start"
+          disabled={draft}
+          title={draft ? uiText(HOME_DRAFT_READ_ONLY) : undefined}
+          onClick={() => {
+            if (!draft) setReportOpen(true);
+          }}
+          size="sm"
+          type="button"
+        >
           <SendIcon aria-hidden className="size-3.5" /> {uiText('send_as_continuum_report_fc89617')}
         </Button>
         <p className="text-muted-foreground text-xs">
-          {uiText('emails_the_brand_s_continuum_report_built_fro_5a1f69e')}
+          {draft
+            ? uiText(HOME_DRAFT_READ_ONLY)
+            : uiText('emails_the_brand_s_continuum_report_built_fro_5a1f69e')}
         </p>
       </div>
-      <SendContinuumReportDialog
-        brandId={ctx.brandId}
-        onOpenChange={setReportOpen}
-        open={reportOpen}
-      />
+      {!draft ? (
+        <SendContinuumReportDialog
+          brandId={ctx.brandId}
+          onOpenChange={setReportOpen}
+          open={reportOpen}
+        />
+      ) : null}
     </div>
   );
 }

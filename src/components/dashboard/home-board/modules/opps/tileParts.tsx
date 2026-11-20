@@ -5,7 +5,7 @@
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import type { WaitingPortfolio } from './oppsModel';
+import { type WaitingPortfolio, waitingLineIn } from './oppsModel';
 
 /** A column of one-line text links (the old Home's rule). Each link's `hit-area` pad grows toward
  *  the 24 px floor and the column caps that growth at the gap the rows share, so two rows' pads
@@ -18,20 +18,7 @@ export const ROW_LINK = 'hit-area py-0.5 underline-offset-2 hover:underline';
 export function useWaitingLine() {
   const uiText = useTranslations('dashboard');
   return (portfolio: Pick<WaitingPortfolio, 'recommendations' | 'budgetMoves'>) =>
-    [
-      portfolio.recommendations > 0
-        ? uiText('count_plural_one_recommendation_other_recomme_510798b', {
-            count: portfolio.recommendations,
-          })
-        : null,
-      portfolio.budgetMoves > 0
-        ? uiText('count_plural_one_budget_move_other_budget_mov_6592963', {
-            count: portfolio.budgetMoves,
-          })
-        : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    waitingLineIn(portfolio, uiText);
 }
 
 /** A read that failed: what the tile cannot say, and a Retry. */

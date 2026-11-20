@@ -2889,7 +2889,7 @@ function SettingsDetail({
  *  combinations it is grounded on. Rendered from the recommendation's seed by the shared
  *  builder — the same brief the request email and the swap worker receive. Falls back to the
  *  plain reason for an older rec that carries no seed. */
-function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
+export function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
   const uiText = useTranslations('scale');
   const brief = creativeBriefForRec(rec);
   if (!brief) return <RecDetail rec={rec} />;
@@ -2975,7 +2975,7 @@ function scoreWindows(item: CycleItemRow): string | null {
  *  apply_audits.justification, so the queue and the money ledger cannot tell two different
  *  stories about one move. Absent on rows scored before the engine persisted it; the row
  *  then shows its numbers and no "Why", rather than a second explanation computed here. */
-function BudgetDetail({
+export function BudgetDetail({
   item,
   currency,
   counterparty,

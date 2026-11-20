@@ -34,6 +34,7 @@ export type OverviewTotals = {
   current: Partial<Record<HomeObjectiveMetric, number>>;
   previous: Partial<Record<HomeObjectiveMetric, number>>;
   series: Partial<Record<HomeObjectiveMetric, number[]>>;
+  seriesDates?: Partial<Record<HomeObjectiveMetric, string[]>>;
   /** Metrics no account in the sum reports at all (a Google-only sum has no conversations). */
   unreported: HomeObjectiveMetric[];
   accountCount: number;
@@ -78,6 +79,7 @@ export function sumOverviews(overviews: HomeAccountOverview[]): OverviewTotals {
     current: {},
     previous: {},
     series: {},
+    seriesDates: {},
     unreported: [],
     accountCount: overviews.length,
   };
@@ -107,9 +109,9 @@ export function sumOverviews(overviews: HomeAccountOverview[]): OverviewTotals {
     if (current !== undefined) totals.current[metric] = current;
     if (previous !== undefined && previousComplete) totals.previous[metric] = previous;
     if (byDate.size > 1) {
-      totals.series[metric] = [...byDate.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([, value]) => value);
+      const ordered = [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b));
+      totals.series[metric] = ordered.map(([, value]) => value);
+      if (totals.seriesDates) totals.seriesDates[metric] = ordered.map(([date]) => date);
     }
   }
   return totals;

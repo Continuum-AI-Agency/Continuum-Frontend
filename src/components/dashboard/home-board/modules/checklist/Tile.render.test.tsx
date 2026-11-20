@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { PortfolioListItem, RecommendationRow } from '@continuum/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { render } from '@/i18n/__tests__/render';
+import { englishMessages, render } from '@/i18n/__tests__/render';
+import { HOME_DRAFT_READ_ONLY, HomePresentationContext } from '../../HomePresentationContext';
 import { homeContext, tileOf } from '../opps/__fixtures__/homeContext';
 import {
   EASY_FIT_PORTFOLIOS,
@@ -112,6 +113,22 @@ describe('Client checklist tile', () => {
 });
 
 describe('Client checklist expanded', () => {
+  it('lets a draft inspect items without mounting the email sender', async () => {
+    render(
+      <HomePresentationContext value="dots">
+        <ChecklistTile ctx={ctx} tile={tileOf('checklist', 'm')} />
+      </HomePresentationContext>,
+    );
+    fireEvent.click(screen.getByTestId('home-tile-checklist-open'));
+    const sheet = await screen.findByTestId('home-checklist-module');
+    expect(within(sheet).getAllByTestId('home-checklist-item')).toHaveLength(9);
+    const send = within(sheet).getByRole('button', { name: /Send by email/ });
+    expect(send.hasAttribute('disabled')).toBe(true);
+    expect(send.getAttribute('title')).toBe(englishMessages.dashboard[HOME_DRAFT_READ_ONLY]);
+    fireEvent.click(send);
+    expect(screen.queryByTestId('report-email-dialog')).toBeNull();
+  });
+
   async function openChecklist() {
     render(<ChecklistTile ctx={ctx} tile={tileOf('checklist', 'm')} />);
     fireEvent.click(screen.getByTestId('home-tile-checklist-open'));
