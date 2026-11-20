@@ -1116,7 +1116,7 @@ export function OrganicAgentPanel({
       });
       return;
     }
-    if (!ownsRun) dispatch({ type: 'STREAM_COMPLETE' });
+    if (!ownsRun) dispatch({ type: 'STREAM_COMPLETE', cancelled: true });
   }, [cancel, show, state.sessionId, activeSessionId, isStreaming, uiText]);
 
   const hasSession = Boolean(state.sessionId || activeSessionId);

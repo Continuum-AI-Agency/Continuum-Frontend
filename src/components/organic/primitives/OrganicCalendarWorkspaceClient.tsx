@@ -32,7 +32,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
 import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
-import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
+import { draftCopyGap, evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { findDraftInDays } from '@/lib/organic/groupDraft';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
 import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
@@ -1498,8 +1498,13 @@ function OrganicCalendarWorkspaceInner({
       drafts.filter((draft) => draft.status === 'scheduled' || draft.status === 'published').length,
     [drafts],
   );
+  // A blank "New" stub is a slot, not a post: a week of them is still at the plan stage.
+  const contentDraftsCount = React.useMemo(
+    () => drafts.filter((draft) => draftCopyGap(draft) !== 'blank').length,
+    [drafts],
+  );
   const plannerStage = resolvePlannerStage({
-    draftsCount: drafts.length,
+    draftsCount: contentDraftsCount,
     scheduledCount,
     isGenerating,
     hasSelection,

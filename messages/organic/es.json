@@ -1547,5 +1547,9 @@
   "count_plural_one_chosen_post_outside_this_lis_bb9c81b": "{count, plural, one {# publicación elegida fuera de esta lista. Se sigue supervisando.} other {# publicaciones elegidas fuera de esta lista. Se siguen supervisando.}}",
   "couldn_t_delete_from_platform_bca3e0d": "No se pudo eliminar de {platform}",
   "couldn_t_reach_continuum_0a69f88": "No se pudo acceder a Continuum",
-  "mapped_mapped_number_total_number_cities_with_7a925a6": "Se ubicaron {mapped, number}/{total, number} ciudades con coordenadas conocidas."
+  "mapped_mapped_number_total_number_cities_with_7a925a6": "Se ubicaron {mapped, number}/{total, number} ciudades con coordenadas conocidas.",
+  "needs_copy_9cce360": "Falta el texto",
+  "empty_draft_nothing_written_yet_f0ec0fe": "Borrador vacío: todavía no hay nada escrito",
+  "generate_copy_e0f96b1": "Generar texto",
+  "generate_with_ai_0dbd840": "Generar con IA"
 }

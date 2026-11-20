@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
-import { evaluateDraftReadiness } from './draftReadiness';
+import { draftCopyGap, evaluateDraftReadiness } from './draftReadiness';
 
 function makeDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
   return {
@@ -198,5 +198,51 @@ describe('evaluateDraftReadiness — several platforms', () => {
       ],
     });
     expect(reasons(card)).toEqual(['caption_missing']);
+  });
+});
+
+// The rows behind the report: a "New" button stub (no copy, text_only) and an approved plan
+// placement (status approved, which the planner reads as draft; content_json NULL; a brief).
+describe('draftCopyGap', () => {
+  it('names a Planner "New" stub blank', () => {
+    expect(draftCopyGap(makeDraft({ hasCopy: false, mediaStage: 'text_only' }))).toBe('blank');
+    // Before its first save it has no media_stage and no hasCopy at all.
+    expect(draftCopyGap(makeDraft())).toBe('blank');
+  });
+
+  it('names an approved plan placement with only a brief as needing its copy', () => {
+    expect(
+      draftCopyGap(
+        makeDraft({
+          title: 'Saved draft',
+          brief: 'Show the cost of typing invoices by hand.',
+          hasCopy: false,
+          mediaStage: 'text_only',
+        }),
+      ),
+    ).toBe('brief');
+  });
+
+  it('treats a whitespace-only brief as no brief', () => {
+    expect(draftCopyGap(makeDraft({ brief: '   ' }))).toBe('blank');
+  });
+
+  it('has no gap once there is copy, a typed caption, or media', () => {
+    expect(draftCopyGap(makeDraft({ hasCopy: true }))).toBeNull();
+    expect(draftCopyGap(makeDraft({ captionPreview: 'Typed by hand' }))).toBeNull();
+    expect(draftCopyGap(makeDraft({ mediaStage: 'realized' }))).toBeNull();
+    expect(draftCopyGap(makeDraft({ publishingAssets: [image] }))).toBeNull();
+  });
+
+  it('leaves drafts that are generating, placeholders or past the draft stage alone', () => {
+    for (const status of [
+      'streaming',
+      'placeholder',
+      'scheduled',
+      'published',
+      'failed',
+    ] as const) {
+      expect(draftCopyGap(makeDraft({ status }))).toBeNull();
+    }
   });
 });

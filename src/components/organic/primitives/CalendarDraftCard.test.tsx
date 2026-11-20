@@ -772,6 +772,100 @@ describe('CalendarDraftCard', () => {
     expect(enrich.className).toContain('shrink-0');
   });
 
+  describe('an empty draft', () => {
+    // The ladder's copy route is called with the real client: only the network is stubbed.
+    const originalFetch = globalThis.fetch;
+    let posted: Array<{ url: string; body: Record<string, unknown> }> = [];
+    beforeEach(() => {
+      posted = [];
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        posted.push({ url: String(input), body: JSON.parse(String(init?.body ?? '{}')) });
+        return new Response(
+          JSON.stringify({
+            status: 'queued',
+            stage: 'generate_copy',
+            draftId: '11111111-1111-4111-8111-111111111111',
+            jobId: 'job-1',
+            mediaStage: 'text_only',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }) as typeof fetch;
+    });
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    // The shape the Planner "New" button saves: a title, nothing else.
+    const stub: OrganicCalendarDraft = {
+      ...draft,
+      id: 'draft-stub',
+      backendDraftId: 'd4c93d67-0000-4000-8000-000000000001',
+      title: 'New Instagram post',
+      captionPreview: '',
+      hasCopy: false,
+      mediaStage: 'text_only',
+      mediaCount: 0,
+    };
+    const renderCard = (target: OrganicCalendarDraft) =>
+      render(
+        <CalendarDraftCard
+          draft={target}
+          isSelected={false}
+          isMultiSelected={false}
+          onSelect={mock()}
+          onToggleSelection={mock()}
+          onEnrich={mock()}
+        />,
+      );
+
+    it('offers Generate with AI instead of Enrich, and writes the copy into this draft', async () => {
+      renderCard(stub);
+
+      expect(screen.getByText('Empty draft — nothing written yet')).toBeTruthy();
+      // Enrich builds a blueprint from copy, and this draft has none.
+      expect(screen.queryByText('Enrich')).toBeNull();
+      expect(screen.queryByText('Text only — no media yet')).toBeNull();
+
+      fireEvent.click(screen.getByText('Generate with AI'));
+
+      await waitFor(() => expect(posted).toHaveLength(1), { timeout: 2000 });
+      expect(posted[0]?.url).toContain(
+        '/api/organic/agent/drafts/d4c93d67-0000-4000-8000-000000000001/generate-copy',
+      );
+      expect(posted[0]?.body).toEqual({ brandId: 'b1' });
+      await waitFor(() => expect(store.updateDraft).toHaveBeenCalled());
+      const [updatedId, updater] = store.updateDraft.mock.calls[0] as [
+        string,
+        (current: OrganicCalendarDraft) => OrganicCalendarDraft,
+      ];
+      expect(updatedId).toBe('draft-stub');
+      expect(updater(stub).status).toBe('streaming');
+    });
+
+    it('reads an approved plan placement as needing copy, and offers Generate copy', () => {
+      renderCard({ ...stub, id: 'draft-plan', brief: 'Show the cost of manual invoicing.' });
+
+      expect(screen.getByText('Needs copy')).toBeTruthy();
+      expect(screen.getByText('Generate copy').getAttribute('role')).toBe('button');
+      expect(screen.queryByText('Generate with AI')).toBeNull();
+    });
+
+    it('holds the action until the draft has a row to write into', () => {
+      renderCard({ ...stub, backendDraftId: undefined });
+
+      expect(screen.getByText('Empty draft — nothing written yet')).toBeTruthy();
+      expect(screen.queryByText('Generate with AI')).toBeNull();
+    });
+
+    it('keeps Enrich for a text-only draft that already has its copy', () => {
+      renderCard({ ...stub, captionPreview: 'Written', hasCopy: true });
+
+      expect(screen.getByText('Enrich')).toBeTruthy();
+      expect(screen.queryByText('Generate with AI')).toBeNull();
+    });
+  });
+
   it("shows the storyboard + 'Blueprint ready' pill for a pending draft with a persisted storyboard", () => {
     const withStoryboard: OrganicCalendarDraft = {
       ...draft,

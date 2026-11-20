@@ -89,7 +89,8 @@ export type PanelAction =
       ok?: boolean;
       reason?: string;
     }
-  | { type: 'STREAM_COMPLETE' }
+  /** `cancelled`: the user stopped the run, so an empty turn is theirs, not a failure. */
+  | { type: 'STREAM_COMPLETE'; cancelled?: boolean }
   | { type: 'STREAM_STALLED' }
   | {
       type: 'STREAM_ERROR';
@@ -142,6 +143,8 @@ const STAGE_ORDER: readonly PipelineStage[] = PIPELINE_STAGES;
 // the run store (or persisted twice, or a later status of the same batch) replaces its card where
 // it stands rather than stacking a second copy under the same turn.
 function sameUiCard(a: UiCard, b: UiCard): boolean {
+  const planId = planIdOf(a);
+  if (planId) return a.type === b.type && planIdOf(b) === planId;
   if (a.type === 'media_strip' && b.type === 'media_strip') {
     return a.data.toolCallId === b.data.toolCallId;
   }
@@ -154,6 +157,45 @@ function sameUiCard(a: UiCard, b: UiCard): boolean {
 export function upsertUiCard(cards: readonly UiCard[], card: UiCard): UiCard[] {
   const at = cards.findIndex((c) => sameUiCard(c, card));
   return at === -1 ? [...cards, card] : cards.map((c, i) => (i === at ? card : c));
+}
+
+export const EMPTY_TURN_MESSAGE = 'The agent stopped without replying. Retry to ask again.';
+
+function isEmptyAssistantTurn(message: ConversationMessage): boolean {
+  return (
+    message.role === 'assistant' &&
+    !message.error &&
+    !message.content.trim() &&
+    !message.toolCalls?.length &&
+    !message.uiCards?.length &&
+    !message.mediaSearchResults?.length
+  );
+}
+
+// A plan is ONE decision with ONE live card. The agent sends a pending plan's card again when a
+// tool is blocked on it, because the user never saw the first or lost it far up the thread. So
+// the card belongs where the conversation is now: the latest copy stays and older ones leave,
+// live and on reload alike. Deduping the new one instead left the user waiting on a card they
+// could not find.
+function planIdOf(card: UiCard): string | null {
+  return card.type === 'plan_card' || card.type === 'bulk_plan_card' ? card.data.planId : null;
+}
+
+function withoutPlanCard(message: ConversationMessage, card: UiCard): ConversationMessage {
+  if (!planIdOf(card) || !message.uiCards?.some((c) => sameUiCard(c, card))) return message;
+  return { ...message, uiCards: message.uiCards.filter((c) => !sameUiCard(c, card)) };
+}
+
+/** Each plan's card only on the latest message that carries it. Untouched messages keep identity. */
+export function keepLatestPlanCards(messages: ConversationMessage[]): ConversationMessage[] {
+  const kept = [...messages];
+  const later: UiCard[] = [];
+  for (let index = kept.length - 1; index >= 0; index -= 1) {
+    const message = later.reduce(withoutPlanCard, kept[index]);
+    kept[index] = message;
+    later.push(...(message.uiCards ?? []).filter((card) => planIdOf(card) !== null));
+  }
+  return kept;
 }
 
 // Unique per assistant turn. A random suffix avoids same-millisecond collisions
@@ -633,7 +675,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
                 ...m,
                 uiCards: upsertUiCard(m.uiCards ?? [], action.card),
               }
-            : m,
+            : withoutPlanCard(m, action.card),
         ),
       };
 
@@ -684,10 +726,26 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       };
     }
 
-    case 'STREAM_COMPLETE':
+    case 'STREAM_COMPLETE': {
       // The stream hook emits a trailing STREAM_COMPLETE after a terminal error frame,
       // so a queued silent auto-retry must survive it — only streaming state clears.
-      return { ...state, streamingMessageId: null, queuedAheadOf: null, streamRetrying: null };
+      const settled = {
+        ...state,
+        streamingMessageId: null,
+        queuedAheadOf: null,
+        streamRetrying: null,
+      };
+      // A run that ended without a word, a tool call or a card rendered as an empty bubble the
+      // user could only stare at. It gets the error row and its Retry instead. A turn that is
+      // waiting on a tool approval has said what it needs, through the approval card.
+      const turn = state.messages.find((m) => m.id === state.streamingMessageId);
+      if (!turn || !isEmptyAssistantTurn(turn)) return settled;
+      if (action.cancelled || state.pendingToolApprovals.length > 0) return settled;
+      return {
+        ...settled,
+        messages: state.messages.map((m) => (m === turn ? { ...m, error: EMPTY_TURN_MESSAGE } : m)),
+      };
+    }
 
     case 'STREAM_ERROR': {
       // First transient failure of a turn: stamp the error but queue ONE silent
@@ -1075,21 +1133,23 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       if (state.sessionId !== null && state.sessionId === action.sessionId) {
         return {
           ...state,
-          messages: mergeRestoredMessages(state.messages, action.messages),
+          messages: keepLatestPlanCards(mergeRestoredMessages(state.messages, action.messages)),
           isHydrated: true,
         };
       }
       return {
         ...initialPanelState(),
         sessionId: action.sessionId,
-        messages: action.messages,
+        messages: keepLatestPlanCards(action.messages),
         isHydrated: true,
       };
     }
 
     case 'PREPEND_MESSAGES': {
       const messages = prependUnseen(state.messages, action.messages);
-      return messages === state.messages ? state : { ...state, messages };
+      return messages === state.messages
+        ? state
+        : { ...state, messages: keepLatestPlanCards(messages) };
     }
 
     // Polled/Realtime-refreshed generation summaries (brand-wide) converge this

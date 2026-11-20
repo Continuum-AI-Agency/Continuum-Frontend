@@ -1547,5 +1547,9 @@
   "count_plural_one_chosen_post_outside_this_lis_bb9c81b": "{count, plural, one {# chosen post outside this list. Still watched.} other {# chosen posts outside this list. Still watched.}}",
   "couldn_t_delete_from_platform_bca3e0d": "Couldn't delete from {platform}",
   "couldn_t_reach_continuum_0a69f88": "Couldn't reach Continuum",
-  "mapped_mapped_number_total_number_cities_with_7a925a6": "Mapped {mapped, number}/{total, number} cities with known coordinates."
+  "mapped_mapped_number_total_number_cities_with_7a925a6": "Mapped {mapped, number}/{total, number} cities with known coordinates.",
+  "needs_copy_9cce360": "Needs copy",
+  "empty_draft_nothing_written_yet_f0ec0fe": "Empty draft — nothing written yet",
+  "generate_copy_e0f96b1": "Generate copy",
+  "generate_with_ai_0dbd840": "Generate with AI"
 }

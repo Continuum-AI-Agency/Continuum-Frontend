@@ -2,12 +2,8 @@
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useUiErrorMessage } from '@/i18n/errors';
-import {
-  DraftEnrichmentConflictError,
-  enqueueBlueprintExpansion,
-  enqueueCopyGeneration,
-} from '@/lib/organic/draftEnrichment';
+import { useUiErrorSentence } from '@/i18n/errors';
+import { enqueueBlueprintExpansion, enqueueCopyGeneration } from '@/lib/organic/draftEnrichment';
 import { useCalendarStore } from '@/lib/organic/store';
 import { useDestructiveConfirmation } from '../primitives/DestructiveConfirmation';
 import { resolveDraftMediaStage } from '../primitives/DraftLifecycle';
@@ -60,6 +56,58 @@ type LadderOptions = {
 };
 
 /**
+ * Enqueue one ladder step for one draft: the Backend job, the optimistic "streaming" stamp the
+ * Realtime refetch later replaces, and the error toast. The editor's ladder and the calendar
+ * card's own Generate action both run through it, so the two cannot behave differently.
+ */
+export function useLadderStepRequest(brandProfileId: string | undefined) {
+  const uiText = useTranslations('organic');
+  const formatUiError = useUiErrorSentence();
+  const updateDraft = useCalendarStore((state) => state.updateDraft);
+  const { show } = useToast();
+  const [isBusy, setIsBusy] = React.useState(false);
+
+  const requestStep = React.useCallback(
+    async (
+      draft: Pick<OrganicCalendarDraft, 'id' | 'backendDraftId'>,
+      step: 'copy' | 'blueprint',
+      regenerate = false,
+    ) => {
+      const backendDraftId = draft.backendDraftId;
+      if (!brandProfileId || !backendDraftId) return;
+      setIsBusy(true);
+      try {
+        const request = regenerate
+          ? { brandId: brandProfileId, regenerate: true }
+          : { brandId: brandProfileId };
+        if (step === 'copy') {
+          await enqueueCopyGeneration(backendDraftId, request);
+        } else {
+          await enqueueBlueprintExpansion(backendDraftId, request);
+        }
+        updateDraft(draft.id, (current) => ({
+          ...current,
+          status: 'streaming',
+          generationError: undefined,
+          generationStage: step === 'copy' ? 'Generating copy…' : 'Building blueprint…',
+        }));
+      } catch (error) {
+        show({
+          title: uiText('enrichmentActionFailed', { step }),
+          description: formatUiError(error),
+          variant: 'error',
+        });
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [brandProfileId, show, updateDraft, formatUiError, uiText],
+  );
+
+  return { requestStep, isBusy };
+}
+
+/**
  * Derive the three-step enrichment ladder for one draft, and dispatch the step the
  * user can act on.
  *
@@ -72,11 +120,8 @@ export function useDraftEnrichmentLadder(
   { brandProfileId, onMediaStep }: LadderOptions,
 ): DraftLadder {
   const uiText = useTranslations('organic');
-  const formatUiError = useUiErrorMessage();
-  const updateDraft = useCalendarStore((state) => state.updateDraft);
-  const { show } = useToast();
   const { requestDestructiveConfirmation } = useDestructiveConfirmation();
-  const [isBusy, setIsBusy] = React.useState(false);
+  const { requestStep, isBusy } = useLadderStepRequest(brandProfileId);
 
   const mediaStage = resolveDraftMediaStage(draft);
   const hasCopy = draft.hasCopy === true;
@@ -140,38 +185,8 @@ export function useDraftEnrichmentLadder(
           : null;
 
   const runLadderRequest = React.useCallback(
-    async (step: 'copy' | 'blueprint', regenerate: boolean) => {
-      if (!brandProfileId || !draft.backendDraftId) return;
-      setIsBusy(true);
-      try {
-        const request = regenerate
-          ? { brandId: brandProfileId, regenerate: true }
-          : { brandId: brandProfileId };
-        if (step === 'copy') {
-          await enqueueCopyGeneration(draft.backendDraftId, request);
-        } else {
-          await enqueueBlueprintExpansion(draft.backendDraftId, request);
-        }
-        // Optimistic: the row's real transition arrives over Realtime, which bumps the
-        // calendar's refetch nonce.
-        updateDraft(draft.id, (current) => ({
-          ...current,
-          status: 'streaming',
-          generationError: undefined,
-          generationStage: step === 'copy' ? 'Generating copy…' : 'Building blueprint…',
-        }));
-      } catch (error) {
-        const description = formatUiError(error);
-        show({
-          title: uiText('enrichmentActionFailed', { step }),
-          description,
-          variant: 'error',
-        });
-      } finally {
-        setIsBusy(false);
-      }
-    },
-    [brandProfileId, draft.backendDraftId, draft.id, show, updateDraft, formatUiError, uiText],
+    (step: 'copy' | 'blueprint', regenerate: boolean) => requestStep(draft, step, regenerate),
+    [draft, requestStep],
   );
 
   const run = React.useCallback(() => {

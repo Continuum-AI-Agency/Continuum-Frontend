@@ -1,3 +1,4 @@
+import { plannerDraftHasCopy } from '@continuum/contracts';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -12,6 +13,11 @@ import {
   resolveWorkflowConceptSpec,
   type WorkflowConceptSpec,
 } from '@/lib/organic/ai-studio-bridge';
+import {
+  CAPTION_NOT_SAVED_MESSAGE,
+  draftHasSavedCaption,
+  WRONG_DRAFT_SAVED_MESSAGE,
+} from '../nodes/publish/publishingApi';
 import { useStudioStore } from '../stores/useStudioStore';
 import {
   type ApplyAssetCandidate,
@@ -264,11 +270,19 @@ export function useApplyBackToPlanner({
         ) {
           throw new Error('Edit this draft caption before applying it to Planner.');
         }
-        await request({
+        const saved = await request<{ id?: unknown; content_json?: unknown } | undefined>({
           path: `/api/organic/calendar/drafts/${encodeURIComponent(draftId)}/fields`,
           method: 'PATCH',
           body: { caption, expected_updated_at: expectedUpdatedAt },
         });
+        // "Saved" is said only once the caption is on THIS row: the field route answers with
+        // the row it wrote, and when that answer is missing it, the row is read back.
+        if (saved?.id !== undefined && saved.id !== draftId) {
+          throw new Error(WRONG_DRAFT_SAVED_MESSAGE);
+        }
+        const landed =
+          plannerDraftHasCopy(saved?.content_json) || (await draftHasSavedCaption(draftId));
+        if (!landed) throw new Error(CAPTION_NOT_SAVED_MESSAGE);
         show({ title: translateUi('caption_saved_to_planner_2fa3400a'), variant: 'success' });
         const params = new URLSearchParams({
           tab: 'planner',

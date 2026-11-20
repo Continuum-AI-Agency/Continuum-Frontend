@@ -105,7 +105,7 @@ describe('PlannerAttentionDock — needs attention', () => {
     day('2026-10-14', [
       draft('approve'),
       draft('broken', { status: 'failed', platforms: ['facebook'] }),
-      draft('text', { mediaStage: 'text_only' }),
+      draft('text', { mediaStage: 'text_only', hasCopy: true }),
     ]),
     day(UNSCHEDULED_DAY_ID, [draft('loose')]),
   ];
@@ -164,6 +164,16 @@ describe('PlannerAttentionDock — needs attention', () => {
     fireEvent.click(buttons[0] as HTMLElement);
     expect(onAddMedia).toHaveBeenCalledWith('text');
     expect(onSelectDraft).not.toHaveBeenCalled();
+  });
+
+  // Media is built from the copy: "Add media" on a draft with nothing written is a dead end.
+  it('files an empty draft under Needs copy, with no Add media action', () => {
+    const { dock } = renderDock([
+      day('2026-10-15', [draft('stub', { title: 'New Instagram post', mediaStage: 'text_only' })]),
+    ]);
+    const list = section(dock, 'attention')?.querySelector('ul');
+    expect(list?.getAttribute('aria-label')).toBe('Needs copy');
+    expect(screen.queryByRole('button', { name: /^Add media/ })).toBeNull();
   });
 
   it('puts the drag handle on the undated row’s own button: one tab stop', () => {

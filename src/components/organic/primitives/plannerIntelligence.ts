@@ -1,3 +1,4 @@
+import { draftCopyGap } from '@/lib/organic/draftReadiness';
 import { formatDayId, startOfWeek, UNSCHEDULED_DAY_ID } from './calendar-utils';
 import type { PlannerPlatform } from './planner-platforms';
 import type {
@@ -25,6 +26,7 @@ export type PlannerIntelligenceTranslator = (
 export type PlannerAttentionGroupKey =
   | 'overdue'
   | 'failed'
+  | 'needs-copy'
   | 'needs-media'
   | 'needs-approval'
   | 'unscheduled';
@@ -40,6 +42,7 @@ export type PlannerAttentionGroup = {
 const GROUP_ORDER: ReadonlyArray<{ key: PlannerAttentionGroupKey; label: string }> = [
   { key: 'overdue', label: 'Overdue' },
   { key: 'failed', label: 'Failed' },
+  { key: 'needs-copy', label: 'Needs copy' },
   { key: 'needs-media', label: 'Needs media' },
   { key: 'needs-approval', label: 'Needs approval' },
   { key: 'unscheduled', label: 'Unscheduled' },
@@ -79,6 +82,8 @@ function classifyDraft(
   if (draft.status === 'failed') return 'failed';
   // Scheduled, published and generating drafts need nothing from the user right now.
   if (!waiting) return null;
+  // Media is built from the copy, so an empty draft's first fix is the copy, not "add media".
+  if (draftCopyGap(draft)) return 'needs-copy';
   if (needsMedia(draft)) return 'needs-media';
   if (!dated) return 'unscheduled';
   return draft.status === 'draft' ? 'needs-approval' : null;
@@ -117,6 +122,7 @@ export function derivePlannerAttention(
 const GROUP_PHRASE: Record<PlannerAttentionGroupKey, readonly [string, string]> = {
   overdue: ['overdue', 'overdue'],
   failed: ['failed', 'failed'],
+  'needs-copy': ['needs copy', 'need copy'],
   'needs-media': ['needs media', 'need media'],
   'needs-approval': ['needs approval', 'need approval'],
   unscheduled: ['unscheduled', 'unscheduled'],
@@ -244,6 +250,8 @@ export function derivePlannerDock(
   let hasDrafts = false;
   for (const day of allDays) {
     for (const draft of day.slots) {
+      // A blank stub is a slot to fill, not a planned post: it leaves its day open.
+      if (draftCopyGap(draft) === 'blank') continue;
       hasDrafts = true;
       // The week grid files a platformless draft under Instagram, so it fills that slot.
       const [first = 'instagram', ...rest] = draft.platforms;
