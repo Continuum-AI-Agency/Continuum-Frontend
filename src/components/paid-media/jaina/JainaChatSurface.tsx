@@ -3326,9 +3326,10 @@ export function JainaChatSurface({
       reportArtifactJob?.status ??
       (hasPendingReportArtifactRequest ? 'starting' : isJainaProMode ? 'enabled' : 'other'),
   });
-  const reportArtifactTooltip = uiText('jainaProTooltip', {
-    state: reportArtifactJob?.status ?? 'other',
-  });
+  const reportArtifactTooltip =
+    reportArtifactJob?.status === 'failed' && reportArtifactJob.error
+      ? reportArtifactJob.error
+      : uiText('jainaProTooltip', { state: reportArtifactJob?.status ?? 'other' });
   const reportArtifactButtonDisabled =
     isInputDisabled ||
     hasPendingReportArtifactRequest ||

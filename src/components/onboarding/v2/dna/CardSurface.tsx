@@ -62,6 +62,7 @@ export function CardSurface({
   minBodyHeight = DEFAULT_MIN_BODY_HEIGHT,
   maxBodyHeight,
   skeleton,
+  errorMessage,
   settled = false,
   onRetry,
   children,
@@ -77,7 +78,7 @@ export function CardSurface({
         icon={
           <WarningCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--cs-warning,#cb8e00)]" />
         }
-        message={tUi('sectionFailed')}
+        message={errorMessage ?? tUi('sectionFailed')}
         onRetry={onRetry}
       />
     );

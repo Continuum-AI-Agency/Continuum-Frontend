@@ -180,17 +180,14 @@ describe('BriefDialog', () => {
       pollAnswers.push(() => ({ jobId: 'job_1', state: 'failed', error: 'No speech found.' }));
       submit();
       await waitFor(
-        () => expect(screen.getByRole('alert').textContent).toContain('The draft failed.'),
+        () => expect(screen.getByRole('alert').textContent).toContain('No speech found.'),
         {
           timeout: TIMEOUT_MS,
         },
       );
       submit();
       await waitFor(
-        () =>
-          expect(screen.getByRole('alert').textContent).toContain(
-            'An unexpected error occurred. Please try again.',
-          ),
+        () => expect(screen.getByRole('alert').textContent).toContain('The draft could not start.'),
         { timeout: TIMEOUT_MS },
       );
       expect(screen.queryByTestId('brief-progress')).toBeNull();
@@ -206,14 +203,13 @@ describe('BriefDialog', () => {
     async () => {
       renderDialog(() => ({ jobId: 'job_2', state: 'running' }));
       pollAnswers.push(() => {
-        throw new ApiError('No draft job_2 on this project.', 404);
+        throw new ApiError('No draft job_2 on this project.', 404, undefined, {
+          message: 'No draft job_2 on this project.',
+        });
       });
       submit();
       await waitFor(
-        () =>
-          expect(screen.getByRole('alert').textContent).toContain(
-            'This item is no longer available.',
-          ),
+        () => expect(screen.getByRole('alert').textContent).toContain('No draft job_2'),
         { timeout: TIMEOUT_MS },
       );
       await new Promise((resolve) => setTimeout(resolve, 2_000));

@@ -96,7 +96,7 @@ export function ApplyReallocationDialog({
           }
           if (!data.ok) {
             setPhase('error');
-            setResultNote(uiText('queueApplyFailed'));
+            setResultNote(data.error?.trim() || data.reason || uiText('queueApplyFailed'));
             return;
           }
           setPhase('done');

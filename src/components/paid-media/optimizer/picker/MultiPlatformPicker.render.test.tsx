@@ -328,15 +328,13 @@ describe('the Google group in Manage: what the portfolio holds, saved on its own
     expect(box('Paused · Pasarela')?.getAttribute('aria-checked')).toBe('false');
   });
 
-  it('shows safe guidance when a save is refused', async () => {
+  it("shows the database's refusal when a save is refused", async () => {
     renderEditable([], async () => {
       throw new Error('optimizer: google_ads campaign pmax-1 is already in portfolio 5aaf5931');
     });
     fireEvent.click(screen.getByText('PMax · Sedes'));
     fireEvent.click(screen.getByRole('button', { name: 'Save Google campaigns' }));
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      'An unexpected error occurred. Please try again.',
-    );
+    expect((await screen.findByRole('alert')).textContent).toContain('is already in portfolio');
   });
 
   it('is a list only, and says why, until the members read answers', () => {

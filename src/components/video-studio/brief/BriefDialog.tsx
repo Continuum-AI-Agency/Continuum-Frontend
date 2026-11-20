@@ -337,7 +337,8 @@ export function BriefDialog({
         if (cancelled) return;
         setStatus(next);
         setError(null);
-        if (next.state === 'failed') return failed(translateUi('draftFailedFallback'));
+        if (next.state === 'failed')
+          return failed(next.error ?? translateUi('draftFailedFallback'));
         if (next.state === 'completed') return await completed(next);
       } catch (pollError) {
         if (cancelled) return;
@@ -431,7 +432,9 @@ export function BriefDialog({
 
   const progress = status?.progress !== undefined ? Math.round(status.progress * 100) : null;
   const failure =
-    status?.state === 'failed' ? (error ?? translateUi('draftFailedFallback')) : error;
+    status?.state === 'failed'
+      ? (status.error ?? error ?? translateUi('draftFailedFallback'))
+      : error;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

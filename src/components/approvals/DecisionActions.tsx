@@ -95,7 +95,9 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
       try {
         const result = await approve.mutateAsync({ ruleActionId: action.id });
         if (!result.ok) {
-          toast.error(uiText('m_4bef5be9a8'));
+          toast.error(
+            result.error ? `${uiText('m_4bef5be9a8')} · ${result.error}` : uiText('m_4bef5be9a8'),
+          );
         } else if (result.alreadyExecuted) {
           toast.info(uiText('m_d540b39f7b'));
         } else {
@@ -118,7 +120,9 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
         try {
           const result = await reject.mutateAsync({ ruleActionId: action.id, reason });
           if (!result.ok) {
-            toast.error(uiText('m_49474675c1'));
+            toast.error(
+              result.error ? `${uiText('m_49474675c1')} · ${result.error}` : uiText('m_49474675c1'),
+            );
           } else {
             toast.success(
               uiText('m_443110582b', { v0: String(actionTypeLabel(action.action_type)) }),

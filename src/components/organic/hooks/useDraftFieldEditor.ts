@@ -60,6 +60,9 @@ function messageForError(
         length: limit.data.length,
       });
   }
+  // `account_not_candidate` names the accounts: say it.
+  if (error instanceof ApiError && error.status === 422 && error.payload?.message)
+    return error.payload.message;
   if (error instanceof ApiError)
     return translate('fieldSaveError', {
       reason:

@@ -155,7 +155,7 @@ describe('PipelineProposalCard', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it('shows localized guidance without exposing an unknown server message when publishing fails', async () => {
+  it("shows the server's message inline when publishing fails", async () => {
     const { onPublished } = renderCard({
       publish: async () => {
         throw new Error('A pipeline named that already exists for this brand.');
@@ -165,7 +165,7 @@ describe('PipelineProposalCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
 
     expect((await screen.findByRole('alert')).textContent).toBe(
-      'An unexpected error occurred. Please try again.',
+      'A pipeline named that already exists for this brand.',
     );
     expect(onPublished).not.toHaveBeenCalled();
     expect(
