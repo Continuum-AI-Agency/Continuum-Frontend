@@ -333,9 +333,49 @@ describe('usePublishDraft', () => {
     const toast = showMock.mock.calls.at(-1)?.[0];
     expect(toast.title).toBe('Partly published');
     expect(toast.description).toBe(
-      'Published to Instagram (@acme_a), Facebook (@acme_fb); LinkedIn (@acme_li) failed: The platform is temporarily rate-limiting requests. Wait a few minutes and try again..',
+      'Published to Instagram (@acme_a), Facebook (@acme_fb); LinkedIn (@acme_li) failed: The platform is temporarily rate-limiting requests. Wait a few minutes and try again.',
     );
     expect(result.current.error).toContain('LinkedIn (@acme_li) failed');
+  });
+
+  // The toast fades; the card is what still says which member failed and why.
+  it("keeps a failed member's reason on its own card", async () => {
+    const reason = '(#200) The permission(s) pages_manage_posts are not available';
+    vi.stubGlobal(
+      'fetch',
+      routedFetch(
+        streamOf([
+          published('draft-instagram', 'instagram', 'ig-post-1'),
+          {
+            event: 'failed',
+            data: { id: 'draft-facebook', type: 'failed', error: reason, code: 'api_error' },
+          },
+          complete([
+            ok('draft-instagram', 'instagram', 'ig-post-1'),
+            {
+              id: 'draft-facebook',
+              status: 'failed',
+              platform: 'facebook',
+              error: reason,
+              code: 'api_error',
+            },
+          ]),
+        ]),
+      ),
+    );
+
+    const { result } = renderHook(() => usePublishDraft());
+    await act(async () => {
+      await result.current.publish(group());
+    });
+
+    const patches = new Map(
+      updateDraftMock.mock.calls.map(([id, updater]) => [id, updater({})] as const),
+    );
+    expect(patches.get('placement-1::facebook')).toEqual({ publishError: reason });
+    expect(showMock.mock.calls.at(-1)?.[0].description).toContain(
+      `Facebook (@acme_fb) failed: ${reason}`,
+    );
   });
 
   // A stream that ends without its summary may have published some members. "Failed" would

@@ -321,6 +321,8 @@ export function usePublishDraft(): UsePublishDraftResult {
                 setTokenExpired(true);
               }
               if (ev.code === 'credits_exhausted') creditsExhausted = true;
+              // The backend keeps the same reason on the row; this shows it before the refetch.
+              if (storeId) updateDraft(storeId, (d) => ({ ...d, publishError: ev.error }));
             }
           }
         }
@@ -347,7 +349,7 @@ export function usePublishDraft(): UsePublishDraftResult {
         if (failures.length > 0) setError(failures.join('; '));
         show({
           title: uiText('publishResultTitle', { status: complete.groupStatus }),
-          description: `${sentence}.`,
+          description: /[.!?]$/.test(sentence) ? sentence : `${sentence}.`,
           variant:
             complete.groupStatus === 'published'
               ? 'success'

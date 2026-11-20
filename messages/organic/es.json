@@ -1551,5 +1551,6 @@
   "needs_copy_9cce360": "Falta el texto",
   "empty_draft_nothing_written_yet_f0ec0fe": "Borrador vacío: todavía no hay nada escrito",
   "generate_copy_e0f96b1": "Generar texto",
-  "generate_with_ai_0dbd840": "Generar con IA"
+  "generate_with_ai_0dbd840": "Generar con IA",
+  "last_publish_failed_a078eb3": "Falló la última publicación"
 }

@@ -171,6 +171,10 @@ export function CalendarDraftCard({
     | 'twitter';
   const isStreaming = draft.status === 'streaming';
   const isFailed = draft.status === 'failed';
+  // A failed publish-now hands the draft back to its pre-claim status, so the card's status does
+  // not say the post never went out. The reason does, until a publish succeeds and clears it.
+  const lastPublishError =
+    draft.status === 'draft' || draft.status === 'scheduled' ? draft.publishError : undefined;
   const isAssignedToDay = draft.dateLabel.trim().length > 0;
   const hasValidTimeLabel = isValidTimeLabel(draft.timeLabel);
   const canMarkScheduled = isAssignedToDay && hasValidTimeLabel;
@@ -326,6 +330,7 @@ export function CalendarDraftCard({
       ...currentDraft,
       status: currentDraft.seedTrendId ? 'placeholder' : 'draft',
       generationError: undefined,
+      publishError: undefined,
     }));
   }, [applyQuickEdit, draft.id, onClearFailure]);
 
@@ -761,6 +766,17 @@ export function CalendarDraftCard({
                             {uiText('pick_a_time_ec11634')}
                           </span>
                         </p>
+                      ) : null}
+
+                      {lastPublishError ? (
+                        <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
+                          <p className="text-2xs font-semibold uppercase tracking-wide text-destructive">
+                            {uiText('last_publish_failed_a078eb3')}
+                          </p>
+                          <p className="mt-0.5 line-clamp-2 text-2xs text-destructive/90">
+                            {lastPublishError}
+                          </p>
+                        </div>
                       ) : null}
 
                       {/* Media state — honest about text-only / blueprint drafts.
