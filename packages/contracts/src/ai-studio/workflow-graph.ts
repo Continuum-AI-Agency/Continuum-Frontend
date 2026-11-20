@@ -195,7 +195,7 @@ export const DEFAULT_VIDEO_GENERATOR_MODEL: VideoGeneratorModel = 'gemini-omni-f
 const LEGACY_UNSET_VIDEO_GENERATOR_MODEL: VideoGeneratorModel = 'veo-3.1-fast';
 
 export const VIDEO_GENERATOR_MODEL_LABELS: Record<VideoGeneratorModel, string> = {
-  'gemini-omni-flash': 'Omni 1.1 Flash',
+  'gemini-omni-flash': 'Omni 1.2 Flash',
   'veo-3.1': 'Veo 3.1',
   'veo-3.1-fast': 'Veo 3.1 Fast',
   'veo-3.1-lite': 'Veo 3.1 Lite',

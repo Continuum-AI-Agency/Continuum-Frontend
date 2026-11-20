@@ -102,7 +102,7 @@ describe('omni model catalog registration', () => {
 
   it('keeps the backend model id distinct from the canvas id', () => {
     expect(OMNI_GEN_MODEL_ID).toBe('gemini-omni-flash');
-    expect(OMNI_GEN_BACKEND_MODEL).toBe('gemini-omni-1.1-flash');
+    expect(OMNI_GEN_BACKEND_MODEL).toBe('gemini-omni-1.2-flash');
   });
 });
 
