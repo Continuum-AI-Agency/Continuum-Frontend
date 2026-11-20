@@ -70,7 +70,7 @@ export function ConversionVolumePanel({
           {volume.actionables.map((action) => (
             <li className="text-foreground" key={action.code}>
               {action.code === 'kpi_mismatch' ? null : (
-                <span className="font-medium">{uiText('to_raise_it_898da5a')}</span>
+                <span className="font-medium">{uiText('to_raise_it_898da5a')} </span>
               )}
               {action.message}
             </li>

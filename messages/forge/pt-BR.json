@@ -2542,5 +2542,15 @@
   "use_at_most_three_template_projects_1a75286": "Use no máximo três projetos de modelo.",
   "unsupported_file_name_fb12dca": "Arquivo não compatível: {name}",
   "name_uploaded_2ba2624": "{name} enviado",
-  "fonts_not_added_reasons_5bbd5ca": "Fontes não adicionadas: {reasons}"
+  "fonts_not_added_reasons_5bbd5ca": "Fontes não adicionadas: {reasons}",
+  "could_not_make_this_template_try_again_c8cf58d": "Não foi possível criar este modelo. Tente novamente.",
+  "could_not_upload_the_revision_b958b62": "Não foi possível enviar a revisão",
+  "could_not_repair_media_eabbe0a": "Não foi possível reparar a mídia",
+  "could_not_save_text_layout_7afda81": "Não foi possível salvar o layout do texto",
+  "the_assistant_is_unavailable_right_now_try_ag_dd82795": "O assistente não está disponível no momento. Tente novamente em um minuto ou edite a grade diretamente.",
+  "a_source_file_is_unavailable_remove_it_and_tr_f5a0e92": "Um arquivo de origem não está disponível. Remova-o e tente novamente.",
+  "draft_saved_revision_revision_8ad702f": "Rascunho salvo · revisão {revision}",
+  "the_edit_could_not_be_applied_53973ec": "Não foi possível aplicar a edição.",
+  "the_changes_could_not_be_saved_they_remain_in_410a32f": "Não foi possível salvar as alterações. Elas continuam neste espaço de trabalho.",
+  "history_could_not_be_restored_dcc791e": "Não foi possível restaurar o histórico."
 }

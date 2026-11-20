@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import type { ChatMedia } from '@/components/chat/media/media';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
 import { getClientRenderJob } from '@/lib/api/clientRenderJobs.client';
 import type { CreativeArtifact } from '@/lib/jaina/schemas';
 import { fetchPaidScaffoldTreeRows } from '@/lib/paid-media/scaffold-tree-client';
@@ -72,9 +72,11 @@ export function PaidCreativeRenderStatus({
             versionId: ref.version_id,
           }),
         });
-        if (!response.ok) throw new Error('Rendered media is temporarily unavailable');
+        const unavailable = () =>
+          new LocalizedUiError(uiText('rendered_media_is_temporarily_unavailable_0d651e2'));
+        if (!response.ok) throw unavailable();
         const body = (await response.json()) as { signedUrl?: string };
-        if (!body.signedUrl) throw new Error('Rendered media is temporarily unavailable');
+        if (!body.signedUrl) throw unavailable();
         return { id: ref.asset_id, url: body.signedUrl, kind: 'video', name: 'Rendered reel' };
       }),
     )
@@ -133,7 +135,7 @@ export function PaidCreativeRenderStatus({
     return () => {
       cancelled = true;
     };
-  }, [job, render.brand_id, render.canvas_target, render.scaffold_target, onCreativeReady]);
+  }, [job, render.brand_id, render.canvas_target, render.scaffold_target, onCreativeReady, uiText]);
 
   const state = job?.state;
   const active = state === 'claimed' || state === 'rendering' || state === 'saving';
@@ -141,9 +143,8 @@ export function PaidCreativeRenderStatus({
   const phase = active ? job?.phase?.trim().slice(0, 120) : null;
   const endedError =
     state === 'failed' || state === 'cancelled' || state === 'superseded'
-      ? job?.errorMessage
-        ? formatUiError(new Error(job.errorMessage))
-        : null
+      ? // The Backend's own sentence, shown whole (bounded).
+        job?.errorMessage?.trim().slice(0, 240)
       : null;
 
   return (

@@ -1413,5 +1413,8 @@
   "show_the_cost_plan_163c535": "Show the cost plan",
   "no_generations_itemized_34a957a": "No generations itemized",
   "unit_select_second_quantity_s_image_quantity__1835a91": "{unit, select, second {{quantity} s} image {{quantity, plural, one {# image} other {# images}}} other {{quantity, plural, one {# call} other {# calls}}}} × {price} · {model}",
-  "list_price_expected_for_one_pass_cap_cap_7529472": "List price {expected} for one pass, cap {cap}."
+  "list_price_expected_for_one_pass_cap_cap_7529472": "List price {expected} for one pass, cap {cap}.",
+  "creating_c79ed94": "Creating…",
+  "a_project_already_has_that_name_5e57cb0": "A project already has that name",
+  "create_failed_3e05ffc": "Create failed"
 }

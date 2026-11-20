@@ -48,7 +48,7 @@ describe('FieldMapEditor', () => {
     expect(preview.textContent).toContain('"event_name": "Purchase"');
 
     paste({ contact: {}, deal: { ccy: 'EUR', lines: [{ amount: 120 }] } });
-    expect(screen.getByText(/needs at least one of email/)).toBeTruthy();
+    expect(screen.getByText(/Provide email, phone, external_id/)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Sample payload (JSON)'), { target: { value: '{' } });
     expect(screen.getByText('That is not valid JSON.')).toBeTruthy();

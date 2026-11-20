@@ -1543,5 +1543,9 @@
   "this_post_failed_to_save_it_isn_t_in_your_cal_f3a4af9": "Não foi possível salvar esta publicação. Ela não estará no seu Calendário até ser salva.",
   "this_post_failed_to_save_open_it_to_recreate_cdc7e1a": "Não foi possível salvar esta publicação. Abra-a para recriá-la.",
   "pick_a_time_ec11634": "Escolha um horário",
-  "move_this_post_back_to_draft_before_changing__ebd935f": "Volte esta publicação para rascunho antes de alterar a legenda."
+  "move_this_post_back_to_draft_before_changing__ebd935f": "Volte esta publicação para rascunho antes de alterar a legenda.",
+  "count_plural_one_chosen_post_outside_this_lis_bb9c81b": "{count, plural, one {# publicação escolhida fora desta lista. Continua sendo monitorada.} other {# publicações escolhidas fora desta lista. Continuam sendo monitoradas.}}",
+  "couldn_t_delete_from_platform_bca3e0d": "Não foi possível excluir de {platform}",
+  "couldn_t_reach_continuum_0a69f88": "Não foi possível acessar o Continuum",
+  "mapped_mapped_number_total_number_cities_with_7a925a6": "Mapeadas {mapped, number}/{total, number} cidades com coordenadas conhecidas."
 }

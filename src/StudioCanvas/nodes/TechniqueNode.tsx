@@ -97,7 +97,9 @@ export function TechniqueNode({ data, selected }: NodeProps<ReactFlowNode<Collap
         </NodeTitleBar>
         <NodeContent className="px-1.5 py-1">
           <p className="text-2xs text-muted-foreground">
-            {translateUi('foldedNodes', { count: data.memberCount })}{' '}
+            {translateUi('count_plural_one_node_folded_other_nodes_fold_db41b9d', {
+              count: data.memberCount,
+            })}
           </p>
         </NodeContent>
       </CanvasNode>

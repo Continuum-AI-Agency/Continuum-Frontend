@@ -4865,5 +4865,7 @@
   "platformGoogleReason_SERVING_STATUS_SUSPENDED": "suspensa",
   "platformGoogleReason_SERVING_STATUS_ENDED": "a data de término já passou",
   "platformGoogleReason_SERVING_STATUS_PENDING": "ainda não começou",
-  "platformGoogleReason_SERVING_STATUS_NONE": "não está veiculando"
+  "platformGoogleReason_SERVING_STATUS_NONE": "não está veiculando",
+  "rendered_media_is_temporarily_unavailable_0d651e2": "A mídia renderizada está temporariamente indisponível",
+  "count_d_a41248a": "{count} d"
 }

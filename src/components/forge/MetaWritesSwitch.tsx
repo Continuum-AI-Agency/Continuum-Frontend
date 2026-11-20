@@ -5,7 +5,7 @@ import { useTransition } from 'react';
 import { updateBrandMetaWritesAllowedAction } from '@/app/[locale]/(post-auth)/settings/actions';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { useUiErrorSentence } from '@/i18n/errors';
 import { useRouter } from '@/i18n/navigation';
 
 /**
@@ -28,7 +28,7 @@ export function MetaWritesSwitch({
   allowed: boolean;
   canEdit: boolean;
 }) {
-  const uiErrorText = useUiErrorMessage();
+  const uiErrorText = useUiErrorSentence();
 
   const translateUi = useUiTranslations('forge');
 
@@ -53,7 +53,10 @@ export function MetaWritesSwitch({
       } catch (error) {
         show({
           title: translateUi('could_not_change_meta_writes_abfa93f7'),
-          description: uiErrorText(error),
+          description: uiErrorText(
+            error,
+            translateUi('only_an_owner_or_admin_can_change_t_23f57c6b'),
+          ),
           variant: 'error',
         });
       }

@@ -1,7 +1,6 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useUiErrorMessage } from '@/i18n/errors';
 
 // The project selector.
 //
@@ -56,8 +55,6 @@ export function ProjectSelect({
   disabled,
   className,
 }: ProjectSelectProps) {
-  const getUiErrorMessage = useUiErrorMessage();
-
   const tUi = useTranslations('common');
   const noProjectLabel = uiProvidedNoProjectLabel ?? tUi('m_c326b75775');
 
@@ -83,16 +80,20 @@ export function ProjectSelect({
 
   const createAndSelect = async (name: string): Promise<void> => {
     if (!onCreate) return;
-    setStatus('Creating…');
+    setStatus(tUi('creating_c79ed94'));
     try {
       const projectId = await onCreate(name);
       if (projectId) select(projectId);
-      else setStatus('Create failed');
+      else setStatus(tUi('create_failed_3e05ffc'));
     } catch (error) {
-      const message = getUiErrorMessage(error);
+      const message = error instanceof Error ? error.message : '';
       // The route answers 409 on a duplicate active name; saying so beats a
       // generic failure the user cannot act on.
-      setStatus(message.includes('409') ? 'A project already has that name' : 'Create failed');
+      setStatus(
+        message.includes('409')
+          ? tUi('a_project_already_has_that_name_5e57cb0')
+          : tUi('create_failed_3e05ffc'),
+      );
     }
   };
 

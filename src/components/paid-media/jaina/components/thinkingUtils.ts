@@ -54,11 +54,10 @@ export function formatToolLabel(
   displayName?: string | null,
 ): string {
   if (displayName?.trim()) return displayName;
-  if (uiTranslate)
-    return toolName === 'router'
-      ? uiTranslate('consulting_the_council_26ca0ae')
-      : uiTranslate('jainaTool');
-  return toolName === 'router' ? 'Consulting the Council' : toolName.replace(/_/g, ' ');
+  if (toolName === 'router')
+    return uiTranslate ? uiTranslate('consulting_the_council_26ca0ae') : 'Consulting the Council';
+  // No worded name: the tool's own name, so each step still says which tool ran.
+  return toolName.replace(/_/g, ' ');
 }
 
 // Human-readable labels for the backend progress stages the run emits. Used for

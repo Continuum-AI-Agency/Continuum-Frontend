@@ -1,8 +1,7 @@
 import { expect, test } from 'bun:test';
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-
 import { BrandTrendsPanel } from '@/components/brand-insights/BrandTrendsPanel';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
 
 test('BrandTrendsPanel loading state does not render progress step labels', () => {
   const html = renderToStaticMarkup(

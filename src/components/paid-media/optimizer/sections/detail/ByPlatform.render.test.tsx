@@ -121,7 +121,7 @@ describe('ByPlatformView', () => {
       ),
     ).toEqual(['meta', 'google_ads', 'tiktok_ads']);
     expect(screen.getByTestId('mixed-spend-total').textContent).toBe(
-      '$8,817 MXN spent across 3 platforms. Cost per lead stays per platform: each one counts its leads its own way, so they are not blended.',
+      '$8,817 MXN spent across 3 platforms. Cost per lead stays per platform: each one counts its results its own way, so they are not blended.',
     );
     // No cost per result for the portfolio as a whole: only the three rows carry one.
     expect(screen.getByTestId('by-platform').textContent?.match(/per lead/g)).toHaveLength(4);

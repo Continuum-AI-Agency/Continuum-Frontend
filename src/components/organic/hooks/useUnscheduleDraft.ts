@@ -47,11 +47,10 @@ export async function patchDraftStatus(
       message?: string;
       code?: string;
     };
-    if (formatError)
-      return formatError(
-        new ApiError(payload.message ?? 'Status change refused', response.status, payload.code),
-      );
-    return payload.message ?? `The server refused the change (${response.status}).`;
+    // The Backend's own sentence is shown whole; only a bare code or status is reworded.
+    if (payload.message) return payload.message;
+    if (formatError) return formatError(new ApiError('', response.status, payload.code));
+    return `The server refused the change (${response.status}).`;
   } catch {
     return formatError?.(new Error('Network error')) ?? 'Network error.';
   }

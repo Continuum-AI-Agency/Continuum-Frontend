@@ -2542,5 +2542,15 @@
   "use_at_most_three_template_projects_1a75286": "Use at most three template projects.",
   "unsupported_file_name_fb12dca": "Unsupported file: {name}",
   "name_uploaded_2ba2624": "{name} uploaded",
-  "fonts_not_added_reasons_5bbd5ca": "Fonts not added: {reasons}"
+  "fonts_not_added_reasons_5bbd5ca": "Fonts not added: {reasons}",
+  "could_not_make_this_template_try_again_c8cf58d": "Could not make this template. Try again.",
+  "could_not_upload_the_revision_b958b62": "Could not upload the revision",
+  "could_not_repair_media_eabbe0a": "Could not repair media",
+  "could_not_save_text_layout_7afda81": "Could not save text layout",
+  "the_assistant_is_unavailable_right_now_try_ag_dd82795": "The assistant is unavailable right now. Try again in a minute, or edit the grid directly.",
+  "a_source_file_is_unavailable_remove_it_and_tr_f5a0e92": "A source file is unavailable. Remove it and try again.",
+  "draft_saved_revision_revision_8ad702f": "Draft saved · revision {revision}",
+  "the_edit_could_not_be_applied_53973ec": "The edit could not be applied.",
+  "the_changes_could_not_be_saved_they_remain_in_410a32f": "The changes could not be saved. They remain in this workspace.",
+  "history_could_not_be_restored_dcc791e": "History could not be restored."
 }

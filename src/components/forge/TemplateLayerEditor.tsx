@@ -2358,13 +2358,11 @@ export function TemplateLayerEditor({
                   ? translateUi('saving_private_draft_64568f37')
                   : null}
                 {authoringDraft.status === 'saved'
-                  ? translateUi('draft_saved_value0_197d0b89', {
-                      value0: String(
-                        authoringDraft.revision
-                          ? ` · ${translateUi('revision_value0_76f40621', { value0: authoringDraft.revision })}`
-                          : '',
-                      ),
-                    })
+                  ? authoringDraft.revision
+                    ? translateUi('draft_saved_revision_revision_8ad702f', {
+                        revision: authoringDraft.revision,
+                      })
+                    : translateUi('draft_saved_5ccb8caa')
                   : null}
                 {authoringDraft.status === 'unsaved' || authoringDraft.status === 'error'
                   ? translateUi('draft_not_saved_c535842f')

@@ -127,7 +127,7 @@ describe('Jaina block citations', () => {
 
     const chip = screen.getByLabelText(/analytics_query/);
     expect(chip.textContent).toContain('1');
-    expect(screen.getByText(/Used 1 sources/)).toBeDefined();
+    expect(screen.getByText(/Used 1 source\b/)).toBeDefined();
   });
 
   it('counts block and item evidence references in the provenance controls, never by id', () => {
@@ -149,7 +149,7 @@ describe('Jaina block citations', () => {
 
     const chip = screen.getByLabelText(/analytics_query/);
     expect(chip.textContent).toContain('1');
-    expect(screen.getByText(/Used 1 sources/)).toBeDefined();
+    expect(screen.getByText(/Used 1 source\b/)).toBeDefined();
   });
 
   it('omits chips and the Sources footer when the block has no citations', () => {

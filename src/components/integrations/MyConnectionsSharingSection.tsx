@@ -1,5 +1,5 @@
-import { useLocale, useTranslations } from 'next-intl';
-import { getTranslations } from 'next-intl/server';
+import { useTranslations } from 'next-intl';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { RemoveConnectionButton } from '@/components/integrations/RemoveConnectionButton';
 import { ShareConnectionButton } from '@/components/integrations/ShareConnectionButton';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -50,7 +50,6 @@ function formatDate(value: string | null, locale: string): string {
 
 function ConnectionStatus({ status }: { status: string | null }) {
   const uiText = useTranslations('common');
-  const uiLocale = useLocale();
   if (status === 'active') return <Pill variant="success">{uiText('active_9234069')}</Pill>;
   if (status === 'needs_reauth') return <Pill variant="warning">{uiText('m_1d537a7de5')}</Pill>;
   return status ? (
@@ -66,8 +65,6 @@ type Grant = { brandProfileId: string; brandName: string; grantedAt: string };
 
 function SharedWithSummary({ grants }: { grants: Grant[] }) {
   const tUi = useTranslations('common');
-  const uiLocale = useLocale();
-
   if (grants.length === 0)
     return <p className="text-xs text-muted-foreground">{tUi('m_0872bf81fd')}</p>;
   const shown = grants.slice(0, 2).map((grant) => grant.brandName);
@@ -90,8 +87,7 @@ type MyConnectionsSharingSectionProps = {
 };
 
 export async function MyConnectionsSharingSection({ userId }: MyConnectionsSharingSectionProps) {
-  const uiLocale = useLocale();
-
+  const uiLocale = await getLocale();
   const tUi = await getTranslations('common');
 
   const [connections, grants] = await Promise.all([

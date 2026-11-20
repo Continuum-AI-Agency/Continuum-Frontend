@@ -311,7 +311,8 @@ export function PortfolioWizard({
         } catch (err) {
           setCostCapFailure(
             uiText('the_portfolio_was_created_but_its_goal_wasn_t_0cda490', {
-              detail: formatUiError(err),
+              // saveGoalAsCostCap throws its own worded sentence; shown whole.
+              detail: err instanceof Error ? err.message : '',
             }),
           );
           run.mutate(portfolio_id);

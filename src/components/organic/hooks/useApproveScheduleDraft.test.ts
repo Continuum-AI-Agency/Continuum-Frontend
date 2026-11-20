@@ -250,7 +250,7 @@ describe('useApproveScheduleDraft', () => {
     expect(updateDraftMock).not.toHaveBeenCalled();
     expect(showMock.mock.calls[0][0]).toMatchObject({
       title: 'Approval blocked',
-      description: 'TikTok: Choose a TikTok account to publish this draft',
+      description: 'TikTok: Choose which TikTok account posts this: @acme_tt or @acme_tt2',
       variant: 'error',
     });
   });
@@ -336,7 +336,7 @@ describe('useApproveScheduleDraft', () => {
     expect(showMock).toHaveBeenCalledTimes(1);
     expect(showMock.mock.calls[0][0]).toMatchObject({
       title: 'Scheduling failed',
-      description: 'Nothing was scheduled. TikTok: Check the highlighted fields and try again.',
+      description: 'Nothing was scheduled. TikTok: Draft must be approved',
       variant: 'error',
     });
   });

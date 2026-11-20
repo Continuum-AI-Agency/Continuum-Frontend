@@ -2517,5 +2517,11 @@
   "composerUpcomingEvents": "Próximos eventos",
   "composerAudienceQuestions": "Perguntas do público",
   "this_post_isn_t_saved_anymore_0f02a6a": "Esta publicação não está mais salva",
-  "its_draft_was_deleted_from_the_calendar_or_ne_eabdf53": "O rascunho foi excluído do calendário ou nunca foi salvo, então não há nada para editar aqui. Recrie-o pelo calendário ou pelo chat."
+  "its_draft_was_deleted_from_the_calendar_or_ne_eabdf53": "O rascunho foi excluído do calendário ou nunca foi salvo, então não há nada para editar aqui. Recrie-o pelo calendário ou pelo chat.",
+  "count_plural_one_node_folded_other_nodes_fold_db41b9d": "{count, plural, one {# nó recolhido} other {# nós recolhidos}}",
+  "nano_banana_2_is_the_closest_match_4f86d98": "O Nano Banana 2 é a opção mais próxima.",
+  "the_save_never_came_back_it_may_still_have_go_cd29edc": "O salvamento nunca retornou. Ele pode ter sido concluído: confira Adicionar nó → Técnicas antes de salvar novamente.",
+  "could_not_save_the_technique_try_again_cd3ad75": "Não foi possível salvar a técnica. Tente novamente.",
+  "apply_response_payload_is_invalid_0f89180": "A resposta da aplicação é inválida.",
+  "unable_to_apply_output_to_planner_c6f8a69": "Não foi possível aplicar o resultado ao Planejador."
 }

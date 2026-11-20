@@ -2542,5 +2542,15 @@
   "use_at_most_three_template_projects_1a75286": "Usa como máximo tres proyectos de plantilla.",
   "unsupported_file_name_fb12dca": "Archivo no compatible: {name}",
   "name_uploaded_2ba2624": "{name} subido",
-  "fonts_not_added_reasons_5bbd5ca": "Fuentes no agregadas: {reasons}"
+  "fonts_not_added_reasons_5bbd5ca": "Fuentes no agregadas: {reasons}",
+  "could_not_make_this_template_try_again_c8cf58d": "No se pudo crear esta plantilla. Inténtalo de nuevo.",
+  "could_not_upload_the_revision_b958b62": "No se pudo subir la revisión",
+  "could_not_repair_media_eabbe0a": "No se pudo reparar el contenido multimedia",
+  "could_not_save_text_layout_7afda81": "No se pudo guardar el diseño del texto",
+  "the_assistant_is_unavailable_right_now_try_ag_dd82795": "El asistente no está disponible en este momento. Inténtalo de nuevo en un minuto o edita la cuadrícula directamente.",
+  "a_source_file_is_unavailable_remove_it_and_tr_f5a0e92": "Un archivo de origen no está disponible. Quítalo e inténtalo de nuevo.",
+  "draft_saved_revision_revision_8ad702f": "Borrador guardado · revisión {revision}",
+  "the_edit_could_not_be_applied_53973ec": "No se pudo aplicar la edición.",
+  "the_changes_could_not_be_saved_they_remain_in_410a32f": "No se pudieron guardar los cambios. Siguen en este espacio de trabajo.",
+  "history_could_not_be_restored_dcc791e": "No se pudo restaurar el historial."
 }

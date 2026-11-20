@@ -31,7 +31,8 @@ mock.module('../utils/executeWorkflow', () => ({
   },
 }));
 
-const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react');
+const { cleanup, fireEvent, screen, waitFor } = await import('@testing-library/react');
+const { render } = await import('@/i18n/__tests__/render');
 const { ToastProvider } = await import('@/components/ui/ToastProvider');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
 const { ReactFlowProvider } = await import('@xyflow/react');
@@ -45,7 +46,9 @@ installPickerDomGlobals();
 
 const renderToolbar = () =>
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
       <ToastProvider>
         <ReactFlowProvider>
           <Toolbar />

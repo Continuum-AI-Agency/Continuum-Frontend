@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STALE_PROCESSING_MS } from '@/components/documents/useDocuments';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { useUiErrorSentence } from '@/i18n/errors';
 import { uploadEphemeralChatDocument } from '@/lib/documents/uploadEphemeralChatDocument';
 import {
   ACCEPTED_DOCUMENT_EXTENSIONS,
@@ -55,7 +55,7 @@ export function useChatAttachments({
   brandId,
   sessionId,
 }: UseChatAttachmentsParams): ChatAttachmentsController {
-  const getUiErrorMessage = useUiErrorMessage();
+  const getUiErrorMessage = useUiErrorSentence();
 
   const tUi = useTranslations('common');
 
@@ -95,7 +95,7 @@ export function useChatAttachments({
       } catch (error) {
         patch(id, {
           status: 'error',
-          error: getUiErrorMessage(error),
+          error: getUiErrorMessage(error, tUi('upload_failed_6efc5d2')),
         });
       }
     },
@@ -124,7 +124,7 @@ export function useChatAttachments({
       } catch (error) {
         patch(id, {
           status: 'error',
-          error: getUiErrorMessage(error),
+          error: getUiErrorMessage(error, tUi('upload_failed_6efc5d2')),
         });
       }
     },
@@ -255,7 +255,10 @@ export function useChatAttachments({
 
       const status = typeof raw.status === 'string' ? raw.status : null;
       const progressStep = typeof raw.progress_step === 'string' ? raw.progress_step : null;
-      const errorMessage = getUiErrorMessage({ code: raw.error_code });
+      const errorMessage = getUiErrorMessage(
+        { code: raw.error_code, message: raw.error_message },
+        tUi('m_c76d04d7ec'),
+      );
 
       if (status === 'ready' || progressStep === 'ready') {
         setFiles((previous) =>

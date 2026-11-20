@@ -4,7 +4,7 @@ import type { DesignImportResponse } from '@continuum/contracts';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { useUiErrorSentence } from '@/i18n/errors';
 import { importDesignTemplate } from '@/lib/library/templateSources';
 
 type DesignImport = {
@@ -21,7 +21,8 @@ export function useDesignTemplateImports(
   brandId: string,
   onImported: (result: DesignImportResponse) => Promise<void> | void,
 ) {
-  const uiErrorText = useUiErrorMessage();
+  const uiErrorText = useUiErrorSentence();
+  const translateUi = useUiTranslations('forge');
 
   const [items, setItems] = useState<DesignImport[]>([]);
   const running = useRef(new Set<string>());
@@ -48,13 +49,13 @@ export function useDesignTemplateImports(
           assetId,
           name,
           state: 'error',
-          error: uiErrorText(error),
+          error: uiErrorText(error, translateUi('could_not_make_this_template_try_again_c8cf58d')),
         });
       } finally {
         running.current.delete(key);
       }
     },
-    [brandId, uiErrorText],
+    [brandId, uiErrorText, translateUi],
   );
   return { imports: items.filter((item) => item.brandId === brandId), start };
 }

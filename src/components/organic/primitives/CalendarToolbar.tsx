@@ -32,7 +32,6 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { CalendarDateRange } from '@/lib/organic/store';
 import { useCalendarStore } from '@/lib/organic/store';
-import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
 import { cn } from '@/lib/utils';
 import { DisabledControl } from '../DisabledControl';
 import { describeAddPlaceholderBlock, describeClearBlock } from '../disabledReasons';
@@ -574,7 +573,7 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
             {gridStatus === 'error' && gridError && (
               <div className="mt-2 flex items-center gap-2 rounded-md bg-red-500/5 px-3 py-1.5 text-xs text-red-600 dark:text-red-400">
                 <X className="h-3.5 w-3.5" />
-                {uiText('gridGenerationError', { error: friendlyStreamError(gridError, uiText) })}
+                {uiText('gridGenerationError', { error: gridError })}
                 {onRetryGeneration && (
                   <button
                     type="button"

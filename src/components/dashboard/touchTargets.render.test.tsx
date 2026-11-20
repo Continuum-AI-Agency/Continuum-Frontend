@@ -50,8 +50,9 @@ describe('touch targets that sit side by side', () => {
       ),
       'utf8',
     );
+    // The Full screen label is localized, so the source carries its catalog key.
     expect(source).toMatch(
-      /className="[^"]*\bhit-area-row\b[^"]*"[^>]*>\s*\{\/\*[\s\S]*?Full screen/,
+      /className="[^"]*\bhit-area-row\b[^"]*"[^>]*>\s*\{\/\*[\s\S]*?uiText\('full_screen_/,
     );
     const insights = /data-testid="whats-working-link"[\s\S]*?className=\{cn\(\s*'([^']*)'/.exec(
       source,

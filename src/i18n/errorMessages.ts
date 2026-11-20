@@ -65,3 +65,22 @@ export function uiErrorKey(error: unknown): UiErrorKey {
 export function uiErrorMessage(error: unknown, translate: (key: UiErrorKey) => string): string {
   return error instanceof LocalizedUiError ? error.message : translate(uiErrorKey(error));
 }
+
+/**
+ * For surfaces whose server already speaks to the person: a known code is reworded, any
+ * other error's own sentence is shown whole. `fallback` stands in when there is no sentence.
+ */
+export function uiErrorSentence(
+  error: unknown,
+  translate: (key: UiErrorKey) => string,
+  fallback?: string,
+): string {
+  if (error instanceof LocalizedUiError) return error.message;
+  const key = uiErrorKey(error);
+  if (key !== 'unexpectedError') return translate(key);
+  const sentence =
+    error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+      ? error.message.trim()
+      : '';
+  return sentence || fallback || translate(key);
+}

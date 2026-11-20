@@ -16,7 +16,7 @@ import { useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { useUiErrorSentence } from '@/i18n/errors';
 import { brandTypeInputsQueryKey, loadBrandTypeInputs } from '@/lib/brands/brandTypeInputs.client';
 import {
   editableTemplateFonts,
@@ -60,7 +60,7 @@ export function ApplyDesignSystemButton({
   designImport: boolean;
   onCreated: (saved: TemplateRevision) => void | Promise<void>;
 }) {
-  const uiErrorText = useUiErrorMessage();
+  const uiErrorText = useUiErrorSentence();
 
   const translateUi = useUiTranslations('forge');
 
@@ -122,7 +122,7 @@ export function ApplyDesignSystemButton({
     } catch (error) {
       show({
         title: translateUi('could_not_apply_your_design_system_a02e29f0'),
-        description: uiErrorText(error),
+        description: error instanceof Error ? uiErrorText(error) : undefined,
         variant: 'error',
       });
     } finally {

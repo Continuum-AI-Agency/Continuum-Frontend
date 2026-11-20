@@ -186,7 +186,6 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
-import { useUiErrorMessage } from '@/i18n/errors';
 import { ApiError } from '@/lib/api/errors';
 import {
   fetchTemplateLineage,
@@ -483,8 +482,6 @@ export function RenderRequestsGrid({
   onOpenTemplate?: (intent: ForgeTemplateIntent) => void;
 }) {
   const presentForge = useForgePresentationText();
-
-  const uiErrorText = useUiErrorMessage();
 
   const currentUiLocale = useUiLocale();
 
@@ -1788,7 +1785,7 @@ export function RenderRequestsGrid({
       );
       acceptDrafts(responses);
     } catch (error) {
-      const message = uiErrorText(error);
+      const message = error instanceof Error ? error.message : '';
       toast.error(
         message.includes('suggest_unavailable')
           ? translateUi('the_ai_writer_is_unavailable_right__04e8eb12')
@@ -2084,7 +2081,7 @@ export function RenderRequestsGrid({
         setSaveState({ phase: 'idle' });
         return saved;
       } catch (error) {
-        const message = uiErrorText(error);
+        const message = error instanceof Error ? error.message : '';
         if (set && message.includes('render_set_revision_conflict')) {
           const merged = await resolveConflict(set, submitted);
           setSaveState({ phase: 'idle' });
@@ -2230,7 +2227,7 @@ export function RenderRequestsGrid({
       setRenderSets((sets) => sets.map((item) => (item.id === updated.id ? updated : item)));
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
     } catch (error) {
-      const message = uiErrorText(error);
+      const message = error instanceof Error ? error.message : '';
       if (message.includes('render_set_revision_conflict')) {
         const fresh = await apiRendersApi.getRenderSet(brandId, set.id).catch(() => null);
         if (fresh)

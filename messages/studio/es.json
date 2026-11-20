@@ -2517,5 +2517,11 @@
   "composerUpcomingEvents": "Próximos eventos",
   "composerAudienceQuestions": "Preguntas de la audiencia",
   "this_post_isn_t_saved_anymore_0f02a6a": "Esta publicación ya no está guardada",
-  "its_draft_was_deleted_from_the_calendar_or_ne_eabdf53": "Su borrador se eliminó del calendario o nunca se guardó, así que aquí no hay nada que editar. Vuelve a crearlo desde el calendario o el chat."
+  "its_draft_was_deleted_from_the_calendar_or_ne_eabdf53": "Su borrador se eliminó del calendario o nunca se guardó, así que aquí no hay nada que editar. Vuelve a crearlo desde el calendario o el chat.",
+  "count_plural_one_node_folded_other_nodes_fold_db41b9d": "{count, plural, one {# nodo contraído} other {# nodos contraídos}}",
+  "nano_banana_2_is_the_closest_match_4f86d98": "Nano Banana 2 es la opción más parecida.",
+  "the_save_never_came_back_it_may_still_have_go_cd29edc": "El guardado nunca respondió. Es posible que se haya completado: revisa Agregar nodo → Técnicas antes de guardar de nuevo.",
+  "could_not_save_the_technique_try_again_cd3ad75": "No se pudo guardar la técnica. Inténtalo de nuevo.",
+  "apply_response_payload_is_invalid_0f89180": "La respuesta de la aplicación no es válida.",
+  "unable_to_apply_output_to_planner_c6f8a69": "No se puede aplicar el resultado al Planificador."
 }

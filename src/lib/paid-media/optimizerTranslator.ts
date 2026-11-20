@@ -276,7 +276,7 @@ const COPY_KEYS = {
   evidenceCost: 'optimizer_evidenceCost',
   evidenceFrequency: 'optimizer_evidenceFrequency',
   evidenceReachGrowth: 'optimizer_evidenceReachGrowth',
-  evidenceDays: 'optimizer_evidenceDays',
+  evidenceDays: 'count_d_a41248a',
   evidenceLine: 'optimizer_evidenceLine',
   atStake: 'optimizer_atStake',
   capBeyond: 'optimizer_capBeyond',

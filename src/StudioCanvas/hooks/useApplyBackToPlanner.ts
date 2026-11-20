@@ -1,7 +1,7 @@
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { LocalizedUiError, useUiErrorSentence } from '@/i18n/errors';
 import { useRouter } from '@/i18n/navigation';
 import { request } from '@/lib/api/http';
 import {
@@ -65,7 +65,7 @@ export function useApplyBackToPlanner({
 }) {
   const translateUi = useUiTranslations('studio');
 
-  const uiErrorText = useUiErrorMessage();
+  const uiErrorText = useUiErrorSentence();
 
   const router = useRouter();
   const { show } = useToast();
@@ -367,16 +367,14 @@ export function useApplyBackToPlanner({
 
       const responseJson = await response.json().catch(() => null);
       if (!response.ok) {
-        const message =
-          responseJson && typeof responseJson.error === 'string'
-            ? responseJson.error
-            : translateUi('failed_to_apply_output_to_planner_eed52d95');
-        throw new Error(message);
+        throw responseJson && typeof responseJson.error === 'string'
+          ? new Error(responseJson.error)
+          : new LocalizedUiError(translateUi('failed_to_apply_output_to_planner_eed52d95'));
       }
 
       const parsed = plannerAiStudioApplyResponseSchema.safeParse(responseJson);
       if (!parsed.success) {
-        throw new Error('Apply response payload is invalid.');
+        throw new LocalizedUiError(translateUi('apply_response_payload_is_invalid_0f89180'));
       }
 
       // The planner mirrors it by its own id, the one the return link carries.
@@ -401,7 +399,7 @@ export function useApplyBackToPlanner({
     } catch (error) {
       show({
         title: translateUi('apply_failed_cae4cf5c'),
-        description: uiErrorText(error),
+        description: uiErrorText(error, translateUi('unable_to_apply_output_to_planner_c6f8a69')),
         variant: 'error',
       });
     } finally {

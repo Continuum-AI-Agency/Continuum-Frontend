@@ -355,7 +355,11 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const errorCopy = generationError
     ? data.uiFailure && data.uiFailure.code !== 'workflow_this_node_could_not_complete_r_4bbf0954'
       ? { ...generationErrorCopy(undefined, undefined, translateUi), guidance: generationError }
-      : generationErrorCopy(data.errorCode, generationError, translateUi)
+      : generationErrorCopy(
+          data.errorCode,
+          typeof data.error === 'string' ? data.error : generationError,
+          translateUi,
+        )
     : undefined;
 
   // A refusal is about the workspace, not this node: remember it so the picker on every

@@ -51,15 +51,25 @@ export const generationErrorCopy = (
   fallbackMessage?: string,
   translate?: ReturnType<typeof useTranslations<'studio'>>,
 ): GenerationErrorCopy => {
+  const message = fallbackMessage?.trim();
   if (translate) {
-    const keys = isStudioGenerationErrorCode(code)
-      ? GENERATION_ERROR_KEYS[code]
-      : GENERATION_FALLBACK_KEYS;
+    if (!isStudioGenerationErrorCode(code)) {
+      return {
+        title: translate(GENERATION_FALLBACK_KEYS.title),
+        guidance: message || translate(GENERATION_FALLBACK_KEYS.guidance),
+      };
+    }
+    const keys = GENERATION_ERROR_KEYS[code];
+    if (code === 'model_unavailable' && message) {
+      return {
+        title: translate(keys.title),
+        guidance: `${message} ${translate('nano_banana_2_is_the_closest_match_4f86d98')}`,
+      };
+    }
     return { title: translate(keys.title), guidance: translate(keys.guidance) };
   }
   if (isStudioGenerationErrorCode(code)) {
     const copy = COPY[code];
-    const message = fallbackMessage?.trim();
     if (code === 'model_unavailable' && message) {
       return { title: copy.title, guidance: `${message} ${MODEL_UNAVAILABLE_SUGGESTION}` };
     }
@@ -67,7 +77,7 @@ export const generationErrorCopy = (
   }
   return {
     title: FALLBACK_TITLE,
-    guidance: fallbackMessage?.trim() || 'Something went wrong while generating. Try again.',
+    guidance: message || 'Something went wrong while generating. Try again.',
   };
 };
 

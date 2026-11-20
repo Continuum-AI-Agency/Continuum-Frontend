@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { EasyfitDashboardResponse, EasyfitPilotConfig } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import { configFixture, responseFixture } from './__fixtures__/easyfitPayload';
 

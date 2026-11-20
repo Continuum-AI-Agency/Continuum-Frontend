@@ -16,7 +16,8 @@
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { render } from '@/i18n/__tests__/render';
+import { createTranslator } from 'next-intl';
+import { englishMessages, render } from '@/i18n/__tests__/render';
 import AutomationWorkspaceError from './[automationId]/error';
 import AutomationWorkspaceLoading from './[automationId]/loading';
 import AutomationWorkspaceNotFound from './[automationId]/not-found';
@@ -121,6 +122,16 @@ mock.module('@/lib/brands/active-brand-context', () => ({
     brandAccess: { billingLive: false, products: [], entitlements: null, legacyTier: 0 },
     user: null,
   }),
+}));
+
+// The index page translates on the server; outside an RSC request the real
+// next-intl/server throws, so it is given the English catalogs directly.
+const intlServer = await import('next-intl/server');
+mock.module('next-intl/server', () => ({
+  ...intlServer,
+  getLocale: async () => 'en',
+  getTranslations: async (namespace?: string) =>
+    createTranslator({ locale: 'en', messages: englishMessages, namespace }),
 }));
 
 mock.module('@/lib/supabase/server', () => ({

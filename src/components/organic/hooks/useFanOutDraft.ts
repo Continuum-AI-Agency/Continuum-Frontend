@@ -127,7 +127,7 @@ export function removalRefusal(
         : (translate?.('memberRemovalFailed', { platform: label }) ??
             `Could not remove ${label}. Nothing changed; try again.`);
     default:
-      return translate?.('memberRemovalFailed', { platform: label }) ?? error.message;
+      return error.message;
   }
 }
 
@@ -214,7 +214,7 @@ export function useDraftMembership(): UseDraftMembershipResult {
       } catch (error) {
         show({
           title: uiText('platforms_not_changed_dbc0551'),
-          description: formatUiError(error),
+          description: error instanceof ApiError ? error.message : formatUiError(error),
           variant: 'error',
         });
         return null;

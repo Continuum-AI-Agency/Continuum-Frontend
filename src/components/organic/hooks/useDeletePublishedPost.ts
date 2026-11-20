@@ -66,16 +66,18 @@ export function useDeletePublishedPost(onDeleted: () => void) {
           show({
             title: deleted
               ? uiText('deletedFromPlatform', { platform: label })
-              : uiText('deleteFromPlatformFailed', { platform: label }),
-            description: deleted
-              ? uiText('deletedPlannerStale')
-              : uiText('postDeleteFailedDescription', { platform: label }),
+              : uiText('couldn_t_delete_from_platform_bca3e0d', { platform: label }),
+            description:
+              body.message ??
+              (deleted
+                ? uiText('deletedPlannerStale')
+                : uiText('postDeleteFailedDescription', { platform: label })),
             variant: 'error',
           });
         }
       } catch {
         show({
-          title: uiText('continuumUnreachable'),
+          title: uiText('couldn_t_reach_continuum_0a69f88'),
           description: uiText('postDeletionUnknown', { platform: label }),
           variant: 'error',
         });

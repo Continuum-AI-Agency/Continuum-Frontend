@@ -1175,5 +1175,8 @@
   "figma_s_api_limit_for_this_account_is_used_up_d4b4bea": "Figma's API limit for this account is used up. View and Collab seats get about 20 file reads a month; a Dev or Full seat lifts it.",
   "the_import_is_still_running_import_again_in_a_11aa35d": "The import is still running. Import again in a minute: it picks up the same import.",
   "the_import_failed_code_fd31eb7": "The import failed ({code}).",
-  "commentsWord": "{count, plural, one {comment} other {comments}}"
+  "commentsWord": "{count, plural, one {comment} other {comments}}",
+  "below_average_35_d9769d8": "below average 35",
+  "below_average_20_b098009": "below average 20",
+  "below_average_10_ca06a68": "below average 10"
 }

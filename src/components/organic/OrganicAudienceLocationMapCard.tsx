@@ -557,7 +557,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
             </div>
             {!countryLayerVisible && cityEntries.length > cityPoints.length ? (
               <span className="mt-3 block text-xs text-muted-foreground">
-                {uiText.rich('sentence_cad49f240285', {
+                {uiText('mapped_mapped_number_total_number_cities_with_7a925a6', {
                   mapped: cityPoints.length,
                   total: cityEntries.length,
                 })}

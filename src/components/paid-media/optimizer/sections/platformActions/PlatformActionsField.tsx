@@ -1,7 +1,7 @@
 'use client';
 import { useTranslations } from 'next-intl';
 
-import { useUiErrorMessage } from '@/i18n/errors';
+import { useUiErrorSentence } from '@/i18n/errors';
 
 // The action kinds this portfolio may execute on each platform the executor writes for (Google,
 // TikTok), one row per platform, each saved on its own as the platform limits are. A kind left
@@ -87,7 +87,7 @@ function PlatformActionsRow({
   save: (allowed: readonly ActionKind[]) => Promise<unknown>;
 }) {
   const uiText = useTranslations('scale');
-  const formatUiError = useUiErrorMessage();
+  const formatUiError = useUiErrorSentence();
   const kinds = platformActionKinds(row.platform);
   const stored = kinds.filter((kind) => row.allowed?.includes(kind));
   const [chosen, setChosen] = useState<ActionKind[]>(stored);

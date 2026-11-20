@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/select';
 import { throwToastError, useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { LocalizedUiError, useUiErrorSentence } from '@/i18n/errors';
 import { formatMiB } from '@/lib/ai-studio/referenceDrop';
 import { brandTechniquesQueryKey } from '@/lib/ai-studio/techniques';
 import { createAiStudioWorkflowAction } from '@/lib/ai-studio/workflowActions';
@@ -59,16 +59,13 @@ const TECHNIQUE_PAYLOAD_MAX_BYTES = 200 * 1024 * 1024;
  */
 export const TECHNIQUE_SAVE_TIMEOUT_MS = 30_000;
 
-const TIMED_OUT_MESSAGE =
-  'The save never came back. It may still have gone through — check Add Node → Techniques before saving again.';
-
-async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+async function withDeadline<T>(work: Promise<T>, ms: number, timedOutMessage: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
       work,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(TIMED_OUT_MESSAGE)), ms);
+        timer = setTimeout(() => reject(new LocalizedUiError(timedOutMessage)), ms);
       }),
     ]);
   } finally {
@@ -105,7 +102,7 @@ export function SaveTechniqueDialog({
   nodes,
   saveTimeoutMs = TECHNIQUE_SAVE_TIMEOUT_MS,
 }: Props) {
-  const uiErrorText = useUiErrorMessage();
+  const uiErrorText = useUiErrorSentence();
 
   const translateUi = useUiTranslations('studio');
 
@@ -179,6 +176,7 @@ export function SaveTechniqueDialog({
           metadata: { technique },
         }),
         saveTimeoutMs,
+        translateUi('the_save_never_came_back_it_may_still_have_go_cd29edc'),
       );
 
       // The row is saved; the dialog is done. Refreshing the Add Node → Techniques
@@ -196,7 +194,7 @@ export function SaveTechniqueDialog({
       });
       onOpenChange(false);
     } catch (err) {
-      setError(uiErrorText(err));
+      setError(uiErrorText(err, translateUi('could_not_save_the_technique_try_again_cd3ad75')));
     } finally {
       setIsSaving(false);
     }

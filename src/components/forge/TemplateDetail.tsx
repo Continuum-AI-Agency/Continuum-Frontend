@@ -92,7 +92,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
 import type { UiLocale } from '@/i18n/config';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { useUiErrorSentence } from '@/i18n/errors';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import {
   advanceTemplateForgeBundle,
@@ -265,7 +265,7 @@ export function TemplateDetail({
   /** Private HyperFrames composition revision carried in from AI Studio. */
   hyperframesRevisionId?: string;
 }) {
-  const uiErrorText = useUiErrorMessage();
+  const uiErrorText = useUiErrorSentence();
 
   const currentUiLocale = useUiLocale();
 
@@ -474,7 +474,7 @@ export function TemplateDetail({
       await onChanged();
       toast.success(translateUi('text_changes_saved_as_a_new_version_3c7874d5'));
     } catch (error) {
-      const message = uiErrorText(error);
+      const message = uiErrorText(error, translateUi('could_not_save_text_layout_7afda81'));
       if (applied) {
         toast.error(
           translateUi('text_changes_are_applied_but_this_v_b50a7e09', { value0: String(message) }),

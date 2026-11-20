@@ -307,7 +307,7 @@ export const OPTIMIZER_DISPLAY_EN = {
   evidenceCost: 'Cost per result',
   evidenceFrequency: 'Frequency',
   evidenceReachGrowth: 'Reach growth',
-  evidenceDays: '{count,plural,one {# day} other {# days}}',
+  evidenceDays: '{count}d',
   evidenceLine: '{metric} {value} {comparator} · {window}',
   atStake: '{amount} at stake',
   capBeyond:

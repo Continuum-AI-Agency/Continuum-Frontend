@@ -319,7 +319,9 @@ export function PostPicker({
       {missing.length === 0 ? null : (
         <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5">
           <span className="text-2xs text-muted-foreground">
-            {uiText.rich('sentence_a1b26652ef2c', { count: missing.length })}
+            {uiText('count_plural_one_chosen_post_outside_this_lis_bb9c81b', {
+              count: missing.length,
+            })}
           </span>
           <Button
             type="button"

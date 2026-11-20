@@ -1,6 +1,5 @@
 import {
   assembleCaption,
-  matchPublishFormat,
   PLATFORM_CAPABILITIES,
   PUBLISH_PLATFORM_LABELS,
   type PublishPlan,
@@ -115,7 +114,17 @@ export function localizePublishNotice(
   }
 }
 
+const PUBLISH_FORMAT_OPTION_KEYS = {
+  post: 'publishFormatPOST',
+  carousel: 'publishFormatCAROUSEL',
+  reel: 'publishFormatREEL',
+  story: 'publishFormatSTORY',
+} as const;
+
+/** A format option's own label ("Story"); any other stored format is shown as written. */
 export function organicPublishFormatLabel(value: string, translate: Translator): string {
-  const format = matchPublishFormat(value);
-  return format ? translate('publishFormatLabel', { format }) : value;
+  const option = value.trim().toLowerCase();
+  return Object.hasOwn(PUBLISH_FORMAT_OPTION_KEYS, option)
+    ? translate(PUBLISH_FORMAT_OPTION_KEYS[option as keyof typeof PUBLISH_FORMAT_OPTION_KEYS])
+    : value;
 }

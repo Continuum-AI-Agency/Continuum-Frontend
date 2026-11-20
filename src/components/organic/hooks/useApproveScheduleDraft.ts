@@ -113,11 +113,13 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
               uiText('approval_blocked_c669cb8'),
               blocked
                 .map((result) => {
-                  const message = approvalMessage(
-                    result.reason,
-                    uiText,
-                    PUBLISH_PLATFORM_LABELS[result.platform],
-                  );
+                  const message =
+                    result.message ??
+                    approvalMessage(
+                      result.reason,
+                      uiText,
+                      PUBLISH_PLATFORM_LABELS[result.platform],
+                    );
                   return members.length > 1
                     ? `${PUBLISH_PLATFORM_LABELS[result.platform]}: ${message}`
                     : message;
@@ -126,9 +128,13 @@ export function useApproveScheduleDraft(): UseApproveScheduleDraftResult {
             );
           }
           const single = payload as { reason?: string; message?: string };
+          const knownReason =
+            single.reason !== undefined && Object.hasOwn(APPROVE_ERROR_MESSAGES, single.reason);
           return fail(
             uiText('approval_blocked_c669cb8'),
-            approvalMessage(single.reason, uiText, platformLabel(card)),
+            !knownReason && single.message
+              ? single.message
+              : approvalMessage(single.reason, uiText, platformLabel(card)),
           );
         }
 

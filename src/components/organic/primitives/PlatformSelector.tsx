@@ -136,7 +136,7 @@ export function PlatformSelector({
                               : 'platformConnect',
                             { platform: label },
                           )
-                    : uiText('platformUnavailable', { platform: label })
+                    : (verdict.reason ?? uiText('platformUnavailable', { platform: label }))
                   : null;
             const reasonId = `${reasonIdPrefix}-${platform}`;
             return (

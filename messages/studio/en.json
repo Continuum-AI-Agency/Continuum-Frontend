@@ -2517,5 +2517,11 @@
   "composerUpcomingEvents": "Upcoming events",
   "composerAudienceQuestions": "Audience questions",
   "this_post_isn_t_saved_anymore_0f02a6a": "This post isn't saved anymore",
-  "its_draft_was_deleted_from_the_calendar_or_ne_eabdf53": "Its draft was deleted from the calendar or never saved, so there is nothing to edit here. Recreate it from the calendar or the chat."
+  "its_draft_was_deleted_from_the_calendar_or_ne_eabdf53": "Its draft was deleted from the calendar or never saved, so there is nothing to edit here. Recreate it from the calendar or the chat.",
+  "count_plural_one_node_folded_other_nodes_fold_db41b9d": "{count, plural, one {# node folded} other {# nodes folded}}",
+  "nano_banana_2_is_the_closest_match_4f86d98": "Nano Banana 2 is the closest match.",
+  "the_save_never_came_back_it_may_still_have_go_cd29edc": "The save never came back. It may still have gone through — check Add Node → Techniques before saving again.",
+  "could_not_save_the_technique_try_again_cd3ad75": "Could not save the technique. Try again.",
+  "apply_response_payload_is_invalid_0f89180": "Apply response payload is invalid.",
+  "unable_to_apply_output_to_planner_c6f8a69": "Unable to apply output to Planner."
 }

@@ -1,7 +1,7 @@
 'use client';
 import { useTranslations } from 'next-intl';
 
-import { useUiErrorMessage } from '@/i18n/errors';
+import { useUiErrorSentence } from '@/i18n/errors';
 
 // One optional daily limit per platform among the portfolio's members, each in that platform
 // account's own currency. Each row saves on its own (optimizer_set_portfolio_platform_cap), as
@@ -80,7 +80,7 @@ function PlatformCapRow({
   save: (dailyCapMinor: number | null) => Promise<unknown>;
 }) {
   const uiText = useTranslations('scale');
-  const formatUiError = useUiErrorMessage();
+  const formatUiError = useUiErrorSentence();
   const currency = normalizeCurrency(cap.currency);
   const stored = platformCapToInput(cap.dailyCapMinor, cap.platform, currency);
   const [value, setValue] = useState(stored);

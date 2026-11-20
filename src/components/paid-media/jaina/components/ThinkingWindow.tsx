@@ -8,7 +8,6 @@ import { TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
 import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Trace } from '@/components/ui/trace';
-import { useUiErrorMessage } from '@/i18n/errors';
 import { formatDecimal } from '@/lib/format/decimal';
 import type { ToolCallEventData, ToolResultEventData } from '@/lib/jaina/schemas';
 import { SparkleSpinner } from './SparkleSpinner';
@@ -129,7 +128,6 @@ function AgentStatusLine({
 function ToolEntryLine({ entry, isStreaming }: { entry: ResolvedToolEntry; isStreaming: boolean }) {
   const uiText = useTranslations('scale');
   const uiLocale = useLocale();
-  const formatUiError = useUiErrorMessage();
   const duration = (ms: number) => formatDecimal(ms / 1000, 1, uiLocale) + 's';
   const result = entry.toolResult;
   // A call with no result after the stream ended never returned — dim it rather than spin forever.
@@ -162,7 +160,7 @@ function ToolEntryLine({ entry, isStreaming }: { entry: ResolvedToolEntry; isStr
         <code>{entry.name}</code>
       </figure>
       {entry.state === 'error' && result?.error ? (
-        <p className="text-xs text-destructive">{formatUiError(result.error)}</p>
+        <p className="text-xs text-destructive">{result.error}</p>
       ) : undefined}
     </TraceStep>
   );
@@ -183,7 +181,6 @@ function SegmentSteps({
 }) {
   const uiText = useTranslations('scale');
   const uiLocale = useLocale();
-  const formatUiError = useUiErrorMessage();
   const duration = (ms: number) => formatDecimal(ms / 1000, 1, uiLocale) + 's';
   if (segment.kind === 'thought') {
     return (
@@ -266,9 +263,7 @@ function SegmentSteps({
           {segment.taskDescription ? (
             <p className="text-foreground/70">{segment.taskDescription}</p>
           ) : null}
-          {segment.error ? (
-            <p className="text-destructive">{formatUiError(segment.error)}</p>
-          ) : null}
+          {segment.error ? <p className="text-destructive">{segment.error}</p> : null}
           {workerEntries.length > 0 ? (
             <Trace>
               {workerEntries.map((entry) => (

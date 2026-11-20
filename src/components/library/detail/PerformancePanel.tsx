@@ -214,9 +214,9 @@ const RANKING_VALUES = {
   ABOVE_AVERAGE: 'performanceRankingAbove',
   AVERAGE: 'performanceRankingAverage',
   BELOW_AVERAGE: 'performanceRankingBelow',
-  BELOW_AVERAGE_35: 'performanceRankingBottom35',
-  BELOW_AVERAGE_20: 'performanceRankingBottom20',
-  BELOW_AVERAGE_10: 'performanceRankingBottom10',
+  BELOW_AVERAGE_35: 'below_average_35_d9769d8',
+  BELOW_AVERAGE_20: 'below_average_20_b098009',
+  BELOW_AVERAGE_10: 'below_average_10_ca06a68',
 } as const;
 
 /**

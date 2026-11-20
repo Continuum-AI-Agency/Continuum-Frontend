@@ -1175,5 +1175,8 @@
   "figma_s_api_limit_for_this_account_is_used_up_d4b4bea": "Se agotó el límite de la API de Figma para esta cuenta. Los puestos View y Collab tienen unas 20 lecturas de archivos al mes; un puesto Dev o Full lo amplía.",
   "the_import_is_still_running_import_again_in_a_11aa35d": "La importación sigue en curso. Vuelve a importar en un minuto: retomará la misma importación.",
   "the_import_failed_code_fd31eb7": "La importación falló ({code}).",
-  "commentsWord": "{count, plural, one {comentario} other {comentarios}}"
+  "commentsWord": "{count, plural, one {comentario} other {comentarios}}",
+  "below_average_35_d9769d8": "por debajo del promedio 35",
+  "below_average_20_b098009": "por debajo del promedio 20",
+  "below_average_10_ca06a68": "por debajo del promedio 10"
 }

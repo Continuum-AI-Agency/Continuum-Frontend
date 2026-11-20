@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { useUiErrorSentence } from '@/i18n/errors';
 import {
   type FolderFile,
   folderFilesFromDrop,
@@ -101,7 +101,7 @@ function SourceRebindForm({
   repairFiles: FolderFile[];
   onRepairFiles: (files: FolderFile[]) => void;
 }) {
-  const uiErrorText = useUiErrorMessage();
+  const uiErrorText = useUiErrorSentence();
 
   const translateUi = useUiTranslations('forge');
 
@@ -230,7 +230,7 @@ function SourceRebindForm({
       await inspect(result.versionId);
     } catch (error) {
       if (!alive.current) return;
-      const message = uiErrorText(error);
+      const message = uiErrorText(error, translateUi('could_not_upload_the_revision_b958b62'));
       toast.error(uploadRefusal({ name: file.name, sizeBytes: file.size }, message) ?? message);
     } finally {
       setBusy(false);
@@ -348,7 +348,7 @@ function SourceRebindForm({
       if (!alive.current) return;
       if (error instanceof RepairProjectChoiceRequired) setProjects(error.projects);
       if (savedVersionId && !applied) onNeedsReview?.(savedVersionId);
-      const message = uiErrorText(error);
+      const message = uiErrorText(error, translateUi('could_not_repair_media_eabbe0a'));
       setRepairError(message);
       toast.error(message);
     } finally {

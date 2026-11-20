@@ -124,10 +124,24 @@ function getConfig(
   }
 }
 
-export function IntegrationErrorBanner({ errorCode, platform = 'meta', retryAfter }: Props) {
+// For these codes the curated copy is a generic restatement, while the server
+// message names the specific integration and remediation. The other codes carry
+// step-by-step instructions the raw upstream message cannot replace.
+const PREFER_SERVER_MESSAGE: ReadonlySet<IntegrationErrorCode | 'unknown'> = new Set([
+  'INTEGRATION_NOT_LINKED',
+  'unknown',
+]);
+
+export function IntegrationErrorBanner({
+  errorCode,
+  message,
+  platform = 'meta',
+  retryAfter,
+}: Props) {
   const tUi = useTranslations('common');
 
   const config = getConfig(errorCode, platform, tUi);
+  const body = message && PREFER_SERVER_MESSAGE.has(errorCode ?? 'unknown') ? message : config.body;
   const [secondsLeft, setSecondsLeft] = React.useState(retryAfter ?? 0);
 
   React.useEffect(() => {
@@ -149,7 +163,7 @@ export function IntegrationErrorBanner({ errorCode, platform = 'meta', retryAfte
     <Alert className="my-2 border-warning/30 bg-warning/10">
       <AlertDescription className="text-warning">
         <span className="font-semibold">{config.title}. </span>
-        <span>{config.body}</span>
+        <span>{body}</span>
         {errorCode === 'RATE_LIMITED' && secondsLeft > 0 && (
           <span className="ml-1 tabular-nums">
             {tUi('integrationRetry', { seconds: secondsLeft })}

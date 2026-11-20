@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { DEFAULT_COOKIE_OPTIONS } from '@supabase/ssr';
 import type { NextRequest } from 'next/server';
+import { createTranslator } from 'next-intl';
+import authMessages from '../../messages/auth/en.json';
 
 const mockExchangeCodeForSession = mock(() =>
   Promise.resolve({
@@ -18,6 +20,19 @@ const mockCreateSupabaseServerClient = mock(() =>
 
 mock.module('@/lib/supabase/server', () => ({
   createSupabaseServerClient: mockCreateSupabaseServerClient,
+}));
+
+// The handler resolves its UI language from the request cookies through next/headers,
+// which has no request scope here; the locale seams are given English directly.
+const intlServer = await import('next-intl/server');
+mock.module('next-intl/server', () => ({
+  ...intlServer,
+  getTranslations: async () =>
+    createTranslator({ locale: 'en', messages: { auth: authMessages }, namespace: 'auth' }),
+}));
+mock.module('@/i18n/server', () => ({
+  getCookieLocale: async () => 'en',
+  restoreAccountLocale: async () => {},
 }));
 
 import { handleAuthCallbackRequest } from '@/lib/auth/callback-handler';

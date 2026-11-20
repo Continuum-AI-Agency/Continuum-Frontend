@@ -26,7 +26,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
-import { useUiErrorMessage } from '@/i18n/errors';
 import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
 import { ACCEPTED_DOCUMENT_EXTENSIONS, hasDocumentExtension } from '@/lib/documents/uploadLimits';
 import { folderFilesFromDrop, folderFilesFromInput } from '@/lib/library/folderUpload';
@@ -217,8 +216,6 @@ export function AiDraftDialog({
   onUndo?: () => void;
 }) {
   const presentForge = useForgePresentationText();
-
-  const uiErrorText = useUiErrorMessage();
 
   const translateUi = useUiTranslations('forge');
 
@@ -443,10 +440,10 @@ export function AiDraftDialog({
       });
       setPrompt('');
     } catch (error) {
-      const message = uiErrorText(error);
+      const message = error instanceof Error ? error.message : '';
       setProblem(
         message.includes('suggest_unavailable')
-          ? 'The assistant is unavailable right now. Try again in a minute, or edit the grid directly.'
+          ? translateUi('the_assistant_is_unavailable_right_now_try_ag_dd82795')
           : describeRenderDiscoveryFailure(message, presentForge),
       );
     } finally {
@@ -521,14 +518,14 @@ export function AiDraftDialog({
       );
       setDrafted(response);
     } catch (error) {
-      const message = uiErrorText(error);
+      const message = error instanceof Error ? error.message : '';
       setProblem(
         message.includes('suggest_unavailable')
-          ? 'The AI writer is unavailable right now. Try again in a few minutes, or add rows by hand.'
+          ? translateUi('the_ai_writer_is_unavailable_right__04e8eb12')
           : message.startsWith('A source file') || message.startsWith('Files are still processing')
             ? message
             : message.includes('render_draft_file_') || message.includes('render_draft_media_')
-              ? 'A source file is unavailable. Remove it and try again.'
+              ? translateUi('a_source_file_is_unavailable_remove_it_and_tr_f5a0e92')
               : describeRenderDiscoveryFailure(message, presentForge),
       );
     } finally {

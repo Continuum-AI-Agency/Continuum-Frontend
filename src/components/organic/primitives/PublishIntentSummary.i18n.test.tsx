@@ -11,10 +11,10 @@ afterEach(cleanup);
 
 describe('publish confirmation localization', () => {
   it.each([
-    ['en', en, 'Song 30 · Original video 100', 'Track start 1.5s · End 8s'],
-    ['pt-BR', pt, 'Música 30 · Vídeo original 100', 'Início da faixa 1,5s · Fim 8s'],
-    ['es', es, 'Música 30 · Video original 100', 'Inicio de la pista 1,5s · Fin 8s'],
-  ] as const)('localizes %s chrome and leaves approved creative text intact', (locale, messages, mix, segment) => {
+    ['en', en, 'Reel · 1 of 1 media item'],
+    ['pt-BR', pt, 'Reel · 1 de 1 arquivo de mídia'],
+    ['es', es, 'Reel · 1 de 1 archivo multimedia'],
+  ] as const)('localizes %s chrome and leaves approved creative text intact', (locale, messages, media) => {
     render(
       <NextIntlClientProvider locale={locale} timeZone="UTC" messages={{ organic: messages }}>
         <PublishIntentSummary
@@ -25,31 +25,13 @@ describe('publish confirmation localization', () => {
             account: { id: 'account', handle: 'source_handle', displayName: 'Source name' },
             caption: { length: 23, preview: 'Source-owned caption' },
             media: { count: 1, required: 1 },
-            audio: {
-              provider: 'tiktok_cml',
-              catalogId: 'catalog',
-              audioId: 'track',
-              accountId: 'account',
-              title: 'Source-owned title',
-              artist: null,
-              coverUrl: null,
-              previewUrl: null,
-              durationMs: null,
-              songVolume: 30,
-              videoVolume: 100,
-              songStartMs: 1500,
-              songEndMs: 8000,
-              unavailablePolicy: 'block',
-            },
           }}
         />
       </NextIntlClientProvider>,
     );
-    expect(screen.getByText(mix)).toBeTruthy();
-    expect(screen.getByText(segment)).toBeTruthy();
+    expect(screen.getByText(media)).toBeTruthy();
     expect(screen.getByText('@source_handle')).toBeTruthy();
     expect(screen.getByText('Source-owned caption')).toBeTruthy();
-    expect(screen.getByText('Source-owned title')).toBeTruthy();
   });
 
   it('uses full plural messages rather than English sentence fragments', () => {
