@@ -445,7 +445,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                             <EmptyMedia variant="icon" className="bg-default text-secondary">
                               <Video />
                             </EmptyMedia>
-                            <EmptyTitle>Omni 1.1 Flash</EmptyTitle>
+                            <EmptyTitle>Omni 1.2 Flash</EmptyTitle>
                             <EmptyDescription>
                               {translateUi('describe_a_clip_then_chat_to_edit_i_19538a48')}
                             </EmptyDescription>
@@ -624,13 +624,13 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                   selected || isHovered ? 'opacity-100' : 'opacity-0',
                 )}
               >
-                Gemini Omni 1.1 • {aspectRatio} • {resolution}
+                Gemini Omni 1.2 • {aspectRatio} • {resolution}
               </div>
             </div>
           }
         />
         <ContextMenuContent className="w-56">
-          <ContextMenuLabel>Omni 1.1 Flash</ContextMenuLabel>
+          <ContextMenuLabel>Omni 1.2 Flash</ContextMenuLabel>
           <ContextMenuItem onClick={() => setEditorOpen(true)}>
             <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_3883a4f4')}
           </ContextMenuItem>

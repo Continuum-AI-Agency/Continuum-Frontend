@@ -188,13 +188,13 @@
   {
     "file": "src/StudioCanvas/nodes/OmniGenBlock.tsx",
     "kind": "text",
-    "text": "Omni 1.1 Flash",
+    "text": "Omni 1.2 Flash",
     "reason": "Published model identifier, independent of UI language."
   },
   {
     "file": "src/StudioCanvas/nodes/OmniGenBlock.tsx",
     "kind": "text",
-    "text": "Gemini Omni 1.1 •",
+    "text": "Gemini Omni 1.2 •",
     "reason": "Published model family identifier with decorative separator."
   },
   {
@@ -224,7 +224,7 @@
   {
     "file": "src/StudioCanvas/nodes/omni/OmniGenDialog.tsx",
     "kind": "text",
-    "text": "Omni 1.1 Flash",
+    "text": "Omni 1.2 Flash",
     "reason": "Published model identifier, independent of UI language."
   },
   {

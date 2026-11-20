@@ -843,7 +843,6 @@
   "gaussian_blur_at_a_pixel_radius_01d7c868": "Gaussian blur at a pixel radius.",
   "gaussian_c7c5f144": "gaussian",
   "gemini_3_8_flash_edits_this_project_3ff2fe5f": "Gemini 3.8 Flash · edits this project’s timeline",
-  "gemini_omni_1_1_flash_this_node_run_fb292f5f": "Gemini Omni 1.1 Flash — this node runs one model.",
   "generate_1080p_master_9e4f4966": "Generate 1080p master",
   "generate_3_30a88c48": "Generate 3",
   "generate_4_6504b7d1": "Generate 4",
@@ -2523,5 +2522,6 @@
   "the_save_never_came_back_it_may_still_have_go_cd29edc": "The save never came back. It may still have gone through — check Add Node → Techniques before saving again.",
   "could_not_save_the_technique_try_again_cd3ad75": "Could not save the technique. Try again.",
   "apply_response_payload_is_invalid_0f89180": "Apply response payload is invalid.",
-  "unable_to_apply_output_to_planner_c6f8a69": "Unable to apply output to Planner."
+  "unable_to_apply_output_to_planner_c6f8a69": "Unable to apply output to Planner.",
+  "gemini_omni_1_2_flash_this_node_runs_one_mode_c19bf40": "Gemini Omni 1.2 Flash — this node runs one model."
 }

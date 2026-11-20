@@ -94,6 +94,7 @@ describe('toBillingModelId', () => {
       'veo-3.1-fast@720p',
     );
     expect(toBillingModelId({ modelId: 'gemini-omni-1.1-flash' })).toBe('gemini-omni-flash');
+    expect(toBillingModelId({ modelId: 'gemini-omni-1.2-flash' })).toBe('gemini-omni-flash');
     expect(toBillingModelId({ modelId: 'kling-omni-video' })).toBe('kling-omni');
     expect(toBillingModelId({ modelId: 'kling-omni-v1' })).toBe('kling-omni');
   });

@@ -1,6 +1,6 @@
 'use client';
 
-// Config for the omniGen node. Gemini Omni 1.1 Flash is the only model it runs, so the
+// Config for the omniGen node. Gemini Omni 1.2 Flash is the only model it runs, so the
 // real choices are the output shape and the tier it renders at. Prompting, the variation
 // library and the edit/extend mode live in the node's editor dialog.
 
@@ -24,7 +24,7 @@ export function OmniGenSection({
   return (
     <>
       <InspectorSection title={translateUi('model_5e2c614c')}>
-        <InspectorNote>{translateUi('gemini_omni_1_1_flash_this_node_run_fb292f5f')}</InspectorNote>
+        <InspectorNote>{translateUi('gemini_omni_1_2_flash_this_node_runs_one_mode_c19bf40')}</InspectorNote>
       </InspectorSection>
 
       <InspectorSection title={translateUi('output_b2439bcb')}>

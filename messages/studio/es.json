@@ -843,7 +843,6 @@
   "gaussian_blur_at_a_pixel_radius_01d7c868": "Desenfoque gaussiano con radio en píxeles.",
   "gaussian_c7c5f144": "gaussiano",
   "gemini_3_8_flash_edits_this_project_3ff2fe5f": "Gemini 3.8 Flash · edita la línea de tiempo de este proyecto",
-  "gemini_omni_1_1_flash_this_node_run_fb292f5f": "Gemini Omni 1.1 Flash: este nodo ejecuta un solo modelo.",
   "generate_1080p_master_9e4f4966": "Generar versión final en 1080p",
   "generate_3_30a88c48": "Generar 3",
   "generate_4_6504b7d1": "Generar 4",
@@ -2523,5 +2522,6 @@
   "the_save_never_came_back_it_may_still_have_go_cd29edc": "El guardado nunca respondió. Es posible que se haya completado: revisa Agregar nodo → Técnicas antes de guardar de nuevo.",
   "could_not_save_the_technique_try_again_cd3ad75": "No se pudo guardar la técnica. Inténtalo de nuevo.",
   "apply_response_payload_is_invalid_0f89180": "La respuesta de la aplicación no es válida.",
-  "unable_to_apply_output_to_planner_c6f8a69": "No se puede aplicar el resultado al Planificador."
+  "unable_to_apply_output_to_planner_c6f8a69": "No se puede aplicar el resultado al Planificador.",
+  "gemini_omni_1_2_flash_this_node_runs_one_mode_c19bf40": "Gemini Omni 1.2 Flash: este nodo ejecuta un solo modelo."
 }

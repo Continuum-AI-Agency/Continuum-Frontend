@@ -174,7 +174,7 @@ export function OmniGenDialog({
         <DialogHeader className="flex flex-row items-center justify-between space-y-0 border-b border-border/60 px-4 py-3 text-left">
           <div>
             <DialogTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="h-4 w-4" /> Omni 1.1 Flash
+              <Sparkles className="h-4 w-4" /> Omni 1.2 Flash
             </DialogTitle>
             <DialogDescription className="text-xs">
               {translateUi('describe_a_clip_then_keep_talking_t_abddaf91')}

@@ -120,7 +120,7 @@ describe('#293 VideoGenBlock model picker', () => {
 
     // Positive control: the same click on a reachable model DOES write.
     await act(async () => {
-      fireEvent.click(modelItem('Omni 1.1 Flash'));
+      fireEvent.click(modelItem('Omni 1.2 Flash'));
     });
     expect(updateNode).toHaveBeenCalled();
   });
@@ -128,7 +128,7 @@ describe('#293 VideoGenBlock model picker', () => {
   it('leaves every reachable model selectable and unannotated', async () => {
     await openModelPicker(nodeData());
 
-    for (const label of ['Omni 1.1 Flash', 'Veo 3.1', 'Veo 3.1 Fast']) {
+    for (const label of ['Omni 1.2 Flash', 'Veo 3.1', 'Veo 3.1 Fast']) {
       const item = modelItem(label);
       expect(item.getAttribute('aria-disabled')).not.toBe('true');
       expect(item.textContent).not.toContain('Returning soon');
