@@ -33,46 +33,19 @@ import type { UiLocale } from '@/i18n/config';
 import { formatDecimal } from '@/lib/format/decimal';
 import {
   currencyGlyph,
+  formatCurrency,
+  formatCurrencyInColumn,
   joinMoney,
-  joinMoneyInColumn,
   moneyParts,
   normalizeCurrency,
 } from '@/lib/money/display';
 
-export { normalizeCurrency };
-
-export function formatCurrency(
-  value: number | null | undefined,
-  currency: string | null | undefined,
-  locale: UiLocale = 'en',
-): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  return joinMoney(moneyParts(value < 0, digitRuleBody(value, locale), currency));
-}
-
-/** A table cell under a header that names the code ("CPL · MXN" over "$99.57"): the symbol
- *  stays, the code moves to the header. Stamp the node with `figureProps(…, 'header')`. */
-export function formatCurrencyInColumn(
-  value: number | null | undefined,
-  currency: string | null | undefined,
-  locale: UiLocale = 'en',
-): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  return joinMoneyInColumn(moneyParts(value < 0, digitRuleBody(value, locale), currency));
-}
+export { formatCurrency, formatCurrencyInColumn, normalizeCurrency };
 
 /** A column header's code, " · MXN", or nothing when the code is unknown. */
 export function currencyColumnSuffix(currency: string | null | undefined): string {
   const code = normalizeCurrency(currency);
   return code ? ` · ${code}` : '';
-}
-
-function digitRuleBody(value: number, locale: string): string {
-  const digits = Math.abs(value) >= 100 ? 0 : 2;
-  return new Intl.NumberFormat(locale, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Math.abs(value));
 }
 
 /** Money to an exact number of decimals, for an amount that has to read to the minor unit —

@@ -1,5 +1,5 @@
-import { formatCurrency as formatUiCurrency } from '@/components/paid-media/optimizer/format';
 import { matchBrowserLocale } from '@/i18n/browserLocale';
+import { formatCurrency as formatUiCurrency } from '@/lib/money/display';
 
 export type ValueFormat =
   | 'currency'

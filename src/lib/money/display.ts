@@ -12,6 +12,7 @@
 // spelling for a column whose header names the code, and `splitMoney`, the inverse.
 
 import { currencyGlyph, normalizeCurrencyCode } from '@continuum/contracts';
+import type { UiLocale } from '@/i18n/config';
 
 export { currencyGlyph };
 
@@ -45,6 +46,36 @@ export function joinMoney({ sign, glyph, body, code }: MoneyParts): string {
  *  code moves up to the header ("CPL · MXN" over "$99.57"). */
 export function joinMoneyInColumn(parts: MoneyParts): string {
   return joinMoney({ ...parts, code: null });
+}
+
+// Two decimals under 100 and none at or above: the digit rule `money()` in contracts follows,
+// so "$25.54/day · $766/mo" multiplies back. Grouping stays; digits follow the UI locale.
+export function formatCurrency(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+  locale: UiLocale = 'en',
+): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return joinMoney(moneyParts(value < 0, digitRuleBody(value, locale), currency));
+}
+
+/** A table cell under a header that names the code ("CPL · MXN" over "$99.57"): the symbol
+ *  stays, the code moves to the header. Stamp the node with `figureProps(…, 'header')`. */
+export function formatCurrencyInColumn(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+  locale: UiLocale = 'en',
+): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return joinMoneyInColumn(moneyParts(value < 0, digitRuleBody(value, locale), currency));
+}
+
+function digitRuleBody(value: number, locale: string): string {
+  const digits = Math.abs(value) >= 100 ? 0 : 2;
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Math.abs(value));
 }
 
 // Presentation only: preserve separators and compact suffixes; never parse or round the value.
