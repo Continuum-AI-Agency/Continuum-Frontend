@@ -784,6 +784,8 @@ export function mapPersistedRowToCalendarEntry(
       readString(snapshot.title) ??
       readString(slotData.title) ??
       readString(placementContent.titleTopic) ??
+      // An approved plan placement carries only its brief until copy is written.
+      readString(slotData.brief) ??
       'Saved draft',
     summary: readString(snapshot.summary) ?? '',
     // content_json-first, matching the caption's ordering and for the same reason:
@@ -808,6 +810,7 @@ export function mapPersistedRowToCalendarEntry(
     hasCopy: plannerDraftHasCopy(placement) || readString(slotData.caption) !== null,
     platforms: [platform],
     contentPlanId: readString(row.content_plan_id) ?? null,
+    brief: readString(slotData.brief) ?? undefined,
     // The publisher's own order (snapshot first): a format edit rewrites the snapshot's format
     // too, and reading content first previewed a format the post would not go out as.
     format: draftFormatCandidates(row)[0] ?? 'Post',

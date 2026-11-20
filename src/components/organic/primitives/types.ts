@@ -79,6 +79,8 @@ export type OrganicCalendarDraft = {
   origin?: 'manual' | 'agent';
   // Non-null when this draft belongs to a bulk content plan ("planned" provenance).
   contentPlanId?: string | null;
+  /** The plan's direction for this slot (`slot_data.brief`), present before any copy exists. */
+  brief?: string;
   /** The row's `platform_account_id` — the one stamp. */
   targetAccountId?: string;
   adjusted?: boolean;

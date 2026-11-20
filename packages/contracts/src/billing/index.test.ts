@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  adminAccessUpdateResponseSchema,
   allowanceResultSchema,
   billedCreditsForBaseCost,
   billingCheckoutRequestSchema,
@@ -52,7 +53,8 @@ describe('billing contracts', () => {
     const read = { ...entitlements, billingModel: 'contract', plans: [], products };
     expect(brandEntitlementsSchema.parse(read).products).toEqual(products);
     expect(
-      brandEntitlementsSchema.safeParse({ ...read, products: [...products, 'unknown_product'] }).success,
+      brandEntitlementsSchema.safeParse({ ...read, products: [...products, 'unknown_product'] })
+        .success,
     ).toBe(false);
   });
 
@@ -226,5 +228,26 @@ describe('usage metering contracts', () => {
     expect(billedCreditsForBaseCost(0.04)).toBe(5); // 4.6 → 5, never 6
     expect(billedCreditsForBaseCost(0.8)).toBe(92); // exactly 92
     expect(billedCreditsForBaseCost(0)).toBe(0);
+  });
+});
+
+describe('admin access update response', () => {
+  const planPeriod = adminAccessUpdateResponseSchema.shape.planPeriod;
+
+  it('carries the plan period ensure_admin_plan_period answered, opened or not', () => {
+    expect(
+      planPeriod.parse({
+        opened: true,
+        reason: 'opened',
+        periodStart: '2026-11-20T03:00:00+00:00',
+        periodEnd: '2026-12-20T03:00:00+00:00',
+      }),
+    ).toMatchObject({ opened: true });
+    expect(planPeriod.parse({ opened: false, reason: 'stripe_managed' })).toEqual({
+      opened: false,
+      reason: 'stripe_managed',
+    });
+    expect(planPeriod.parse(undefined)).toBeUndefined();
+    expect(planPeriod.safeParse({ opened: true, reason: 'opened', extra: 1 }).success).toBe(false);
   });
 });

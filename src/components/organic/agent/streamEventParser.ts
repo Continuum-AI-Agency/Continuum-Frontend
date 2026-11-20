@@ -69,7 +69,7 @@ export type ParsedOrganicStreamEvent =
     }
   | { kind: 'error'; message: string; code?: string; transient?: boolean }
   | { kind: 'retrying'; attempt: number; reason?: string }
-  | { kind: 'complete' }
+  | { kind: 'complete'; cancelled?: true }
   | { kind: 'uiCard'; card: UiCard }
   | { kind: 'postCard'; card: UiPostCard }
   | { kind: 'jobUpdate'; job: Partial<AgentJobState> & { jobId: string } }
@@ -567,7 +567,7 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     // The user stopped the run. It ended, but it did not fail — surfacing it as an error
     // would put a red banner on a turn they cancelled on purpose.
     case 'response.cancelled':
-      return { kind: 'complete' };
+      return { kind: 'complete', cancelled: true };
     case 'response.error': {
       const payload = getEventPayload(frame);
       const message = readNonEmptyString(payload.message) ?? 'Unknown stream error';

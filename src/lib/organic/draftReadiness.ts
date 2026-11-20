@@ -50,3 +50,22 @@ export function evaluateDraftReadiness(draft: OrganicCalendarDraft): DraftReadin
     reason: blockers.length === 0 ? null : blockers.map((issue) => issue.message).join('; '),
   };
 }
+
+/**
+ * A draft with neither copy nor media is a slot waiting to be written, not content. The planner
+ * "New" button makes one (`blank`); approving a plan makes one per placement that carries only
+ * the plan's brief (`brief`). Both need the copy step first, and neither counts as a planned post.
+ * `hasCopy` is the backend's caption check over content_json; the caption covers an unsaved draft
+ * the user has typed into.
+ */
+export type DraftCopyGap = 'blank' | 'brief';
+
+export function draftCopyGap(draft: OrganicCalendarDraft): DraftCopyGap | null {
+  if (draft.status !== 'draft' || draft.hasCopy === true || draft.captionPreview.trim()) {
+    return null;
+  }
+  const hasMedia =
+    (draft.mediaStage ?? 'text_only') !== 'text_only' || (draft.publishingAssets?.length ?? 0) > 0;
+  if (hasMedia) return null;
+  return draft.brief?.trim() ? 'brief' : 'blank';
+}

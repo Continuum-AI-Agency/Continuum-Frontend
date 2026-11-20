@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import { applyOrganicFrame } from './applyOrganicFrame';
-import type { AgentJobState, ConversationMessage } from './types';
-import { initialPanelState, mergeRestoredMessages, panelReducer } from './useOrganicAgentReducer';
+import type { AgentJobState, ConversationMessage, UiCard } from './types';
+import {
+  EMPTY_TURN_MESSAGE,
+  initialPanelState,
+  mergeRestoredMessages,
+  type PanelState,
+  panelReducer,
+} from './useOrganicAgentReducer';
 
 describe('useOrganicAgentReducer', () => {
   it('hydrates jobs from a valid array payload', () => {
@@ -1330,5 +1336,204 @@ describe('the reply to an approval', () => {
     state = panelReducer(state, { type: 'DISCARD_MESSAGE', messageId: 'reply-1' });
 
     expect(state.messages.map((m) => m.id)).not.toContain('reply-1');
+  });
+});
+
+// P8: a tool blocked on a pending plan re-sends that plan's card. It must reach the user where
+// the conversation is now, not be dropped as a duplicate of a card far up the thread.
+describe('a plan card sent again', () => {
+  const planFrame = (planId: string, extra: Record<string, unknown> = {}) => ({
+    type: 'ui.plan_card',
+    data: {
+      planId,
+      sessionId: 's1',
+      brandId: 'b1',
+      userId: 'u1',
+      weekStart: '2026-11-16',
+      title: 'Reel week',
+      summary: 'Three reels',
+      items: [
+        {
+          itemId: 'item_1',
+          kind: 'create_post',
+          platform: 'instagram',
+          scheduledAt: '2026-11-20T15:00:00Z',
+          format: 'reel',
+          trendId: null,
+          trendTitle: null,
+          angle: 'Behind the scenes',
+          objective: 'follow',
+          audienceSegment: 'everyone',
+          rationale: 'Reels reach new viewers',
+          guidancePrompt: null,
+          draftId: null,
+          jobId: null,
+          dependsOn: [],
+          status: 'pending',
+          creativeBrief: null,
+        },
+      ],
+      evidence: [],
+      estimatedDurationSeconds: 60,
+      status: 'proposed',
+      createdAt: '2026-11-19T23:04:00Z',
+      ...extra,
+    },
+  });
+
+  const turn = (state: PanelState, messageId: string, frames: Record<string, unknown>[]) => {
+    let next = panelReducer(state, { type: 'SUBMIT_USER_MESSAGE', content: 'go', messageId });
+    for (const frame of frames) {
+      applyOrganicFrame(
+        frame,
+        (action) => {
+          next = panelReducer(next, action);
+        },
+        'chat',
+      );
+    }
+    return panelReducer(next, { type: 'STREAM_COMPLETE' });
+  };
+  const planCardsByMessage = (state: PanelState) =>
+    state.messages
+      .filter((m) => m.role === 'assistant')
+      .map((m) =>
+        (m.uiCards ?? []).flatMap((c) => (c.type === 'plan_card' ? [c.data.planId] : [])),
+      );
+
+  it('moves to the turn that sent it again, so the plan waiting on the user is at the bottom', () => {
+    let state = turn(initialPanelState(), 'u1', [
+      { type: 'response.output_text.delta', data: { delta: 'Here is the plan.' } },
+      planFrame('plan_1'),
+    ]);
+    state = turn(state, 'u2', [
+      { type: 'response.output_text.delta', data: { delta: 'Your plan is still waiting.' } },
+      planFrame('plan_1', { reemitted: true }),
+    ]);
+
+    expect(planCardsByMessage(state)).toEqual([[], ['plan_1']]);
+    // The earlier turn keeps its words; only the card moved.
+    expect(state.messages[1]?.content).toBe('Here is the plan.');
+  });
+
+  it('replaces the copy in the same turn instead of stacking a second card', () => {
+    const state = turn(initialPanelState(), 'u1', [
+      planFrame('plan_1'),
+      planFrame('plan_1', { title: 'Reel week (updated)' }),
+    ]);
+
+    const cards = state.messages[1]?.uiCards ?? [];
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.type === 'plan_card' && cards[0].data.title).toBe('Reel week (updated)');
+  });
+
+  it('leaves a different plan where it is', () => {
+    let state = turn(initialPanelState(), 'u1', [planFrame('plan_1')]);
+    state = turn(state, 'u2', [planFrame('plan_2')]);
+
+    expect(planCardsByMessage(state)).toEqual([['plan_1'], ['plan_2']]);
+  });
+
+  it('shows the latest copy only, when history is restored', () => {
+    const card = (planId: string) => ({
+      type: 'plan_card' as const,
+      data: planFrame(planId).data as unknown as Extract<UiCard, { type: 'plan_card' }>['data'],
+    });
+    const restored: ConversationMessage[] = [
+      { id: 'a1', role: 'assistant', content: 'Here is the plan.', uiCards: [card('plan_1')] },
+      { id: 'a2', role: 'assistant', content: 'Other plan.', uiCards: [card('plan_2')] },
+      { id: 'a3', role: 'assistant', content: 'Still waiting.', uiCards: [card('plan_1')] },
+    ];
+    const state = panelReducer(initialPanelState(), {
+      type: 'SESSION_SWITCH',
+      sessionId: 's1',
+      messages: restored,
+    });
+
+    expect(planCardsByMessage(state)).toEqual([[], ['plan_2'], ['plan_1']]);
+    // A message with nothing to move keeps its identity, so its memoised row does not re-render.
+    expect(state.messages[1]).toBe(restored[1]);
+  });
+});
+
+// P2/P7: a run that ends with nothing to show must not leave a silent empty bubble.
+describe('a turn that ends with nothing to show', () => {
+  const submitted = () =>
+    panelReducer(initialPanelState(), {
+      type: 'SUBMIT_USER_MESSAGE',
+      content: 'plan my week',
+      messageId: 'u1',
+    });
+  const fold = (state: PanelState, frames: Record<string, unknown>[]) => {
+    let next = state;
+    for (const frame of frames) {
+      applyOrganicFrame(
+        frame,
+        (action) => {
+          next = panelReducer(next, action);
+        },
+        'chat',
+      );
+    }
+    return next;
+  };
+
+  it('paints the error row, with its Retry, on a run that ended without a word', () => {
+    const state = submitted();
+    const assistantId = state.streamingMessageId;
+    const after = fold(state, [{ type: 'response.done', data: {} }]);
+
+    expect(after.streamingMessageId).toBeNull();
+    expect(after.messages.find((m) => m.id === assistantId)?.error).toBe(EMPTY_TURN_MESSAGE);
+  });
+
+  it('paints it when the stream closed with no terminal frame at all', () => {
+    const state = submitted();
+    const after = panelReducer(state, { type: 'STREAM_COMPLETE' });
+
+    expect(after.messages.find((m) => m.id === state.streamingMessageId)?.error).toBe(
+      EMPTY_TURN_MESSAGE,
+    );
+  });
+
+  it('leaves a turn the user stopped alone', () => {
+    const state = submitted();
+    const after = fold(state, [{ type: 'response.cancelled', data: {} }]);
+
+    expect(after.streamingMessageId).toBeNull();
+    expect(after.messages.find((m) => m.id === state.streamingMessageId)?.error).toBeUndefined();
+  });
+
+  it('leaves a turn waiting on a tool approval alone', () => {
+    let state = submitted();
+    state = panelReducer(state, {
+      type: 'TOOL_APPROVAL_ADD',
+      approval: { approvalId: 'a1', toolCallId: 'call_1', toolName: 'publishDraft', input: {} },
+    });
+    const after = panelReducer(state, { type: 'STREAM_COMPLETE' });
+
+    expect(after.messages.find((m) => m.id === state.streamingMessageId)?.error).toBeUndefined();
+  });
+
+  it('leaves a turn that said something untouched', () => {
+    const state = fold(submitted(), [
+      { type: 'response.output_text.delta', data: { delta: 'Done.' } },
+    ]);
+    const after = panelReducer(state, { type: 'STREAM_COMPLETE' });
+
+    expect(after.messages).toBe(state.messages);
+    expect(after.messages.at(-1)?.error).toBeUndefined();
+  });
+
+  it('keeps the explicit failure message instead of the empty-turn one', () => {
+    const state = submitted();
+    const after = fold(state, [
+      { type: 'response.error', data: { message: 'The planner tool failed.' } },
+      { type: 'response.done', data: {} },
+    ]);
+
+    expect(after.messages.find((m) => m.id === state.streamingMessageId)?.error).toBe(
+      'The planner tool failed.',
+    );
   });
 });

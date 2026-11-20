@@ -104,7 +104,7 @@ describe('PlannerAttentionDock — needs attention', () => {
     day('2026-10-14', [
       draft('approve'),
       draft('broken', { status: 'failed', platforms: ['facebook'] }),
-      draft('text', { mediaStage: 'text_only' }),
+      draft('text', { mediaStage: 'text_only', hasCopy: true }),
     ]),
     day(UNSCHEDULED_DAY_ID, [draft('loose')]),
   ];
@@ -165,6 +165,16 @@ describe('PlannerAttentionDock — needs attention', () => {
     expect(onSelectDraft).not.toHaveBeenCalled();
   });
 
+  // Media is built from the copy: "Add media" on a draft with nothing written is a dead end.
+  it('files an empty draft under Needs copy, with no Add media action', () => {
+    const { dock } = renderDock([
+      day('2026-10-15', [draft('stub', { title: 'New Instagram post', mediaStage: 'text_only' })]),
+    ]);
+    const list = section(dock, 'attention')?.querySelector('ul');
+    expect(list?.getAttribute('aria-label')).toBe('Needs copy');
+    expect(screen.queryByRole('button', { name: /^Add media/ })).toBeNull();
+  });
+
   it('puts the drag handle on the undated row’s own button: one tab stop', () => {
     const { dock } = renderDock(queue);
     expect(draggedIds).toEqual(['loose']);
@@ -198,9 +208,9 @@ describe('PlannerAttentionDock — overdue', () => {
     ]);
     const lists = section(dock, 'attention')?.querySelectorAll('ul');
     expect(lists?.[0]?.getAttribute('aria-label')).toBe('Overdue');
-    expect(lists?.[0]?.querySelector('[data-dock-draft-id]')?.getAttribute('data-dock-draft-id')).toBe(
-      'late',
-    );
+    expect(
+      lists?.[0]?.querySelector('[data-dock-draft-id]')?.getAttribute('data-dock-draft-id'),
+    ).toBe('late');
     fireEvent.click(screen.getByRole('button', { name: /Missed launch/ }));
     expect(onSelectDraft).toHaveBeenCalledWith('late');
   });
@@ -237,7 +247,9 @@ describe('PlannerAttentionDock — lookahead', () => {
     );
     expect(thursday?.textContent).toBe('151');
     // The glyphs are decoration; the label already names the open platforms.
-    expect(thursday?.querySelector('[data-brand-icon="facebook"]')?.closest('[aria-hidden]')).not.toBeNull();
+    expect(
+      thursday?.querySelector('[data-brand-icon="facebook"]')?.closest('[aria-hidden]'),
+    ).not.toBeNull();
     expect(dock.querySelector('[data-dock-day="2026-10-16"]')?.getAttribute('aria-label')).toBe(
       'Plan a post for Fri, Oct 16 · 0 planned · open: Instagram, Facebook',
     );
@@ -279,10 +291,11 @@ describe('PlannerAttentionDock — lookahead', () => {
   it('sits beside the attention list from 48rem wide and stacks under it below', () => {
     const { dock } = renderDock([day('2026-10-14', [draft('broken', { status: 'failed' })])]);
     const sections = section(dock, 'attention')?.parentElement;
-    expect(sections?.className).toContain('[@container(width>=48rem)]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]');
-    expect(Array.from(sections?.children ?? []).map((child) => child.getAttribute('data-dock-section'))).toEqual([
-      'attention',
-      'lookahead',
-    ]);
+    expect(sections?.className).toContain(
+      '[@container(width>=48rem)]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
+    );
+    expect(
+      Array.from(sections?.children ?? []).map((child) => child.getAttribute('data-dock-section')),
+    ).toEqual(['attention', 'lookahead']);
   });
 });

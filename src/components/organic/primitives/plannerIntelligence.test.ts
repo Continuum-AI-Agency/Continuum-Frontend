@@ -29,8 +29,20 @@ const draft = (
     mediaStage: 'realized',
     timeLabel: '9:00 AM',
     platforms: ['instagram'],
+    captionPreview: 'Written copy',
     ...extra,
   }) as OrganicCalendarDraft;
+
+// What the Planner "New" button leaves behind until something is written into it.
+const blankStub = (id: string, extra: Partial<OrganicCalendarDraft> = {}) =>
+  draft(id, 'draft', {
+    title: 'New Instagram post',
+    captionPreview: '',
+    hasCopy: false,
+    mediaStage: 'text_only',
+    mediaCount: 0,
+    ...extra,
+  });
 
 const day = (id: string, slots: OrganicCalendarDraft[] = []): OrganicCalendarDay =>
   ({ id, slots }) as OrganicCalendarDay;
@@ -75,6 +87,20 @@ describe('derivePlannerAttention', () => {
       ]),
     ];
     expect(groupIds(days)).toEqual([{ key: 'overdue', ids: ['draft', 'idea', 'broken'] }]);
+  });
+
+  it('files an empty draft under Needs copy, not Needs media: the copy comes first', () => {
+    const days = [
+      day('2026-10-20', [
+        blankStub('stub'),
+        blankStub('plan-slot', { brief: 'Why manual invoicing costs you a day a week' }),
+        draft('text', 'draft', { mediaStage: 'text_only' }),
+      ]),
+    ];
+    expect(groupIds(days)).toEqual([
+      { key: 'needs-copy', ids: ['stub', 'plan-slot'] },
+      { key: 'needs-media', ids: ['text'] },
+    ]);
   });
 
   it('keeps today’s drafts out of Overdue', () => {
@@ -281,6 +307,23 @@ describe('derivePlannerDock', () => {
     expect(
       result.lookahead.every((entry) => entry.open.map((p) => p.key).join() === 'instagram'),
     ).toBe(true);
+  });
+
+  it('does not count a blank stub as planned: its day and platform stay open', () => {
+    const result = dock([day('2026-10-18', [blankStub('stub')])]);
+    expect(lookaheadDay(result, '2026-10-18')?.planned).toBe(0);
+    expect(openKeys(result, '2026-10-18')).toEqual(['instagram', 'facebook']);
+    expect(result.openDays).toBe(23);
+    // It is still queued, so the rail names the work rather than calling the week empty.
+    expect(result.insight).toBe('1 needs copy');
+  });
+
+  it('counts a plan placement awaiting its copy as planned: the plan put it there', () => {
+    const result = dock([
+      day('2026-10-18', [blankStub('slot', { brief: 'Behind the scenes at the depot' })]),
+    ]);
+    expect(lookaheadDay(result, '2026-10-18')?.planned).toBe(1);
+    expect(openKeys(result, '2026-10-18')).toEqual(['facebook']);
   });
 
   it('keeps a day taken by a draft the lens hides', () => {

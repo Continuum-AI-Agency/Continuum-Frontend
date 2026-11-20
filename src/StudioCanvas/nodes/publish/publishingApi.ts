@@ -60,14 +60,26 @@ export const publishingApi = {
       schema: organicCanvasTargetSearchResponseSchema,
     });
   },
-  /** Create a Planner draft, or edit the one this node is bound to. */
-  writeOrganicDraft(input: OrganicCanvasDraftWriteRequest) {
-    return http.request<OrganicCanvasDraftWriteResponse>({
+  /**
+   * Create a Planner draft, or edit the one this node is bound to. An ok is not taken on
+   * trust: the row written must be the one asked for, and a caption that was sent must be
+   * on it when read back — a save that answered ok while writing nothing was reported as
+   * saved, and the post went out empty-handed.
+   */
+  async writeOrganicDraft(input: OrganicCanvasDraftWriteRequest) {
+    const result = await http.request<OrganicCanvasDraftWriteResponse>({
       path: '/api/ai-studio/publishing/organic/drafts',
       method: 'POST',
       body: input,
       schema: organicCanvasDraftWriteResponseSchema,
     });
+    if (input.draftId && result.draftId !== input.draftId) {
+      throw new Error(WRONG_DRAFT_SAVED_MESSAGE);
+    }
+    if (input.caption?.trim() && !(await draftHasSavedCaption(result.draftId))) {
+      throw new Error(CAPTION_NOT_SAVED_MESSAGE);
+    }
+    return result;
   },
   attachOrganic(draftId: string, input: AttachOrganicCanvasCreativeRequest) {
     return http.request<import('@continuum/contracts').AttachOrganicCanvasCreativeResponse>({
@@ -121,6 +133,22 @@ export async function fetchOrganicPublishIntent(
   } catch {
     return null;
   }
+}
+
+export const CAPTION_NOT_SAVED_MESSAGE =
+  'The caption did not reach the planner draft. Save again, or open the draft in the planner to check it.';
+export const WRONG_DRAFT_SAVED_MESSAGE =
+  'The planner saved a different draft than the one picked here. Re-select the draft, then save again.';
+
+/**
+ * Whether the draft's row carries a caption, read back through publish-intent: read-only,
+ * checked against brand access (a teammate's draft reads too, unlike the row GET), and it
+ * reports the caption the post would actually go out with. A failed read is not a caption.
+ */
+export async function draftHasSavedCaption(draftId: string): Promise<boolean> {
+  const intent = await fetchOrganicPublishIntent(draftId);
+  const length = intent?.caption?.length;
+  return typeof length === 'number' && length > 0;
 }
 
 /**

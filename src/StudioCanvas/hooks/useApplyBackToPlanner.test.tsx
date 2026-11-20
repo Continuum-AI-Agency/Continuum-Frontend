@@ -52,10 +52,13 @@ type ApplyBack = ReturnType<typeof useApplyBackToPlanner>;
 
 let applyOk = true;
 let applyBody: unknown = null;
-const fetchMock = mock(async (_input: unknown, _init?: unknown) => ({
-  ok: applyOk,
-  json: async () => applyBody,
-}));
+// What the read-back (publish-intent) reports about the row's caption.
+let intentBody: unknown = null;
+const fetchMock = mock(async (input: unknown, _init?: unknown) =>
+  String(input).includes('/publish-intent')
+    ? { ok: true, json: async () => intentBody }
+    : { ok: applyOk, json: async () => applyBody },
+);
 const originalFetch = global.fetch;
 
 function makeSeed(overrides: Partial<PlannerAiStudioHandoff> = {}): PlannerAiStudioHandoff {
@@ -155,6 +158,7 @@ describe('useApplyBackToPlanner', () => {
     fetchMock.mockClear();
     applyOk = true;
     applyBody = null;
+    intentBody = null;
     window.localStorage.clear();
   });
 
@@ -346,7 +350,12 @@ describe('useApplyBackToPlanner', () => {
         data: { value: 'Edited TikTok caption' },
       } as StudioNode,
     ];
-    applyBody = { updated_at: '2026-09-22T00:01:00Z' };
+    // The field route answers with the row it wrote.
+    applyBody = {
+      id: 'server-draft-1',
+      updated_at: '2026-09-22T00:01:00Z',
+      content_json: { copy: { caption: 'Edited TikTok caption' } },
+    };
     const { result } = renderApply(seed, 'brand-1');
     expect(result.current.applyReadiness?.ready).toBe(true);
     await act(async () => {
@@ -364,6 +373,75 @@ describe('useApplyBackToPlanner', () => {
     expect(push).toHaveBeenCalledWith(
       '/organic?tab=planner&draftId=draft-1&weekStartId=2026-08-17&from=ai-studio',
     );
+  });
+
+  describe('a caption save the row does not show', () => {
+    const tiktokSeed = () =>
+      makeSeed({
+        platform: 'tiktok',
+        workflowConcept: 'tt_text',
+        backendDraftId: 'server-draft-1',
+        sourceUpdatedAt: '2026-09-22T00:00:00Z',
+        captionPreview: 'Original caption',
+      });
+    const editCaption = () => {
+      store.nodes = [
+        {
+          id: 'organic-seed-text-draft-1',
+          type: 'string',
+          position: { x: 0, y: 0 },
+          data: { value: 'Edited TikTok caption' },
+        } as StudioNode,
+      ];
+    };
+    const apply = async () => {
+      const { result } = renderApply(tiktokSeed(), 'brand-1');
+      await act(async () => {
+        await result.current.onApplyBack();
+      });
+    };
+    const toastTitles = () => show.mock.calls.map(([toast]) => (toast as { title: string }).title);
+
+    it('reads the row back when the answer carries no caption, and says saved once it is there', async () => {
+      editCaption();
+      applyBody = { updated_at: '2026-09-22T00:01:00Z' };
+      intentBody = { caption: { present: true, length: 21, preview: 'Edited TikTok caption' } };
+      await apply();
+
+      expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+        '/api/organic/calendar/drafts/server-draft-1/publish-intent',
+      );
+      expect(toastTitles()).toEqual(['Caption saved to Planner']);
+      expect(push).toHaveBeenCalled();
+    });
+
+    it('reports a failure, not "saved", when the read-back finds no caption', async () => {
+      editCaption();
+      applyBody = { updated_at: '2026-09-22T00:01:00Z' };
+      intentBody = { caption: { present: false, length: 0, preview: null } };
+      await apply();
+
+      expect(toastTitles()).toEqual(['Apply failed']);
+      expect(show.mock.calls[0]?.[0]).toMatchObject({
+        description:
+          'The caption did not reach the planner draft. Save again, or open the draft in the planner to check it.',
+        variant: 'error',
+      });
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it('reports a failure when the route wrote a different draft', async () => {
+      editCaption();
+      applyBody = {
+        id: 'some-other-draft',
+        updated_at: '2026-09-22T00:01:00Z',
+        content_json: { copy: { caption: 'Edited TikTok caption' } },
+      };
+      await apply();
+
+      expect(toastTitles()).toEqual(['Apply failed']);
+      expect(push).not.toHaveBeenCalled();
+    });
   });
 
   it('requires a real pick for a multi-output LinkedIn draft', () => {
