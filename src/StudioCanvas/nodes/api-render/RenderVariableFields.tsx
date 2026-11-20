@@ -255,8 +255,7 @@ function MediaVariableField({
       ) : null}
       {wired && picked.length > 0 ? (
         <FieldDescription>
-          {' '}
-          {translateUi('connected_the_wired_media_is_used_i_53be6835')}{' '}
+          {translateUi('connected_the_wired_media_is_used_i_53be6835')}
         </FieldDescription>
       ) : null}
     </>
@@ -284,7 +283,7 @@ function LockedDesignKitField({ variable }: { variable: ApiRenderVariable }) {
         </FieldLabel>
       </FieldContent>
       <Badge variant="muted">
-        <Check aria-hidden /> {translateUi('brand_logo_e458e2b5')}{' '}
+        <Check aria-hidden /> {translateUi('brand_logo_e458e2b5')}
       </Badge>
     </Field>
   );
@@ -428,8 +427,7 @@ function VariableField({
           />
           {connectedKeys?.has(variable.key) ? (
             <FieldDescription>
-              {' '}
-              {translateUi('connected_the_wired_text_is_used_in_a7dad784')}{' '}
+              {translateUi('connected_the_wired_text_is_used_in_a7dad784')}
             </FieldDescription>
           ) : null}
         </>

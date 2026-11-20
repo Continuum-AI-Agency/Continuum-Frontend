@@ -61,8 +61,7 @@ export function ScenePreviewStage({
   if (!formats.length || !outputId) {
     return (
       <p className="p-3 text-xs text-muted-foreground">
-        {' '}
-        {translateUi('this_file_has_no_camera_that_render_57b9ddaa')}{' '}
+        {translateUi('this_file_has_no_camera_that_render_57b9ddaa')}
       </p>
     );
   }
@@ -131,7 +130,7 @@ export function ScenePreviewStage({
           {draft ? problem : null}
           <Button type="button" size="xs" variant="outline" onClick={() => void preview.refetch()}>
             {' '}
-            {translateUi('try_the_draft_again_577cd6f6')}{' '}
+            {translateUi('try_the_draft_again_577cd6f6')}
           </Button>
         </p>
       ) : null}

@@ -573,8 +573,7 @@ export function ReferenceDock({
         <div className="mt-3 flex items-center gap-2">
           <Upload />
           <span className="text-xs text-gray-400">
-            {' '}
-            {translateUi('drag_from_creative_library_to_seed__c8c8632f')}{' '}
+            {translateUi('drag_from_creative_library_to_seed__c8c8632f')}
           </span>
         </div>
       </div>
@@ -736,8 +735,7 @@ function FrameTile({
           />
           {refImage.originalBase64 ? (
             <Pill variant="warning" className="absolute left-1 top-1">
-              {' '}
-              {translateUi('edited_1fb9f409')}{' '}
+              {translateUi('edited_1fb9f409')}
             </Pill>
           ) : null}
           <div className="absolute right-1 top-1 flex items-center gap-1">
@@ -758,7 +756,7 @@ function FrameTile({
               onClick={onClear}
             >
               {' '}
-              {translateUi('clear_83b12c22')}{' '}
+              {translateUi('clear_83b12c22')}
             </Button>
           </div>
         </div>

@@ -250,7 +250,6 @@ export function SceneRenderPanel({
       {job ? (
         <section aria-label={translateUi('this_render_26c02a7e')} className="flex flex-col gap-1">
           <h3 className="m-0 text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-            {' '}
             {translateUi('this_render_26c02a7e')}{' '}
           </h3>
           <ul className="m-0 list-none p-0">
@@ -265,7 +264,6 @@ export function SceneRenderPanel({
       ) : null}
       <section aria-label={translateUi('renders_5d75bf75')} className="flex flex-col gap-1">
         <h3 className="m-0 text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-          {' '}
           {translateUi('renders_5d75bf75')}{' '}
         </h3>
         <SceneRenderHistory

@@ -74,8 +74,7 @@ function TakePreview({ take, brandId }: { take: EditorTake; brandId: string }) {
   if (!url) {
     return (
       <div className="flex aspect-video items-center justify-center bg-muted text-xs text-muted-foreground">
-        {' '}
-        {translateUi('preview_loading_13bd19bd')}{' '}
+        {translateUi('preview_loading_13bd19bd')}
       </div>
     );
   }
@@ -131,7 +130,7 @@ export function VideoStudioWorkspace({
     return (
       <div className="flex h-[var(--app-content-h)] items-center justify-center text-xs text-muted-foreground">
         <Loader2 className="mr-2 size-4 animate-spin" />{' '}
-        {translateUi('opening_the_editor_cc472a43')}{' '}
+        {translateUi('opening_the_editor_cc472a43')}
       </div>
     );
   }
@@ -385,8 +384,7 @@ function ProductionStages({
             </div>
             {takes.length === 0 ? (
               <div className="rounded-lg border border-dashed p-8 text-center text-xs text-muted-foreground">
-                {' '}
-                {translateUi('no_candidates_yet_c78e71b2')}{' '}
+                {translateUi('no_candidates_yet_c78e71b2')}
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -418,7 +416,7 @@ function ProductionStages({
                           }
                           disabled={Boolean(busy)}
                         >
-                          <Check /> {translateUi('choose_keeper_c1c59aea')}{' '}
+                          <Check /> {translateUi('choose_keeper_c1c59aea')}
                         </Button>
                       ) : null}
                     </div>
@@ -438,14 +436,13 @@ function ProductionStages({
         <div>
           <h1 className="text-sm font-semibold tracking-tight">{project.title}</h1>
           <p className="text-xs text-muted-foreground">
-            {' '}
             {translateUi('human_directed_production_revision_654d5f40')} {project.revision}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline">{project.production.workflowStage.replaceAll('_', ' ')}</Badge>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={onOpenEdit}>
-            <Scissors className="size-3.5" /> {translateUi('edit_464c4ffd')}{' '}
+            <Scissors className="size-3.5" /> {translateUi('edit_464c4ffd')}
           </Button>
           <Button
             size="sm"
@@ -454,7 +451,7 @@ function ProductionStages({
             aria-expanded={agentOpen}
             aria-controls="video-editor-agent"
           >
-            <Sparkles className="size-3.5" /> {translateUi('agent_11b39c93')}{' '}
+            <Sparkles className="size-3.5" /> {translateUi('agent_11b39c93')}
           </Button>
           <Link
             href={origin === 'library' ? '/library' : '/ai-studio'}
@@ -525,7 +522,7 @@ function ProductionStages({
                     }
                   >
                     {' '}
-                    {translateUi('save_script_c656be3f')}{' '}
+                    {translateUi('save_script_c656be3f')}
                   </Button>
                 </div>
               </div>
@@ -534,8 +531,7 @@ function ProductionStages({
                   <div>
                     <h2 className="font-medium">{translateUi('style_contract_a6dc8d4f')}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {' '}
-                      {translateUi('lock_the_lens_light_palette_texture_c4582c5f')}{' '}
+                      {translateUi('lock_the_lens_light_palette_texture_c4582c5f')}
                     </p>
                   </div>
                   <Badge>{style?.status ?? translateUi('not_extracted_d701490b')}</Badge>
@@ -548,8 +544,7 @@ function ProductionStages({
                   ))}
                   {pinnedPool.length === 0 ? (
                     <span className="text-xs text-muted-foreground">
-                      {' '}
-                      {translateUi('connect_pinned_library_images_to_th_d90aca1b')}{' '}
+                      {translateUi('connect_pinned_library_images_to_th_d90aca1b')}
                     </span>
                   ) : null}
                 </div>
@@ -611,7 +606,7 @@ function ProductionStages({
                     }
                   >
                     {' '}
-                    {translateUi('pin_connected_references_fb8e0f5a')}{' '}
+                    {translateUi('pin_connected_references_fb8e0f5a')}
                   </Button>
                   <Button
                     disabled={
@@ -626,7 +621,7 @@ function ProductionStages({
                     ) : (
                       <Sparkles />
                     )}{' '}
-                    {translateUi('extract_style_d4ba66a2')}{' '}
+                    {translateUi('extract_style_d4ba66a2')}
                   </Button>
                 </div>
               </div>
@@ -652,18 +647,18 @@ function ProductionStages({
                           }
                         >
                           {' '}
-                          {translateUi('save_edits_54dfca80')}{' '}
+                          {translateUi('save_edits_54dfca80')}
                         </Button>
                         <Button
                           disabled={Boolean(busy)}
                           onClick={() => void commit({ commandType: 'approve_style_contract' })}
                         >
-                          <Check /> {translateUi('approve_style_ccbace13')}{' '}
+                          <Check /> {translateUi('approve_style_ccbace13')}
                         </Button>
                       </>
                     ) : (
                       <Badge>
-                        <Check /> {translateUi('human_approved_e3bee027')}{' '}
+                        <Check /> {translateUi('human_approved_e3bee027')}
                       </Badge>
                     )}
                   </div>
@@ -678,12 +673,11 @@ function ProductionStages({
                 <div>
                   <h2 className="font-medium">{translateUi('frames_first_e66ff843')}</h2>
                   <p className="text-xs text-muted-foreground">
-                    {' '}
-                    {translateUi('explore_composition_cheaply_then_ch_6927cd89')}{' '}
+                    {translateUi('explore_composition_cheaply_then_ch_6927cd89')}
                   </p>
                 </div>
                 <Button variant="outline" onClick={addShot} disabled={Boolean(busy)}>
-                  <ImageIcon /> {translateUi('add_shot_bcfd3d07')}{' '}
+                  <ImageIcon /> {translateUi('add_shot_bcfd3d07')}
                 </Button>
               </div>
               {takeGrid('frame', 'frame')}
@@ -697,8 +691,7 @@ function ProductionStages({
                 <div>
                   <h2 className="font-medium">{translateUi('voiceover_317f3d76')}</h2>
                   <p className="text-xs text-muted-foreground">
-                    {' '}
-                    {translateUi('generate_a_wav_take_from_the_approv_678014fb')}{' '}
+                    {translateUi('generate_a_wav_take_from_the_approv_678014fb')}
                   </p>
                 </div>
                 <Textarea
@@ -710,15 +703,14 @@ function ProductionStages({
                   disabled={!narrationText.trim() || Boolean(busy)}
                   onClick={() => void generateSound('narration')}
                 >
-                  <Sparkles /> {translateUi('generate_narration_725b3dda')}{' '}
+                  <Sparkles /> {translateUi('generate_narration_725b3dda')}
                 </Button>
               </section>
               <section className="space-y-4 bg-background p-5">
                 <div>
                   <h2 className="font-medium">{translateUi('music_and_beat_grid_3f857b77')}</h2>
                   <p className="text-xs text-muted-foreground">
-                    {' '}
-                    {translateUi('set_musical_direction_then_correct__129c3a92')}{' '}
+                    {translateUi('set_musical_direction_then_correct__129c3a92')}
                   </p>
                 </div>
                 <Textarea
@@ -751,7 +743,7 @@ function ProductionStages({
                     disabled={!musicPrompt.trim() || Boolean(busy)}
                     onClick={() => void generateSound('music')}
                   >
-                    <Sparkles /> {translateUi('generate_music_bb3d6254')}{' '}
+                    <Sparkles /> {translateUi('generate_music_bb3d6254')}
                   </Button>
                   <Button
                     variant="outline"
@@ -783,7 +775,7 @@ function ProductionStages({
                       );
                     }}
                   >
-                    <Waves /> {translateUi('beat_sync_e3d70f0e')}{' '}
+                    <Waves /> {translateUi('beat_sync_e3d70f0e')}
                   </Button>
                 </div>
                 <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
@@ -795,7 +787,7 @@ function ProductionStages({
                     }
                   >
                     {' '}
-                    {translateUi('save_sound_plan_9fee8797')}{' '}
+                    {translateUi('save_sound_plan_9fee8797')}
                   </Button>
                   <Button
                     disabled={Boolean(busy)}
@@ -806,7 +798,7 @@ function ProductionStages({
                       })
                     }
                   >
-                    <Check /> {translateUi('approve_sound_e42eaec1')}{' '}
+                    <Check /> {translateUi('approve_sound_e42eaec1')}
                   </Button>
                 </div>
               </section>

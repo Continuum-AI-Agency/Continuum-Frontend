@@ -265,8 +265,7 @@ function ApprovalCard({
           <div className="h-24 animate-pulse bg-muted" />
         ) : (
           <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
-            {' '}
-            {translateUi('no_preview_4b8bacd8')}{' '}
+            {translateUi('no_preview_4b8bacd8')}
           </div>
         )}
       </div>
@@ -320,7 +319,7 @@ function ApprovalCard({
               ) : (
                 <CheckCircle2 className="mr-1 h-3 w-3" />
               )}{' '}
-              {translateUi('approve_and_publish_paused_ad6bf111')}{' '}
+              {translateUi('approve_and_publish_paused_ad6bf111')}
             </Button>
             <Button
               size="sm"
@@ -328,7 +327,7 @@ function ApprovalCard({
               disabled={busy}
               onClick={() => onDecide(approval.id, 'reject')}
             >
-              <XCircle className="mr-1 h-3 w-3" /> {translateUi('reject_ab604a36')}{' '}
+              <XCircle className="mr-1 h-3 w-3" /> {translateUi('reject_ab604a36')}
             </Button>
           </div>
         ) : null}
@@ -408,7 +407,7 @@ function ApprovalPackage({
               disabled={busyId !== null}
               onClick={() => onDecideAll(packageId, pendingIds, 'reject')}
             >
-              <XCircle className="mr-1 h-3 w-3" /> {translateUi('reject_all_adba2523')}{' '}
+              <XCircle className="mr-1 h-3 w-3" /> {translateUi('reject_all_adba2523')}
             </Button>
           </span>
         ) : null}
@@ -565,13 +564,11 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
           />
           <ShieldCheck className="h-4 w-4 shrink-0 text-warning" aria-hidden />
           <span className="font-medium text-sm">
-            {' '}
             {translateUi('pending_approvals_0405f4b6')}
             {waiting > 0 ? ` (${waiting})` : ''}
           </span>
           <span className="truncate text-xs text-muted-foreground">
-            {' '}
-            {translateUi('rendered_creatives_waiting_for_a_pe_cf22b62e')}{' '}
+            {translateUi('rendered_creatives_waiting_for_a_pe_cf22b62e')}
           </span>
         </CollapsibleTrigger>
       </h2>

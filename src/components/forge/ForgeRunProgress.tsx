@@ -146,7 +146,7 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground">
             {run.findings.length} {translateUi('thing_5de94d69')}
-            {run.findings.length === 1 ? '' : 's'} {translateUi('setup_couldn_t_do_a9f106fe')}{' '}
+            {run.findings.length === 1 ? '' : 's'} {translateUi('setup_couldn_t_do_a9f106fe')}
           </summary>
           <ul className="mt-2 flex flex-col gap-1">
             {run.findings.map((finding) => (

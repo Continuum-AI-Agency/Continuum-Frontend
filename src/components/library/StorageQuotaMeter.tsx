@@ -38,7 +38,7 @@ export function StorageQuotaMeterView({
     <div data-testid="storage-quota-meter" className="space-y-1.5">
       <p className="text-xs text-muted-foreground">
         {formatGb(heldBytes, locale)} {translateUi('of_28391d3b')}{' '}
-        {formatGb(quota.capacityBytes, locale)} {translateUi('used_f8391613')}{' '}
+        {formatGb(quota.capacityBytes, locale)} {translateUi('used_f8391613')}
       </p>
       <Progress
         value={percent}
@@ -65,7 +65,7 @@ export function StorageQuotaMeterView({
             className="font-medium underline underline-offset-2"
           >
             {' '}
-            {translateUi('upgrade_storage_7def8745')}{' '}
+            {translateUi('upgrade_storage_7def8745')}
           </Link>
         </p>
       )}

@@ -2287,8 +2287,7 @@ export function TemplateLayerEditor({
   if (!effectiveVersionId)
     return (
       <p className="text-xs text-muted-foreground">
-        {' '}
-        {translateUi('import_and_parse_the_source_to_edit_14d0109c')}{' '}
+        {translateUi('import_and_parse_the_source_to_edit_14d0109c')}
       </p>
     );
   return (
@@ -2311,12 +2310,12 @@ export function TemplateLayerEditor({
             ) : null}
             {lineage?.role === 'golden' ? (
               <Pill variant="warning">
-                <Lock className="size-3" aria-hidden /> {translateUi('golden_source_db333f6d')}{' '}
+                <Lock className="size-3" aria-hidden /> {translateUi('golden_source_db333f6d')}
               </Pill>
             ) : null}
             {onVariant ? (
               <Pill variant="violet">
-                <GitFork className="size-3" aria-hidden /> {translateUi('variant_3f19fe84')}{' '}
+                <GitFork className="size-3" aria-hidden /> {translateUi('variant_3f19fe84')}
               </Pill>
             ) : null}
             {onVariant && lineage?.parent ? (
@@ -2380,7 +2379,7 @@ export function TemplateLayerEditor({
             authoringDraft.error ? (
               <Button size="xs" variant="outline" onClick={() => void authoringDraft.retry()}>
                 {' '}
-                {translateUi('retry_draft_save_ed1f81a2')}{' '}
+                {translateUi('retry_draft_save_ed1f81a2')}
               </Button>
             ) : null}
             <Button
@@ -2390,7 +2389,7 @@ export function TemplateLayerEditor({
               onClick={() => setAgentOpen((open) => !open)}
               data-testid="forge-agent-toggle"
             >
-              <Sparkles data-icon="inline-start" aria-hidden /> {translateUi('agent_11b39c93')}{' '}
+              <Sparkles data-icon="inline-start" aria-hidden /> {translateUi('agent_11b39c93')}
             </Button>
             <Button
               size="icon-sm"
@@ -2430,8 +2429,7 @@ export function TemplateLayerEditor({
               {translateUi('private_composition_workspace_attac_00590fcb')}
             </p>
             <p className="mt-1 text-muted-foreground">
-              {' '}
-              {translateUi('editing_this_composition_privately__0bade28b')}{' '}
+              {translateUi('editing_this_composition_privately__0bade28b')}
             </p>
           </div>
         ) : hyperframesRevisionId ? (
@@ -2440,22 +2438,18 @@ export function TemplateLayerEditor({
             data-testid="hyperframes-seed-handoff"
           >
             <p className="font-medium text-foreground">
-              {' '}
-              {translateUi('hyperframes_composition_ready_for_t_68a15072')}{' '}
+              {translateUi('hyperframes_composition_ready_for_t_68a15072')}
             </p>
             <p className="mt-1 text-muted-foreground">
-              {' '}
-              {translateUi('forge_will_privately_stage_and_veri_d6f6bb01')}{' '}
+              {translateUi('forge_will_privately_stage_and_veri_d6f6bb01')}
             </p>
             {hasUnreconciledLocalCommands ? (
               <p className="mt-2 text-amber-700 dark:text-amber-300">
-                {' '}
-                {translateUi('resolve_the_saved_local_recovery_co_b6c9e7cd')}{' '}
+                {translateUi('resolve_the_saved_local_recovery_co_b6c9e7cd')}
               </p>
             ) : authoringDraft.persistedDraft?.commands.length ? (
               <p className="mt-2 text-amber-700 dark:text-amber-300">
-                {' '}
-                {translateUi('save_or_reset_the_existing_private__2de505f9')}{' '}
+                {translateUi('save_or_reset_the_existing_private__2de505f9')}
               </p>
             ) : null}
             {seedImportError ? (
@@ -2472,7 +2466,7 @@ export function TemplateLayerEditor({
               {seedImporting ? (
                 <>
                   <Loader2 className="animate-spin" aria-hidden />{' '}
-                  {translateUi('preparing_private_workspace_fced2b6e')}{' '}
+                  {translateUi('preparing_private_workspace_fced2b6e')}
                 </>
               ) : canBootstrapEmptyDraft ? (
                 translateUi('create_private_draft_and_import_776ff462')
@@ -2498,8 +2492,7 @@ export function TemplateLayerEditor({
             </p>
             <details className="mt-2">
               <summary className="cursor-pointer text-muted-foreground">
-                {' '}
-                {translateUi('review_changes_in_both_copies_4a69daaa')}{' '}
+                {translateUi('review_changes_in_both_copies_4a69daaa')}
               </summary>
               <div className="mt-2 overflow-x-auto rounded-md border border-border">
                 <table className="w-full text-left text-xs">
@@ -2509,11 +2502,9 @@ export function TemplateLayerEditor({
                         {translateUi('layer_or_setting_dab41ad6')}
                       </th>
                       <th className="px-2 py-1.5 font-medium">
-                        {' '}
                         {translateUi('this_copy_rev_5a2beca3')} {authoringDraft.revision}
                       </th>
                       <th className="px-2 py-1.5 font-medium">
-                        {' '}
                         {translateUi('saved_copy_rev_ff4be5c5')}{' '}
                         {authoringDraft.serverDraft.revision}
                       </th>
@@ -2530,8 +2521,7 @@ export function TemplateLayerEditor({
                     {!draftDifferences.length ? (
                       <tr>
                         <td colSpan={3} className="px-2 py-2 text-muted-foreground">
-                          {' '}
-                          {translateUi('both_copies_contain_the_same_change_e71e52da')}{' '}
+                          {translateUi('both_copies_contain_the_same_change_e71e52da')}
                         </td>
                       </tr>
                     ) : null}
@@ -2546,7 +2536,7 @@ export function TemplateLayerEditor({
               onClick={() => void authoringDraft.adoptServerDraft()}
             >
               {' '}
-              {translateUi('use_server_draft_keep_local_recover_4e8f4ca2')}{' '}
+              {translateUi('use_server_draft_keep_local_recover_4e8f4ca2')}
             </Button>
           </div>
         ) : null}
@@ -2554,7 +2544,6 @@ export function TemplateLayerEditor({
           <div className="border-b border-border px-3 py-2 text-xs">
             <details>
               <summary className="cursor-pointer text-muted-foreground">
-                {' '}
                 {translateUi('browse_saved_recovery_copies_b05927ef')}
                 {authoringDraft.recoveries.length})
               </summary>
@@ -2626,8 +2615,7 @@ export function TemplateLayerEditor({
                             ).length ? (
                               <tr>
                                 <td colSpan={3} className="px-2 py-2 text-muted-foreground">
-                                  {' '}
-                                  {translateUi('no_changes_in_this_copy_9067af51')}{' '}
+                                  {translateUi('no_changes_in_this_copy_9067af51')}
                                 </td>
                               </tr>
                             ) : null}
@@ -2686,7 +2674,7 @@ export function TemplateLayerEditor({
             className="border-b border-border px-3 py-2 text-xs text-muted-foreground"
           >
             {' '}
-            {translateUi('the_source_version_changed_while_th_a1457228')}{' '}
+            {translateUi('the_source_version_changed_while_th_a1457228')}
           </p>
         ) : null}
 
@@ -2842,7 +2830,6 @@ export function TemplateLayerEditor({
                   <>
                     <Collapsible open={creationToolsOpen} onOpenChange={setCreationToolsOpen}>
                       <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium hover:bg-accent">
-                        {' '}
                         {translateUi('create_and_artboard_tools_d9260521')}{' '}
                         <ChevronDown
                           className={`size-3 transition-transform ${creationToolsOpen ? 'rotate-180' : ''}`}
@@ -2851,8 +2838,7 @@ export function TemplateLayerEditor({
                       </CollapsibleTrigger>
                       <CollapsibleContent className="flex flex-col gap-2 border-t border-border p-2">
                         <p className="text-2xs font-medium text-muted-foreground">
-                          {' '}
-                          {translateUi('draft_artboards_d7bd29e5')}{' '}
+                          {translateUi('draft_artboards_d7bd29e5')}
                         </p>
                         <Input
                           aria-label={translateUi('new_artboard_name_aa570c51')}
@@ -2872,7 +2858,7 @@ export function TemplateLayerEditor({
                             }
                             onClick={createArtboard}
                           >
-                            <Plus aria-hidden /> {translateUi('add_artboard_291b8762')}{' '}
+                            <Plus aria-hidden /> {translateUi('add_artboard_291b8762')}
                           </Button>
                           <Button
                             size="xs"
@@ -2888,12 +2874,11 @@ export function TemplateLayerEditor({
                             }
                             onClick={duplicateArtboard}
                           >
-                            <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}{' '}
+                            <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}
                           </Button>
                         </div>
                         <p className="text-2xs font-medium text-muted-foreground">
-                          {' '}
-                          {translateUi('composition_size_06cff32e')}{' '}
+                          {translateUi('composition_size_06cff32e')}
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                           <Input
@@ -2948,7 +2933,7 @@ export function TemplateLayerEditor({
                             onClick={resizeArtboard}
                           >
                             {' '}
-                            {translateUi('apply_composition_size_1a235cde')}{' '}
+                            {translateUi('apply_composition_size_1a235cde')}
                           </Button>
                         ) : (
                           <p className="text-2xs text-muted-foreground">
@@ -2972,7 +2957,7 @@ export function TemplateLayerEditor({
                             onClick={() => createShape('rectangle')}
                           >
                             {' '}
-                            {translateUi('rectangle_03069962')}{' '}
+                            {translateUi('rectangle_03069962')}
                           </Button>
                           <Button
                             size="xs"
@@ -2985,7 +2970,7 @@ export function TemplateLayerEditor({
                             onClick={() => createShape('ellipse')}
                           >
                             {' '}
-                            {translateUi('ellipse_cb1ee8cb')}{' '}
+                            {translateUi('ellipse_cb1ee8cb')}
                           </Button>
                         </div>
                         {selectedAuthoringComposition?.shapeCreationReason ? (
@@ -3007,7 +2992,7 @@ export function TemplateLayerEditor({
                           }
                           onClick={openArtworkCreation}
                         >
-                          <Plus aria-hidden /> {translateUi('choose_from_library_626d06a7')}{' '}
+                          <Plus aria-hidden /> {translateUi('choose_from_library_626d06a7')}
                         </Button>
                         <p className="text-2xs font-medium text-muted-foreground">
                           {translateUi('add_text_1b4d1003')}
@@ -3062,7 +3047,7 @@ export function TemplateLayerEditor({
                                 onClick={() => setFontRetry((attempt) => attempt + 1)}
                               >
                                 {' '}
-                                {translateUi('retry_942087cc')}{' '}
+                                {translateUi('retry_942087cc')}
                               </button>
                             </>
                           ) : null}
@@ -3083,7 +3068,7 @@ export function TemplateLayerEditor({
                           }
                           onClick={createText}
                         >
-                          <Plus aria-hidden /> {translateUi('add_text_layer_20d15151')}{' '}
+                          <Plus aria-hidden /> {translateUi('add_text_layer_20d15151')}
                         </Button>
                         {selectedAuthoringComposition?.creationReason ? (
                           <p className="text-2xs text-muted-foreground">
@@ -3131,7 +3116,7 @@ export function TemplateLayerEditor({
                         onClick={ungroupSelected}
                       >
                         {' '}
-                        {translateUi('ungroup_b57ef478')}{' '}
+                        {translateUi('ungroup_b57ef478')}
                       </Button>
                     ) : null}
                     <Button
@@ -3142,7 +3127,7 @@ export function TemplateLayerEditor({
                       title={selectedNode.duplicateReason ?? undefined}
                       onClick={duplicateSelected}
                     >
-                      <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}{' '}
+                      <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}
                     </Button>
                     <Button
                       size="xs"
@@ -3152,7 +3137,7 @@ export function TemplateLayerEditor({
                       title={selectedNode.deleteReason ?? undefined}
                       onClick={deleteSelected}
                     >
-                      <Trash2 aria-hidden /> {translateUi('delete_e2d0a549')}{' '}
+                      <Trash2 aria-hidden /> {translateUi('delete_e2d0a549')}
                     </Button>
                   </div>
                 ) : null}
@@ -3173,7 +3158,7 @@ export function TemplateLayerEditor({
                       disabled={busy || staleSource || !groupSelectionReady}
                       onClick={createGroup}
                     >
-                      <Layers aria-hidden /> {translateUi('group_34ca0e76')}{' '}
+                      <Layers aria-hidden /> {translateUi('group_34ca0e76')}
                     </Button>
                   </div>
                 ) : null}
@@ -3228,7 +3213,7 @@ export function TemplateLayerEditor({
                     {inventoryError?.message}
                     <Button size="xs" variant="outline" onClick={() => void inventoryRefetch()}>
                       {' '}
-                      {translateUi('retry_942087cc')}{' '}
+                      {translateUi('retry_942087cc')}
                     </Button>
                   </div>
                 ) : (
@@ -3291,8 +3276,7 @@ export function TemplateLayerEditor({
                         <li>{translateUi('ctrl_cmd_z_undoes_ctrl_cmd_shift_z__89067f60')}</li>
                       </ul>
                       <p className="mt-3 text-xs text-muted-foreground">
-                        {' '}
-                        {translateUi('edits_save_privately_publishing_req_535ba746')}{' '}
+                        {translateUi('edits_save_privately_publishing_req_535ba746')}
                       </p>
                     </PopoverContent>
                   </Popover>
@@ -3485,8 +3469,7 @@ export function TemplateLayerEditor({
                 </ResizablePanel>
               </ResizablePanelGroup>
               <p id="template-preview-help" className="sr-only">
-                {' '}
-                {translateUi('click_a_layer_for_controls_drag_to__e74a760b')}{' '}
+                {translateUi('click_a_layer_for_controls_drag_to__e74a760b')}
               </p>
               {sceneIsError || compositionError || shownScene?.warnings.length ? (
                 <div className="max-h-24 overflow-y-auto border-t border-border px-3 py-2">
@@ -3508,7 +3491,7 @@ export function TemplateLayerEditor({
                         }
                       >
                         {' '}
-                        {translateUi('retry_preview_ceba3527')}{' '}
+                        {translateUi('retry_preview_ceba3527')}
                       </Button>
                     </div>
                   ) : null}
@@ -3540,7 +3523,6 @@ export function TemplateLayerEditor({
                   className="mb-3 border-b border-border pb-3"
                 >
                   <CollapsibleTrigger className="group flex w-full items-center justify-between text-xs font-medium text-foreground">
-                    {' '}
                     {translateUi('repair_and_checks_5f30e53e')}{' '}
                     <ChevronDown
                       className={`size-3 transition-transform ${preparationDetailsOpen ? 'rotate-180' : ''}`}
@@ -3968,8 +3950,7 @@ export function TemplateLayerEditor({
                   ) : null}
                   {!selectedNode.capabilities.transform && !selectedNode.capabilities.font ? (
                     <p className="text-xs text-muted-foreground">
-                      {' '}
-                      {translateUi('controls_become_available_after_the_2efe2651')}{' '}
+                      {translateUi('controls_become_available_after_the_2efe2651')}
                     </p>
                   ) : null}
                 </div>
@@ -3990,8 +3971,7 @@ export function TemplateLayerEditor({
               )}
               {fonts.isError ? (
                 <p role="alert" className="mt-3 text-xs text-destructive">
-                  {' '}
-                  {translateUi('available_font_faces_could_not_be_l_afa93115')}{' '}
+                  {translateUi('available_font_faces_could_not_be_l_afa93115')}
                 </p>
               ) : null}
               {templateKey ? (
@@ -4007,7 +3987,6 @@ export function TemplateLayerEditor({
                 className="mt-5 border-t border-border pt-3"
               >
                 <CollapsibleTrigger className="group flex w-full items-center justify-between text-xs font-medium text-foreground">
-                  {' '}
                   {translateUi('fields_each_render_row_asks_for_fa55a962')}{' '}
                   <ChevronDown
                     className="size-3 transition-transform group-data-[panel-open]:rotate-180"
@@ -4018,8 +3997,7 @@ export function TemplateLayerEditor({
                   {fields.isPending ? <Skeleton className="h-16 w-full" /> : null}
                   {fields.isError ? (
                     <p role="alert" className="text-xs text-destructive">
-                      {' '}
-                      {translateUi('template_fields_could_not_be_loaded_07238082')}{' '}
+                      {translateUi('template_fields_could_not_be_loaded_07238082')}
                     </p>
                   ) : null}
                   {fields.data?.variables.map((field) => (
@@ -4106,13 +4084,12 @@ export function TemplateLayerEditor({
               </div>
               {preparationSummary.action === 'fonts' && onOpenFontRepair ? (
                 <Button size="xs" variant="outline" onClick={onOpenFontRepair}>
-                  {' '}
-                  {translateUi('resolve_fonts_1272847e')}{' '}
+                  {translateUi('resolve_fonts_1272847e')}
                 </Button>
               ) : preparationSummary.action === 'save' && authoringDraft.status === 'error' ? (
                 <Button size="xs" variant="outline" onClick={() => void authoringDraft.retry()}>
                   {' '}
-                  {translateUi('retry_draft_save_ed1f81a2')}{' '}
+                  {translateUi('retry_draft_save_ed1f81a2')}
                 </Button>
               ) : preparationSummary.action === 'checks' ? (
                 <Button size="xs" variant="outline" onClick={showRepair}>
@@ -4169,7 +4146,7 @@ export function TemplateLayerEditor({
                 onClick={() => void save('this_variant')}
               >
                 {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}{' '}
-                {translateUi('review_and_publish_revision_05597d26')}{' '}
+                {translateUi('review_and_publish_revision_05597d26')}
               </Button>
             ) : null}
             <Button
@@ -4211,13 +4188,12 @@ export function TemplateLayerEditor({
                 }}
               >
                 {' '}
-                {translateUi('open_variant_a9b56930')}{' '}
+                {translateUi('open_variant_a9b56930')}
               </Button>
             </div>
           ) : null}
           <Collapsible open={variantsOpen} onOpenChange={setVariantsOpen}>
             <CollapsibleTrigger className="group flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground">
-              {' '}
               {translateUi('variants_of_this_template_6103d548')}{' '}
               <ChevronDown
                 className="size-3 transition-transform group-data-[panel-open]:rotate-180"

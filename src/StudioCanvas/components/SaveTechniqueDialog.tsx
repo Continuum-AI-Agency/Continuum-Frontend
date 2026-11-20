@@ -223,15 +223,13 @@ export function SaveTechniqueDialog({
         <DialogHeader>
           <DialogTitle>{translateUi('save_selection_as_technique_c3849b70')}</DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('save_the_selected_nodes_as_a_reusab_6983a665')}{' '}
+            {translateUi('save_the_selected_nodes_as_a_reusab_6983a665')}
           </DialogDescription>
         </DialogHeader>
 
         {!hasNodes ? (
           <p className="py-4 text-sm text-muted-foreground">
-            {' '}
-            {translateUi('select_the_nodes_you_want_to_reuse__7a07833a')}{' '}
+            {translateUi('select_the_nodes_you_want_to_reuse__7a07833a')}
           </p>
         ) : (
           <div className="flex flex-col gap-3">
@@ -287,14 +285,12 @@ export function SaveTechniqueDialog({
               </p>
               {inference.truncated && (
                 <p className="mt-1 text-amber-600 dark:text-amber-500">
-                  {' '}
-                  {translateUi('more_than_12_ports_on_one_side_the__eb9baba8')}{' '}
+                  {translateUi('more_than_12_ports_on_one_side_the__eb9baba8')}
                 </p>
               )}
             </div>
 
             <p className="text-xs text-muted-foreground">
-              {' '}
               {translateUi('saving_096b7362')} {nodes.length} {translateUi('node_545ea538')}
               {nodes.length === 1 ? '' : 's'} {translateUi('and_6201111b')} {selectedEdges.length}{' '}
               {translateUi('connection_b38d9d16')}
@@ -304,8 +300,7 @@ export function SaveTechniqueDialog({
             {error && <p className="text-sm text-destructive">{error}</p>}
             {!brandProfileId && (
               <p className="text-xs text-muted-foreground">
-                {' '}
-                {translateUi('select_a_brand_before_saving_a_tech_f3fa31ad')}{' '}
+                {translateUi('select_a_brand_before_saving_a_tech_f3fa31ad')}
               </p>
             )}
           </div>

@@ -148,8 +148,7 @@ export function PresentationAgentPanel({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        {' '}
-        {translateUi('describe_the_audience_narrative_and_199a1b79')}{' '}
+        {translateUi('describe_the_audience_narrative_and_199a1b79')}
       </p>
       {document.layouts?.length ? (
         <details>
@@ -157,8 +156,7 @@ export function PresentationAgentPanel({
             {translateUi('allowed_layouts_7dc7428d')}
           </summary>
           <p className="mt-2 text-xs text-muted-foreground">
-            {' '}
-            {translateUi('choose_the_layouts_agents_can_use_s_545e505c')}{' '}
+            {translateUi('choose_the_layouts_agents_can_use_s_545e505c')}
           </p>
           <div className="mt-3 flex max-h-48 flex-col gap-2 overflow-y-auto">
             {document.layouts.map((layout) => (
@@ -224,7 +222,7 @@ export function PresentationAgentPanel({
           {dirty ? (
             <Button type="button" variant="outline" onClick={() => void save()}>
               {' '}
-              {translateUi('save_before_drafting_d95f48cd')}{' '}
+              {translateUi('save_before_drafting_d95f48cd')}
             </Button>
           ) : null}
           <Button type="submit" disabled={busy || dirty}>
@@ -241,8 +239,7 @@ export function PresentationAgentPanel({
         >
           {stale ? (
             <p role="status" className="text-xs text-muted-foreground">
-              {' '}
-              {translateUi('these_proposals_refer_to_an_earlier_40232641')}{' '}
+              {translateUi('these_proposals_refer_to_an_earlier_40232641')}
             </p>
           ) : null}
           {proposalSet.proposals.map((proposal) => (
@@ -265,7 +262,7 @@ export function PresentationAgentPanel({
                   {proposal.summary}
                 </span>
                 <span className="text-xs font-normal">
-                  {proposal.commands.length} {translateUi('proposed_edits_229089d6')}{' '}
+                  {proposal.commands.length} {translateUi('proposed_edits_229089d6')}
                 </span>
               </span>
             </Button>
@@ -294,8 +291,7 @@ export function PresentationAgentPanel({
             />
           ) : (
             <p role="status" className="text-xs text-muted-foreground">
-              {' '}
-              {translateUi('rendering_proposed_changes_d3443839')}{' '}
+              {translateUi('rendering_proposed_changes_d3443839')}
             </p>
           )}
           <Button
@@ -324,7 +320,7 @@ export function PresentationAgentPanel({
             }}
           >
             {' '}
-            {translateUi('apply_to_this_deck_d04c3a5e')}{' '}
+            {translateUi('apply_to_this_deck_d04c3a5e')}
           </Button>
         </section>
       ) : null}
@@ -363,19 +359,18 @@ export function PresentationAgentPanel({
             disabled={busy || dirty || Boolean(selected && stale)}
           >
             {' '}
-            {translateUi('save_independent_variant_e2e2ddfd')}{' '}
+            {translateUi('save_independent_variant_e2e2ddfd')}
           </Button>
         </FieldGroup>
       </form>
       {saved ? (
         <p role="status" className="text-sm">
-          {' '}
           {translateUi('saved_97d79450')}
           {saved.name}”.{' '}
           {onOpenVariant ? (
             <Button size="sm" variant="link" onClick={() => onOpenVariant(saved.assetId)}>
               {' '}
-              {translateUi('open_variant_a9b56930')}{' '}
+              {translateUi('open_variant_a9b56930')}
             </Button>
           ) : null}
         </p>

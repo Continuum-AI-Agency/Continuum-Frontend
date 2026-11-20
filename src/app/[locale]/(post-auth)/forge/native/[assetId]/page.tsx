@@ -39,8 +39,7 @@ export default async function NativeHyperframesEditorPage({
       <Alert>
         <AlertTitle>{translateUi('choose_this_template_s_brand_5b77bb65')}</AlertTitle>
         <AlertDescription>
-          {' '}
-          {translateUi('switch_to_the_brand_used_by_this_te_55f2a530')}{' '}
+          {translateUi('switch_to_the_brand_used_by_this_te_55f2a530')}
         </AlertDescription>
       </Alert>
     );

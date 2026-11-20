@@ -54,8 +54,7 @@ export function PresentationViewer({
       <DialogContent className="inset-0 flex h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 flex-col rounded-none p-4 sm:max-w-none sm:p-6">
         <DialogTitle>{translateUi('presentation_preview_4ff250e4')}</DialogTitle>
         <DialogDescription className="sr-only">
-          {' '}
-          {translateUi('use_the_arrow_keys_to_move_between__da9a481b')}{' '}
+          {translateUi('use_the_arrow_keys_to_move_between__da9a481b')}
         </DialogDescription>
         <div className="flex min-h-0 flex-1 items-center justify-center">
           {slide ? (

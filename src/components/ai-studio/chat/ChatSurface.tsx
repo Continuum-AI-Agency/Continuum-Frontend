@@ -702,8 +702,7 @@ function HistoryPanel({
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-gray-400">
-                    {' '}
-                    {translateUi('no_thumb_c61d6540')}{' '}
+                    {translateUi('no_thumb_c61d6540')}
                   </div>
                 )}
                 <span className="absolute left-1 top-1 rounded bg-slate-900/70 px-1 text-2xs uppercase text-gray-200">

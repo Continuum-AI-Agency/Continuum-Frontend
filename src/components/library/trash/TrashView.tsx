@@ -103,10 +103,9 @@ export function TrashView({
     >
       <div className="flex items-center gap-3">
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          <ArrowLeft className="size-3.5" /> {translateUi('back_to_library_008e42d2')}{' '}
+          <ArrowLeft className="size-3.5" /> {translateUi('back_to_library_008e42d2')}
         </Button>
         <p className="text-xs text-muted-foreground">
-          {' '}
           {translateUi('trashRetention', { days: LIBRARY_TRASH_RETENTION_DAYS })}{' '}
         </p>
       </div>
@@ -122,7 +121,7 @@ export function TrashView({
       ) : items.length === 0 ? (
         <div className="flex h-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
           <Trash2 className="size-6 text-muted-foreground/40" />{' '}
-          {translateUi('trash_is_empty_4ff14067')}{' '}
+          {translateUi('trash_is_empty_4ff14067')}
         </div>
       ) : (
         <ul className="flex flex-col divide-y divide-border/60 rounded-lg border border-border/70">
@@ -162,7 +161,7 @@ export function TrashView({
                   ) : (
                     <RotateCcw className="size-3.5" />
                   )}{' '}
-                  {translateUi('restore_a76e13b9')}{' '}
+                  {translateUi('restore_a76e13b9')}
                 </Button>
               </li>
             );

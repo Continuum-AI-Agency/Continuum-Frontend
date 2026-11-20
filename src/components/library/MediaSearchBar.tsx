@@ -396,8 +396,7 @@ export function MediaSearchBar({
       ) : null}
       {strategy === 'lexical' && !searching && (
         <p className="px-1 text-xs leading-tight text-muted-foreground/70">
-          {' '}
-          {translateUi('keyword_results_this_media_hasn_t_b_1fa78c37')}{' '}
+          {translateUi('keyword_results_this_media_hasn_t_b_1fa78c37')}
         </p>
       )}
     </div>

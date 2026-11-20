@@ -56,24 +56,21 @@ export function SetHistoryDialog({
             {translateUi('version_history_bbf37f92')} {set?.name}
           </DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('kept_when_you_stop_editing_for_a_wh_f0d0658c')}{' '}
+            {translateUi('kept_when_you_stop_editing_for_a_wh_f0d0658c')}
           </DialogDescription>
         </DialogHeader>
         {history.isLoading ? (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
-            {translateUi('loading_versions_9780e2c9')}{' '}
+            {translateUi('loading_versions_9780e2c9')}
           </p>
         ) : history.isError ? (
           <p role="alert" className="text-xs text-destructive">
-            {' '}
-            {translateUi('could_not_load_this_set_s_versions__135f6155')}{' '}
+            {translateUi('could_not_load_this_set_s_versions__135f6155')}
           </p>
         ) : items.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            {' '}
-            {translateUi('no_earlier_versions_yet_one_is_kept_2cd2430a')}{' '}
+            {translateUi('no_earlier_versions_yet_one_is_kept_2cd2430a')}
           </p>
         ) : (
           <ul
@@ -94,8 +91,7 @@ export function SetHistoryDialog({
                 </span>
                 {revision.contractHash === contractHash ? null : (
                   <Pill variant="warning" className="shrink-0 text-3xs">
-                    {' '}
-                    {translateUi('older_template_631ab51f')}{' '}
+                    {translateUi('older_template_631ab51f')}
                   </Pill>
                 )}
                 <Button
@@ -115,7 +111,7 @@ export function SetHistoryDialog({
                   {restoring === revision.revision ? (
                     <Loader2 className="animate-spin" data-icon="inline-start" />
                   ) : null}{' '}
-                  {translateUi('restore_as_new_set_63d4d167')}{' '}
+                  {translateUi('restore_as_new_set_63d4d167')}
                 </Button>
               </li>
             ))}

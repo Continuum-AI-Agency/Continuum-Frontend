@@ -64,7 +64,7 @@ export function TypographyPanel({
           </p>
         </div>
         <Button size="sm" onClick={() => inputRef.current?.click()}>
-          <Upload className="size-4" /> {translateUi('add_fonts_420422d6')}{' '}
+          <Upload className="size-4" /> {translateUi('add_fonts_420422d6')}
         </Button>
         <input
           ref={inputRef}
@@ -88,7 +88,7 @@ export function TypographyPanel({
 
       {fonts === null ? (
         <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> {translateUi('loading_fonts_59a92bbd')}{' '}
+          <Loader2 className="size-4 animate-spin" /> {translateUi('loading_fonts_59a92bbd')}
         </div>
       ) : fonts.length === 0 && neededBy.size === 0 ? (
         <div className="rounded-lg border border-dashed border-border/60 p-8 text-center">
@@ -97,8 +97,7 @@ export function TypographyPanel({
             {translateUi('no_fonts_in_the_engine_82813310')}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {' '}
-            {translateUi('add_the_faces_your_templates_use_th_ecf5e7f3')}{' '}
+            {translateUi('add_the_faces_your_templates_use_th_ecf5e7f3')}
           </p>
         </div>
       ) : (
@@ -143,7 +142,6 @@ export function TypographyPanel({
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate text-sm font-medium">{family}</span>
                   <span className="text-xs text-muted-foreground">
-                    {' '}
                     {translateUi('fontNeededByTemplates', { count: assetIds.length })}
                   </span>
                 </div>

@@ -149,8 +149,7 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
         <DialogHeader>
           <DialogTitle className="text-sm">{translateUi('status_labels_6d7434bf')}</DialogTitle>
           <DialogDescription className="text-xs">
-            {' '}
-            {translateUi('how_each_review_state_reads_for_thi_aec84b9e')}{' '}
+            {translateUi('how_each_review_state_reads_for_thi_aec84b9e')}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2">
@@ -200,13 +199,12 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
                 });
               }}
             >
-              <Plus className="size-3" /> {translateUi('add_9fd728c6')}{' '}
+              <Plus className="size-3" /> {translateUi('add_9fd728c6')}
             </Button>
           </div>
           {customDraft.length === 0 ? (
             <p className="text-2xs text-muted-foreground">
-              {' '}
-              {translateUi('your_own_states_each_counted_as_one_0aafdc1d')}{' '}
+              {translateUi('your_own_states_each_counted_as_one_0aafdc1d')}
             </p>
           ) : null}
           {customDraft.map((state, index) => (
@@ -279,11 +277,11 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             {' '}
-            {translateUi('cancel_19766ed6')}{' '}
+            {translateUi('cancel_19766ed6')}
           </Button>
           <Button type="button" size="sm" disabled={saving || invalid} onClick={() => void save()}>
             {saving && <Loader2 className="size-3.5 animate-spin" />}{' '}
-            {translateUi('save_labels_78956453')}{' '}
+            {translateUi('save_labels_78956453')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -346,7 +346,7 @@ export function ApiRenderSection({
             onClick={() => void saveInputSet()}
           >
             {' '}
-            {translateUi('save_1509f561')}{' '}
+            {translateUi('save_1509f561')}
           </Button>
           <Button
             size="sm"
@@ -355,14 +355,13 @@ export function ApiRenderSection({
             onClick={() => void deleteInputSet()}
           >
             {' '}
-            {translateUi('delete_e2d0a549')}{' '}
+            {translateUi('delete_e2d0a549')}
           </Button>
         </div>
         {inputSets.length > 0 ? (
           <div className="flex flex-col gap-1">
             <FieldDescription>
-              {' '}
-              {translateUi('render_several_presets_at_once_one__be172606')}{' '}
+              {translateUi('render_several_presets_at_once_one__be172606')}
             </FieldDescription>
             {inputSets.map((set) => (
               <Field key={set.id} orientation="horizontal">
@@ -393,8 +392,7 @@ export function ApiRenderSection({
               {translateUi('also_create_a_paused_ad_d3d84362')}
             </FieldLabel>
             <FieldDescription>
-              {' '}
-              {translateUi('off_by_default_the_render_always_la_c0682c5a')}{' '}
+              {translateUi('off_by_default_the_render_always_la_c0682c5a')}
             </FieldDescription>
           </FieldContent>
           <Switch

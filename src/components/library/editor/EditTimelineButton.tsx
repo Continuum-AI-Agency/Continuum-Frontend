@@ -183,7 +183,7 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
           : translateUi('edit_in_timeline_ddcbe08b')}
       </Button>
       <Link href="/studio/video/new" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-        <Plus className="size-3.5" aria-hidden /> {translateUi('new_edit_2e7779e8')}{' '}
+        <Plus className="size-3.5" aria-hidden /> {translateUi('new_edit_2e7779e8')}
       </Link>
     </>
   );

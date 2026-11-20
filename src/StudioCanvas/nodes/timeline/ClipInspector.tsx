@@ -144,8 +144,7 @@ export function ClipInspector({
   if (!item) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg border border-border/60 p-4 text-center text-2xs text-muted-foreground">
-        {' '}
-        {translateUi('select_a_clip_to_edit_its_trim_effe_ff63694c')}{' '}
+        {translateUi('select_a_clip_to_edit_its_trim_effe_ff63694c')}
       </div>
     );
   }
@@ -195,7 +194,6 @@ export function ClipInspector({
       </div>
 
       <div className="text-2xs text-muted-foreground">
-        {' '}
         {translateUi('duration_4fc52a3c')}{' '}
         <span className="tabular-nums text-foreground">
           {formatDecimal(durationSec, 2, decimalLocale)}s
@@ -262,8 +260,7 @@ export function ClipInspector({
 
           <div className="flex items-center justify-between">
             <Label htmlFor="clip-mute" className="text-2xs">
-              {' '}
-              {translateUi('mute_audio_1690e448')}{' '}
+              {translateUi('mute_audio_1690e448')}
             </Label>
             <Switch
               id="clip-mute"
@@ -288,8 +285,7 @@ export function ClipInspector({
           {onSetAudio ? (
             <div className="flex flex-col gap-3">
               <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {' '}
-                {translateUi('audio_bc1b8890')}{' '}
+                {translateUi('audio_bc1b8890')}
               </span>
               <SliderField
                 onCommit={onCommit}
@@ -349,8 +345,7 @@ export function ClipInspector({
       {/* Color + opacity */}
       <div className="flex flex-col gap-3">
         <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {' '}
-          {translateUi('adjust_fd8a7d7b')}{' '}
+          {translateUi('adjust_fd8a7d7b')}
         </span>
         <SliderField
           onCommit={onCommit}
@@ -453,8 +448,7 @@ export function ClipInspector({
       {/* Transform + Ken Burns */}
       <div className="flex flex-col gap-3">
         <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {' '}
-          {translateUi('transform_d2d68041')}{' '}
+          {translateUi('transform_d2d68041')}
         </span>
         <SliderField
           onCommit={onCommit}
@@ -477,8 +471,7 @@ export function ClipInspector({
         />
         <div className="flex items-center justify-between">
           <Label htmlFor="clip-kenburns" className="text-2xs">
-            {' '}
-            {translateUi('ken_burns_zoom_3915308a')}{' '}
+            {translateUi('ken_burns_zoom_3915308a')}
           </Label>
           <Switch
             id="clip-kenburns"
@@ -491,8 +484,7 @@ export function ClipInspector({
         <div className="grid grid-cols-2 gap-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="clip-flip-h" className="text-2xs">
-              {' '}
-              {translateUi('flip_h_6f20f10f')}{' '}
+              {translateUi('flip_h_6f20f10f')}
             </Label>
             <Switch
               id="clip-flip-h"
@@ -502,8 +494,7 @@ export function ClipInspector({
           </div>
           <div className="flex items-center justify-between">
             <Label htmlFor="clip-flip-v" className="text-2xs">
-              {' '}
-              {translateUi('flip_v_06d50597')}{' '}
+              {translateUi('flip_v_06d50597')}
             </Label>
             <Switch
               id="clip-flip-v"
@@ -519,13 +510,11 @@ export function ClipInspector({
       {/* Look: one-tap filter preset + (overlay) blend mode */}
       <div className="flex flex-col gap-2">
         <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {' '}
-          {translateUi('look_a0de5719')}{' '}
+          {translateUi('look_a0de5719')}
         </span>
         <div className="flex flex-col gap-1">
           <Label htmlFor="clip-filter" className="text-2xs">
-            {' '}
-            {translateUi('filter_638e249f')}{' '}
+            {translateUi('filter_638e249f')}
           </Label>
           <select
             id="clip-filter"
@@ -543,8 +532,7 @@ export function ClipInspector({
         {context === 'overlay' ? (
           <div className="flex flex-col gap-1">
             <Label htmlFor="clip-blend" className="text-2xs">
-              {' '}
-              {translateUi('blend_mode_15e98399')}{' '}
+              {translateUi('blend_mode_15e98399')}
             </Label>
             <select
               id="clip-blend"
@@ -566,8 +554,7 @@ export function ClipInspector({
 
       <div className="flex flex-col gap-3">
         <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {' '}
-          {translateUi('effects_358511c8')}{' '}
+          {translateUi('effects_358511c8')}
         </span>
         <ShaderEffectControls idPrefix="clip" effects={effects} onChange={onSetEffects} />
       </div>
@@ -580,8 +567,7 @@ export function ClipInspector({
               matte service and comes back as a new cutout in the media bin. */}
           <div className="flex flex-col gap-2">
             <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {' '}
-              {translateUi('background_ea2b8a87')}{' '}
+              {translateUi('background_ea2b8a87')}
             </span>
             <Button
               variant="secondary"
@@ -605,8 +591,7 @@ export function ClipInspector({
               <p className="text-2xs text-muted-foreground">{heldBack}</p>
             ) : sourceAssetId ? null : (
               <p className="text-2xs text-muted-foreground">
-                {' '}
-                {translateUi('save_this_clip_to_the_library_first_17b98854')}{' '}
+                {translateUi('save_this_clip_to_the_library_first_17b98854')}
               </p>
             )}
             {backgroundRemoval.error ? (
@@ -623,8 +608,7 @@ export function ClipInspector({
           {/* Transition into this clip */}
           <div className="flex flex-col gap-2">
             <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {' '}
-              {translateUi('transition_in_06a440ca')}{' '}
+              {translateUi('transition_in_06a440ca')}
             </span>
             <div className="grid grid-cols-4 gap-1">
               {TRANSITION_OPTIONS.map((option) => {
@@ -672,8 +656,7 @@ export function ClipInspector({
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {' '}
-            {translateUi('text_71988c4d')}{' '}
+            {translateUi('text_71988c4d')}
           </span>
           <Button
             variant="ghost"
@@ -683,12 +666,12 @@ export function ClipInspector({
               updateText([...textOverlays, { id: uuidv4(), text: translateUi('text_71988c4d') }])
             }
           >
-            <Plus className="h-3 w-3" /> {translateUi('add_9fd728c6')}{' '}
+            <Plus className="h-3 w-3" /> {translateUi('add_9fd728c6')}
           </Button>
         </div>
         {textOverlays.length === 0 ? (
           <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
-            <Type className="h-3 w-3" /> {translateUi('no_text_overlays_54dac15e')}{' '}
+            <Type className="h-3 w-3" /> {translateUi('no_text_overlays_54dac15e')}
           </div>
         ) : (
           textOverlays.map((overlay, index) => (

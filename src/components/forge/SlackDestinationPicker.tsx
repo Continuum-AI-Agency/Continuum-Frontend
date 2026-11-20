@@ -70,17 +70,15 @@ export function SlackDestinationPicker({
   if (slack === 'unavailable') {
     return (
       <p className="text-xs text-muted-foreground">
-        {' '}
-        {translateUi('slack_delivery_isn_t_available_yet__1b3cf556')}{' '}
+        {translateUi('slack_delivery_isn_t_available_yet__1b3cf556')}
       </p>
     );
   }
   if ('error' in slack) {
     return (
       <p className="text-xs text-muted-foreground">
-        {' '}
         {translateUi('couldn_t_load_slack_channels_0ccfec27')} {slack.error}{' '}
-        {translateUi('renders_still_go_to_the_library_b943fa53')}{' '}
+        {translateUi('renders_still_go_to_the_library_b943fa53')}
       </p>
     );
   }
@@ -104,8 +102,7 @@ export function SlackDestinationPicker({
       {destinations.length ? (
         <div className="flex flex-col gap-1 text-xs">
           <Label htmlFor="forge-slack-channel" className="text-muted-foreground">
-            {' '}
-            {translateUi('post_each_finished_render_to_cd9f3273')}{' '}
+            {translateUi('post_each_finished_render_to_cd9f3273')}
           </Label>
           <Select
             value={value?.id ?? NO_ROOM}
@@ -133,14 +130,12 @@ export function SlackDestinationPicker({
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('no_slack_channel_is_set_up_for_this_80a1788c')}{' '}
+          {translateUi('no_slack_channel_is_set_up_for_this_80a1788c')}
         </p>
       )}
       {value?.role === 'client' ? (
         <p className="text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('a_client_channel_gets_a_post_only_a_bfea5f73')}{' '}
+          {translateUi('a_client_channel_gets_a_post_only_a_bfea5f73')}
         </p>
       ) : null}
       {slack.state !== 'ready' ? (
@@ -177,7 +172,7 @@ export function SlackDestinationPicker({
           className="gap-1.5"
           onClick={() => setAdding(true)}
         >
-          <Plus className="size-3.5" aria-hidden /> {translateUi('add_a_channel_075fee45')}{' '}
+          <Plus className="size-3.5" aria-hidden /> {translateUi('add_a_channel_075fee45')}
         </Button>
       )}
     </div>

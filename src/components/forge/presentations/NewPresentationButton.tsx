@@ -42,7 +42,7 @@ export function NewPresentationButton({
         onClick={() => setOpen((value) => !value)}
         disabled={busy}
       >
-        <Presentation data-icon="inline-start" /> {translateUi('create_presentation_b4fd9a4b')}{' '}
+        <Presentation data-icon="inline-start" /> {translateUi('create_presentation_b4fd9a4b')}
       </Button>
       {open ? (
         <form

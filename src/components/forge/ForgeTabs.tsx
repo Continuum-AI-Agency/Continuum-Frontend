@@ -104,7 +104,6 @@ export function ForgeTabs({
         <TabsTrigger value="templates">{translateUi('templates_56b564b7')}</TabsTrigger>
         <TabsTrigger value="render">{translateUi('render_6d89eb7d')}</TabsTrigger>
         <TabsTrigger value="renders">
-          {' '}
           {translateUi('render_ledger_8068f2c7')}{' '}
           {approvalCountUnavailable ? (
             <Badge
@@ -113,7 +112,7 @@ export function ForgeTabs({
               title={translateUi('approval_count_unavailable_7836cd6e')}
             >
               {' '}
-              {translateUi('approval_count_unavailable_7836cd6e')}{' '}
+              {translateUi('approval_count_unavailable_7836cd6e')}
             </Badge>
           ) : waiting ? (
             <Badge variant="warning" className="ml-1.5 tabular-nums">
@@ -146,7 +145,7 @@ export function ForgeTabs({
               title={translateUi('approval_count_may_be_stale_894f8955')}
             >
               {' '}
-              {translateUi('stale_a03f2386')}{' '}
+              {translateUi('stale_a03f2386')}
             </span>
           ) : null}
         </TabsTrigger>

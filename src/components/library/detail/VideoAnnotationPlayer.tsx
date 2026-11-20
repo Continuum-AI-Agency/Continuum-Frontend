@@ -675,8 +675,7 @@ export function VideoAnnotationPlayer({
             <div className="flex flex-col items-center gap-2 text-center">
               <ImageOff className="size-8 text-muted-foreground/40" aria-hidden />
               <span className="text-xs">
-                {' '}
-                {translateUi('video_preview_unavailable_timeline__41f64ba9')}{' '}
+                {translateUi('video_preview_unavailable_timeline__41f64ba9')}
               </span>
             </div>
           </div>

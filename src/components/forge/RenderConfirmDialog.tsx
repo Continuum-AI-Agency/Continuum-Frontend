@@ -636,7 +636,7 @@ export function RenderConfirmDialog({
           <DialogHeader>
             <DialogTitle>{translateUi('unconfirmed_render_c4a6f394')}</DialogTitle>
             <DialogDescription>
-              {templateName} {translateUi('this_set_s_last_render_didn_t_confi_86a28e3c')}{' '}
+              {templateName} {translateUi('this_set_s_last_render_didn_t_confi_86a28e3c')}
             </DialogDescription>
           </DialogHeader>
           <HeldBatchView
@@ -673,7 +673,6 @@ export function RenderConfirmDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {' '}
             {translateUi('render_6d89eb7d')} {plural(rows.length, 'row')} ·{' '}
             {plural(fileCount, 'file')}
           </DialogTitle>
@@ -709,14 +708,14 @@ export function RenderConfirmDialog({
                 onClick={onChangeSettings}
               >
                 {' '}
-                {translateUi('change_c0bf75bd')}{' '}
+                {translateUi('change_c0bf75bd')}
               </Button>
             }
           >
             <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="flex items-center gap-1">
                 <Check className="size-3.5 text-success" aria-hidden />{' '}
-                {translateUi('library_dc20b3d5')}{' '}
+                {translateUi('library_dc20b3d5')}
               </span>
               {slackName ? <span>· #{slackName}</span> : null}
               {roomNames.map((name) => (
@@ -767,8 +766,7 @@ export function RenderConfirmDialog({
               ) : null}
               {metaWritesAllowed === false ? (
                 <p role="status" className="text-warning">
-                  {' '}
-                  {translateUi('meta_writes_are_off_for_this_brand__791f2ff2')}{' '}
+                  {translateUi('meta_writes_are_off_for_this_brand__791f2ff2')}
                 </p>
               ) : null}
             </Section>
@@ -789,7 +787,6 @@ export function RenderConfirmDialog({
                     />
                     <div className="flex min-w-0 flex-col gap-0.5">
                       <Label htmlFor={`override-${flag}`} className="text-xs font-medium">
-                        {' '}
                         {translateUi('render_anyway_34a5c500')}{' '}
                         {renderOverrideCopy(flag, translateUi).title.toLowerCase()}
                       </Label>
@@ -800,7 +797,7 @@ export function RenderConfirmDialog({
                       ))}
                       <p className="text-muted-foreground">
                         {renderOverrideCopy(flag, translateUi).consequence}{' '}
-                        {translateUi('applies_to_this_batch_only_and_is_r_ca6e3af8')}{' '}
+                        {translateUi('applies_to_this_batch_only_and_is_r_ca6e3af8')}
                       </p>
                     </div>
                   </li>
@@ -818,7 +815,7 @@ export function RenderConfirmDialog({
             >
               <div className="flex flex-col gap-0.5">
                 <Label className="text-xs">
-                  <RadioGroupItem value="proof" /> {translateUi('proof_7fbb3ccf')}{' '}
+                  <RadioGroupItem value="proof" /> {translateUi('proof_7fbb3ccf')}
                 </Label>
                 <span className="pl-6 text-muted-foreground">
                   {translateUi('for_review_recorded_as_a_proof_be78783b')}
@@ -827,7 +824,7 @@ export function RenderConfirmDialog({
               <div className="flex flex-col gap-0.5">
                 <Label className="text-xs">
                   <RadioGroupItem value="final" disabled={finalBlocked !== null} />{' '}
-                  {translateUi('final_f4ed8fa6')}{' '}
+                  {translateUi('final_f4ed8fa6')}
                 </Label>
                 <span className="pl-6 text-muted-foreground">
                   {finalBlocked ?? translateUi('ready_to_go_recorded_as_final_b4448611')}
@@ -858,11 +855,10 @@ export function RenderConfirmDialog({
                 <div className="flex flex-col gap-0.5">
                   <Label className="text-xs">
                     <RadioGroupItem value="experimental" />{' '}
-                    {translateUi('continuum_s_new_renderer_2f2c51f3')}{' '}
+                    {translateUi('continuum_s_new_renderer_2f2c51f3')}
                   </Label>
                   <span className="pl-6 text-muted-foreground">
-                    {' '}
-                    {translateUi('anything_it_can_t_render_goes_to_af_d9b6b46b')}{' '}
+                    {translateUi('anything_it_can_t_render_goes_to_af_d9b6b46b')}
                   </span>
                 </div>
               </RadioGroup>
@@ -937,7 +933,7 @@ export function RenderConfirmDialog({
                 {check.message}
                 <Button type="button" size="xs" variant="outline" onClick={() => void runCheck()}>
                   {' '}
-                  {translateUi('retry_942087cc')}{' '}
+                  {translateUi('retry_942087cc')}
                 </Button>
               </span>
             ) : (
@@ -960,7 +956,7 @@ export function RenderConfirmDialog({
             onClick={() => onOpenChange(false)}
           >
             {' '}
-            {translateUi('cancel_19766ed6')}{' '}
+            {translateUi('cancel_19766ed6')}
           </Button>
           <Button type="button" disabled={!canRender} onClick={() => void fire()}>
             {firing ? (
@@ -1108,13 +1104,11 @@ export function HeldBatchView({
       (request.contractHash !== templateNow.contractHash ||
         (request.templateRef ?? null) !== templateNow.templateRef) ? (
         <p className="text-muted-foreground">
-          {' '}
-          {translateUi('this_set_s_template_changed_since_t_79321060')}{' '}
+          {translateUi('this_set_s_template_changed_since_t_79321060')}
         </p>
       ) : null}
       {held.saved ? null : <p className="text-muted-foreground">{presentForge(NOT_SAVED)}</p>}
       <p className="text-muted-foreground">
-        {' '}
         {translateUi('in_the_render_ledger_look_for_the_b_eacdf676')} {heldTime}.
       </p>
       <div className="flex flex-wrap gap-2 pt-1">
@@ -1128,7 +1122,7 @@ export function HeldBatchView({
             {retrying || held.sending ? (
               <Loader2 className="size-3 animate-spin" aria-hidden />
             ) : null}{' '}
-            {translateUi('retry_this_batch_17603985')}{' '}
+            {translateUi('retry_this_batch_17603985')}
           </Button>
         ) : null}
         <Button
@@ -1143,7 +1137,7 @@ export function HeldBatchView({
           }}
         >
           {' '}
-          {translateUi('open_render_ledger_ff0b52b9')}{' '}
+          {translateUi('open_render_ledger_ff0b52b9')}
         </Button>
       </div>
     </section>

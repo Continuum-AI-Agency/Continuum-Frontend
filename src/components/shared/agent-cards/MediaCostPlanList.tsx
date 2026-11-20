@@ -27,7 +27,6 @@ export function MediaCostPlanList({
           })}
         </span>
         <span className="text-muted-foreground">
-          {' '}
           {uiText.rich('typically_expected_amount_expected_5e0189a', {
             amount: usd(plan.billedExpectedUsd),
             expected: (chunks) => <span data-field="billed-expected-usd">{chunks}</span>,

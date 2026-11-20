@@ -425,7 +425,7 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
               ) : (
                 <DropdownMenuItem render={<Link href="/settings?section=brand" />}>
                   {' '}
-                  {translateUi('no_brand_book_yet_finish_it_in_sett_4502a9bc')}{' '}
+                  {translateUi('no_brand_book_yet_finish_it_in_sett_4502a9bc')}
                 </DropdownMenuItem>
               )}
             </DropdownMenuGroup>
@@ -474,15 +474,14 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
           <DropdownMenuSubContent className={SUB_CONTENT_CLASS}>
             <DropdownMenuGroup>
               <DropdownMenuItem render={<Link href="/settings?section=skills" />}>
-                <Wand2 /> {translateUi('manage_skills_f3600715')}{' '}
+                <Wand2 /> {translateUi('manage_skills_f3600715')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {model.skillsLoading ? (
                 <DropdownMenuItem disabled>{translateUi('loading_ba3bbbe1')}</DropdownMenuItem>
               ) : model.skillRows.length === 0 ? (
                 <DropdownMenuItem disabled>
-                  {' '}
-                  {translateUi('no_creative_skills_yet_create_one_f_fc7ce707')}{' '}
+                  {translateUi('no_creative_skills_yet_create_one_f_fc7ce707')}
                 </DropdownMenuItem>
               ) : (
                 model.skillRows.map((row) => <GroundingCheckboxRow key={row.key} row={row} />)
@@ -631,7 +630,7 @@ function SkillRows({
           href="/settings?section=skills"
           className="inline-flex shrink-0 items-center gap-1 text-[0.65rem] text-muted-foreground no-underline! transition-colors hover:text-foreground"
         >
-          <Wand2 className="h-3 w-3" /> {translateUi('manage_5a234448')}{' '}
+          <Wand2 className="h-3 w-3" /> {translateUi('manage_5a234448')}
         </Link>
       </div>
     </>
@@ -674,14 +673,13 @@ export function GroundingPopover(props: GroundingEditorProps) {
                 model.bookRows.map((row) => <ToggleRow key={row.key} row={row} />)
               ) : (
                 <p className="px-1.5 py-1 text-xs text-muted-foreground">
-                  {' '}
                   {translateUi('no_brand_book_yet_edee2223')}{' '}
                   <Link
                     href="/settings?section=brand"
                     className="underline underline-offset-2 transition-colors hover:text-foreground"
                   >
                     {' '}
-                    {translateUi('finish_it_in_settings_b83e61a0')}{' '}
+                    {translateUi('finish_it_in_settings_b83e61a0')}
                   </Link>
                   .
                 </p>

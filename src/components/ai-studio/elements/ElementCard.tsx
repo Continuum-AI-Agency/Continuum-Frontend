@@ -68,9 +68,8 @@ export function ElementCard({
         ) : null}
         <p className="text-sm font-medium">{element.name}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {' '}
           {translateUi('reusable_8ded2b38')} {element.category}{' '}
-          {translateUi('saved_to_your_library_015ba2f4')}{' '}
+          {translateUi('saved_to_your_library_015ba2f4')}
         </p>
         {element.facts?.map((fact) => (
           <p key={fact.label} className="mt-2 text-xs">
@@ -78,8 +77,7 @@ export function ElementCard({
           </p>
         ))}
         <p className="mt-2 text-xs text-muted-foreground">
-          {' '}
-          {translateUi('open_to_view_or_edit_drag_into_the__572f504e')}{' '}
+          {translateUi('open_to_view_or_edit_drag_into_the__572f504e')}
         </p>
       </HoverCardContent>
     </HoverCard>

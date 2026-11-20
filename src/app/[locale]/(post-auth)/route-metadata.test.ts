@@ -1,9 +1,22 @@
-import { describe, expect, it } from 'bun:test';
-import { metadata as adminMetadata } from './admin/layout';
-import { metadata as aiStudioMetadata } from './ai-studio/layout';
-import { metadata as organicMetadata } from './organic/layout';
-import { metadata as scaleMetadata } from './scale/layout';
-import { metadata as settingsMetadata } from './settings/layout';
+import { describe, expect, it, mock } from 'bun:test';
+import { createTranslator } from 'next-intl';
+import { englishMessages } from '@/i18n/__tests__/render';
+
+// Admin and Settings translate their titles on the server; outside an RSC request the real
+// next-intl/server throws, so they are given the English catalogs. `mock.module` is not
+// hoisted, so the layouts are imported after it.
+const intlServer = await import('next-intl/server');
+mock.module('next-intl/server', () => ({
+  ...intlServer,
+  getTranslations: async (namespace?: string) =>
+    createTranslator({ locale: 'en', messages: englishMessages, namespace }),
+}));
+
+const { generateMetadata: adminMetadata } = await import('./admin/layout');
+const { metadata: aiStudioMetadata } = await import('./ai-studio/layout');
+const { metadata: organicMetadata } = await import('./organic/layout');
+const { metadata: scaleMetadata } = await import('./scale/layout');
+const { generateMetadata: settingsMetadata } = await import('./settings/layout');
 
 describe('post-auth route metadata', () => {
   it('gives AI Studio its own document title', () => {
@@ -18,21 +31,21 @@ describe('post-auth route metadata', () => {
     expect(scaleMetadata.title).toBe('Scale | Continuum AI');
   });
 
-  it('gives Settings its own document title', () => {
-    expect(settingsMetadata.title).toBe('Settings | Continuum AI');
+  it('gives Settings its own document title', async () => {
+    expect((await settingsMetadata()).title).toBe('Settings | Continuum AI');
   });
 
-  it('gives Admin its own document title', () => {
-    expect(adminMetadata.title).toBe('Admin | Continuum AI');
+  it('gives Admin its own document title', async () => {
+    expect((await adminMetadata()).title).toBe('Admin | Continuum AI');
   });
 
-  it('keeps every post-auth shell title distinct', () => {
+  it('keeps every post-auth shell title distinct', async () => {
     const titles = [
       aiStudioMetadata.title,
       organicMetadata.title,
       scaleMetadata.title,
-      settingsMetadata.title,
-      adminMetadata.title,
+      (await settingsMetadata()).title,
+      (await adminMetadata()).title,
     ];
 
     expect(new Set(titles).size).toBe(titles.length);

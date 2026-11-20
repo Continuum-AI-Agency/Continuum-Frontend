@@ -41,7 +41,7 @@ export function ShareLinkPanel({ by }: { by: { id: string } | { token: string } 
     return (
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
-        {translateUi('loading_link_a58e52a2')}{' '}
+        {translateUi('loading_link_a58e52a2')}
       </p>
     );
   }
@@ -61,7 +61,7 @@ export function ShareLinkPanel({ by }: { by: { id: string } | { token: string } 
             onClick={() => void load()}
           >
             {' '}
-            {translateUi('refresh_0e916101')}{' '}
+            {translateUi('refresh_0e916101')}
           </Button>
         </div>
         <ShareLinkActivity

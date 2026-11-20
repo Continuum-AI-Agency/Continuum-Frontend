@@ -455,8 +455,7 @@ export function EditorProjectV2Assembly({
             </div>
           </div>
           <p className="mb-3 text-2xs text-muted-foreground">
-            {' '}
-            {translateUi('every_edit_commits_a_durable_projec_65c8e3e9')}{' '}
+            {translateUi('every_edit_commits_a_durable_projec_65c8e3e9')}
           </p>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-3">
             <section className="min-h-[9rem]">
@@ -464,8 +463,7 @@ export function EditorProjectV2Assembly({
             </section>
             <section>
               <div className="mb-2 text-xs font-semibold text-muted-foreground">
-                {' '}
-                {translateUi('pinned_overlays_e551b60a')}{' '}
+                {translateUi('pinned_overlays_e551b60a')}
               </div>
               {overlayPool.length ? (
                 <div className="space-y-2">
@@ -495,8 +493,7 @@ export function EditorProjectV2Assembly({
                 </div>
               ) : (
                 <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-                  {' '}
-                  {translateUi('connect_a_pinned_library_image_or_v_e110e855')}{' '}
+                  {translateUi('connect_a_pinned_library_image_or_v_e110e855')}
                 </p>
               )}
             </section>
@@ -529,8 +526,7 @@ export function EditorProjectV2Assembly({
                 </div>
               ) : (
                 <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-                  {' '}
-                  {translateUi('connect_a_pinned_library_audio_sour_196f77ad')}{' '}
+                  {translateUi('connect_a_pinned_library_audio_sour_196f77ad')}
                 </p>
               )}
             </section>
@@ -542,7 +538,7 @@ export function EditorProjectV2Assembly({
             title={renderBlockers.length > 0 ? renderBlockers.join(' ') : undefined}
           >
             {' '}
-            {translateUi('render_final_1080p_5d483b77')}{' '}
+            {translateUi('render_final_1080p_5d483b77')}
           </Button>
           {renderBlockers.length > 0 ? (
             <p className="mt-1.5 text-2xs text-muted-foreground">{renderBlockers[0]}</p>
@@ -592,7 +588,7 @@ export function EditorProjectV2Assembly({
                 onClick={() => setTimelineMode('edit')}
               >
                 {' '}
-                {translateUi('edit_464c4ffd')}{' '}
+                {translateUi('edit_464c4ffd')}
               </Button>
               <Button
                 type="button"
@@ -602,7 +598,7 @@ export function EditorProjectV2Assembly({
                 onClick={() => setTimelineMode('motion')}
               >
                 {' '}
-                {translateUi('motion_8ca34424')}{' '}
+                {translateUi('motion_8ca34424')}
               </Button>
               {editingSequenceId ? (
                 <Button
@@ -643,7 +639,7 @@ export function EditorProjectV2Assembly({
                 }}
               >
                 {' '}
-                {translateUi('precompose_e338d3be')}{' '}
+                {translateUi('precompose_e338d3be')}
               </Button>
               <Button
                 type="button"
@@ -669,7 +665,7 @@ export function EditorProjectV2Assembly({
                 }}
               >
                 {' '}
-                {translateUi('open_nest_4af506ab')}{' '}
+                {translateUi('open_nest_4af506ab')}
               </Button>
             </div>
             {timelineMode === 'motion' ? (
@@ -849,8 +845,7 @@ export function EditorProjectV2Assembly({
           </div>
           <div className="overflow-x-auto rounded-lg border border-border/60 bg-card px-3 py-2">
             <div className="mb-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {' '}
-              {translateUi('review_comments_persist_on_the_sour_8ebf3473')}{' '}
+              {translateUi('review_comments_persist_on_the_sour_8ebf3473')}
             </div>
             <div
               className="min-w-full"
@@ -903,8 +898,7 @@ export function EditorProjectV2Assembly({
           {selectedAudio && urls.get(selectedAudio.item.id) ? (
             <div className="flex items-center gap-3 rounded-md border border-border/60 bg-card px-3 py-2">
               <span className="shrink-0 text-2xs font-medium text-muted-foreground">
-                {' '}
-                {translateUi('audition_selected_audio_8f25484d')}{' '}
+                {translateUi('audition_selected_audio_8f25484d')}
               </span>
               {/* biome-ignore lint/a11y/useMediaCaption: audio audition has no visual content. */}
               <audio

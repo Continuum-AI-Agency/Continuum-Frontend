@@ -100,12 +100,11 @@ export function RequestCollectionReviewDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
-            <UsersRound className="size-4" /> {translateUi('request_review_8f47b4cd')}{' '}
+            <UsersRound className="size-4" /> {translateUi('request_review_8f47b4cd')}
           </DialogTitle>
           <DialogDescription className="truncate text-xs">
-            {' '}
             {translateUi('every_asset_in_0774c290')} {collectionName}{' '}
-            {translateUi('goes_to_review_with_these_reviewers_65f3cb58')}{' '}
+            {translateUi('goes_to_review_with_these_reviewers_65f3cb58')}
           </DialogDescription>
         </DialogHeader>
         {targets === null ? (
@@ -168,7 +167,7 @@ export function RequestCollectionReviewDialog({
             className="text-xs text-muted-foreground underline-offset-2 hover:underline"
           >
             {' '}
-            {translateUi('approval_report_bb125019')}{' '}
+            {translateUi('approval_report_bb125019')}
           </a>
           <Button
             type="button"
@@ -177,7 +176,7 @@ export function RequestCollectionReviewDialog({
             onClick={() => void submit()}
           >
             {submitting && <Loader2 className="size-3.5 animate-spin" />}{' '}
-            {translateUi('request_review_8f47b4cd')}{' '}
+            {translateUi('request_review_8f47b4cd')}
           </Button>
         </DialogFooter>
       </DialogContent>

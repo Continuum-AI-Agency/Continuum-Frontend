@@ -39,8 +39,7 @@ export function ShareBoxDialog({ open, url, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>{translateUi('share_box_21c716f6')}</DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('anyone_with_the_link_can_review_thi_8efa7028')}{' '}
+            {translateUi('anyone_with_the_link_can_review_thi_8efa7028')}
           </DialogDescription>
         </DialogHeader>
         {url ? (

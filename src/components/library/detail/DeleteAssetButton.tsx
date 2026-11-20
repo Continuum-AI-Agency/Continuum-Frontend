@@ -79,13 +79,12 @@ export function DeleteAssetButton({ brandId, asset, onDeleted }: DeleteAssetButt
         className="gap-1.5 text-destructive hover:text-destructive"
         onClick={() => setOpen(true)}
       >
-        <Trash2Icon className="size-3.5" /> {translateUi('delete_e2d0a549')}{' '}
+        <Trash2Icon className="size-3.5" /> {translateUi('delete_e2d0a549')}
       </Button>
       <AlertDialog open={open} onOpenChange={(next) => (deleting ? undefined : setOpen(next))}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm">
-              {' '}
               {translateUi('delete_fdd77e66')}
               {asset.title ?? asset.fileName}”?
             </AlertDialogTitle>
@@ -93,7 +92,7 @@ export function DeleteAssetButton({ brandId, asset, onDeleted }: DeleteAssetButt
               {asset.carousel
                 ? translateUi('it_leaves_your_library_with_every_s_8ef9834a')
                 : translateUi('it_leaves_your_library_ce86464a')}{' '}
-              {translateUi('comments_versions_and_approvals_are_3b590c33')}{' '}
+              {translateUi('comments_versions_and_approvals_are_3b590c33')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

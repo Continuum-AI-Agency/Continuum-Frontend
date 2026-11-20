@@ -177,7 +177,7 @@ export function MotionTimeline({
           onClick={onToggleAutoKey}
         >
           {' '}
-          {translateUi('autokey_594d0cde')}{' '}
+          {translateUi('autokey_594d0cde')}
         </Button>
         <label
           htmlFor="motion-current-time"
@@ -229,7 +229,7 @@ export function MotionTimeline({
           onClick={() => setShowGraph((current) => !current)}
         >
           {' '}
-          {translateUi('graph_32ab018f')}{' '}
+          {translateUi('graph_32ab018f')}
         </Button>
         <Button
           type="button"
@@ -245,7 +245,7 @@ export function MotionTimeline({
           onClick={onSaveElement}
         >
           {' '}
-          {translateUi('save_element_1285445f')}{' '}
+          {translateUi('save_element_1285445f')}
         </Button>
         <label className="flex items-center gap-1 text-2xs text-muted-foreground">
           <span className="sr-only">{translateUi('place_motion_element_df78db20')}</span>
@@ -337,8 +337,7 @@ export function MotionTimeline({
           </div>
           {layers.length === 0 ? (
             <p className="px-3 py-6 text-center text-2xs text-muted-foreground">
-              {' '}
-              {translateUi('place_an_overlay_or_text_clip_then__6f2a6b38')}{' '}
+              {translateUi('place_an_overlay_or_text_clip_then__6f2a6b38')}
             </p>
           ) : null}
           {layers.map((layer) => (

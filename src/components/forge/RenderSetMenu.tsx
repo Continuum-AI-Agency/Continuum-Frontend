@@ -78,7 +78,7 @@ export function NameDialog({
               onClick={() => onOpenChange(false)}
             >
               {' '}
-              {translateUi('cancel_19766ed6')}{' '}
+              {translateUi('cancel_19766ed6')}
             </Button>
             <Button type="submit" disabled={busy || !name.trim()}>
               {busy ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}

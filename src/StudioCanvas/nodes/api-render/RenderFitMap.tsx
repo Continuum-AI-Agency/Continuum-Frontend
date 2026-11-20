@@ -117,7 +117,7 @@ export function RenderFitMap({
           the render usually resolves to, and not a claim about the bytes the worker read. */}
       <figcaption className="text-2xs text-muted-foreground">
         {comp.name} · {comp.width}×{comp.height}{' '}
-        {translateUi('dashed_where_the_chosen_artwork_lan_c87d37cf')}{' '}
+        {translateUi('dashed_where_the_chosen_artwork_lan_c87d37cf')}
       </figcaption>
     </figure>
   );

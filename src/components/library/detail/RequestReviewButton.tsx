@@ -122,14 +122,13 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm" className="gap-1.5">
-            <UserRoundPlusIcon className="size-3.5" /> {translateUi('request_review_8f47b4cd')}{' '}
+            <UserRoundPlusIcon className="size-3.5" /> {translateUi('request_review_8f47b4cd')}
           </Button>
         }
       />
       <PopoverContent align="start" className="w-80 p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {' '}
-          {translateUi('ping_teammates_213f856e')}{' '}
+          {translateUi('ping_teammates_213f856e')}
         </p>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
           {asset.title ?? asset.fileName}
@@ -139,7 +138,7 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
             <p className="text-xs text-red-500">{loadError}</p>
             <Button variant="outline" size="sm" onClick={() => void loadTargets()}>
               {' '}
-              {translateUi('retry_942087cc')}{' '}
+              {translateUi('retry_942087cc')}
             </Button>
           </div>
         ) : visibleTargets === null ? (
@@ -148,8 +147,7 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
           </div>
         ) : visibleTargets.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted-foreground">
-            {' '}
-            {translateUi('no_other_members_in_this_brand_yet_9bb91e6b')}{' '}
+            {translateUi('no_other_members_in_this_brand_yet_9bb91e6b')}
           </p>
         ) : (
           <>

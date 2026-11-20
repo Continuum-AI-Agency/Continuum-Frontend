@@ -309,7 +309,6 @@ function SideMedia({
   }
   return (
     <div className="flex size-full items-center justify-center text-xs text-muted-foreground">
-      {' '}
       {translateUi('no_visual_preview_for_7f41017e')} {media.label}
     </div>
   );
@@ -618,7 +617,7 @@ export function CompareDialog({
                 onClick={() => setMode((value) => (value === 'overlay' ? 'side' : 'overlay'))}
               >
                 {' '}
-                {translateUi('overlay_2af93aeb')}{' '}
+                {translateUi('overlay_2af93aeb')}
               </Button>
               <Button
                 type="button"
@@ -630,7 +629,7 @@ export function CompareDialog({
                 onClick={() => setMode((value) => (value === 'difference' ? 'side' : 'difference'))}
               >
                 {' '}
-                {translateUi('difference_4d280a45')}{' '}
+                {translateUi('difference_4d280a45')}
               </Button>
             </>
           ) : null}
@@ -645,12 +644,11 @@ export function CompareDialog({
               onClick={() => setHighlight((value) => !value)}
             >
               {' '}
-              {translateUi('highlight_changes_5566a129')}{' '}
+              {translateUi('highlight_changes_5566a129')}
             </Button>
           ) : null}
           {difference && highlight && canStack ? (
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              {' '}
               {translateUi('threshold_0da627ad')}{' '}
               <input
                 type="range"
@@ -667,7 +665,6 @@ export function CompareDialog({
           ) : null}
           {mode === 'overlay' && canStack ? (
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              {' '}
               {translateUi('wipe_3404644e')}{' '}
               <input
                 type="range"

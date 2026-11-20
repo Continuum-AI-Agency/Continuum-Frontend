@@ -120,7 +120,7 @@ export function HeadlessElementReview({
           onClick={() => action.mutate('prepare')}
         >
           {' '}
-          {translateUi('generate_actress_reference_477c8a64')}{' '}
+          {translateUi('generate_actress_reference_477c8a64')}
         </Button>
       ) : null}
       {revision && !ready && !canPromote && (revision.kind !== 'character' || pack) ? (
@@ -141,8 +141,7 @@ export function HeadlessElementReview({
           {needsRightsNote ? (
             <>
               <Label htmlFor={`element-${elementId}-auto-ads-rights`}>
-                {' '}
-                {translateUi('rights_basis_for_auto_ads_655bc19f')}{' '}
+                {translateUi('rights_basis_for_auto_ads_655bc19f')}
               </Label>
               <Input
                 id={`element-${elementId}-auto-ads-rights`}
@@ -167,19 +166,17 @@ export function HeadlessElementReview({
             }
           >
             {' '}
-            {translateUi('use_in_auto_ads_1451354d')}{' '}
+            {translateUi('use_in_auto_ads_1451354d')}
           </Button>
         </div>
       ) : null}
       {promote.isSuccess ? (
         <p role="status" className="text-xs text-muted-foreground">
-          {' '}
           {translateUi('approved_for_auto_ads_revision_be400439')} {promote.data.revision}).
         </p>
       ) : null}
       {promote.error ? (
         <p role="alert" className="text-xs text-destructive">
-          {' '}
           {translateUi('could_not_approve_for_auto_ads_562c6616')} {promote.error.message}
         </p>
       ) : null}

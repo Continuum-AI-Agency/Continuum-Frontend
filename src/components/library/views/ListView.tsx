@@ -283,7 +283,7 @@ export function ListView({
           onClick={onLoadMore}
         >
           {loadingMore ? <Loader2 className="size-4 animate-spin" /> : null}{' '}
-          {translateUi('load_more_ac8991ef')}{' '}
+          {translateUi('load_more_ac8991ef')}
         </Button>
       ) : null}
     </div>

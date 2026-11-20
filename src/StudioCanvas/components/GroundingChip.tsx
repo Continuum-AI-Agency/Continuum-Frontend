@@ -179,9 +179,8 @@ export function GroundingChip({
         </p>
         {contextual && contextual.wired.length > 0 ? (
           <p className="opacity-70">
-            {' '}
             {translateUi('wired_6f076d29')} {contextual.wired.join(', ')}{' '}
-            {translateUi('from_a_design_reference_3a0f601f')}{' '}
+            {translateUi('from_a_design_reference_3a0f601f')}
           </p>
         ) : null}
       </div>

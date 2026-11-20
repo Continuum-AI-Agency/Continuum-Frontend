@@ -103,7 +103,7 @@ export function OpenInLibrary({ brandId, assetId }: { brandId: string; assetId: 
       href={libraryAssetHref(brandId, assetId)}
       className="inline-flex items-center gap-1 text-primary hover:underline"
     >
-      <ExternalLink className="size-3" aria-hidden /> {translateUi('open_in_library_c0a66bb6')}{' '}
+      <ExternalLink className="size-3" aria-hidden /> {translateUi('open_in_library_c0a66bb6')}
     </Link>
   );
 }

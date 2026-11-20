@@ -39,8 +39,7 @@ export function LibraryElementsGrid({ brandId }: { brandId: string }) {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {' '}
-          {translateUi('droppable_onto_canvas_and_pipeline__de0c4d4b')}{' '}
+          {translateUi('droppable_onto_canvas_and_pipeline__de0c4d4b')}
         </p>
         <Button
           type="button"
@@ -51,7 +50,7 @@ export function LibraryElementsGrid({ brandId }: { brandId: string }) {
             setPanelOpen(true);
           }}
         >
-          <Plus className="size-4" /> {translateUi('new_element_45e3dc5d')}{' '}
+          <Plus className="size-4" /> {translateUi('new_element_45e3dc5d')}
         </Button>
       </div>
       {isLoading ? (
@@ -62,8 +61,7 @@ export function LibraryElementsGrid({ brandId }: { brandId: string }) {
         </p>
       ) : elements.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-          {' '}
-          {translateUi('no_elements_yet_select_images_and_u_4ebcae2f')}{' '}
+          {translateUi('no_elements_yet_select_images_and_u_4ebcae2f')}
         </p>
       ) : (
         grouped.map((group) => (

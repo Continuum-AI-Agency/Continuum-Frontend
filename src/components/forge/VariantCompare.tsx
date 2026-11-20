@@ -85,8 +85,7 @@ export function VariantCompare({
   if (reads.some((read) => read.error))
     return (
       <p role="alert" className="text-xs text-destructive">
-        {' '}
-        {translateUi('could_not_read_these_variants_rende_efd939dc')}{' '}
+        {translateUi('could_not_read_these_variants_rende_efd939dc')}
       </p>
     );
   if (reads.some((read) => !read.data))
@@ -100,8 +99,7 @@ export function VariantCompare({
   if (!rows.length)
     return (
       <p className="text-xs text-muted-foreground">
-        {' '}
-        {translateUi('no_finished_renders_on_these_varian_8899f0d8')}{' '}
+        {translateUi('no_finished_renders_on_these_varian_8899f0d8')}
       </p>
     );
   return (

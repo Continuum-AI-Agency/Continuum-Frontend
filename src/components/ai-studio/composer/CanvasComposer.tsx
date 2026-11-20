@@ -319,12 +319,10 @@ export function CanvasComposer({
         {hero ? (
           <div className="mb-4 text-center">
             <h2 className="text-2xl font-semibold tracking-tight">
-              {' '}
               {translateUi('describe_the_workflow_you_want_78fecafd')}{' '}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {' '}
-              {translateUi('continuum_lays_out_the_nodes_wires__ba3aa826')}{' '}
+              {translateUi('continuum_lays_out_the_nodes_wires__ba3aa826')}
             </p>
           </div>
         ) : null}
@@ -475,7 +473,7 @@ function TurnMessages({
                 className="h-6 px-2 text-xs text-muted-foreground"
               >
                 {' '}
-                {translateUi('stop_cae7d57b')}{' '}
+                {translateUi('stop_cae7d57b')}
               </Button>
             ) : null}
           </div>
@@ -518,7 +516,7 @@ function TurnMessages({
               data-testid="composer-turn-run"
               className="h-6 w-fit px-2 text-xs"
             >
-              <Play data-icon="inline-start" /> {translateUi('run_00d60e31')}{' '}
+              <Play data-icon="inline-start" /> {translateUi('run_00d60e31')}
             </Button>
           ) : null}
 
@@ -647,8 +645,7 @@ function ComposerAnsweredNote() {
 
   return (
     <p className="text-xs text-muted-foreground" data-testid="composer-answered-note">
-      {' '}
-      {translateUi('answered_nothing_on_the_canvas_chan_08fe8bea')}{' '}
+      {translateUi('answered_nothing_on_the_canvas_chan_08fe8bea')}
     </p>
   );
 }
@@ -723,7 +720,7 @@ function ComposerProgress({
         <div className="flex shrink-0 items-center gap-1">
           {state.status === 'done' && state.graph && state.changed !== false ? (
             <Button size="sm" type="button" onClick={onRun} data-testid="composer-card-run">
-              <Play data-icon="inline-start" /> {translateUi('run_00d60e31')}{' '}
+              <Play data-icon="inline-start" /> {translateUi('run_00d60e31')}
             </Button>
           ) : null}
           <Button

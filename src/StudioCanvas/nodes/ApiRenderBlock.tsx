@@ -753,8 +753,7 @@ export function ApiRenderBlock({
                   {translateUi('no_template_chosen_4c47b9c2')}
                 </EmptyTitle>
                 <EmptyDescription className="text-2xs">
-                  {' '}
-                  {translateUi('pick_one_to_see_what_it_needs_and_w_0ddfb0ee')}{' '}
+                  {translateUi('pick_one_to_see_what_it_needs_and_w_0ddfb0ee')}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -772,11 +771,11 @@ export function ApiRenderBlock({
                 className="flex gap-4"
               >
                 <Label>
-                  <RadioGroupItem value="proof" /> {translateUi('proof_7fbb3ccf')}{' '}
+                  <RadioGroupItem value="proof" /> {translateUi('proof_7fbb3ccf')}
                 </Label>
                 <Label>
                   <RadioGroupItem value="final" disabled={!mayRenderFinal} />{' '}
-                  {translateUi('final_f4ed8fa6')}{' '}
+                  {translateUi('final_f4ed8fa6')}
                 </Label>
               </RadioGroup>
               {!mayRenderFinal ? (
@@ -789,12 +788,11 @@ export function ApiRenderBlock({
                   checked={acceptMissingFonts}
                   onCheckedChange={(checked) => setAcceptMissingFonts(checked === true)}
                 />{' '}
-                {translateUi('allow_font_substitution_for_this_re_d183df9e')}{' '}
+                {translateUi('allow_font_substitution_for_this_re_d183df9e')}
               </Label>
               {acceptMissingFonts ? (
                 <p role="status" className="text-warning">
-                  {' '}
-                  {translateUi('the_worker_may_substitute_typefaces_9ae2b04e')}{' '}
+                  {translateUi('the_worker_may_substitute_typefaces_9ae2b04e')}
                 </p>
               ) : null}
             </section>
@@ -812,7 +810,7 @@ export function ApiRenderBlock({
 
           <div className="mt-auto flex items-center gap-2 border-t border-border/60 pt-2">
             <span className="text-2xs text-muted-foreground">
-              {renderCount(variationCount)} {translateUi('saves_to_library_81f7cddb')}{' '}
+              {renderCount(variationCount)} {translateUi('saves_to_library_81f7cddb')}
             </span>
             <Button
               size="sm"
@@ -822,7 +820,7 @@ export function ApiRenderBlock({
             >
               {busy ? (
                 <>
-                  <Spinner data-icon="inline-start" /> {translateUi('submitting_49195f55')}{' '}
+                  <Spinner data-icon="inline-start" /> {translateUi('submitting_49195f55')}
                 </>
               ) : (
                 translateUi('render_value0_aba29037', { value0: String(variationCount) })

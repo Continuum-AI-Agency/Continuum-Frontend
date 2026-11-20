@@ -53,8 +53,7 @@ export function TemplateActivity({
         className="flex w-full items-center justify-between gap-2 px-[var(--card-pad)] py-2 text-left hover:bg-muted/30"
       >
         <span className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">
-          {' '}
-          {translateUi('activity_38da1505')}{' '}
+          {translateUi('activity_38da1505')}
         </span>
         <span
           className={cn('truncate', latest ? LEVEL_TONE[latest.level] : 'text-muted-foreground')}
@@ -83,8 +82,7 @@ export function TemplateActivity({
                 {event.message}
                 {isAutoTemplateEvent(event) ? (
                   <span className="ml-1.5 rounded border px-1 font-mono text-2xs uppercase text-muted-foreground">
-                    {' '}
-                    {translateUi('auto_929260ad')}{' '}
+                    {translateUi('auto_929260ad')}
                   </span>
                 ) : null}
               </span>

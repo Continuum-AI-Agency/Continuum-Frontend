@@ -44,7 +44,7 @@ export function LibraryBreadcrumbs({
         className="rounded px-1 py-0.5 hover:text-foreground"
       >
         {' '}
-        {translateUi('library_dc20b3d5')}{' '}
+        {translateUi('library_dc20b3d5')}
       </button>
       {trail.map((segment, index) => {
         const current = index === trail.length - 1;

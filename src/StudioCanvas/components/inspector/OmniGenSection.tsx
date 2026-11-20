@@ -39,8 +39,7 @@ export function OmniGenSection({
         />
         {hasChain ? (
           <InspectorNote>
-            {' '}
-            {translateUi('locked_while_this_node_holds_genera_7e165549')}{' '}
+            {translateUi('locked_while_this_node_holds_genera_7e165549')}
           </InspectorNote>
         ) : null}
         {/* Deliberately NOT locked with the chain the way the ratio is: raising the
@@ -56,10 +55,7 @@ export function OmniGenSection({
           ]}
           onChange={(value) => onPatch({ resolution: value })}
         />
-        <InspectorNote>
-          {' '}
-          {translateUi('360p_is_the_draft_tier_much_faster__c2f1440a')}{' '}
-        </InspectorNote>
+        <InspectorNote>{translateUi('360p_is_the_draft_tier_much_faster__c2f1440a')}</InspectorNote>
       </InspectorSection>
     </>
   );

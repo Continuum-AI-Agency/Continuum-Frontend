@@ -49,13 +49,11 @@ export function VideoInsightsPanel({
         ) : null}
         {insights.hook.strengths.length > 0 ? (
           <p className="mt-2 text-2xs text-emerald-600 dark:text-emerald-400">
-            {' '}
             {translateUi('strengths_ab38c36f')} {insights.hook.strengths.join(' · ')}
           </p>
         ) : null}
         {insights.hook.risks.length > 0 ? (
           <p className="mt-1 text-2xs text-amber-600 dark:text-amber-400">
-            {' '}
             {translateUi('risks_d25b080b')} {insights.hook.risks.join(' · ')}
           </p>
         ) : null}

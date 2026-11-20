@@ -210,7 +210,7 @@ function ForgeSection({ provenance }: { provenance: ForgeProvenance }) {
             href={forgeDeepLinkHref({ ...link, rerender: true })}
             className="inline-flex items-center gap-1 text-primary hover:underline"
           >
-            <RefreshCw className="size-3" aria-hidden /> {translateUi('re_render_f6e0dcab')}{' '}
+            <RefreshCw className="size-3" aria-hidden /> {translateUi('re_render_f6e0dcab')}
           </Link>
         ) : null}
       </div>

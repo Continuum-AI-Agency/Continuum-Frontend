@@ -90,7 +90,7 @@ export function PosterFramePicker({ brandId, asset, src, onPosterChanged }: Prop
       <PopoverTrigger
         render={
           <Button type="button" variant="outline" size="sm">
-            <Aperture className="size-3.5" aria-hidden /> {translateUi('poster_1ba76ea7')}{' '}
+            <Aperture className="size-3.5" aria-hidden /> {translateUi('poster_1ba76ea7')}
           </Button>
         }
       />
@@ -132,7 +132,7 @@ export function PosterFramePicker({ brandId, asset, src, onPosterChanged }: Prop
           </span>
           <Button type="button" size="sm" onClick={() => void confirm()} disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{' '}
-            {translateUi('set_poster_b258b95c')}{' '}
+            {translateUi('set_poster_b258b95c')}
           </Button>
         </div>
         {error ? <p className="text-xs text-destructive">{error}</p> : null}

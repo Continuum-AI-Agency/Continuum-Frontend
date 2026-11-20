@@ -278,7 +278,7 @@ export function LibraryMediaPickerDialog({
     <>
       {controlled ? null : (
         <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
-          <Plus className="size-3.5" aria-hidden /> {translateUi('add_media_d5d5d266')}{' '}
+          <Plus className="size-3.5" aria-hidden /> {translateUi('add_media_d5d5d266')}
         </Button>
       )}
 
@@ -320,7 +320,7 @@ export function LibraryMediaPickerDialog({
             {loading ? (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
-                {translateUi('loading_media_035a75ff')}{' '}
+                {translateUi('loading_media_035a75ff')}
               </p>
             ) : visible.length === 0 ? (
               <p className="text-xs text-muted-foreground">
@@ -346,7 +346,7 @@ export function LibraryMediaPickerDialog({
           <DialogFooter className="shrink-0 border-t border-border px-4 py-3">
             <Button type="button" variant="ghost" size="sm" onClick={() => handleOpenChange(false)}>
               {' '}
-              {translateUi('cancel_19766ed6')}{' '}
+              {translateUi('cancel_19766ed6')}
             </Button>
             <Button type="button" size="sm" disabled={selected.size === 0} onClick={confirm}>
               {copy?.confirm ??
@@ -389,7 +389,7 @@ export function LibraryBinActions({
           onClick={onDiscard}
           className="text-muted-foreground"
         >
-          <Trash2 className="size-3.5" aria-hidden /> {translateUi('discard_draft_cb30147e')}{' '}
+          <Trash2 className="size-3.5" aria-hidden /> {translateUi('discard_draft_cb30147e')}
         </Button>
       ) : null}
     </div>

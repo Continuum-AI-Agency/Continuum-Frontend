@@ -93,8 +93,7 @@ function NotesEditor({
           <Textarea id="presentation-notes" rows={4} disabled={busy} {...form.register('notes')} />
         </Field>
         <Button type="submit" size="sm" variant="outline" disabled={busy}>
-          {' '}
-          {translateUi('apply_notes_638f8785')}{' '}
+          {translateUi('apply_notes_638f8785')}
         </Button>
       </FieldGroup>
     </form>
@@ -130,8 +129,7 @@ function TitleEditor({
         {...form.register('title')}
       />
       <Button type="submit" size="sm" variant="outline" disabled={busy}>
-        {' '}
-        {translateUi('rename_3064d79a')}{' '}
+        {translateUi('rename_3064d79a')}
       </Button>
     </form>
   );
@@ -287,7 +285,7 @@ export default function PresentationWorkspace({
     return (
       <div className="flex flex-col gap-3">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft data-icon="inline-start" /> {translateUi('templates_56b564b7')}{' '}
+          <ArrowLeft data-icon="inline-start" /> {translateUi('templates_56b564b7')}
         </Button>
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-96 w-full" />
@@ -297,7 +295,7 @@ export default function PresentationWorkspace({
     return (
       <div className="flex flex-col gap-3">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft data-icon="inline-start" /> {translateUi('templates_56b564b7')}{' '}
+          <ArrowLeft data-icon="inline-start" /> {translateUi('templates_56b564b7')}
         </Button>
         <Alert variant="destructive">
           <AlertTitle>{translateUi('presentation_could_not_be_opened_486869d8')}</AlertTitle>
@@ -307,7 +305,7 @@ export default function PresentationWorkspace({
               : translateUi('the_template_parser_has_not_returne_0abcdbd8')}
             <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
               {' '}
-              {translateUi('retry_942087cc')}{' '}
+              {translateUi('retry_942087cc')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -365,7 +363,7 @@ export default function PresentationWorkspace({
     >
       <header className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft data-icon="inline-start" /> {translateUi('templates_56b564b7')}{' '}
+          <ArrowLeft data-icon="inline-start" /> {translateUi('templates_56b564b7')}
         </Button>
         <h2 className="mr-auto min-w-0 truncate text-lg font-medium">
           {document.title || sourceName}
@@ -376,7 +374,7 @@ export default function PresentationWorkspace({
           disabled={busy || !slide || blocked}
           onClick={() => setPresenting(true)}
         >
-          <Presentation data-icon="inline-start" /> {translateUi('present_43f9b89c')}{' '}
+          <Presentation data-icon="inline-start" /> {translateUi('present_43f9b89c')}
         </Button>
         <Pill>
           {busy
@@ -391,7 +389,7 @@ export default function PresentationWorkspace({
           disabled={busy || !(editor.canUndoLocal || envelope.history?.canUndo)}
           onClick={() => void editor.history('undo')}
         >
-          <Undo2 data-icon="inline-start" /> {translateUi('undo_a8283ade')}{' '}
+          <Undo2 data-icon="inline-start" /> {translateUi('undo_a8283ade')}
         </Button>
         <Button
           size="sm"
@@ -399,10 +397,10 @@ export default function PresentationWorkspace({
           disabled={busy || !(editor.canRedoLocal || (!dirty && envelope.history?.canRedo))}
           onClick={() => void editor.history('redo')}
         >
-          <Redo2 data-icon="inline-start" /> {translateUi('redo_74273989')}{' '}
+          <Redo2 data-icon="inline-start" /> {translateUi('redo_74273989')}
         </Button>
         <Button size="sm" disabled={busy || !dirty} onClick={() => void editor.save()}>
-          <Save data-icon="inline-start" /> {translateUi('save_1509f561')}{' '}
+          <Save data-icon="inline-start" /> {translateUi('save_1509f561')}
         </Button>
       </header>
       {presenting ? (
@@ -421,7 +419,7 @@ export default function PresentationWorkspace({
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => setError(null)}>
                 {' '}
-                {translateUi('dismiss_48845bff')}{' '}
+                {translateUi('dismiss_48845bff')}
               </Button>
               <Button
                 size="sm"
@@ -430,7 +428,7 @@ export default function PresentationWorkspace({
                 onClick={() => setReloadOpen(true)}
               >
                 {' '}
-                {translateUi('reload_saved_revision_90fb6eb1')}{' '}
+                {translateUi('reload_saved_revision_90fb6eb1')}
               </Button>
               {dirty ? (
                 <Button
@@ -440,7 +438,7 @@ export default function PresentationWorkspace({
                   onClick={() => void editor.save()}
                 >
                   {' '}
-                  {translateUi('retry_save_71fdfa79')}{' '}
+                  {translateUi('retry_save_71fdfa79')}
                 </Button>
               ) : null}
             </div>
@@ -454,8 +452,7 @@ export default function PresentationWorkspace({
               {translateUi('load_the_saved_presentation_8d1dd55b')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {' '}
-              {translateUi('this_discards_unsaved_changes_in_th_3eb3a05a')}{' '}
+              {translateUi('this_discards_unsaved_changes_in_th_3eb3a05a')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -469,7 +466,7 @@ export default function PresentationWorkspace({
               }}
             >
               {' '}
-              {translateUi('discard_local_changes_and_reload_9cda1d54')}{' '}
+              {translateUi('discard_local_changes_and_reload_9cda1d54')}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -503,7 +500,7 @@ export default function PresentationWorkspace({
                         }}
                       >
                         {' '}
-                        {translateUi('select_affected_object_cb7afb93')}{' '}
+                        {translateUi('select_affected_object_cb7afb93')}
                       </Button>
                       <Button
                         size="sm"
@@ -519,7 +516,7 @@ export default function PresentationWorkspace({
                         }}
                       >
                         {' '}
-                        {translateUi('remove_affected_object_ce2dac26')}{' '}
+                        {translateUi('remove_affected_object_ce2dac26')}
                       </Button>
                     </span>
                   ) : null}
@@ -579,9 +576,8 @@ export default function PresentationWorkspace({
                   }
                 />
                 <FieldLabel htmlFor={`variant-${item.id}`} className="text-xs">
-                  {' '}
                   {translateUi('select_slide_68bf2dfe')} {index + 1}{' '}
-                  {translateUi('for_variants_2aa8bba2')}{' '}
+                  {translateUi('for_variants_2aa8bba2')}
                 </FieldLabel>
               </Field>
             </div>
@@ -592,7 +588,7 @@ export default function PresentationWorkspace({
             disabled={busy || !editable}
             onClick={() => void addSlide()}
           >
-            <Plus data-icon="inline-start" /> {translateUi('add_slide_1115e5d9')}{' '}
+            <Plus data-icon="inline-start" /> {translateUi('add_slide_1115e5d9')}
           </Button>
         </aside>
         <div className="flex min-w-0 flex-col gap-3">
@@ -612,7 +608,7 @@ export default function PresentationWorkspace({
                   chooseSlide(id);
               }}
             >
-              <Copy data-icon="inline-start" /> {translateUi('duplicate_02cdaabf')}{' '}
+              <Copy data-icon="inline-start" /> {translateUi('duplicate_02cdaabf')}
             </Button>
             <Button
               size="sm"
@@ -715,7 +711,7 @@ export default function PresentationWorkspace({
               disabled={busy || !slide || !editable}
               onClick={() => imageInput.current?.click()}
             >
-              <Plus data-icon="inline-start" /> {translateUi('image_1aa4cb0b')}{' '}
+              <Plus data-icon="inline-start" /> {translateUi('image_1aa4cb0b')}
             </Button>
             {(['text', 'shape', 'table', 'chart'] as const).map((kind) => (
               <Button
@@ -767,7 +763,7 @@ export default function PresentationWorkspace({
                   ])
                 }
               >
-                <Group data-icon="inline-start" /> {translateUi('group_34ca0e76')}{' '}
+                <Group data-icon="inline-start" /> {translateUi('group_34ca0e76')}
               </Button>
               <Button
                 size="sm"
@@ -780,7 +776,7 @@ export default function PresentationWorkspace({
                   ])
                 }
               >
-                <Ungroup data-icon="inline-start" /> {translateUi('ungroup_b57ef478')}{' '}
+                <Ungroup data-icon="inline-start" /> {translateUi('ungroup_b57ef478')}
               </Button>
               <Select<'alignment' | 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'>
                 value="alignment"
@@ -846,7 +842,7 @@ export default function PresentationWorkspace({
                 }
               >
                 {' '}
-                {translateUi('bring_forward_2a3d681d')}{' '}
+                {translateUi('bring_forward_2a3d681d')}
               </Button>
               <Button
                 size="sm"
@@ -870,7 +866,7 @@ export default function PresentationWorkspace({
                 }
               >
                 {' '}
-                {translateUi('send_back_a7b87f68')}{' '}
+                {translateUi('send_back_a7b87f68')}
               </Button>
               <Button
                 size="sm"
@@ -886,7 +882,7 @@ export default function PresentationWorkspace({
                   )
                 }
               >
-                <Trash2 data-icon="inline-start" /> {translateUi('delete_object_0b1bbb00')}{' '}
+                <Trash2 data-icon="inline-start" /> {translateUi('delete_object_0b1bbb00')}
               </Button>
             </div>
           ) : null}
@@ -924,8 +920,7 @@ export default function PresentationWorkspace({
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  {' '}
-                  {translateUi('select_an_object_on_the_slide_to_ed_28898628')}{' '}
+                  {translateUi('select_an_object_on_the_slide_to_ed_28898628')}
                 </p>
               )}
               {slide ? (
@@ -973,8 +968,7 @@ export default function PresentationWorkspace({
             <TabsContent value="history" className="flex flex-col gap-4 pt-3">
               {dirty ? (
                 <p className="text-sm text-muted-foreground">
-                  {' '}
-                  {translateUi('save_your_presentation_before_revie_a43a3133')}{' '}
+                  {translateUi('save_your_presentation_before_revie_a43a3133')}
                 </p>
               ) : tab === 'history' ? (
                 <SourceRebindPanel
@@ -1003,15 +997,13 @@ export default function PresentationWorkspace({
               </dl>
               {dirty ? (
                 <p className="text-xs text-muted-foreground">
-                  {' '}
-                  {translateUi('unsaved_edits_remain_local_until_yo_743679de')}{' '}
+                  {translateUi('unsaved_edits_remain_local_until_yo_743679de')}
                 </p>
               ) : null}
               <ol className="flex flex-col gap-3">
                 {envelope.history?.entries.map((item) => (
                   <li key={item.revision} className="flex flex-col gap-1 text-xs">
                     <span className="font-medium">
-                      {' '}
                       {translateUi('revision_2e516d68')} {item.revision} · {item.summary}
                     </span>
                     <time className="text-muted-foreground" dateTime={item.createdAt}>

@@ -107,7 +107,7 @@ export function MappingQuestions({
           onClick={() => void onAnswer(decisionsFor(questions, answers))}
         >
           {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
-          {translateUi('apply_answers_be5c8116')}{' '}
+          {translateUi('apply_answers_be5c8116')}
         </Button>
         <span className="text-muted-foreground">
           {unanswered > 0

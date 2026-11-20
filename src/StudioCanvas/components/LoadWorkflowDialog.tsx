@@ -191,7 +191,7 @@ function WorkflowRow({
           onClick={onMutationCancel}
         >
           {' '}
-          {translateUi('cancel_19766ed6')}{' '}
+          {translateUi('cancel_19766ed6')}
         </Button>
       </div>
     );
@@ -201,9 +201,8 @@ function WorkflowRow({
     return (
       <div className="flex flex-col gap-2 px-3 py-2">
         <p className="text-xs text-foreground">
-          {' '}
           {translateUi('delete_e2d0a549')} <span className="font-medium">{workflow.name}</span>
-          {translateUi('this_cannot_be_undone_7f5d26a5')}{' '}
+          {translateUi('this_cannot_be_undone_7f5d26a5')}
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -225,7 +224,7 @@ function WorkflowRow({
             onClick={onMutationCancel}
           >
             {' '}
-            {translateUi('cancel_19766ed6')}{' '}
+            {translateUi('cancel_19766ed6')}
           </Button>
         </div>
       </div>
@@ -246,7 +245,6 @@ function WorkflowRow({
           <p className="truncate text-xs text-secondary">{workflow.description}</p>
         )}
         <p className="text-xs text-muted-foreground">
-          {' '}
           {translateUi('updated_3a5ecca1')}{' '}
           {formatTimestamp(workflow.updatedAt ?? workflow.createdAt, calendarLocale)}
         </p>
@@ -283,7 +281,7 @@ function WorkflowRow({
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onSelect={() => onRenameRequest(workflow)}>
-              <Pencil className="mr-2 h-3.5 w-3.5" /> {translateUi('rename_3064d79a')}{' '}
+              <Pencil className="mr-2 h-3.5 w-3.5" /> {translateUi('rename_3064d79a')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -384,16 +382,13 @@ function WorkflowPanel({
       <Tabs value={activeTab} onValueChange={(value) => onTabChange(value as WorkflowTab)}>
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="premade" className="text-xs">
-            {' '}
-            {translateUi('pre_mades_f8df8130')}{' '}
+            {translateUi('pre_mades_f8df8130')}
           </TabsTrigger>
           <TabsTrigger value="saved" className="text-xs">
-            {' '}
             {translateUi('saved_b5c120b3')}
             {savedCount > 0 ? ` (${savedCount})` : ''}
           </TabsTrigger>
           <TabsTrigger value="pipeline" className="text-xs">
-            {' '}
             {translateUi('pipelines_d1a8fffe')}
             {pipelines.length > 0 ? ` (${pipelines.length})` : ''}
           </TabsTrigger>
@@ -417,8 +412,7 @@ function WorkflowPanel({
 
           {!brandProfileId && (
             <p className="text-xs text-muted-foreground">
-              {' '}
-              {translateUi('select_a_brand_profile_to_see_your__3277a550')}{' '}
+              {translateUi('select_a_brand_profile_to_see_your__3277a550')}
             </p>
           )}
           {error && <p className="text-xs text-danger">{error}</p>}
@@ -749,7 +743,7 @@ export function LoadWorkflowDialog({
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <Download className="mr-2 h-4 w-4" /> {translateUi('my_workflows_a749a3fd')}{' '}
+            <Download className="mr-2 h-4 w-4" /> {translateUi('my_workflows_a749a3fd')}
           </Button>
         }
       />

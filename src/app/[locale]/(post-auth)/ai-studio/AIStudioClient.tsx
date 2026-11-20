@@ -148,7 +148,6 @@ function AIStudioContent({
               {translateUi(compositionStatusKeys[selectedComposition.status])}
             </span>
             <label className="flex items-center gap-1.5 text-slate-400">
-              {' '}
               {translateUi('revision_2e516d68')}{' '}
               <select
                 aria-label={translateUi('compositionRevision')}

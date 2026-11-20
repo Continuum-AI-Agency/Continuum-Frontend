@@ -99,8 +99,7 @@ export function TemplateLayerInspector({
         </div>
         <div className="flex items-center justify-between gap-3">
           <label htmlFor={`${idPrefix}-visible-${layer.layerId}`} className="text-xs">
-            {' '}
-            {translateUi('visible_in_template_105b588a')}{' '}
+            {translateUi('visible_in_template_105b588a')}
           </label>
           <Switch
             id={`${idPrefix}-visible-${layer.layerId}`}
@@ -209,7 +208,7 @@ export function TemplateLayerInspector({
                   if (weight.target?.postScriptName) onEdit({ font: weight.target.postScriptName });
                 }}
               />{' '}
-              {translateUi('bold_94fee62e')}{' '}
+              {translateUi('bold_94fee62e')}
             </label>
           </div>
           {font ? <Note>{font}</Note> : null}

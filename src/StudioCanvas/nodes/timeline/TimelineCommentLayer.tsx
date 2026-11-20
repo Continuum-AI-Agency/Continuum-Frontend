@@ -245,7 +245,7 @@ export function TimelineCommentLayer({
                   {draftAnchor.endMs === null
                     ? formatTimecode(draftAnchor.timeMs)
                     : `${formatTimecode(draftAnchor.timeMs)}–${formatTimecode(draftAnchor.endMs)}`}{' '}
-                  {translateUi('on_the_source_db95b90b')}{' '}
+                  {translateUi('on_the_source_db95b90b')}
                 </span>
               }
               onSubmit={postDraft}
@@ -256,8 +256,7 @@ export function TimelineCommentLayer({
             // two clips, so there is no single source range to anchor it to.
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs text-destructive">
-                {' '}
-                {translateUi('that_range_crosses_a_cut_set_in_and_37619714')}{' '}
+                {translateUi('that_range_crosses_a_cut_set_in_and_37619714')}
               </p>
               <div className="ml-auto flex items-center gap-1.5">
                 <Button
@@ -267,11 +266,10 @@ export function TimelineCommentLayer({
                   onClick={() => setDraftOutSec(null)}
                 >
                   {' '}
-                  {translateUi('back_to_a_moment_bf4634d3')}{' '}
+                  {translateUi('back_to_a_moment_bf4634d3')}
                 </Button>
                 <Button type="button" variant="ghost" size="sm" onClick={clearDraft}>
-                  {' '}
-                  {translateUi('cancel_19766ed6')}{' '}
+                  {translateUi('cancel_19766ed6')}
                 </Button>
               </div>
             </div>

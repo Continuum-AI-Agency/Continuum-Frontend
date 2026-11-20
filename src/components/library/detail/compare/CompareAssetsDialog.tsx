@@ -133,7 +133,7 @@ export function CompareAssetsDialog({ brandId, assetIds, open, onOpenChange }: P
         ) : (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" />{' '}
-            {translateUi('loading_both_assets_e88ebeba')}{' '}
+            {translateUi('loading_both_assets_e88ebeba')}
           </p>
         )}
       </DialogContent>

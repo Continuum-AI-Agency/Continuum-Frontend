@@ -40,8 +40,7 @@ const PostCover = ({ post }: { post: InstagramPost }) => {
   }
   return (
     <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-      {' '}
-      {translateUi('no_preview_4b8bacd8')}{' '}
+      {translateUi('no_preview_4b8bacd8')}
     </div>
   );
 };
@@ -60,7 +59,7 @@ const PostBadge = ({ post }: { post: InstagramPost }) => {
   if (post.kind === 'reel') {
     return (
       <Badge variant="secondary" className="absolute right-1 top-1 gap-1">
-        <Play className="h-3 w-3" /> {translateUi('reel_9cb145e8')}{' '}
+        <Play className="h-3 w-3" /> {translateUi('reel_9cb145e8')}
       </Badge>
     );
   }
@@ -121,7 +120,6 @@ export function InstagramPostGrid({
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-xs text-muted-foreground">
-            {' '}
             {translateUi('page_0a30a815')} {safePage + 1} {translateUi('of_28391d3b')} {totalPages}
           </span>
           <Button

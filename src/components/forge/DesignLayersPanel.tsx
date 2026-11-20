@@ -110,8 +110,7 @@ export function DesignLayersPanel({
             {translateUi('arrangements_extra_formats_605be01c')}
           </span>
           <span className="block text-xs text-muted-foreground">
-            {' '}
-            {translateUi('the_same_layers_in_another_front_to_eae399ee')}{' '}
+            {translateUi('the_same_layers_in_another_front_to_eae399ee')}
           </span>
         </span>
         <ChevronDown
@@ -156,7 +155,7 @@ export function DesignLayersPanel({
         ) : (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
-            {translateUi('reading_the_file_s_layers_46466344')}{' '}
+            {translateUi('reading_the_file_s_layers_46466344')}
           </p>
         )}
       </CollapsibleContent>

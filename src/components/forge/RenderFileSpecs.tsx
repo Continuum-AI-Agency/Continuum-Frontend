@@ -90,7 +90,7 @@ export function RenderFileSpecs({
             })}
           >
             {' '}
-            {translateUi('retry_942087cc')}{' '}
+            {translateUi('retry_942087cc')}
           </Button>
         </span>
       ) : (

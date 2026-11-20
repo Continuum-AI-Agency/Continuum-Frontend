@@ -174,7 +174,7 @@ function TransitionRow({
           disabled={type === 'cut' && !transition}
         >
           {' '}
-          {translateUi('apply_31e392d1')}{' '}
+          {translateUi('apply_31e392d1')}
         </Button>
       </div>
     </div>

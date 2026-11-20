@@ -195,7 +195,7 @@ export function DefaultValueControl({
           ) : (
             <Upload className="size-3.5" aria-hidden />
           )}{' '}
-          {translateUi('upload_here_0a705ba9')}{' '}
+          {translateUi('upload_here_0a705ba9')}
         </Button>
         {pinned?.assetId ? (
           <>
@@ -209,7 +209,7 @@ export function DefaultValueControl({
               className="gap-1"
               onClick={() => onChange(null)}
             >
-              <X className="size-3.5" aria-hidden /> {translateUi('clear_83b12c22')}{' '}
+              <X className="size-3.5" aria-hidden /> {translateUi('clear_83b12c22')}
             </Button>
           </>
         ) : null}
@@ -385,7 +385,6 @@ function FillFromControl({
             <SelectItem value={WHOLE_TEXT}>{translateUi('whole_text_19f28d17')}</SelectItem>
             {[2, 3, 4, 5].map((line) => (
               <SelectItem key={line} value={String(line)}>
-                {' '}
                 {translateUi('line_d7852cd0')} {line}
               </SelectItem>
             ))}
@@ -555,8 +554,7 @@ export function VariableEditor({
   if (!variables.length) {
     return (
       <p className="p-[var(--card-pad)] text-xs text-muted-foreground">
-        {' '}
-        {translateUi('we_read_this_project_and_it_exposes_39bd50ee')}{' '}
+        {translateUi('we_read_this_project_and_it_exposes_39bd50ee')}
       </p>
     );
   }
@@ -687,8 +685,7 @@ export function VariableEditor({
                 <FieldGroup className="grid max-w-3xl gap-x-6 gap-y-3 @xl:grid-cols-2">
                   <Field className="gap-1.5">
                     <FieldLabel htmlFor={`variable-name-${variable.key}`} className="text-xs">
-                      {' '}
-                      {translateUi('name_dcd1d522')}{' '}
+                      {translateUi('name_dcd1d522')}
                     </FieldLabel>
                     <Input
                       id={`variable-name-${variable.key}`}
@@ -741,8 +738,7 @@ export function VariableEditor({
                     </Select>
                     {clash ? (
                       <FieldError className="text-xs">
-                        {' '}
-                        {translateUi('another_variable_already_means_this_d5ee4f3f')}{' '}
+                        {translateUi('another_variable_already_means_this_d5ee4f3f')}
                       </FieldError>
                     ) : null}
                   </Field>
@@ -758,13 +754,11 @@ export function VariableEditor({
                     />
                     {isLayerSwitch(variable.key) ? (
                       <FieldDescription className="text-xs">
-                        {' '}
-                        {translateUi('hidden_makes_this_layer_invisible_i_633b17ec')}{' '}
+                        {translateUi('hidden_makes_this_layer_invisible_i_633b17ec')}
                       </FieldDescription>
                     ) : (
                       <FieldDescription className="text-xs">
-                        {' '}
-                        {translateUi('a_row_that_leaves_this_empty_render_41cd3e24')}{' '}
+                        {translateUi('a_row_that_leaves_this_empty_render_41cd3e24')}
                       </FieldDescription>
                     )}
                   </Field>
@@ -773,8 +767,7 @@ export function VariableEditor({
                     {textLike ? (
                       <Field className="w-28 gap-1.5">
                         <FieldLabel htmlFor={`variable-budget-${variable.key}`} className="text-xs">
-                          {' '}
-                          {translateUi('reference_length_7e5bfe39')}{' '}
+                          {translateUi('reference_length_7e5bfe39')}
                         </FieldLabel>
                         <InputGroup className="h-7 rounded-md shadow-none">
                           <InputGroupInput
@@ -816,13 +809,11 @@ export function VariableEditor({
                         onCheckedChange={(next) => patch(variable.key, { exposed: next })}
                       />
                       <FieldLabel htmlFor={`variable-exposed-${variable.key}`} className="text-xs">
-                        {' '}
-                        {translateUi('ask_per_row_860e8090')}{' '}
+                        {translateUi('ask_per_row_860e8090')}
                       </FieldLabel>
                       {exposed ? null : (
                         <span className="text-xs text-muted-foreground">
-                          {' '}
-                          {translateUi('every_row_renders_what_the_file_has_fea13dc7')}{' '}
+                          {translateUi('every_row_renders_what_the_file_has_fea13dc7')}
                         </span>
                       )}
                     </Field>
@@ -834,8 +825,7 @@ export function VariableEditor({
                         onCheckedChange={(next) => patch(variable.key, { required: next })}
                       />
                       <FieldLabel htmlFor={`variable-required-${variable.key}`} className="text-xs">
-                        {' '}
-                        {translateUi('required_4850b174')}{' '}
+                        {translateUi('required_4850b174')}
                       </FieldLabel>
                     </Field>
                   </div>
@@ -863,8 +853,7 @@ export function VariableEditor({
         })}
         {shown.length ? null : (
           <li className="px-[var(--card-pad)] py-2 text-xs text-muted-foreground">
-            {' '}
-            {translateUi('no_variables_match_this_filter_3facca1a')}{' '}
+            {translateUi('no_variables_match_this_filter_3facca1a')}
           </li>
         )}
       </Accordion>
@@ -904,7 +893,7 @@ export function VariableEditor({
             ) : (
               <Save className="size-3.5" aria-hidden />
             )}{' '}
-            {translateUi('save_changes_dd0ae7a5')}{' '}
+            {translateUi('save_changes_dd0ae7a5')}
           </Button>
         </div>
       </div>

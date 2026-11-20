@@ -229,7 +229,7 @@ export function LayerEditorBlock({
                       onMouseDown={(event) => event.stopPropagation()}
                       onClick={() => onOpenChange(true)}
                     >
-                      <SquarePen className="mr-1 h-3 w-3" /> {translateUi('edit_464c4ffd')}{' '}
+                      <SquarePen className="mr-1 h-3 w-3" /> {translateUi('edit_464c4ffd')}
                     </Button>
                     <NodeDownloadButton
                       nodeType="layerEditor"
@@ -292,7 +292,7 @@ export function LayerEditorBlock({
           <ContextMenuLabel>{translateUi('layer_editor_328aef07')}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onOpenChange(true)}>
-            <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_550697e0')}{' '}
+            <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_550697e0')}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
             <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
@@ -300,7 +300,7 @@ export function LayerEditorBlock({
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onClick={() => deleteNode(id)}>
-            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

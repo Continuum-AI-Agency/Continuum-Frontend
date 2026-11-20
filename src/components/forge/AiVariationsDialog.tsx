@@ -556,8 +556,7 @@ export function AiDraftDialog({
             {translateUi('some_rows_failed_your_brand_s_rules_637a2fa0')}
           </h2>
           <p className="mt-1 mb-3 text-xs text-muted-foreground">
-            {' '}
-            {translateUi('a_failed_row_starts_unticked_keep_i_cf917fe3')}{' '}
+            {translateUi('a_failed_row_starts_unticked_keep_i_cf917fe3')}
           </p>
           <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
             {drafted.rows.map((row) => {
@@ -598,10 +597,9 @@ export function AiDraftDialog({
           <div className="mt-4 flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setDrafted(null)}>
               {' '}
-              {translateUi('back_76900f1b')}{' '}
+              {translateUi('back_76900f1b')}
             </Button>
             <Button type="button" disabled={kept === 0} onClick={addChecked}>
-              {' '}
               {translateUi('add_9fd728c6')} {kept}{' '}
               {kept === 1 ? translateUi('row_634768da') : translateUi('rows_bc51e9e6')}
             </Button>
@@ -667,7 +665,7 @@ export function AiDraftDialog({
                   }}
                 >
                   {' '}
-                  {translateUi('undo_this_change_c1497e90')}{' '}
+                  {translateUi('undo_this_change_c1497e90')}
                 </Button>
               ) : null}
             </div>
@@ -821,10 +819,9 @@ export function AiDraftDialog({
             </ul>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            {' '}
             {translateUi('pdf_word_powerpoint_excel_csv_text__09c4f388')}{' '}
             {API_RENDER_DRAFT_DOCUMENTS_MAX} {translateUi('documents_and_c36c0203')}{' '}
-            {API_RENDER_DRAFT_MEDIA_MAX} {translateUi('images_or_videos_397cdc31')}{' '}
+            {API_RENDER_DRAFT_MEDIA_MAX} {translateUi('images_or_videos_397cdc31')}
           </p>
           {problem ? (
             <p role="alert" className="text-sm text-destructive">
@@ -849,7 +846,7 @@ export function AiDraftDialog({
               onClick={() => void draftRows()}
             >
               {' '}
-              {translateUi('draft_new_rows_c61d61d8')}{' '}
+              {translateUi('draft_new_rows_c61d61d8')}
             </Button>
           ) : null}
           <Button
@@ -913,8 +910,7 @@ export function DraftWithAiButton({
       </Button>
       {templateKey ? null : (
         <span className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('available_once_this_template_is_pub_7baee5d6')}{' '}
+          {translateUi('available_once_this_template_is_pub_7baee5d6')}
         </span>
       )}
     </>

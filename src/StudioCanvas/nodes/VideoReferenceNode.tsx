@@ -362,7 +362,7 @@ export function VideoReferenceNode({
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={handleRetryUpload}
                         >
-                          <RotateCw className="mr-1 h-3 w-3" /> {translateUi('retry_942087cc')}{' '}
+                          <RotateCw className="mr-1 h-3 w-3" /> {translateUi('retry_942087cc')}
                         </Button>
                       </TooltipContent>
                     </Tooltip>
@@ -472,7 +472,7 @@ export function VideoReferenceNode({
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
+            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}
           </ContextMenuItem>
           <ContextMenuItem
             className="text-destructive focus:text-destructive"

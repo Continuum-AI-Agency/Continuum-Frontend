@@ -1067,7 +1067,7 @@ export function LibraryViewer({
                         onClick={() => fileInputRef.current?.click()}
                         className="active:scale-[0.96] [transition-property:scale]"
                       >
-                        <Upload className="size-4" /> {translateUi('upload_865e89de')}{' '}
+                        <Upload className="size-4" /> {translateUi('upload_865e89de')}
                       </Button>
                     </div>
                   </div>
@@ -1306,8 +1306,7 @@ export function LibraryViewer({
 
             {!isPaid && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-600 dark:text-amber-400">
-                {' '}
-                {translateUi('upgrade_to_a_paid_plan_to_enable_ai_788a2b29')}{' '}
+                {translateUi('upgrade_to_a_paid_plan_to_enable_ai_788a2b29')}
               </div>
             )}
 
@@ -1364,8 +1363,7 @@ export function LibraryViewer({
                       p_project_ids on the listing route, which is not this change. */}
                   {initialBrowseQuery.projectIds.length > 0 ? (
                     <p className="rounded-md border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
-                      {' '}
-                      {translateUi('board_view_doesn_t_filter_by_projec_8cd4b914')}{' '}
+                      {translateUi('board_view_doesn_t_filter_by_projec_8cd4b914')}
                     </p>
                   ) : null}
                   <LibraryBoardView

@@ -34,7 +34,7 @@ export function CanvasValidationPanel({
               })}
             >
               <ShieldCheck className="size-3.5" aria-hidden />
-              {issues.length} {translateUi('to_review_07024d06')}{' '}
+              {issues.length} {translateUi('to_review_07024d06')}
             </Button>
           }
         />

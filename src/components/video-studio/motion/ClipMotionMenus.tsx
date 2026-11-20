@@ -54,7 +54,7 @@ export function ClipMotionMenus({
       <ContextMenuSeparator />
       <ContextMenuSub>
         <ContextMenuSubTrigger>
-          <Sparkles /> {translateUi('animate_fd4a5f3d')}{' '}
+          <Sparkles /> {translateUi('animate_fd4a5f3d')}
         </ContextMenuSubTrigger>
         <ContextMenuSubContent className={SUB}>
           {CLIP_MOTION_PRESET_IDS.map((preset) => (
@@ -67,7 +67,7 @@ export function ClipMotionMenus({
       {takesLook(clip) ? (
         <ContextMenuSub>
           <ContextMenuSubTrigger>
-            <Palette /> {translateUi('look_a0de5719')}{' '}
+            <Palette /> {translateUi('look_a0de5719')}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className={SUB}>
             {LOOK_EFFECT_IDS.map((effect) => (
@@ -81,18 +81,18 @@ export function ClipMotionMenus({
       {transitionsToNext ? (
         <ContextMenuSub>
           <ContextMenuSubTrigger>
-            <Blend /> {translateUi('transition_2fe70464')}{' '}
+            <Blend /> {translateUi('transition_2fe70464')}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className={SUB}>
             {SEAM_TRANSITIONS.map((type) => (
               <ContextMenuItem key={type} onClick={() => actions.transition(clip.id, type)}>
-                {registryText(TRANSITION_LABELS[type])} {translateUi('into_next_a4f503b3')}{' '}
+                {registryText(TRANSITION_LABELS[type])} {translateUi('into_next_a4f503b3')}
               </ContextMenuItem>
             ))}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => actions.transition(clip.id, 'cut')}>
               {' '}
-              {translateUi('remove_transition_cd609bcd')}{' '}
+              {translateUi('remove_transition_cd609bcd')}
             </ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>

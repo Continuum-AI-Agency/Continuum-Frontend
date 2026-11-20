@@ -228,8 +228,7 @@ export function ChatPanel({
         <div className="space-y-0.5">
           <span className="font-medium">{translateUi('generate_49e49bb4')}</span>
           <span className="block text-xs text-gray-400">
-            {' '}
-            {translateUi('model_aware_controls_with_advanced__31a6c6ab')}{' '}
+            {translateUi('model_aware_controls_with_advanced__31a6c6ab')}
           </span>
         </div>
         <Pill variant="muted">
@@ -313,8 +312,7 @@ export function ChatPanel({
                       }
                     />
                     <TooltipContent>
-                      {' '}
-                      {translateUi('align_to_brand_rewrites_your_prompt_0012cdd9')}{' '}
+                      {translateUi('align_to_brand_rewrites_your_prompt_0012cdd9')}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -468,8 +466,7 @@ export function ChatPanel({
               <span className="block text-xs text-gray-400">{VEO_RESOLUTION_DURATION_NOTE}</span>
             ) : referencesRequire8s ? (
               <span className="block text-xs text-gray-400">
-                {' '}
-                {translateUi('veo_renders_8_seconds_only_when_a_r_29f99ce9')}{' '}
+                {translateUi('veo_renders_8_seconds_only_when_a_r_29f99ce9')}
               </span>
             ) : null}
           </div>
@@ -482,7 +479,7 @@ export function ChatPanel({
           open={false}
         >
           <summary className="flex cursor-pointer items-center gap-2 text-sm text-gray-200">
-            <SlidersVertical /> {translateUi('advanced_9f088dbe')}{' '}
+            <SlidersVertical /> {translateUi('advanced_9f088dbe')}
           </summary>
           <div className="mt-3 space-y-3">
             <div className="space-y-1">
@@ -529,8 +526,7 @@ export function ChatPanel({
               </div>
             ) : (
               <span className="block text-xs text-gray-400">
-                {' '}
-                {translateUi('advanced_knobs_not_required_for_nan_91db04fa')}{' '}
+                {translateUi('advanced_knobs_not_required_for_nan_91db04fa')}
               </span>
             )}
           </div>
@@ -562,7 +558,7 @@ export function ChatPanel({
             onClick={onCancel}
             disabled={!isStreaming}
           >
-            <Square /> {translateUi('cancel_19766ed6')}{' '}
+            <Square /> {translateUi('cancel_19766ed6')}
           </Button>
         </div>
       </form>

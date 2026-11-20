@@ -646,7 +646,7 @@ function Flow({
                 onClick={() => setIsLibraryBrowserOpen((open) => !open)}
                 aria-label={translateUi('browse_media_library_7eccde04')}
               >
-                <FolderOpen className="mr-2 h-4 w-4" /> {translateUi('library_dc20b3d5')}{' '}
+                <FolderOpen className="mr-2 h-4 w-4" /> {translateUi('library_dc20b3d5')}
               </Button>
               <Button
                 type="button"
@@ -676,7 +676,7 @@ function Flow({
                 onClick={() => setIsStylesOpen((open) => !open)}
                 aria-label={translateUi('browse_styles_83e5ad00')}
               >
-                <Palette className="mr-2 h-4 w-4" /> {translateUi('styles_3626e7fd')}{' '}
+                <Palette className="mr-2 h-4 w-4" /> {translateUi('styles_3626e7fd')}
               </Button>
             </Panel>
 

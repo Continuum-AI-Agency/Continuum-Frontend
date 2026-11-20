@@ -116,8 +116,7 @@ export function PipelinePanel({ brandId }: { brandId: string }) {
   if (isError) {
     return (
       <p className="px-1 py-8 text-center text-sm text-muted-foreground">
-        {' '}
-        {translateUi('could_not_read_your_pipelines_check_fe7114c6')}{' '}
+        {translateUi('could_not_read_your_pipelines_check_fe7114c6')}
       </p>
     );
   }
@@ -130,8 +129,7 @@ export function PipelinePanel({ brandId }: { brandId: string }) {
           {translateUi('no_pipelines_published_yet_81994b22')}
         </p>
         <p className="max-w-md text-xs text-muted-foreground">
-          {' '}
-          {translateUi('build_a_canvas_in_the_studio_leave__4307e85c')}{' '}
+          {translateUi('build_a_canvas_in_the_studio_leave__4307e85c')}
         </p>
       </div>
     );

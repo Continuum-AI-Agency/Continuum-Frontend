@@ -62,8 +62,7 @@ function AssetPreview({ asset, url }: { asset: VideoEditorPoolAsset; url?: strin
   if (!url)
     return (
       <div className="flex h-24 items-center justify-center rounded bg-muted text-2xs">
-        {' '}
-        {translateUi('no_preview_4b8bacd8')}{' '}
+        {translateUi('no_preview_4b8bacd8')}
       </div>
     );
   if (asset.kind === 'image') {
@@ -116,7 +115,7 @@ export function MediaPanel({
           className="gap-1.5"
           onClick={() => fileInput.current?.click()}
         >
-          <Upload className="size-3.5" /> {translateUi('import_2cff9baa')}{' '}
+          <Upload className="size-3.5" /> {translateUi('import_2cff9baa')}
         </Button>
         <input
           ref={fileInput}
@@ -153,8 +152,7 @@ export function MediaPanel({
       ))}
       {assets.length === 0 && importing.length === 0 ? (
         <p className="rounded-md border border-dashed p-4 text-center text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('drop_files_anywhere_in_the_editor_r_9ca8ebc9')}{' '}
+          {translateUi('drop_files_anywhere_in_the_editor_r_9ca8ebc9')}
         </p>
       ) : null}
       <div className="grid grid-cols-2 gap-2">
@@ -229,10 +227,10 @@ export function MediaPanel({
               </HoverCard>
               <ContextMenuContent className="w-52">
                 <ContextMenuItem onClick={() => onAddAsset(asset)}>
-                  <Plus /> {translateUi('add_at_playhead_1c335439')}{' '}
+                  <Plus /> {translateUi('add_at_playhead_1c335439')}
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => onAddAsset(asset, { newTrack: true })}>
-                  <Plus /> {translateUi('add_on_a_new_track_a34b8d35')}{' '}
+                  <Plus /> {translateUi('add_on_a_new_track_a34b8d35')}
                 </ContextMenuItem>
                 <ContextMenuItem
                   render={
@@ -243,7 +241,7 @@ export function MediaPanel({
                   }
                 >
                   {' '}
-                  {translateUi('open_in_library_c0a66bb6')}{' '}
+                  {translateUi('open_in_library_c0a66bb6')}
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>

@@ -113,7 +113,7 @@ export function PresentationCanvas({
           {error}
           <Button size="sm" variant="outline" onClick={() => setRefresh((value) => value + 1)}>
             {' '}
-            {translateUi('retry_preview_ceba3527')}{' '}
+            {translateUi('retry_preview_ceba3527')}
           </Button>
         </AlertDescription>
       </Alert>
@@ -248,7 +248,7 @@ export function PresentationCanvas({
           className="absolute bottom-2 left-2 rounded bg-background px-2 py-1 text-xs"
         >
           {' '}
-          {translateUi('updating_preview_67e600e7')}{' '}
+          {translateUi('updating_preview_67e600e7')}
         </span>
       ) : null}
     </div>

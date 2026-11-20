@@ -188,8 +188,7 @@ export function HyperframesMotionPanel({
   if (doc.animations.length === 0)
     return (
       <p className="px-3 py-2 text-2xs text-muted-foreground">
-        {' '}
-        {translateUi('this_composition_has_no_motion_data_31141386')}{' '}
+        {translateUi('this_composition_has_no_motion_data_31141386')}
       </p>
     );
 

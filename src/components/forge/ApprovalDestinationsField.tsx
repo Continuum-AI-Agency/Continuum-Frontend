@@ -73,7 +73,6 @@ export function ApprovalDestinationsField({
   if (query.isError) {
     return (
       <p className="text-xs text-muted-foreground">
-        {' '}
         {translateUi('couldn_t_load_approval_rooms_a8ce7efb')} {query.error.message}
       </p>
     );
@@ -83,7 +82,7 @@ export function ApprovalDestinationsField({
     return (
       <p className="text-xs text-muted-foreground">
         {translateUi('approvalRoomFallback')}{' '}
-        {translateUi('to_be_asked_in_slack_too_add_one_of_66a0838a')}{' '}
+        {translateUi('to_be_asked_in_slack_too_add_one_of_66a0838a')}
       </p>
     );
   }
@@ -153,7 +152,7 @@ export function ApprovalDestinationsField({
                   onClick={() => setManaging(open ? null : destination.id)}
                 >
                   {' '}
-                  {translateUi('manage_approvers_e16ac95b')}{' '}
+                  {translateUi('manage_approvers_e16ac95b')}
                 </Button>
               </div>
               {open ? (
@@ -165,10 +164,9 @@ export function ApprovalDestinationsField({
       </ul>
       {unstaffed.length ? (
         <p role="status" className="text-xs text-warning">
-          {' '}
           {translateUi('nobody_can_approve_in_30bfe27b')}{' '}
           {unstaffed.map(approvalRoomName).join(', ')}{' '}
-          {translateUi('yet_the_package_still_goes_there_so_88c815fe')}{' '}
+          {translateUi('yet_the_package_still_goes_there_so_88c815fe')}
         </p>
       ) : null}
     </div>

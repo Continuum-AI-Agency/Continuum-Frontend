@@ -345,8 +345,7 @@ export function CommentComposer({
         <div className="ml-auto flex items-center gap-1.5">
           {onCancel && (
             <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
-              {' '}
-              {translateUi('cancel_19766ed6')}{' '}
+              {translateUi('cancel_19766ed6')}
             </Button>
           )}
           <Button

@@ -1074,8 +1074,7 @@ export function TemplateDetail({
           </ul>
         ) : null}
         <p className="text-muted-foreground">
-          {' '}
-          {translateUi('we_look_for_missing_fonts_in_your_u_948e8eb5')}{' '}
+          {translateUi('we_look_for_missing_fonts_in_your_u_948e8eb5')}
         </p>
         {/* Always mounted, not gated on `missingFonts`: once a face is substituted the count is
             zero while the panel still offers "Add the real files", and a button wired to an
@@ -1090,7 +1089,7 @@ export function TemplateDetail({
             onClick={() => fontInput.current?.click()}
           >
             {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
-            {translateUi('add_font_files_7ad2d46a')}{' '}
+            {translateUi('add_font_files_7ad2d46a')}
           </Button>
         ) : null}
         {!editingText && fontCandidates && fontCandidates.missing.length > 0 ? (
@@ -1111,28 +1110,25 @@ export function TemplateDetail({
             onClick={() => void reviewFontInstall()}
           >
             {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
-            {translateUi('review_font_install_8b99a35e')}{' '}
+            {translateUi('review_font_install_8b99a35e')}
           </Button>
         ) : null}
         {fontResult ? (
           <div role="status" className="flex flex-col gap-1">
             {fontResult.linked.length > 0 ? (
               <p className="text-success">
-                {' '}
                 {translateUi('installed_b92fd7f8')}{' '}
                 {fontResult.linked.map((font) => font.postScriptName).join(', ')}
               </p>
             ) : null}
             {fontResult.alreadyLinked.length > 0 ? (
               <p className="text-muted-foreground">
-                {' '}
                 {translateUi('already_installed_cb70e72b')}{' '}
                 {fontResult.alreadyLinked.map((font) => font.postScriptName).join(', ')}
               </p>
             ) : null}
             {fontResult.refused.map((font) => (
               <p key={font.filename} className="text-destructive">
-                {' '}
                 {translateUi('refused_66b87354')} {font.filename}: {font.reason}
               </p>
             ))}
@@ -1173,7 +1169,7 @@ export function TemplateDetail({
               ) : (
                 <Send className="size-3.5" aria-hidden />
               )}{' '}
-              {translateUi('set_up_template_6e4e62fb')}{' '}
+              {translateUi('set_up_template_6e4e62fb')}
             </Button>
           </div>
           <p
@@ -1191,8 +1187,7 @@ export function TemplateDetail({
         <div className="rounded-md border p-3 space-y-3">
           <p className="font-medium">{translateUi('delivery_templates_554fed86')}</p>
           <p className="text-sm text-muted-foreground">
-            {' '}
-            {translateUi('each_format_has_its_own_fields_and__265f075f')}{' '}
+            {translateUi('each_format_has_its_own_fields_and__265f075f')}
           </p>
           {bundle.children.map((child) => (
             <div
@@ -1229,7 +1224,7 @@ export function TemplateDetail({
                   onClick={() => void onBundleAdvance('resume', { runId: child.runId })}
                 >
                   {' '}
-                  {translateUi('retry_setup_8e087204')}{' '}
+                  {translateUi('retry_setup_8e087204')}
                 </Button>
               ) : null}
             </div>
@@ -1243,7 +1238,7 @@ export function TemplateDetail({
                 onClick={() => void onBundleAdvance('smoke')}
               >
                 {' '}
-                {translateUi('test_all_formats_16c048fd')}{' '}
+                {translateUi('test_all_formats_16c048fd')}
               </Button>
             ) : null}
             {bundle.children.every((child) => child.state === 'review_ready') &&
@@ -1255,7 +1250,7 @@ export function TemplateDetail({
                 onClick={() => void onBundleAdvance('promotion-plan')}
               >
                 {' '}
-                {translateUi('review_publication_03b9d524')}{' '}
+                {translateUi('review_publication_03b9d524')}
               </Button>
             ) : null}
             {bundle.approval && bundle.activation?.state !== 'published' ? (
@@ -1268,7 +1263,7 @@ export function TemplateDetail({
                 }
               >
                 {' '}
-                {translateUi('publish_all_formats_d9f2bf1e')}{' '}
+                {translateUi('publish_all_formats_d9f2bf1e')}
               </Button>
             ) : null}
             {bundle.activation?.state === 'published' ? (
@@ -1315,8 +1310,7 @@ export function TemplateDetail({
     <p className="text-destructive">{source.parseError}</p>
   ) : parseState === 'pending' && parseSlow ? (
     <p className="text-muted-foreground">
-      {' '}
-      {translateUi('opening_the_file_is_taking_longer_t_87ad6546')}{' '}
+      {translateUi('opening_the_file_is_taking_longer_t_87ad6546')}
     </p>
   ) : undefined;
   const detailOf: Record<string, CheckRow['detail']> = {
@@ -1393,7 +1387,7 @@ export function TemplateDetail({
       check.id === 'mapping' && mappingReview?.state === 'needs_review' ? (
         <Button type="button" size="xs" variant="outline" onClick={() => setTab('mapping')}>
           {' '}
-          {translateUi('review_layers_f02e6d38')}{' '}
+          {translateUi('review_layers_f02e6d38')}
         </Button>
       ) : (
         ladderButton(check.action)
@@ -1418,7 +1412,7 @@ export function TemplateDetail({
       ) : (
         <Wrench className="size-3" aria-hidden />
       )}{' '}
-      {translateUi('fix_problems_80195a4c')}{' '}
+      {translateUi('fix_problems_80195a4c')}
     </Button>
   ) : hasProblem ? (
     <Button
@@ -1432,7 +1426,7 @@ export function TemplateDetail({
       }}
     >
       {' '}
-      {translateUi('investigate_e2641093')}{' '}
+      {translateUi('investigate_e2641093')}
     </Button>
   ) : undefined;
 
@@ -1441,7 +1435,7 @@ export function TemplateDetail({
       <header className="flex flex-wrap items-center justify-between gap-2 px-[var(--card-pad)] py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={onBack}>
-            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}{' '}
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}
           </Button>
           <h2 className="min-w-0 text-base font-semibold">
             <InlineRename value={name} onRename={onRename} />
@@ -1463,7 +1457,6 @@ export function TemplateDetail({
         <div className="flex flex-wrap items-center gap-2">
           {onOpenVariant && revisionCatalog?.length ? (
             <label className="flex items-center gap-2 text-xs">
-              {' '}
               {translateUi('variant_3f19fe84')}{' '}
               <select
                 aria-label={translateUi('inspect_template_variant_d7a42b8a')}
@@ -1515,7 +1508,7 @@ export function TemplateDetail({
               className="gap-1.5 text-destructive"
               onClick={onRemove}
             >
-              <Trash2 className="size-3.5" aria-hidden /> {translateUi('remove_c3812fc4')}{' '}
+              <Trash2 className="size-3.5" aria-hidden /> {translateUi('remove_c3812fc4')}
             </Button>
           ) : null}
           {onOpenVariant && inspectedRevision && parseState === 'parsed' ? (
@@ -1544,7 +1537,7 @@ export function TemplateDetail({
                 onClick={() => void removeFromWorkspace(templateKey)}
               >
                 {' '}
-                {translateUi('remove_from_workspace_bf720619')}{' '}
+                {translateUi('remove_from_workspace_bf720619')}
               </Button>
               <Button
                 type="button"
@@ -1656,8 +1649,7 @@ export function TemplateDetail({
               />
             ) : (
               <div className="flex h-[min(60vh,40rem)] items-center justify-center bg-muted/40 text-xs text-muted-foreground">
-                {' '}
-                {translateUi('no_formats_read_from_this_file_yet_b1657b14')}{' '}
+                {translateUi('no_formats_read_from_this_file_yet_b1657b14')}
               </div>
             )}
           </TemplateMorph>
@@ -1669,7 +1661,7 @@ export function TemplateDetail({
               <p className="mb-2 font-semibold">
                 {missingFootage.length} {translateUi('missing_media_file_fc1331e6')}
                 {missingFootage.length === 1 ? '' : 's'}{' '}
-                {translateUi('drop_each_replacement_onto_its_name_d19f50c6')}{' '}
+                {translateUi('drop_each_replacement_onto_its_name_d19f50c6')}
               </p>
               <SourceRebindPanel
                 repairOnly
@@ -1706,7 +1698,7 @@ export function TemplateDetail({
                     onClick={() => void saveTextMoves()}
                   >
                     {savingText ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
-                    {translateUi('save_text_layout_1434bf4c')}{' '}
+                    {translateUi('save_text_layout_1434bf4c')}
                   </Button>
                   <Button
                     type="button"
@@ -1719,7 +1711,7 @@ export function TemplateDetail({
                     }}
                   >
                     {' '}
-                    {translateUi('cancel_19766ed6')}{' '}
+                    {translateUi('cancel_19766ed6')}
                   </Button>
                 </>
               ) : (
@@ -1737,7 +1729,7 @@ export function TemplateDetail({
                   onClick={() => setEditingText(true)}
                 >
                   {' '}
-                  {translateUi('repair_text_81e7778d')}{' '}
+                  {translateUi('repair_text_81e7778d')}
                 </Button>
               )}
             </div>
@@ -1745,8 +1737,7 @@ export function TemplateDetail({
           {editingText ? (
             <div className="flex flex-col gap-2 text-xs">
               <p className="text-muted-foreground">
-                {' '}
-                {translateUi('select_text_on_the_preview_then_cli_bf730046')}{' '}
+                {translateUi('select_text_on_the_preview_then_cli_bf730046')}
               </p>
               {selectedTextBox ? (
                 <div className="flex items-center gap-2">
@@ -1822,8 +1813,7 @@ export function TemplateDetail({
                 ))}
                 {editableFonts.length === 0 ? (
                   <span className="text-muted-foreground">
-                    {' '}
-                    {translateUi('drop_ttf_or_otf_files_here_or_use_a_b51d3aa8')}{' '}
+                    {translateUi('drop_ttf_or_otf_files_here_or_use_a_b51d3aa8')}
                   </span>
                 ) : null}
               </fieldset>
@@ -1836,7 +1826,7 @@ export function TemplateDetail({
                 onClick={() => fontInput.current?.click()}
               >
                 {' '}
-                {translateUi('add_font_files_7ad2d46a')}{' '}
+                {translateUi('add_font_files_7ad2d46a')}
               </Button>
               {fontCandidates && fontCandidates.missing.length > 0 ? (
                 <FontSubstitutions
@@ -1864,14 +1854,13 @@ export function TemplateDetail({
                 onClick={() => setTab('source')}
               >
                 {' '}
-                {translateUi('review_saved_version_ac1e6d7c')}{' '}
+                {translateUi('review_saved_version_ac1e6d7c')}
               </Button>
             </div>
           ) : null}
           {!rendered && source.parse && drawnRatios.size > 0 ? (
             <p className="text-xs text-muted-foreground">
-              {' '}
-              {translateUi('this_preview_is_a_quick_layout_chec_3e0fbe85')}{' '}
+              {translateUi('this_preview_is_a_quick_layout_chec_3e0fbe85')}
             </p>
           ) : null}
         </div>
@@ -1885,31 +1874,25 @@ export function TemplateDetail({
             <TabsTrigger value="layers">{translateUi('edit_layers_589e52a5')}</TabsTrigger>
             <TabsTrigger value="author">{translateUi('author_d95082a2')}</TabsTrigger>
             <TabsTrigger value="variants" className="flex-none px-0 text-xs">
-              {' '}
               {translateUi('variants_63d2643b')}{' '}
               {revisionCatalog?.length ? `(${revisionCatalog.length})` : ''}
             </TabsTrigger>
             <TabsTrigger value="variables" className="flex-none px-0 text-xs">
-              {' '}
-              {translateUi('variables_02db55ba')}{' '}
+              {translateUi('variables_02db55ba')}
             </TabsTrigger>
             <TabsTrigger value="mapping" className="flex-none px-0 text-xs">
-              {' '}
-              {translateUi('connected_layers_b5bc1739')}{' '}
+              {translateUi('connected_layers_b5bc1739')}
             </TabsTrigger>
             {templateKey ? (
               <TabsTrigger value="output" className="flex-none px-0 text-xs">
-                {' '}
-                {translateUi('output_b2439bcb')}{' '}
+                {translateUi('output_b2439bcb')}
               </TabsTrigger>
             ) : null}
             <TabsTrigger value="source" className="flex-none px-0 text-xs">
-              {' '}
-              {translateUi('replace_file_68ec54a9')}{' '}
+              {translateUi('replace_file_68ec54a9')}
             </TabsTrigger>
             <TabsTrigger value="details" className="flex-none px-0 text-xs">
-              {' '}
-              {translateUi('details_45989de4')}{' '}
+              {translateUi('details_45989de4')}
             </TabsTrigger>
 
             {templateKey ? (
@@ -2081,12 +2064,12 @@ export function TemplateDetail({
                 {DESIGN_SOURCE[selectedRevisionVariant.sourceKind] ? (
                   <Button size="xs" variant="outline" onClick={() => setTab('layers')}>
                     {' '}
-                    {translateUi('edit_layers_589e52a5')}{' '}
+                    {translateUi('edit_layers_589e52a5')}
                   </Button>
                 ) : (
                   <Button size="xs" variant="outline" onClick={() => setTab('variants')}>
                     {' '}
-                    {translateUi('open_variants_489f83e0')}{' '}
+                    {translateUi('open_variants_489f83e0')}
                   </Button>
                 )}
               </div>
@@ -2181,15 +2164,14 @@ export function TemplateDetail({
               {translateUi('install_fonts_on_this_template_22ae3fd4')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {' '}
-              {translateUi('we_ll_upload_these_files_privately__dadd16f9')}{' '}
+              {translateUi('we_ll_upload_these_files_privately__dadd16f9')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ul className="flex flex-col gap-1 text-xs">
             {fontPlan?.files.map((file) => (
               <li key={file.filename} className="break-all">
                 {file.filename} · {file.bytes.toLocaleString(currentUiLocale)}{' '}
-                {translateUi('bytes_277089d9')}{' '}
+                {translateUi('bytes_277089d9')}
               </li>
             ))}
           </ul>
@@ -2199,7 +2181,7 @@ export function TemplateDetail({
             </AlertDialogCancel>
             <AlertDialogAction disabled={fontBusy} onClick={() => void installFonts()}>
               {' '}
-              {translateUi('install_fonts_9de0db7c')}{' '}
+              {translateUi('install_fonts_9de0db7c')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

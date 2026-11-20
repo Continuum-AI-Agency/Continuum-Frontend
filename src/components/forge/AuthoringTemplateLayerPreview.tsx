@@ -1965,7 +1965,7 @@ export function TemplateLayerPreview({
                       count: Number(liveCount),
                     })
                   : translateUi('no_layers_selected_708f38bb')}{' '}
-                {translateUi('hold_shift_while_selecting_to_add_o_6d956cc4')}{' '}
+                {translateUi('hold_shift_while_selecting_to_add_o_6d956cc4')}
               </span>
             </div>
           }
@@ -2013,7 +2013,7 @@ export function TemplateLayerPreview({
             }}
           >
             {' '}
-            {translateUi('select_editable_layers_c1d247cb')}{' '}
+            {translateUi('select_editable_layers_c1d247cb')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuLabel>{translateUi('align_selected_8d4ee794')}</ContextMenuLabel>
@@ -2070,8 +2070,7 @@ export function TemplateLayerPreview({
         ) : null}
         {displayedLayer?.parentId ? (
           <p className="mt-3 text-2xs text-muted-foreground">
-            {' '}
-            {translateUi('move_this_layer_with_x_and_y_in_its_bd2586fd')}{' '}
+            {translateUi('move_this_layer_with_x_and_y_in_its_bd2586fd')}
           </p>
         ) : null}
       </PopoverContent>

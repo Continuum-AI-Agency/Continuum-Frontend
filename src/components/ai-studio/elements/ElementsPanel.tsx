@@ -227,7 +227,7 @@ function ElementList({
   return (
     <div className="flex flex-col gap-3">
       <Button type="button" size="sm" className="self-start" onClick={onCreate}>
-        <Plus className="mr-2 h-4 w-4" /> {translateUi('new_element_45e3dc5d')}{' '}
+        <Plus className="mr-2 h-4 w-4" /> {translateUi('new_element_45e3dc5d')}
       </Button>
 
       {isLoading ? (

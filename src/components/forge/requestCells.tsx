@@ -407,7 +407,7 @@ function MediaPicker({
           className="shrink-0 px-1 py-0 text-2xs"
         >
           {' '}
-          {translateUi('short_f5d61ead')}{' '}
+          {translateUi('short_f5d61ead')}
         </Badge>
       ) : null}
       {fit ? (
@@ -537,7 +537,7 @@ function StatusBadge({
             .join(' ')}
         >
           <Badge variant="warning">
-            <Info className="size-3" aria-hidden /> {translateUi('ready_fit_warning_363f14d8')}{' '}
+            <Info className="size-3" aria-hidden /> {translateUi('ready_fit_warning_363f14d8')}
           </Badge>
         </Explained>
       );
@@ -545,7 +545,7 @@ function StatusBadge({
       return fitWarning ? (
         <Explained why={fitWarning}>
           <Badge variant="warning">
-            <Info className="size-3" aria-hidden /> {translateUi('ready_fit_warning_363f14d8')}{' '}
+            <Info className="size-3" aria-hidden /> {translateUi('ready_fit_warning_363f14d8')}
           </Badge>
         </Explained>
       ) : (
@@ -642,7 +642,7 @@ function DefaultTag({
       className="shrink-0 px-1 py-0 text-2xs"
     >
       {' '}
-      {translateUi('default_21b111cb')}{' '}
+      {translateUi('default_21b111cb')}
     </Badge>
   );
 }
@@ -733,8 +733,7 @@ export function VariableCell({
     return (
       <Explained why={translateUi('automaticBrandLogoExplanation')}>
         <span className="text-2xs text-muted-foreground underline decoration-dotted underline-offset-2">
-          {' '}
-          {translateUi('continuum_fills_this_43ee4b3a')}{' '}
+          {translateUi('continuum_fills_this_43ee4b3a')}
         </span>
       </Explained>
     );
@@ -1062,9 +1061,8 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
               {breadcrumb}
             </p>
             <span className="shrink-0 rounded-sm bg-muted px-1 font-mono text-3xs tabular-nums text-muted-foreground">
-              {' '}
               {translateUi('inherits_8f7d01d4')} {ownChangeCount(row)}{' '}
-              {translateUi('changed_d67e2e94')}{' '}
+              {translateUi('changed_d67e2e94')}
             </span>
           </div>
         ) : null}
@@ -1406,7 +1404,7 @@ function RunBadge({ job }: { job: ApiRenderJob }) {
     <Explained why={where}>
       <Badge variant="muted">
         <Loader2 className="size-3 animate-spin motion-reduce:animate-none" aria-hidden />{' '}
-        {translateUi('rendering_e2fe3539')}{' '}
+        {translateUi('rendering_e2fe3539')}
       </Badge>
     </Explained>
   );
@@ -1433,7 +1431,7 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
         title={translateUi('fill_in_value0_8f5e7ca4', { value0: String(names.join(', ')) })}
       >
         {' '}
-        {translateUi('needs_input_aecc044c')}{' '}
+        {translateUi('needs_input_aecc044c')}
       </Badge>
     );
   }

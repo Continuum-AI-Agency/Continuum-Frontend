@@ -1068,7 +1068,7 @@ export function LayerStage({
           data-testid="layer-drop-target"
         >
           {' '}
-          {translateUi('drop_to_add_as_a_layer_dd3f0538')}{' '}
+          {translateUi('drop_to_add_as_a_layer_dd3f0538')}
         </div>
       ) : null}
 

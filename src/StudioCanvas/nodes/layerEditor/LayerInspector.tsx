@@ -144,7 +144,6 @@ function LayerInspectorImpl({
     <div className="flex flex-col gap-3 p-2" data-testid="layer-inspector">
       <section className="flex flex-col gap-1.5">
         <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-          {' '}
           {translateUi('frame_d0b50e06')}{' '}
         </h3>
         <Select
@@ -197,7 +196,7 @@ function LayerInspectorImpl({
         </div>
         <p className="text-3xs text-muted-foreground">
           {FRAME_MIN_SIZE}–{FRAME_MAX_SIZE}{' '}
-          {translateUi('px_resizing_the_frame_never_moves_a_2f5627a8')}{' '}
+          {translateUi('px_resizing_the_frame_never_moves_a_2f5627a8')}
         </p>
 
         {/* Transparent stays the DEFAULT — the export owes downstream an alpha channel.
@@ -218,7 +217,7 @@ function LayerInspectorImpl({
             onClick={() => onBackgroundChange(null)}
           >
             {' '}
-            {translateUi('clear_83b12c22')}{' '}
+            {translateUi('clear_83b12c22')}
           </Button>
         </div>
       </section>
@@ -257,7 +256,6 @@ function LayerInspectorImpl({
         <>
           <section className="flex flex-col gap-1.5">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              {' '}
               {translateUi('transform_d2d68041')}{' '}
             </h3>
             <div className="grid grid-cols-2 gap-1.5">
@@ -347,7 +345,6 @@ function LayerInspectorImpl({
 
           <section className="flex flex-col gap-1.5">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              {' '}
               {translateUi('anchor_a4ae750b')}{' '}
             </h3>
             <div className="grid grid-cols-2 gap-1.5">
@@ -366,8 +363,7 @@ function LayerInspectorImpl({
             </div>
             <div className="flex items-center justify-between gap-1">
               <p className="text-3xs text-muted-foreground">
-                {' '}
-                {translateUi('source_pixels_rotation_and_scale_pi_bab1b73a')}{' '}
+                {translateUi('source_pixels_rotation_and_scale_pi_bab1b73a')}
               </p>
               <Button
                 type="button"
@@ -381,14 +377,13 @@ function LayerInspectorImpl({
                 }
               >
                 {' '}
-                {translateUi('centre_45c19322')}{' '}
+                {translateUi('centre_45c19322')}
               </Button>
             </div>
           </section>
 
           <section className="flex flex-col gap-2">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              {' '}
               {translateUi('shader_effects_05531dd8')}{' '}
             </h3>
             <ShaderEffectControls
@@ -451,7 +446,6 @@ function LayerInspectorImpl({
 
           <section className="flex flex-col gap-1.5">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              {' '}
               {translateUi('order_6be09082')}{' '}
             </h3>
             <div className="grid grid-cols-4 gap-1">

@@ -77,7 +77,6 @@ export function LibraryRenderQueue() {
           />
           <div className="min-w-0 flex-1">
             <h2 id="library-render-queue-title" className="text-sm font-semibold">
-              {' '}
               {translateUi('jobs_2f17a0f8')}{' '}
             </h2>
             <p className="text-xs text-muted-foreground">
@@ -156,7 +155,7 @@ export function LibraryRenderQueue() {
                         disabled={!queue.canExecute(job)}
                         onClick={() => setConsentJob(job)}
                       >
-                        <Cpu /> {translateUi('render_6d89eb7d')}{' '}
+                        <Cpu /> {translateUi('render_6d89eb7d')}
                       </Button>
                     ) : null}
                     {job.state === 'failed' ? (
@@ -167,7 +166,7 @@ export function LibraryRenderQueue() {
                         variant="outline"
                         onClick={() => void queue.retry(job)}
                       >
-                        <RotateCcw /> {translateUi('retry_942087cc')}{' '}
+                        <RotateCcw /> {translateUi('retry_942087cc')}
                       </Button>
                     ) : null}
                     {job.state === 'failed' ? (
@@ -189,13 +188,12 @@ export function LibraryRenderQueue() {
                         variant="outline"
                         onClick={() => void queue.stop(job)}
                       >
-                        <Square /> {translateUi('stop_cae7d57b')}{' '}
+                        <Square /> {translateUi('stop_cae7d57b')}
                       </Button>
                     ) : null}
                     {active && !local ? (
                       <span className="ml-auto text-xs text-muted-foreground">
-                        {' '}
-                        {translateUi('on_another_device_d0db529f')}{' '}
+                        {translateUi('on_another_device_d0db529f')}
                       </span>
                     ) : null}
                   </div>
@@ -211,18 +209,17 @@ export function LibraryRenderQueue() {
           <DialogHeader>
             <DialogTitle>{translateUi('use_this_device_to_render_b69fdd33')}</DialogTitle>
             <DialogDescription>
-              {' '}
-              {translateUi('rendering_uses_this_device_s_cpu_gp_56dddc4f')}{' '}
+              {translateUi('rendering_uses_this_device_s_cpu_gp_56dddc4f')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConsentJob(null)}>
               {' '}
-              {translateUi('cancel_19766ed6')}{' '}
+              {translateUi('cancel_19766ed6')}
             </Button>
             <Button type="button" disabled={starting} onClick={() => void confirm()}>
               {starting ? <Loader2 className="animate-spin" /> : <Cpu />}{' '}
-              {translateUi('claim_and_render_c8654218')}{' '}
+              {translateUi('claim_and_render_c8654218')}
             </Button>
           </DialogFooter>
         </DialogContent>

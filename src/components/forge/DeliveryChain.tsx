@@ -135,8 +135,7 @@ export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?:
     >
       {bucketOnly ? (
         <span title={translateUi('masters_stay_in_the_render_bucket_a_8016fd98')}>
-          {' '}
-          {translateUi('render_bucket_bf540934')}{' '}
+          {translateUi('render_bucket_bf540934')}
         </span>
       ) : (
         <span

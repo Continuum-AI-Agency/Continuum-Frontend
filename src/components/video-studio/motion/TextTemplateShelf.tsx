@@ -147,8 +147,7 @@ export function TextTemplateShelf({
         />
       </div>
       <p className="text-2xs text-muted-foreground">
-        {' '}
-        {translateUi('click_to_add_at_the_playhead_or_dra_2d9a1530')}{' '}
+        {translateUi('click_to_add_at_the_playhead_or_dra_2d9a1530')}
       </p>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-2">
         {TEXT_TEMPLATE_IDS.map((templateId) => (

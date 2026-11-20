@@ -169,7 +169,7 @@ export function DestinationApproversPanel({
       {approversQuery.isPending ? (
         <p className="flex items-center gap-1.5 text-muted-foreground">
           <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
-          {translateUi('loading_approvers_8f6c0f93')}{' '}
+          {translateUi('loading_approvers_8f6c0f93')}
         </p>
       ) : approversQuery.isError ? (
         <p className="text-destructive">
@@ -184,8 +184,7 @@ export function DestinationApproversPanel({
                 {requested.length})
               </h4>
               <p className="text-muted-foreground">
-                {' '}
-                {translateUi('they_pressed_request_approver_acces_6ee424cb')}{' '}
+                {translateUi('they_pressed_request_approver_acces_6ee424cb')}
               </p>
               <ul aria-label={translateUi('requested_approvers_858cd847')}>
                 {requested.map((item) => row(item, 'activate'))}
@@ -206,8 +205,7 @@ export function DestinationApproversPanel({
               </ul>
             ) : (
               <p className="text-warning">
-                {' '}
-                {translateUi('nobody_can_approve_here_yet_someone_21f33763')}{' '}
+                {translateUi('nobody_can_approve_here_yet_someone_21f33763')}
               </p>
             )}
           </section>
@@ -286,8 +284,7 @@ function AddApprover({
     <div className="space-y-1.5 border-t border-border pt-2">
       <div className="flex flex-col gap-1">
         <Label htmlFor={`approver-kind-${destination.id}`} className="text-muted-foreground">
-          {' '}
-          {translateUi('add_an_approver_a0396c52')}{' '}
+          {translateUi('add_an_approver_a0396c52')}
         </Label>
         <Select
           value={mode}
@@ -394,7 +391,7 @@ function AddApprover({
           disabled={!body || busy}
           onClick={() => void add()}
         >
-          <UserPlus className="size-3.5" aria-hidden /> {translateUi('add_approver_10746b93')}{' '}
+          <UserPlus className="size-3.5" aria-hidden /> {translateUi('add_approver_10746b93')}
         </Button>
       </div>
     </div>

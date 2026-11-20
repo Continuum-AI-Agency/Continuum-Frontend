@@ -127,7 +127,7 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
           <LibraryElementsGrid brandId={brandProfileId} />
         ) : assets.length === 0 && loading ? (
           <div className="flex h-32 items-center justify-center text-sm text-gray-400">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {translateUi('loading_ba3bbbe1')}{' '}
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {translateUi('loading_ba3bbbe1')}
           </div>
         ) : assets.length === 0 && error ? (
           <div className="flex flex-col items-center gap-2 p-6 text-center text-sm text-gray-400">
@@ -284,8 +284,7 @@ function InspirationEmptyState({ pull }: { pull: InspirationPull }) {
         {translateUi('no_inspiration_saved_yet_b2f58eea')}
       </p>
       <p className="max-w-[16rem] text-xs leading-relaxed text-gray-400">
-        {' '}
-        {translateUi('inspiration_is_competitor_creative__f55857a5')}{' '}
+        {translateUi('inspiration_is_competitor_creative__f55857a5')}
       </p>
       <InspirationPullButton label={translateUi('find_inspiration_eed90577')} pull={pull} />
     </div>

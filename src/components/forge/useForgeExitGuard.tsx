@@ -160,14 +160,13 @@ export function useForgeExitGuard() {
         <AlertDialogHeader>
           <AlertDialogTitle>{translateUi('unsaved_layer_changes_f1acb0cf')}</AlertDialogTitle>
           <AlertDialogDescription>
-            {' '}
-            {translateUi('these_layer_edits_have_not_been_sav_cd48b2b1')}{' '}
+            {translateUi('these_layer_edits_have_not_been_sav_cd48b2b1')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={saving} onClick={() => resolvePending(false)}>
             {' '}
-            {translateUi('stay_08fd1de4')}{' '}
+            {translateUi('stay_08fd1de4')}
           </AlertDialogCancel>
           <Button
             type="button"
@@ -176,7 +175,7 @@ export function useForgeExitGuard() {
             onClick={discardAndExit}
           >
             {' '}
-            {translateUi('discard_eb1a70e3')}{' '}
+            {translateUi('discard_eb1a70e3')}
           </Button>
           <AlertDialogAction
             disabled={saving || draft?.busy}

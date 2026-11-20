@@ -251,8 +251,7 @@ function PlacementStage({
         />
       ) : (
         <p className="absolute inset-0 flex items-center justify-center px-3 text-center text-2xs text-white/60">
-          {' '}
-          {translateUi('wire_a_picture_into_this_action_to__a93bfa6b')}{' '}
+          {translateUi('wire_a_picture_into_this_action_to__a93bfa6b')}
         </p>
       )}
 
@@ -454,8 +453,7 @@ export function BurnInConfig({
           onPick={(anchor) => write({ anchor, offsetX: 0, offsetY: 0 })}
         />
         <p className="text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('drag_the_block_or_pick_a_point_rele_ea624597')}{' '}
+          {translateUi('drag_the_block_or_pick_a_point_rele_ea624597')}
         </p>
       </section>
 
@@ -494,7 +492,7 @@ export function BurnInConfig({
             }`}
           >
             {' '}
-            {translateUi('default_21b111cb')}{' '}
+            {translateUi('default_21b111cb')}
           </button>
           {inkTokens.map((token) => (
             <button
@@ -578,14 +576,12 @@ export function BurnInConfig({
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col">
           <Label id={`burn-in-fallback-type-${nodeId}`} className="text-xs">
-            {' '}
-            {translateUi('use_a_fallback_typeface_e5d0dd7b')}{' '}
+            {translateUi('use_a_fallback_typeface_e5d0dd7b')}
           </Label>
           <p className="max-w-[15rem] text-2xs text-muted-foreground">
-            {' '}
             {translateUi('off_makes_this_action_refuse_to_run_523d0a18')}{' '}
             {PRELOADED_TYPE_FACES.display}
-            {translateUi('turn_it_off_for_a_piece_where_a_sub_b5859524')}{' '}
+            {translateUi('turn_it_off_for_a_piece_where_a_sub_b5859524')}
           </p>
         </div>
         <Switch
@@ -598,12 +594,10 @@ export function BurnInConfig({
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col">
           <Label id={`burn-in-fallback-ink-${nodeId}`} className="text-xs">
-            {' '}
-            {translateUi('measure_a_fallback_ink_60623b9b')}{' '}
+            {translateUi('measure_a_fallback_ink_60623b9b')}
           </Label>
           <p className="max-w-[15rem] text-2xs text-muted-foreground">
-            {' '}
-            {translateUi('off_makes_this_action_refuse_to_run_1a7a3c60')}{' '}
+            {translateUi('off_makes_this_action_refuse_to_run_1a7a3c60')}
           </p>
         </div>
         <Switch
@@ -616,12 +610,10 @@ export function BurnInConfig({
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col">
           <Label id={`burn-in-escalate-${nodeId}`} className="text-xs">
-            {' '}
-            {translateUi('treat_the_background_84b51931')}{' '}
+            {translateUi('treat_the_background_84b51931')}
           </Label>
           <p className="max-w-[15rem] text-2xs text-muted-foreground">
-            {' '}
-            {translateUi('contrast_outranks_placement_type_dr_8d93424b')}{' '}
+            {translateUi('contrast_outranks_placement_type_dr_8d93424b')}
           </p>
         </div>
         <Switch

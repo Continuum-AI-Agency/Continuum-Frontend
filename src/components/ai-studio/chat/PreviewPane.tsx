@@ -61,11 +61,11 @@ export function PreviewPane({
           </Pill>
           {canMarkup ? (
             <Button size="sm" variant="outline" onClick={onMarkup}>
-              <SquarePen /> {translateUi('markup_b2161d2c')}{' '}
+              <SquarePen /> {translateUi('markup_b2161d2c')}
             </Button>
           ) : null}
           <Button size="sm" variant="ghost" onClick={onReset}>
-            <RotateCw /> {translateUi('reset_daee7606')}{' '}
+            <RotateCw /> {translateUi('reset_daee7606')}
           </Button>
         </div>
       </div>
@@ -128,7 +128,7 @@ export function PreviewPane({
               className="mt-3 border-destructive text-destructive hover:text-destructive"
               onClick={onCancel}
             >
-              <Square /> {translateUi('cancel_19766ed6')}{' '}
+              <Square /> {translateUi('cancel_19766ed6')}
             </Button>
           </div>
         ) : null}

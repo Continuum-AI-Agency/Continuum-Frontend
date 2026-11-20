@@ -212,7 +212,7 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                 onClick={() => void run()}
               >
                 {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}{' '}
-                {translateUi('run_00d60e31')}{' '}
+                {translateUi('run_00d60e31')}
               </Button>
               {/* Every op that lands an image or a clip carries the save; the text ops
                   render nothing here, because the button reads the OUTPUT and a string
@@ -230,8 +230,7 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
             </>
           ) : (
             <span className="px-3 text-center text-xs text-muted-foreground">
-              {' '}
-              {translateUi('choose_an_operation_for_this_node_f_fee91761')}{' '}
+              {translateUi('choose_an_operation_for_this_node_f_fee91761')}
             </span>
           )}
         </NodeContent>

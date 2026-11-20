@@ -105,8 +105,7 @@ export function CanvasRoomsTabs({
                 <span className="whitespace-nowrap">{room.name}</span>
                 {room.kind === 'planner' ? (
                   <span className="rounded border border-border/70 px-1 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
-                    {' '}
-                    {translateUi('planner_38581d18')}{' '}
+                    {translateUi('planner_38581d18')}
                   </span>
                 ) : null}
                 {isActive && room.kind !== 'planner' && (
@@ -155,7 +154,7 @@ export function CanvasRoomsTabs({
               className="bg-popover text-2xs text-popover-foreground"
             >
               {' '}
-              {translateUi('new_workspace_0ece3208')}{' '}
+              {translateUi('new_workspace_0ece3208')}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

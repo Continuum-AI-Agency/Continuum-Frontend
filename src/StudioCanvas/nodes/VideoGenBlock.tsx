@@ -618,8 +618,7 @@ export function VideoGenBlock({
                           className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                          {' '}
-                          {translateUi('prompt_5c391238')}{' '}
+                          {translateUi('prompt_5c391238')}
                         </span>
                       </div>
                     }
@@ -648,8 +647,7 @@ export function VideoGenBlock({
                           className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                          {' '}
-                          {translateUi('negative_prompt_e2203ddc')}{' '}
+                          {translateUi('negative_prompt_e2203ddc')}
                         </span>
                       </div>
                     }
@@ -680,8 +678,7 @@ export function VideoGenBlock({
                               className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                             />
                             <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                              {' '}
-                              {translateUi('first_frame_c5cf3d9e')}{' '}
+                              {translateUi('first_frame_c5cf3d9e')}
                             </span>
                           </div>
                         }
@@ -710,8 +707,7 @@ export function VideoGenBlock({
                               className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                             />
                             <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                              {' '}
-                              {translateUi('last_frame_1f3800e3')}{' '}
+                              {translateUi('last_frame_1f3800e3')}
                             </span>
                           </div>
                         }
@@ -743,7 +739,6 @@ export function VideoGenBlock({
                             className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                           />
                           <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                            {' '}
                             {translateUi('ref_images_b23274eb')}
                             {imageLimit
                               ? translateUi('max_value0_ae063e23', { value0: String(imageLimit) })
@@ -759,7 +754,6 @@ export function VideoGenBlock({
                     />
                     <TooltipContent>
                       <p>
-                        {' '}
                         {translateUi('reference_images_34e9d320')} {refImageCount}/
                         {imageLimit ?? '∞'}
                       </p>
@@ -785,8 +779,7 @@ export function VideoGenBlock({
                             className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                           />
                           <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                            {' '}
-                            {translateUi('ref_video_max_1_353289d0')}{' '}
+                            {translateUi('ref_video_max_1_353289d0')}
                           </span>
                         </div>
                       }
@@ -899,7 +892,7 @@ export function VideoGenBlock({
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}{' '}
+            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem

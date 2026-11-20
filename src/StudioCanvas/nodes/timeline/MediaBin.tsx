@@ -145,8 +145,7 @@ export function MediaBin({
       </div>
       {pool.length === 0 ? (
         <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border/60 p-4 text-center text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('wire_image_video_or_audio_nodes_int_95fb00c4')}{' '}
+          {translateUi('wire_image_video_or_audio_nodes_int_95fb00c4')}
         </div>
       ) : (
         <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto pr-1">

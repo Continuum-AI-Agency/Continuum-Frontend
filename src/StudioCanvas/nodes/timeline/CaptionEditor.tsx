@@ -110,8 +110,7 @@ export function CaptionEditor({
         <div>
           <h3 className="text-xs font-semibold">{translateUi('captions_43bf6af8')}</h3>
           <p className="text-2xs text-muted-foreground">
-            {' '}
-            {translateUi('pick_a_style_edit_copy_and_timing_m_9cdcd281')}{' '}
+            {translateUi('pick_a_style_edit_copy_and_timing_m_9cdcd281')}
           </p>
         </div>
         <span className="text-2xs tabular-nums text-muted-foreground">
@@ -179,7 +178,7 @@ export function CaptionEditor({
         />
         <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
           {' '}
-          {translateUi('import_srt_vtt_ab1f65b4')}{' '}
+          {translateUi('import_srt_vtt_ab1f65b4')}
         </Button>
         <Button
           variant="ghost"
@@ -188,7 +187,7 @@ export function CaptionEditor({
           onClick={() => download('captions.srt', toSrt(cues), 'application/x-subrip')}
         >
           {' '}
-          {translateUi('export_srt_31a28c6e')}{' '}
+          {translateUi('export_srt_31a28c6e')}
         </Button>
         <Button
           variant="ghost"
@@ -197,7 +196,7 @@ export function CaptionEditor({
           onClick={() => download('captions.vtt', toVtt(cues, globalStyle), 'text/vtt')}
         >
           {' '}
-          {translateUi('export_vtt_f1358c6b')}{' '}
+          {translateUi('export_vtt_f1358c6b')}
         </Button>
       </div>
 
@@ -211,7 +210,6 @@ export function CaptionEditor({
 
       <div className="grid grid-cols-2 gap-2 text-2xs">
         <div className="grid gap-1">
-          {' '}
           {translateUi('text_71988c4d')}{' '}
           <ColorField
             label={translateUi('caption_text_73ce218c')}
@@ -220,7 +218,6 @@ export function CaptionEditor({
           />
         </div>
         <div className="grid gap-1">
-          {' '}
           {translateUi('highlight_07ccd15d')}{' '}
           <ColorField
             label={translateUi('caption_highlight_2af72d7c')}
@@ -278,7 +275,6 @@ export function CaptionEditor({
       {selected ? (
         <div className="grid gap-2 border-t border-border/60 pt-3 text-2xs">
           <label className="grid gap-1">
-            {' '}
             {translateUi('caption_copy_712e0c67')}{' '}
             <textarea
               className="min-h-16 resize-y rounded border border-border bg-background p-2 text-xs"
@@ -328,7 +324,6 @@ export function CaptionEditor({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="grid gap-1">
-              {' '}
               {translateUi('cue_text_7cb7e771')}{' '}
               <ColorField
                 label={translateUi('cue_text_7cb7e771')}
@@ -337,7 +332,6 @@ export function CaptionEditor({
               />
             </div>
             <div className="grid gap-1">
-              {' '}
               {translateUi('cue_highlight_2c779540')}{' '}
               <ColorField
                 label={translateUi('cue_highlight_2c779540')}
@@ -349,7 +343,7 @@ export function CaptionEditor({
           <div className="flex justify-end">
             <Button variant="ghost" size="sm" onClick={() => updateSelected({ style: undefined })}>
               {' '}
-              {translateUi('reset_cue_style_e4e890c0')}{' '}
+              {translateUi('reset_cue_style_e4e890c0')}
             </Button>
           </div>
         </div>

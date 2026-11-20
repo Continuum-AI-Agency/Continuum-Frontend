@@ -218,8 +218,7 @@ export function TranscriptPanel({
       <fieldset className="flex shrink-0 items-center gap-1 border-b border-border px-3 py-1">
         <legend className="sr-only">{translateUi('export_transcript_f6aee6b2')}</legend>
         <span className="text-2xs text-muted-foreground" aria-hidden="true">
-          {' '}
-          {translateUi('export_36648955')}{' '}
+          {translateUi('export_36648955')}
         </span>
         {formats.map((format) => (
           <Button
@@ -316,7 +315,7 @@ export function TranscriptPanel({
                 data-testid="transcript-comment-range"
                 onClick={() => setComposing(true)}
               >
-                <MessageSquarePlus className="size-3.5" /> {translateUi('comment_44f5e3fb')}{' '}
+                <MessageSquarePlus className="size-3.5" /> {translateUi('comment_44f5e3fb')}
               </Button>
               <button
                 type="button"

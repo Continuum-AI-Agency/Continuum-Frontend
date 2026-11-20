@@ -327,8 +327,7 @@ export function ImageMarkupDialog({
           <div>
             <DialogTitle>{title ?? translateUi('markup_image_c1077adf')}</DialogTitle>
             <DialogDescription>
-              {' '}
-              {translateUi('draw_on_top_of_the_image_use_pen_er_440440fc')}{' '}
+              {translateUi('draw_on_top_of_the_image_use_pen_er_440440fc')}
             </DialogDescription>
           </div>
           <DialogClose
@@ -347,7 +346,7 @@ export function ImageMarkupDialog({
               variant={tool === 'pen' ? 'default' : 'outline'}
               onClick={() => setTool('pen')}
             >
-              <SquarePen /> {translateUi('pen_a04bd35b')}{' '}
+              <SquarePen /> {translateUi('pen_a04bd35b')}
             </Button>
             <Button
               size="sm"
@@ -355,7 +354,7 @@ export function ImageMarkupDialog({
               onClick={() => setTool('eraser')}
             >
               {' '}
-              {translateUi('eraser_686eee3c')}{' '}
+              {translateUi('eraser_686eee3c')}
             </Button>
           </div>
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1">
@@ -400,7 +399,7 @@ export function ImageMarkupDialog({
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={handleUndo} disabled={!canUndo}>
-              <RotateCw /> {translateUi('undo_a8283ade')}{' '}
+              <RotateCw /> {translateUi('undo_a8283ade')}
             </Button>
             <Button
               size="sm"
@@ -408,7 +407,7 @@ export function ImageMarkupDialog({
               className="border-destructive text-destructive hover:text-destructive"
               onClick={resetCanvas}
             >
-              <Trash2 /> {translateUi('clear_83b12c22')}{' '}
+              <Trash2 /> {translateUi('clear_83b12c22')}
             </Button>
           </div>
         </div>
@@ -433,8 +432,7 @@ export function ImageMarkupDialog({
               />
               {isCanvasHover && !isDrawing ? (
                 <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
-                  {' '}
-                  {translateUi('click_drag_to_draw_87076949')}{' '}
+                  {translateUi('click_drag_to_draw_87076949')}
                 </div>
               ) : null}
               <canvas

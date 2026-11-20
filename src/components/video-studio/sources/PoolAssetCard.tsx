@@ -157,7 +157,7 @@ export function PoolAssetCard({
       </HoverCard>
       <ContextMenuContent className="w-52">
         <ContextMenuItem onClick={add}>
-          <Plus className="mr-2 size-4" /> {translateUi('add_at_playhead_1c335439')}{' '}
+          <Plus className="mr-2 size-4" /> {translateUi('add_at_playhead_1c335439')}
         </ContextMenuItem>
         <ContextMenuItem
           onClick={() =>
@@ -168,7 +168,7 @@ export function PoolAssetCard({
             )
           }
         >
-          <ExternalLink className="mr-2 size-4" /> {translateUi('open_in_library_c0a66bb6')}{' '}
+          <ExternalLink className="mr-2 size-4" /> {translateUi('open_in_library_c0a66bb6')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

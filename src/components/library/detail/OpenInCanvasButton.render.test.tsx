@@ -7,7 +7,9 @@ import {
   waitFor,
 } from '@/components/library/__tests__/renderWithCreativeI18n';
 
+const navigation = await import('next/navigation');
 mock.module('next/navigation', () => ({
+  ...navigation,
   useRouter: () => ({ push: () => {} }),
 }));
 

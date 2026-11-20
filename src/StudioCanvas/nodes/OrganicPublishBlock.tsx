@@ -365,7 +365,6 @@ export function OrganicPublishBlock({
         <AlertDialogContent className="nodrag">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {' '}
               {translateUi('publish_to_b7a69104')}{' '}
               {publishPlatformLabel(pending?.platform as never)}?
             </AlertDialogTitle>
@@ -383,7 +382,7 @@ export function OrganicPublishBlock({
               onClick={confirmPublish}
             >
               {' '}
-              {translateUi('publish_859390eb')}{' '}
+              {translateUi('publish_859390eb')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

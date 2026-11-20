@@ -360,7 +360,7 @@ export function PlannerDraftBlock({
                   rel="noreferrer"
                 >
                   <ExternalLink className="size-3" aria-hidden />{' '}
-                  {translateUi('open_in_planner_28ad31bc')}{' '}
+                  {translateUi('open_in_planner_28ad31bc')}
                 </a>
                 <button
                   type="button"
@@ -377,7 +377,7 @@ export function PlannerDraftBlock({
                   }
                 >
                   {' '}
-                  {translateUi('unbind_dca68375')}{' '}
+                  {translateUi('unbind_dca68375')}
                 </button>
               </div>
             </div>

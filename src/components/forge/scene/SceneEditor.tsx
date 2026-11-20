@@ -124,7 +124,7 @@ export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: st
         {sceneProblem(view.error).message}
         <Button size="sm" variant="outline" onClick={() => void view.refetch()}>
           {' '}
-          {translateUi('retry_942087cc')}{' '}
+          {translateUi('retry_942087cc')}
         </Button>
       </div>
     );
@@ -188,7 +188,7 @@ function SceneEditorBody({
             href={forgeDeepLinkHref({ templateAssetId: assetId, renderSetId: null, rowId: null })}
             className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'gap-1' })}
           >
-            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('template_0575f29d')}{' '}
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('template_0575f29d')}
           </Link>
           <h1 className="min-w-0 truncate text-base font-semibold">{name}</h1>
           <Badge variant={changed ? 'violet' : 'muted'} className="text-2xs">
@@ -226,7 +226,7 @@ function SceneEditorBody({
             disabled={!changed}
             onClick={() => dispatch({ type: 'resetAll' })}
           >
-            <RotateCcw className="size-3.5" aria-hidden /> {translateUi('reset_daee7606')}{' '}
+            <RotateCcw className="size-3.5" aria-hidden /> {translateUi('reset_daee7606')}
           </Button>
           {output && mediaType ? (
             <SceneMediaTypePicker output={output} value={mediaType} onChange={setPickedMediaType} />
@@ -262,18 +262,16 @@ function SceneEditorBody({
           {' '}
           {translateUi('someone_saved_a_newer_version_of_th_7ba54ccc')}{' '}
           <Button size="xs" variant="outline" onClick={onReload}>
-            {' '}
-            {translateUi('load_newest_4ee5e8bc')}{' '}
+            {translateUi('load_newest_4ee5e8bc')}
           </Button>
         </p>
       ) : null}
       {view.externals.length ? (
         <p className="m-0 shrink-0 border-b border-border px-3 py-2 text-xs text-muted-foreground">
-          {' '}
           {translateUi('this_file_points_at_aa813de2')} {view.externals.length}{' '}
           {translateUi('file_s_it_does_not_carry_2c784b5d')}{' '}
           {view.externals.map((external) => external.path).join(', ')}
-          {translateUi('they_render_missing_pack_them_in_bl_eeefa1d3')}{' '}
+          {translateUi('they_render_missing_pack_them_in_bl_eeefa1d3')}
         </p>
       ) : null}
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[18rem_minmax(0,1fr)_20rem] lg:overflow-hidden">

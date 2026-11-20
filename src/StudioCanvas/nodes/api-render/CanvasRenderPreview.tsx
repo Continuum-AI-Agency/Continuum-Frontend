@@ -128,12 +128,11 @@ export function CanvasRenderPreview({
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-border/60 px-2 py-1">
         <p className="text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('layout_preview_test_render_verifies_c973e963')}{' '}
+          {translateUi('layout_preview_test_render_verifies_c973e963')}
         </p>
         {preview ? (
           <Button type="button" variant="ghost" size="xs" onClick={() => setExpanded(true)}>
-            <Expand className="size-3" /> {translateUi('expand_07548c2c')}{' '}
+            <Expand className="size-3" /> {translateUi('expand_07548c2c')}
           </Button>
         ) : null}
       </div>

@@ -172,16 +172,14 @@ export function CustomFieldManagerDialog({
           <DialogHeader className="shrink-0 border-b border-border px-4 py-3">
             <DialogTitle className="text-sm">{translateUi('custom_fields_5566db49')}</DialogTitle>
             <DialogDescription className="text-xs">
-              {' '}
-              {translateUi('your_brand_s_own_metadata_on_an_ass_ea2bfd7a')}{' '}
+              {translateUi('your_brand_s_own_metadata_on_an_ass_ea2bfd7a')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
             {fields.length === 0 ? (
               <p className="py-2 text-xs text-muted-foreground">
-                {' '}
-                {translateUi('no_fields_yet_add_one_below_a_ratin_39c82322')}{' '}
+                {translateUi('no_fields_yet_add_one_below_a_ratin_39c82322')}
               </p>
             ) : null}
 
@@ -204,9 +202,8 @@ export function CustomFieldManagerDialog({
           <div className="shrink-0 border-t border-border p-4">
             {atCapacity ? (
               <p className="text-xs text-muted-foreground">
-                {' '}
                 {translateUi('this_brand_has_the_maximum_of_16df4da4')}{' '}
-                {MAX_CUSTOM_FIELDS_PER_BRAND} {translateUi('fields_64805f12')}{' '}
+                {MAX_CUSTOM_FIELDS_PER_BRAND} {translateUi('fields_64805f12')}
               </p>
             ) : (
               <NewFieldForm
@@ -231,8 +228,7 @@ export function CustomFieldManagerDialog({
               {pendingDelete?.name}”?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
-              {' '}
-              {translateUi('every_value_your_assets_hold_for_th_a0e67bb2')}{' '}
+              {translateUi('every_value_your_assets_hold_for_th_a0e67bb2')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -484,7 +480,7 @@ function RatingScalePicker({
         <SelectContent>
           {Array.from({ length: 10 }, (_, index) => index + 1).map((max) => (
             <SelectItem key={max} value={String(max)} className="text-xs">
-              {max} {translateUi('stars_b2547aa0')}{' '}
+              {max} {translateUi('stars_b2547aa0')}
             </SelectItem>
           ))}
         </SelectContent>
@@ -569,7 +565,7 @@ function NewFieldForm({
           onClick={() => void submit()}
         >
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}{' '}
-          {translateUi('add_9fd728c6')}{' '}
+          {translateUi('add_9fd728c6')}
         </Button>
       </div>
       {isSelect ? (

@@ -258,7 +258,7 @@ export function ForgeAgentPanel({
                       <SafeMarkdown content={turn.text} isAnimating={turn.status === 'running'} />
                     ) : turn.status === 'running' ? (
                       <span className="flex items-center gap-2 text-muted-foreground">
-                        <Spinner className="size-3" /> {translateUi('working_5474eef8')}{' '}
+                        <Spinner className="size-3" /> {translateUi('working_5474eef8')}
                       </span>
                     ) : null}
                     {turn.question ? (
@@ -283,7 +283,6 @@ export function ForgeAgentPanel({
                     ) : null}
                     {turn.drafts > 0 && turn.status !== 'running' ? (
                       <span className="text-xs text-muted-foreground">
-                        {' '}
                         {translateUi('saved_to_your_draft_as_75926d7e')} {turn.drafts}{' '}
                         {translateUi('undo_step_21a9c1b9')}
                         {turn.drafts === 1 ? '' : 's'}.

@@ -267,7 +267,7 @@ export function ForgeProjectDrop({
         disabled={packing}
         onClick={() => folderInput.current?.click()}
       >
-        <FolderUp aria-hidden /> {translateUi('upload_folder_e35182e6')}{' '}
+        <FolderUp aria-hidden /> {translateUi('upload_folder_e35182e6')}
       </Button>
       {brandId && onPresentationCreated ? (
         <NewPresentationButton brandId={brandId} onCreated={onPresentationCreated} />
@@ -284,8 +284,7 @@ export function ForgeProjectDrop({
         <>
           <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">
-              {' '}
-              {translateUi('how_to_prepare_an_after_effects_tem_4adcd62d')}{' '}
+              {translateUi('how_to_prepare_an_after_effects_tem_4adcd62d')}
             </summary>
             <ol className="mt-2 list-decimal space-y-1 pl-4">
               <li> {translateUi('use_file_dependencies_collect_files_01e52695')} </li>
@@ -294,11 +293,10 @@ export function ForgeProjectDrop({
             </ol>
           </details>
           <p className="text-xs text-muted-foreground">
-            {' '}
             {translateUi('powerpoint_decks_and_templates_up_t_7ca26b0d')}{' '}
             {LIBRARY_PRESENTATION_MAX_BYTES / (1024 * 1024)}{' '}
             {translateUi('mb_other_projects_up_to_eea784da')} {FORGE_PROJECT_FILE_MAX_MB}{' '}
-            {translateUi('mb_you_can_add_font_files_separatel_9deaa09a')}{' '}
+            {translateUi('mb_you_can_add_font_files_separatel_9deaa09a')}
           </p>
         </>
       )}

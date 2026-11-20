@@ -133,8 +133,7 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-3 pb-1">
         <p className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-          {' '}
-          {translateUi('custom_fields_5566db49')}{' '}
+          {translateUi('custom_fields_5566db49')}
         </p>
         {canEdit ? (
           <Button
@@ -144,7 +143,7 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
             className="h-6 gap-1 px-1.5 text-2xs text-muted-foreground"
             onClick={() => setManagerOpen(true)}
           >
-            <Settings2 className="size-3.5" /> {translateUi('manage_5a234448')}{' '}
+            <Settings2 className="size-3.5" /> {translateUi('manage_5a234448')}
           </Button>
         ) : null}
       </div>
@@ -201,8 +200,7 @@ function EmptyFields({ onAdd }: { onAdd: () => void }) {
     <div className="rounded-lg border border-dashed border-border/60 p-4 text-center">
       <p className="text-xs font-medium">{translateUi('no_custom_fields_yet_eb0a32b0')}</p>
       <p className="mt-1 text-2xs text-muted-foreground">
-        {' '}
-        {translateUi('track_what_your_team_needs_to_know__eb9e3ba9')}{' '}
+        {translateUi('track_what_your_team_needs_to_know__eb9e3ba9')}
       </p>
       <Button
         type="button"
@@ -212,7 +210,7 @@ function EmptyFields({ onAdd }: { onAdd: () => void }) {
         onClick={onAdd}
       >
         {' '}
-        {translateUi('add_a_field_72d29bb1')}{' '}
+        {translateUi('add_a_field_72d29bb1')}
       </Button>
     </div>
   );

@@ -126,7 +126,7 @@ function AssetInput({
       {loading ? (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
-          {translateUi('reading_the_library_c11aab21')}{' '}
+          {translateUi('reading_the_library_c11aab21')}
         </p>
       ) : (
         <div className="grid max-h-40 grid-cols-2 gap-1.5 overflow-y-auto">
@@ -151,7 +151,6 @@ function AssetInput({
                 <span className="min-w-0">
                   <span className="block truncate text-xs">{asset.title ?? asset.fileName}</span>
                   <span className="block font-mono text-3xs text-muted-foreground">
-                    {' '}
                     {translateUi('exact_version_68ab8187')} {asset.headVersionId?.slice(0, 8)}
                   </span>
                 </span>
@@ -160,9 +159,8 @@ function AssetInput({
           })}
           {choices.length === 0 ? (
             <p className="col-span-2 text-xs text-muted-foreground">
-              {' '}
               {translateUi('no_versioned_2bcee361')} {input.media}{' '}
-              {translateUi('assets_found_365e775e')}{' '}
+              {translateUi('assets_found_365e775e')}
             </p>
           ) : null}
         </div>
@@ -215,15 +213,14 @@ function ElementInput({
             <span className="block truncate text-xs">{element.name}</span>
             <span className="block text-3xs text-muted-foreground">
               {elementCategoryLabel(element.category, translateUi)}{' '}
-              {translateUi('element_4e5b548d')}{' '}
+              {translateUi('element_4e5b548d')}
             </span>
           </span>
         </button>
       ))}
       {choices.length === 0 ? (
         <p className="col-span-2 text-xs text-muted-foreground">
-          {' '}
-          {translateUi('no_matching_elements_create_one_in__840857f0')}{' '}
+          {translateUi('no_matching_elements_create_one_in__840857f0')}
         </p>
       ) : null}
     </div>
@@ -296,7 +293,6 @@ function PipelineReceipt({
                 </p>
                 {artifact.kind === 'element_candidate' ? (
                   <p className="font-mono text-3xs text-muted-foreground">
-                    {' '}
                     {translateUi('reference_52367a66')}{' '}
                     {artifact.candidate.reference_asset.asset_id.slice(0, 8)}{' '}
                     {translateUi('version_01ed56b7')}{' '}

@@ -141,8 +141,7 @@ export function CollectionMembersDialog({
             <UserLock className="size-4" /> {translateUi('members_of_935f85f3')} {collectionName}
           </DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('each_member_s_role_decides_what_the_930e1d39')}{' '}
+            {translateUi('each_member_s_role_decides_what_the_930e1d39')}
           </DialogDescription>
         </DialogHeader>
 
@@ -270,13 +269,12 @@ export function CollectionMembersDialog({
                   }
                 >
                   {' '}
-                  {translateUi('add_9fd728c6')}{' '}
+                  {translateUi('add_9fd728c6')}
                 </Button>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                {' '}
-                {translateUi('only_a_brand_owner_admin_or_this_co_2619c701')}{' '}
+                {translateUi('only_a_brand_owner_admin_or_this_co_2619c701')}
               </p>
             )}
           </div>

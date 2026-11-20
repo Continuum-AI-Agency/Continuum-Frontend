@@ -687,7 +687,6 @@ export function SharedTemplateCard({
           {template.granted ? (
             <>
               <span className="inline-flex items-center gap-1 text-xs">
-                {' '}
                 {translateUi('in_8bc1d53c')} {brand}
                 <Check className="size-3.5 text-success" aria-hidden />
               </span>
@@ -707,7 +706,7 @@ export function SharedTemplateCard({
                 onClick={onToggle}
               >
                 {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
-                {translateUi('remove_c3812fc4')}{' '}
+                {translateUi('remove_c3812fc4')}
               </Button>
               {!template.draft && onRender ? (
                 <Button
@@ -717,7 +716,7 @@ export function SharedTemplateCard({
                   className="ml-auto gap-1.5"
                   onClick={onRender}
                 >
-                  <Play className="size-3.5" aria-hidden /> {translateUi('render_6d89eb7d')}{' '}
+                  <Play className="size-3.5" aria-hidden /> {translateUi('render_6d89eb7d')}
                 </Button>
               ) : null}
             </>

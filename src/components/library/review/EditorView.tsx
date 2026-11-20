@@ -140,11 +140,10 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
                 value2: String(timing.dropFrame ? translateUi('drop_frame_9d74721f') : ''),
               })
             : translateUi('reading_the_file_s_timecode_f9f02daa')}{' '}
-          · {openCount} {translateUi('open_2348f998')}{' '}
+          · {openCount} {translateUi('open_2348f998')}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-1">
           <label className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
-            {' '}
             {translateUi('timeline_starts_at_3579fbaa')}{' '}
             <select
               data-testid="editor-timeline-start"
@@ -182,8 +181,7 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
         </p>
       ) : rows.length === 0 ? (
         <p className="px-3 py-4 text-xs text-muted-foreground">
-          {' '}
-          {translateUi('no_timed_comments_on_this_version_37970d84')}{' '}
+          {translateUi('no_timed_comments_on_this_version_37970d84')}
         </p>
       ) : (
         <ol className="divide-y divide-border">

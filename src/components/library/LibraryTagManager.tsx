@@ -98,7 +98,7 @@ export function LibraryTagManager({
       <DialogTrigger
         render={
           <Button type="button" size="sm" variant="ghost" className="h-8 text-muted-foreground">
-            <Tags className="size-3.5" /> {translateUi('manage_tags_0b4ee559')}{' '}
+            <Tags className="size-3.5" /> {translateUi('manage_tags_0b4ee559')}
           </Button>
         }
       />
@@ -106,8 +106,7 @@ export function LibraryTagManager({
         <DialogHeader>
           <DialogTitle>{translateUi('manage_tags_0b4ee559')}</DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('rename_one_tag_or_merge_duplicates__22cd061c')}{' '}
+            {translateUi('rename_one_tag_or_merge_duplicates__22cd061c')}
           </DialogDescription>
         </DialogHeader>
         <fieldset className="flex gap-1 rounded-lg bg-muted p-1">
@@ -142,8 +141,7 @@ export function LibraryTagManager({
         ) : (
           <fieldset className="max-h-48 overflow-y-auto rounded-lg border border-border p-2">
             <legend className="px-1 text-xs font-medium text-muted-foreground">
-              {' '}
-              {translateUi('tags_to_merge_8a524354')}{' '}
+              {translateUi('tags_to_merge_8a524354')}
             </legend>
             {alphabetical.map(({ tag, count }) => (
               <label key={tag} className="flex min-h-8 items-center gap-2 rounded px-1 text-sm">
@@ -182,7 +180,7 @@ export function LibraryTagManager({
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
             {' '}
-            {translateUi('cancel_19766ed6')}{' '}
+            {translateUi('cancel_19766ed6')}
           </Button>
           <Button type="button" disabled={!canSubmit} onClick={() => void submit()}>
             {busy

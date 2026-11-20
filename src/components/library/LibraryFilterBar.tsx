@@ -637,8 +637,7 @@ function AdvancedFilterPopover({
             <FilterSection label={translateUi('project_98595978')}>
               {projectOptions.length === 0 ? (
                 <span className="text-xs text-muted-foreground">
-                  {' '}
-                  {translateUi('no_projects_yet_select_assets_and_u_d9432711')}{' '}
+                  {translateUi('no_projects_yet_select_assets_and_u_d9432711')}
                 </span>
               ) : (
                 projectOptions
@@ -940,8 +939,7 @@ function TechnicalSection({
           className="flex min-w-0 items-center gap-1.5 border-0 p-0"
         >
           <span aria-hidden className="w-24 shrink-0 text-xs text-muted-foreground">
-            {' '}
-            {translateUi('resolution_d4055faf')}{' '}
+            {translateUi('resolution_d4055faf')}
           </span>
           {LIBRARY_RESOLUTION_PRESETS.map((preset) => {
             const selected =

@@ -263,11 +263,9 @@ export function ShareLinkSettings({
 
       <Section title={translateUi('branding_d417aa16')}>
         <p className="text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('empty_fields_use_the_brand_kit_its__95cbc096')}{' '}
+          {translateUi('empty_fields_use_the_brand_kit_its__95cbc096')}
         </p>
         <div className={LABEL}>
-          {' '}
           {translateUi('logo_d707dc2f')}{' '}
           <ShareLogoPicker
             brandId={link.brandId}
@@ -276,7 +274,6 @@ export function ShareLinkSettings({
           />
         </div>
         <label className={LABEL}>
-          {' '}
           {translateUi('title_7e8cd205')}{' '}
           <input
             name="headerTitle"
@@ -287,7 +284,6 @@ export function ShareLinkSettings({
           />
         </label>
         <label className={LABEL}>
-          {' '}
           {translateUi('description_526e0087')}{' '}
           <textarea
             name="description"
@@ -330,7 +326,6 @@ export function ShareLinkSettings({
             </label>
           ))}
           <label className={LABEL}>
-            {' '}
             {translateUi('theme_efb52e71')}{' '}
             <select
               name="theme"
@@ -353,7 +348,7 @@ export function ShareLinkSettings({
             checked={branding.hideFooter === true}
             onChange={(event) => setBrand({ hideFooter: event.target.checked || undefined })}
           />{' '}
-          {translateUi('hide_shared_via_continuum_a83bf4b5')}{' '}
+          {translateUi('hide_shared_via_continuum_a83bf4b5')}
         </label>
       </Section>
 
@@ -376,12 +371,11 @@ export function ShareLinkSettings({
               )
             }
           />{' '}
-          {translateUi('show_each_viewer_s_name_email_and_t_3118daa8')}{' '}
+          {translateUi('show_each_viewer_s_name_email_and_t_3118daa8')}
         </label>
         {watermark ? (
           <>
             <label className={LABEL}>
-              {' '}
               {translateUi('text_102e9b76')}
               {'{name}'} {'{email}'} {'{ip}'} {'{time}'})
               <input
@@ -394,7 +388,6 @@ export function ShareLinkSettings({
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className={LABEL}>
-                {' '}
                 {translateUi('position_6d031af1')}{' '}
                 <select
                   name="watermarkPosition"
@@ -415,7 +408,6 @@ export function ShareLinkSettings({
                 </select>
               </label>
               <label className={LABEL}>
-                {' '}
                 {translateUi('opacity_6062652e')} {Math.round(watermark.opacity * 100)}%
                 <input
                   type="range"
@@ -439,7 +431,7 @@ export function ShareLinkSettings({
                   setWatermark({ ...watermark, burnDownloads: event.target.checked })
                 }
               />{' '}
-              {translateUi('burn_it_into_downloaded_images_and__c4c5f09d')}{' '}
+              {translateUi('burn_it_into_downloaded_images_and__c4c5f09d')}
             </label>
           </>
         ) : null}
@@ -467,7 +459,6 @@ export function ShareLinkSettings({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <label className={LABEL}>
-            {' '}
             {translateUi('expires_blank_never_f79a9791')}{' '}
             <input
               type="date"
@@ -506,7 +497,7 @@ export function ShareLinkSettings({
               checked={removePasscode}
               onChange={(event) => setRemovePasscode(event.target.checked)}
             />{' '}
-            {translateUi('remove_the_passcode_changing_or_rem_34c175a6')}{' '}
+            {translateUi('remove_the_passcode_changing_or_rem_34c175a6')}
           </label>
         ) : null}
       </Section>
@@ -542,7 +533,7 @@ export function ShareLinkSettings({
           data-share-save
         >
           {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
-          {translateUi('save_presentation_16a4ddd5')}{' '}
+          {translateUi('save_presentation_16a4ddd5')}
         </Button>
       </div>
     </div>

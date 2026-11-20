@@ -22,7 +22,11 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
     });
   },
 }));
-mock.module('next/navigation', () => ({ useRouter: () => ({ push: () => undefined }) }));
+const navigation = await import('next/navigation');
+mock.module('next/navigation', () => ({
+  ...navigation,
+  useRouter: () => ({ push: () => undefined }),
+}));
 
 const { VariantSwitcher } = await import('./VariantSwitcher');
 

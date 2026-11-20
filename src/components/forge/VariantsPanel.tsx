@@ -202,7 +202,7 @@ export function VariantsPanel({
                 })}
               >
                 {' '}
-                {translateUi('behind_original_a3a2dbc1')}{' '}
+                {translateUi('behind_original_a3a2dbc1')}
               </Badge>
             ) : null}
             {variant.tags.includes('brand_aligned') ? (
@@ -211,7 +211,6 @@ export function VariantsPanel({
           </div>
           {node.from ? (
             <p className="text-muted-foreground">
-              {' '}
               {translateUi('from_21819769')} {variantName(node.from.variant)}{' '}
               {translateUi('revision_8d8560f7')} {node.from.revision.number}
               {node.changes.length ? ` — ${node.changes.join(' · ')}` : ''}
@@ -230,7 +229,7 @@ export function VariantsPanel({
             {head && onBranch && !archived ? (
               <Button size="xs" variant="outline" onClick={() => void onBranch(head.sourceAssetId)}>
                 {' '}
-                {translateUi('branch_from_here_35ed2154')}{' '}
+                {translateUi('branch_from_here_35ed2154')}
               </Button>
             ) : null}
             {published?.publications.map((target) =>
@@ -273,7 +272,7 @@ export function VariantsPanel({
                 }
               >
                 {' '}
-                {translateUi('make_default_f43b9425')}{' '}
+                {translateUi('make_default_f43b9425')}
               </Button>
             ) : null}
             {archived ? (
@@ -289,7 +288,7 @@ export function VariantsPanel({
                 }
               >
                 {' '}
-                {translateUi('restore_a76e13b9')}{' '}
+                {translateUi('restore_a76e13b9')}
               </Button>
             ) : !variant.original ? (
               <Button
@@ -299,7 +298,7 @@ export function VariantsPanel({
                 onClick={() => setArchive(variant.variantId)}
               >
                 {' '}
-                {translateUi('archive_66f4804e')}{' '}
+                {translateUi('archive_66f4804e')}
               </Button>
             ) : null}
           </div>
@@ -375,8 +374,7 @@ export function VariantsPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-          {' '}
-          {translateUi('the_original_is_never_edited_branch_f8ae1077')}{' '}
+          {translateUi('the_original_is_never_edited_branch_f8ae1077')}
         </p>
         <fieldset className="flex gap-1">
           <legend className="sr-only">{translateUi('family_view_baf916d0')}</legend>
@@ -395,11 +393,10 @@ export function VariantsPanel({
       </div>
       {error ? (
         <p role="alert" className="text-xs text-destructive">
-          {' '}
           {translateUi('could_not_read_variants_3bcdbb4e')}{' '}
           <Button size="xs" variant="outline" onClick={() => void refetch()}>
             {' '}
-            {translateUi('retry_942087cc')}{' '}
+            {translateUi('retry_942087cc')}
           </Button>
         </p>
       ) : !variants ? (
@@ -418,7 +415,7 @@ export function VariantsPanel({
             </strong>
             <Button size="xs" variant="ghost" onClick={() => setComparing([])}>
               {' '}
-              {translateUi('close_7d9eb7ac')}{' '}
+              {translateUi('close_7d9eb7ac')}
             </Button>
           </div>
           <VariantCompare brandId={brandId} variants={compared} />
@@ -442,15 +439,13 @@ export function VariantsPanel({
       {selectedVariant && DESIGN_FILE[selectedVariant.sourceKind] ? (
         <div className="space-y-2 border-t pt-3 text-xs">
           <p>
-            {' '}
             {translateUi('this_template_is_built_from_8d44d0ff')}{' '}
             {DESIGN_FILE[selectedVariant.sourceKind]}{' '}
-            {translateUi('file_make_a_variant_by_changing_its_bbfd99c9')}{' '}
+            {translateUi('file_make_a_variant_by_changing_its_bbfd99c9')}
           </p>
           {onEditLayers ? (
             <Button size="xs" variant="outline" onClick={onEditLayers}>
-              {' '}
-              {translateUi('edit_layers_589e52a5')}{' '}
+              {translateUi('edit_layers_589e52a5')}
             </Button>
           ) : null}
         </div>
@@ -489,7 +484,7 @@ export function VariantsPanel({
           <div className="flex gap-2">
             <Button size="xs" variant="outline" disabled={busy} onClick={() => setArchive(null)}>
               {' '}
-              {translateUi('cancel_19766ed6')}{' '}
+              {translateUi('cancel_19766ed6')}
             </Button>
             <Button
               size="xs"
@@ -508,7 +503,7 @@ export function VariantsPanel({
               }
             >
               {' '}
-              {translateUi('archive_variant_f774d5b8')}{' '}
+              {translateUi('archive_variant_f774d5b8')}
             </Button>
           </div>
         </div>

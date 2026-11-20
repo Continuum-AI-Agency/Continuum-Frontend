@@ -74,9 +74,8 @@ export function MotionGraph({
   if (keys.length === 0) {
     return (
       <p className="px-3 py-2 text-2xs text-muted-foreground">
-        {' '}
         {translateUi('add_keys_on_4bc8dcc7')} {label}{' '}
-        {translateUi('to_plot_value_and_speed_511b305e')}{' '}
+        {translateUi('to_plot_value_and_speed_511b305e')}
       </p>
     );
   }

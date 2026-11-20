@@ -163,8 +163,7 @@ export function ForgeSourceHandoff({ brandId }: { brandId: string }) {
     >
       <h2 className="font-medium">{translateUi('add_files_for_the_agent_aab38c64')}</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        {' '}
-        {translateUi('choose_a_template_project_an_after__1bee29cf')}{' '}
+        {translateUi('choose_a_template_project_an_after__1bee29cf')}
       </p>
       {status === 'ready' || status === 'error' ? (
         <div className="mt-2 flex items-center gap-2">

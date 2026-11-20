@@ -194,8 +194,7 @@ export function NativeUploadedVariants({
         {translateUi('upload_a_native_source_variant_18112a07')}
       </p>
       <p className="text-xs text-muted-foreground">
-        {' '}
-        {translateUi('upload_html_or_an_html_zip_it_becom_78aa4372')}{' '}
+        {translateUi('upload_html_or_an_html_zip_it_becom_78aa4372')}
       </p>
       <Input
         aria-label={translateUi('uploaded_native_variant_name_04272c91')}
@@ -218,14 +217,12 @@ export function NativeUploadedVariants({
       />
       {!enabled && history.isSuccess ? (
         <p className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('uploaded_source_variants_are_unavai_642e2788')}{' '}
+          {translateUi('uploaded_source_variants_are_unavai_642e2788')}
         </p>
       ) : null}
       {dirty ? (
         <p className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('save_or_discard_the_current_edits_b_a10b6edf')}{' '}
+          {translateUi('save_or_discard_the_current_edits_b_a10b6edf')}
         </p>
       ) : null}
       {uploading ? <p role="status">{translateUi('uploading_native_source_318af512')}</p> : null}
@@ -243,7 +240,7 @@ export function NativeUploadedVariants({
               }}
             >
               {' '}
-              {translateUi('refresh_uploads_e73ecc73')}{' '}
+              {translateUi('refresh_uploads_e73ecc73')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -268,12 +265,11 @@ export function NativeUploadedVariants({
                 href={`${nativeEditorHref(view.brandId, view.assetId, item.intent.parentRevisionId)}&uploadJobId=${item.jobId}`}
               >
                 {' '}
-                {translateUi('upload_job_5c6293ff')}{' '}
+                {translateUi('upload_job_5c6293ff')}
               </Link>
               {item.revisionId ? (
                 <Link href={nativeEditorHref(view.brandId, view.assetId, item.revisionId)}>
-                  {' '}
-                  {translateUi('open_saved_variant_a4026a5e')}{' '}
+                  {translateUi('open_saved_variant_a4026a5e')}
                 </Link>
               ) : null}
             </div>
@@ -289,7 +285,7 @@ export function NativeUploadedVariants({
           onClick={() => void history.fetchNextPage()}
         >
           {' '}
-          {translateUi('older_uploads_8389340e')}{' '}
+          {translateUi('older_uploads_8389340e')}
         </Button>
       ) : null}
     </section>

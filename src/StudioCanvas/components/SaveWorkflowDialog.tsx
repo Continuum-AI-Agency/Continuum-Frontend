@@ -294,8 +294,7 @@ function PipelinePortBindingEditor({
         (port) => bindings[bindingKey(direction, port.id)]?.kind === 'element_candidate',
       ) ? (
         <p className="text-muted-foreground">
-          {' '}
-          {translateUi('a_candidate_is_created_only_after_q_881e7a4f')}{' '}
+          {translateUi('a_candidate_is_created_only_after_q_881e7a4f')}
         </p>
       ) : null}
     </div>
@@ -681,12 +680,10 @@ export function SaveWorkflowDialog({
           aria-label={translateUi('save_as_60af8a30')}
         >
           <ToggleGroupItem value="workflow" className="text-xs">
-            {' '}
-            {translateUi('workflow_2e2d5c56')}{' '}
+            {translateUi('workflow_2e2d5c56')}
           </ToggleGroupItem>
           <ToggleGroupItem value="pipeline" className="text-xs">
-            {' '}
-            {translateUi('pipeline_37e1c775')}{' '}
+            {translateUi('pipeline_37e1c775')}
           </ToggleGroupItem>
         </ToggleGroup>
 
@@ -704,11 +701,10 @@ export function SaveWorkflowDialog({
                     {ports.outputPorts.length} {translateUi('output_e0ee8bb5')}{' '}
                     {ports.outputPorts.length === 1 ? '' : 's'}
                   </span>{' '}
-                  {translateUi('the_whole_contract_everything_else__04f020f4')}{' '}
+                  {translateUi('the_whole_contract_everything_else__04f020f4')}
                 </p>
                 {ports.inputPorts.length > 0 && (
                   <p className="mt-1 text-muted-foreground">
-                    {' '}
                     {translateUi('takes_6228c88a')}{' '}
                     {ports.inputPorts.map((port) => port.label ?? port.handleId).join(', ')}
                   </p>
@@ -733,14 +729,12 @@ export function SaveWorkflowDialog({
                 />
                 {ports.truncated && (
                   <p className="mt-1 text-warning">
-                    {' '}
-                    {translateUi('more_ports_than_a_pipeline_can_decl_1e9440cd')}{' '}
+                    {translateUi('more_ports_than_a_pipeline_can_decl_1e9440cd')}
                   </p>
                 )}
                 {loadingEditorConfigurations ? (
                   <p className="mt-1 text-muted-foreground">
-                    {' '}
-                    {translateUi('loading_saved_editor_configuration_76da4a02')}{' '}
+                    {translateUi('loading_saved_editor_configuration_76da4a02')}
                   </p>
                 ) : null}
               </>
@@ -752,7 +746,7 @@ export function SaveWorkflowDialog({
                 {isSelectionScoped
                   ? translateUi('this_selection_1e0997de')
                   : translateUi('this_canvas_c4679bf5')}{' '}
-                {translateUi('declares_no_ports_so_a_pipeline_cou_c586fb52')}{' '}
+                {translateUi('declares_no_ports_so_a_pipeline_cou_c586fb52')}
               </p>
             )}
           </div>
@@ -796,8 +790,7 @@ export function SaveWorkflowDialog({
             <div>
               <p className="font-medium text-foreground">{translateUi('agent_guide_e58f91e6')}</p>
               <p className="text-muted-foreground">
-                {' '}
-                {translateUi('review_what_another_agent_will_use__4870ea8d')}{' '}
+                {translateUi('review_what_another_agent_will_use__4870ea8d')}
               </p>
             </div>
             <Button
@@ -818,8 +811,7 @@ export function SaveWorkflowDialog({
             <>
               {guideSource === 'fallback' ? (
                 <p className="text-xs text-muted-foreground">
-                  {' '}
-                  {translateUi('drafted_from_the_pipeline_s_inputs__46be92c0')}{' '}
+                  {translateUi('drafted_from_the_pipeline_s_inputs__46be92c0')}
                 </p>
               ) : null}
               <div className="grid gap-1">
@@ -859,7 +851,7 @@ export function SaveWorkflowDialog({
                 return (
                   <div key={port.id} className="grid gap-1">
                     <Label htmlFor={`pipeline-guide-${port.id}`}>
-                      {port.label ?? port.id} {translateUi('guidance_f8aac527')}{' '}
+                      {port.label ?? port.id} {translateUi('guidance_f8aac527')}
                     </Label>
                     <Input
                       id={`pipeline-guide-${port.id}`}
@@ -902,15 +894,13 @@ export function SaveWorkflowDialog({
             </>
           ) : (
             <p className="text-muted-foreground">
-              {' '}
-              {translateUi('draft_the_guide_then_edit_it_before_79e5f747')}{' '}
+              {translateUi('draft_the_guide_then_edit_it_before_79e5f747')}
             </p>
           )}
         </div>
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        {' '}
         {translateUi('ready_to_save_255249e7')} {scopedNodes.length} {translateUi('node_545ea538')}
         {scopedNodes.length === 1 ? '' : 's'} {translateUi('and_6201111b')} {scopedEdges.length}{' '}
         {translateUi('connection_b38d9d16')}
@@ -990,7 +980,7 @@ export function SaveWorkflowDialog({
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <Upload className="mr-2 h-4 w-4" /> {translateUi('save_1509f561')}{' '}
+            <Upload className="mr-2 h-4 w-4" /> {translateUi('save_1509f561')}
           </Button>
         }
       />

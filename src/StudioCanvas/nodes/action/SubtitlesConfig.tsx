@@ -123,22 +123,19 @@ export function SubtitlesConfig({ nodeId, config, onWrite, brandStyle }: Props) 
         // and rendering Helvetica while claiming the brand face is the exact bug that made
         // fontFamily inert for as long as it was.
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-3xs text-amber-700 dark:text-amber-300">
-          {' '}
           {translateUi('brand_font_f4cb5ee1')}
           {brandFont.family}
-          {translateUi('is_unavailable_captions_will_render_5e8a212c')}{' '}
+          {translateUi('is_unavailable_captions_will_render_5e8a212c')}
         </p>
       ) : null}
 
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-col">
           <Label htmlFor={`subtitles-emphasize-${nodeId}`} className="text-xs">
-            {' '}
-            {translateUi('emphasise_key_words_f94ffaf4')}{' '}
+            {translateUi('emphasise_key_words_f94ffaf4')}
           </Label>
           <span className="text-3xs text-muted-foreground">
-            {' '}
-            {translateUi('marks_about_one_word_a_line_falls_b_7d3770f2')}{' '}
+            {translateUi('marks_about_one_word_a_line_falls_b_7d3770f2')}
           </span>
         </div>
         <Switch
@@ -150,8 +147,7 @@ export function SubtitlesConfig({ nodeId, config, onWrite, brandStyle }: Props) 
 
       <div className="flex flex-col gap-1">
         <Label htmlFor={`subtitles-language-${nodeId}`} className="text-xs">
-          {' '}
-          {translateUi('language_a4fe6526')}{' '}
+          {translateUi('language_a4fe6526')}
         </Label>
         <Input
           id={`subtitles-language-${nodeId}`}

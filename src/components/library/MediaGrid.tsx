@@ -160,8 +160,7 @@ export function MediaGrid({
           <p className="text-sm">{emptyHint ?? translateUi('no_media_yet_78144e53')}</p>
           {!emptyHint && (
             <p className="text-xs text-muted-foreground/60">
-              {' '}
-              {translateUi('upload_images_or_videos_or_drop_fil_30c6fae8')}{' '}
+              {translateUi('upload_images_or_videos_or_drop_fil_30c6fae8')}
             </p>
           )}
         </div>

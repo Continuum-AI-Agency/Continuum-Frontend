@@ -76,7 +76,7 @@ mock.module('@/lib/api/brandInsights.server', () => ({
   startBrandInsightsServer: mockStartBrandInsightsServer,
 }));
 
-import { approveAndLaunchOnboardingAction } from '@/app/onboarding/actions';
+import { approveAndLaunchOnboardingAction } from '@/app/[locale]/onboarding/actions';
 import { approveOnboardingBrandProfile } from '@/lib/onboarding/agentClient';
 import { fetchOnboardingState } from '@/lib/onboarding/storage';
 

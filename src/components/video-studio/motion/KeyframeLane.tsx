@@ -269,8 +269,7 @@ export function KeyframeLane({
     >
       <div className="flex items-center justify-between">
         <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {' '}
-          {translateUi('keyframes_170414a6')}{' '}
+          {translateUi('keyframes_170414a6')}
         </span>
         <span className="font-mono text-2xs tabular-nums text-muted-foreground">
           {inside

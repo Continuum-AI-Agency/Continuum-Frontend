@@ -371,12 +371,11 @@ export function EditorAgentPanel({
                         data-testid="editor-agent-undo-turn"
                       >
                         <CornerUpLeft data-icon="inline-start" />{' '}
-                        {translateUi('undo_this_turn_e2cd98c6')}{' '}
+                        {translateUi('undo_this_turn_e2cd98c6')}
                       </Button>
                     ) : null}
                     {turn.undone ? (
                       <span className="text-xs text-muted-foreground">
-                        {' '}
                         {translateUi('undone_restored_revision_6e48b105')} {turn.baseRevision}.
                       </span>
                     ) : null}
@@ -401,12 +400,11 @@ export function EditorAgentPanel({
             }
           >
             {' '}
-            {translateUi('saved_workflows_c30cdde1')}{' '}
+            {translateUi('saved_workflows_c30cdde1')}
           </PopoverTrigger>
           <PopoverContent side="top" align="start" className="flex w-80 flex-col gap-3">
             <p className="text-xs text-muted-foreground">
-              {' '}
-              {translateUi('reusable_instructions_for_the_curre_9496d555')}{' '}
+              {translateUi('reusable_instructions_for_the_curre_9496d555')}
             </p>
             <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
               {workflowBusy ? (
@@ -458,7 +456,7 @@ export function EditorAgentPanel({
                 onClick={() => void saveWorkflow()}
               >
                 {' '}
-                {translateUi('save_prompt_7462a09b')}{' '}
+                {translateUi('save_prompt_7462a09b')}
               </Button>
             </div>
             {workflowError ? (

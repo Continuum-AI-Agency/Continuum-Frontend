@@ -315,12 +315,12 @@ function VersionRollupCard({ rollup, leading }: { rollup: AssetVersionRollup; le
             className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-3xs font-medium text-emerald-600 dark:text-emerald-400"
           >
             {' '}
-            {translateUi('leading_30adc606')}{' '}
+            {translateUi('leading_30adc606')}
           </span>
         )}
         <span className="text-2xs text-muted-foreground">{surfaces.join(' · ')}</span>
         <span className="ml-auto text-2xs tabular-nums text-muted-foreground">
-          {formatMoney(rollup.spend)} {translateUi('spent_2705d83f')}{' '}
+          {formatMoney(rollup.spend)} {translateUi('spent_2705d83f')}
         </span>
       </div>
 
@@ -392,7 +392,7 @@ function AdDeploymentCard({ deployment, ad }: { deployment: AssetDeployment; ad:
         </span>
         <LinkBadge linkMethod={deployment.linkMethod} confidence={deployment.confidence} />
         <span className="ml-auto text-2xs tabular-nums text-muted-foreground">
-          {formatMoney(ad.metrics.spend)} {translateUi('spent_2705d83f')}{' '}
+          {formatMoney(ad.metrics.spend)} {translateUi('spent_2705d83f')}
         </span>
       </div>
 
@@ -404,7 +404,6 @@ function AdDeploymentCard({ deployment, ad }: { deployment: AssetDeployment; ad:
         <div className="mt-1.5 flex flex-wrap gap-1 text-3xs text-muted-foreground">
           {ad.virality ? (
             <span className="rounded bg-muted px-1 py-0.5">
-              {' '}
               {translateUi('virality_4df0f609')} {ad.virality.predicted_overall} ·{' '}
               {ad.virality.grade}
               {ad.virality.prediction_only
@@ -522,12 +521,11 @@ function DeploymentCard({ deployment }: { deployment: AssetDeployment }) {
   // The ledger says it ran here; the surface store has no row for it yet.
   return (
     <li className="rounded-md border border-border p-2.5 text-2xs text-muted-foreground">
-      {' '}
       {translateUi('deployed_to_06de7cfe')}{' '}
       {deployment.surface === 'meta_ad'
         ? translateUi('a_meta_ad_f194d272')
         : translateUi('a_post_179c02fe')}{' '}
-      {translateUi('we_can_no_longer_read_98dc4f00')}{' '}
+      {translateUi('we_can_no_longer_read_98dc4f00')}
     </li>
   );
 }
@@ -649,8 +647,7 @@ export function PerformanceView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-1.5">
         <span className="text-2xs uppercase tracking-wide text-muted-foreground/70">
-          {' '}
-          {translateUi('performance_442aded8')}{' '}
+          {translateUi('performance_442aded8')}
         </span>
         <WindowSwitcher window={window} onChange={onWindowChange} />
       </div>
@@ -667,8 +664,7 @@ export function PerformanceView({
                 {translateUi('this_creative_hasn_t_run_anywhere_y_d066a117')}
               </p>
               <p className="mt-1 text-2xs text-muted-foreground">
-                {' '}
-                {translateUi('nothing_links_it_to_a_meta_ad_or_a__92013f92')}{' '}
+                {translateUi('nothing_links_it_to_a_meta_ad_or_a__92013f92')}
               </p>
             </div>
             {usage && <UsedIn usage={usage} />}

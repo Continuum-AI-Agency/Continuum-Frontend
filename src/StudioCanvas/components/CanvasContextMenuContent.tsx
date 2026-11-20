@@ -84,11 +84,11 @@ export function CanvasContextMenuContent({
       />
 
       <ContextMenuItem inset onSelect={openLoadWorkflow}>
-        <FolderOpen className="mr-2 h-4 w-4" /> {translateUi('load_workflow_15bb7725')}{' '}
+        <FolderOpen className="mr-2 h-4 w-4" /> {translateUi('load_workflow_15bb7725')}
       </ContextMenuItem>
 
       <ContextMenuItem inset onSelect={openInstagram}>
-        <AtSign className="mr-2 h-4 w-4" /> {translateUi('import_from_instagram_ee939f89')}{' '}
+        <AtSign className="mr-2 h-4 w-4" /> {translateUi('import_from_instagram_ee939f89')}
       </ContextMenuItem>
 
       {/* Never disabled: with nothing selected this saves the whole canvas, which is the
@@ -100,12 +100,12 @@ export function CanvasContextMenuContent({
 
       <ContextMenuItem inset disabled={!hasSelection} onSelect={enforceBrandBookOnSelection}>
         <ShieldCheck className="mr-2 h-4 w-4" />{' '}
-        {translateUi('enforce_brand_book_on_selection_21b4b2fb')}{' '}
+        {translateUi('enforce_brand_book_on_selection_21b4b2fb')}
       </ContextMenuItem>
 
       <ContextMenuSub>
         <ContextMenuSubTrigger inset>
-          <ScanLine className="mr-2 h-4 w-4" /> {translateUi('view_and_interaction_09718797')}{' '}
+          <ScanLine className="mr-2 h-4 w-4" /> {translateUi('view_and_interaction_09718797')}
         </ContextMenuSubTrigger>
         <ContextMenuSubContent className="w-64">
           <ContextMenuCheckboxItem
@@ -124,10 +124,10 @@ export function CanvasContextMenuContent({
           </ContextMenuCheckboxItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => zoomIn({ duration: 250 })}>
-            <ZoomIn className="mr-2 h-4 w-4" /> {translateUi('zoom_in_5a982cf9')}{' '}
+            <ZoomIn className="mr-2 h-4 w-4" /> {translateUi('zoom_in_5a982cf9')}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => zoomOut({ duration: 250 })}>
-            <ZoomOut className="mr-2 h-4 w-4" /> {translateUi('zoom_out_24649ee0')}{' '}
+            <ZoomOut className="mr-2 h-4 w-4" /> {translateUi('zoom_out_24649ee0')}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 350 })}>
             {' '}
@@ -142,7 +142,7 @@ export function CanvasContextMenuContent({
         className="text-destructive focus:bg-destructive/10 focus:text-destructive"
         onClick={clearCanvas}
       >
-        <Trash2 className="mr-2 h-4 w-4" /> {translateUi('clear_canvas_8c3f944e')}{' '}
+        <Trash2 className="mr-2 h-4 w-4" /> {translateUi('clear_canvas_8c3f944e')}
       </ContextMenuItem>
     </ContextMenuContent>
   );

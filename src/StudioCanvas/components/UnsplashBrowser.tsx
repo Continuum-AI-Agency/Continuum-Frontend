@@ -162,8 +162,7 @@ export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBro
 
       {status === 'unconfigured' && (
         <p className="text-sm text-muted-foreground">
-          {' '}
-          {translateUi('unsplash_isn_t_configured_on_this_e_91db2499')}{' '}
+          {translateUi('unsplash_isn_t_configured_on_this_e_91db2499')}
         </p>
       )}
 

@@ -413,7 +413,6 @@ function SourceRebindForm({
           <p>{translateUi('drop_missing_files_or_a_folder_here_d0d1f792')}</p>
           <div className="flex flex-wrap items-center gap-2">
             <Label className="cursor-pointer">
-              {' '}
               {translateUi('choose_missing_files_a6007a63')}{' '}
               <Input
                 type="file"
@@ -430,7 +429,6 @@ function SourceRebindForm({
               />
             </Label>
             <Label className="cursor-pointer">
-              {' '}
               {translateUi('choose_media_folder_8e92e2f9')}{' '}
               <input
                 type="file"
@@ -460,10 +458,9 @@ function SourceRebindForm({
         </fieldset>
         {unmatchedFiles.length ? (
           <p role="status">
-            {' '}
             {translateUi('unmatched_files_0a259868')}{' '}
             {unmatchedFiles.map(({ file }) => file.name).join(', ')}
-            {translateUi('choose_a_file_on_its_named_row_belo_02078b20')}{' '}
+            {translateUi('choose_a_file_on_its_named_row_belo_02078b20')}
           </p>
         ) : null}
         {matches.map(({ missing: item, matches: choices }, index) => (
@@ -486,8 +483,7 @@ function SourceRebindForm({
                 <span>
                   <strong>{item.name || item.file.split(/[\\/]/).pop()}</strong>
                   <span className="block text-muted-foreground">
-                    {' '}
-                    {translateUi('drop_this_file_here_or_click_to_cho_7b23ac5a')}{' '}
+                    {translateUi('drop_this_file_here_or_click_to_cho_7b23ac5a')}
                   </span>
                   <span className="block break-all text-muted-foreground">{item.file}</span>
                   {item.projectPath ? (
@@ -497,7 +493,6 @@ function SourceRebindForm({
                   ) : null}
                   {assignments[mediaKey(item)] || choices.length === 1 ? (
                     <span className="block">
-                      {' '}
                       {translateUi('matched_919d2f9c')}{' '}
                       {(assignments[mediaKey(item)] ?? choices[0]?.file)?.name}
                     </span>
@@ -526,7 +521,7 @@ function SourceRebindForm({
                 onClick={() => void repair([{ missing: item, file: null }])}
               >
                 {' '}
-                {translateUi('find_in_zip_0029e8fd')}{' '}
+                {translateUi('find_in_zip_0029e8fd')}
               </Button>
             </div>
             {repairFiles.length > 0 ? (
@@ -611,7 +606,6 @@ function SourceRebindForm({
         {repairRows}
         {uploading ? (
           <p role="status" className="text-xs text-muted-foreground">
-            {' '}
             {translateUi('repairing_e2c5201c')} {uploading}…
           </p>
         ) : null}
@@ -622,8 +616,7 @@ function SourceRebindForm({
     <div ref={root} className="flex flex-col gap-3">
       {repairRows}
       <p className="text-xs text-muted-foreground">
-        {' '}
-        {translateUi('compare_a_library_version_before_ch_a6f108dc')}{' '}
+        {translateUi('compare_a_library_version_before_ch_a6f108dc')}
       </p>
       {newerHead ? (
         <div
@@ -642,7 +635,7 @@ function SourceRebindForm({
             }}
           >
             {' '}
-            {translateUi('review_newer_version_d4df3a68')}{' '}
+            {translateUi('review_newer_version_d4df3a68')}
           </Button>
         </div>
       ) : null}
@@ -676,7 +669,7 @@ function SourceRebindForm({
           onClick={() => void inspect()}
         >
           {busy ? <Loader2 className="animate-spin" /> : null}
-          {translateUi('preview_changes_330c32c4')}{' '}
+          {translateUi('preview_changes_330c32c4')}
         </Button>
         <Label className="cursor-pointer">
           <Input
@@ -689,14 +682,14 @@ function SourceRebindForm({
               if (file) void upload(file);
             }}
           />{' '}
-          {translateUi('upload_new_revision_5d2a1af8')}{' '}
+          {translateUi('upload_new_revision_5d2a1af8')}
         </Label>
       </div>
       {uploading ? (
         <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
           {translateUi('uploading_8b898ca3')} {uploading}{' '}
-          {translateUi('as_a_new_revision_ea08fdd0')}{' '}
+          {translateUi('as_a_new_revision_ea08fdd0')}
         </p>
       ) : null}
       {listError ? (
@@ -704,7 +697,7 @@ function SourceRebindForm({
           {listError}{' '}
           <Button variant="link" onClick={() => setReload((value) => value + 1)}>
             {' '}
-            {translateUi('retry_942087cc')}{' '}
+            {translateUi('retry_942087cc')}
           </Button>
         </p>
       ) : null}
@@ -735,7 +728,7 @@ function SourceRebindForm({
           {ambiguous ? (
             <p className="flex items-center gap-2 text-xs text-destructive">
               <AlertTriangle className="size-4" />{' '}
-              {translateUi('ambiguous_slots_must_be_resolved_be_021a7f11')}{' '}
+              {translateUi('ambiguous_slots_must_be_resolved_be_021a7f11')}
             </p>
           ) : null}
           {missing ? (
@@ -744,7 +737,7 @@ function SourceRebindForm({
                 checked={acceptMissing}
                 onCheckedChange={(checked) => setAcceptMissing(checked === true)}
               />{' '}
-              {translateUi('accept_missing_slots_in_this_revisi_4b5095cd')}{' '}
+              {translateUi('accept_missing_slots_in_this_revisi_4b5095cd')}
             </Label>
           ) : null}
           <Button
@@ -753,7 +746,7 @@ function SourceRebindForm({
             onClick={() => void confirm()}
           >
             {' '}
-            {translateUi('use_this_revision_58a93f1e')}{' '}
+            {translateUi('use_this_revision_58a93f1e')}
           </Button>
         </div>
       ) : null}

@@ -129,8 +129,7 @@ export function StudioCanvasHeader({
               </Select>
             ) : null}
             <Button type="button" size="sm" variant="outline" onClick={apply.onReturnToPlanner}>
-              {' '}
-              {translateUi('back_to_planner_193ffd99')}{' '}
+              {translateUi('back_to_planner_193ffd99')}
             </Button>
             <Button
               type="button"

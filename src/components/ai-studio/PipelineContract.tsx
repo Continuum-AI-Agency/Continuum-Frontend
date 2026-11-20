@@ -47,11 +47,11 @@ function LegacyPipelineContract({ manifest }: { manifest: PipelineManifest }) {
       </p>
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
         <Pill variant="warning">
-          <PillIndicator variant="warning" /> {translateUi('needs_republish_827764df')}{' '}
+          <PillIndicator variant="warning" /> {translateUi('needs_republish_827764df')}
         </Pill>
         {blocked ? (
           <Pill variant="destructive">
-            <PillIndicator variant="error" /> {translateUi('cannot_run_0316aea2')}{' '}
+            <PillIndicator variant="error" /> {translateUi('cannot_run_0316aea2')}
           </Pill>
         ) : null}
         {manifest.headless.requires_authorisation ? (
@@ -172,7 +172,7 @@ function V2PipelineContract({ capability }: { capability: PipelineCapabilityV2 }
       </p>
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
         <Pill variant="success">
-          <PillIndicator variant="success" /> {translateUi('runnable_c687f9d1')}{' '}
+          <PillIndicator variant="success" /> {translateUi('runnable_c687f9d1')}
         </Pill>
         <Pill variant="muted">
           {translateUi('revision_2e516d68')} {capability.identity.revision}

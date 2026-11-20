@@ -105,7 +105,7 @@ export function PipelineProposalCard({
         </p>
         {published ? (
           <Pill variant="success">
-            <PillIndicator variant="success" /> {translateUi('published_2ef42ec2')}{' '}
+            <PillIndicator variant="success" /> {translateUi('published_2ef42ec2')}
           </Pill>
         ) : null}
       </div>
@@ -126,8 +126,7 @@ export function PipelineProposalCard({
       </div>
       <div className="grid gap-1">
         <Label htmlFor={`pipeline-proposal-description-${capability.pipeline_id}`}>
-          {' '}
-          {translateUi('what_it_makes_and_when_to_use_it_75d6bf54')}{' '}
+          {translateUi('what_it_makes_and_when_to_use_it_75d6bf54')}
         </Label>
         <Textarea
           id={`pipeline-proposal-description-${capability.pipeline_id}`}
@@ -156,7 +155,7 @@ export function PipelineProposalCard({
           onClick={onDismiss}
         >
           {' '}
-          {translateUi('dismiss_48845bff')}{' '}
+          {translateUi('dismiss_48845bff')}
         </Button>
         <Button type="submit" size="sm" disabled={published || isSubmitting}>
           {isSubmitting

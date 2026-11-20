@@ -93,7 +93,6 @@ export function TemplateLayerMaskCreator({
       {geometry && draft ? (
         <>
           <p className="text-2xs text-muted-foreground">
-            {' '}
             {translateUi('layer_source_pixels_x_39f1f56d')}{' '}
             {formatDecimal(geometry.bounds.x, 2, decimalLocale)}, y{' '}
             {formatDecimal(geometry.bounds.y, 2, decimalLocale)},{' '}
@@ -276,7 +275,7 @@ export function TemplateLayerMaskCreator({
             onClick={() => onCreate(draft)}
           >
             <Plus aria-hidden /> {translateUi('add_9fd728c6')} {shape}{' '}
-            {translateUi('mask_48bf9b4f')}{' '}
+            {translateUi('mask_48bf9b4f')}
           </Button>
         </>
       ) : null}

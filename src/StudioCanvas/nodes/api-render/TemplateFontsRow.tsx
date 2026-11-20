@@ -59,14 +59,12 @@ export function TemplateFontsRow({
           {translateUi('nobody_has_uploaded_upload_the_miss_25d0d28c')}{' '}
           {brandId ? (
             <Link className="underline underline-offset-2" href="/library?section=typography">
-              {' '}
-              {translateUi('upload_them_154a0a57')}{' '}
+              {translateUi('upload_them_154a0a57')}
             </Link>
           ) : null}
         </InspectorNote>
       ) : (
         <InspectorNote>
-          {' '}
           {translateUi('every_face_is_in_the_font_repositor_ef9af3bc')}{' '}
           {assetId ? '' : translateUi('this_template_has_no_parsed_source__75793fce')}.
         </InspectorNote>

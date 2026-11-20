@@ -172,15 +172,14 @@ export function RenderSetSettingsDialog({
             {set?.name}”
           </DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('where_every_render_of_this_set_goes_333394e7')}{' '}
+            {translateUi('where_every_render_of_this_set_goes_333394e7')}
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto text-xs">
           <Section title={translateUi('library_dc20b3d5')}>
             <p className="flex items-center gap-1.5 text-muted-foreground">
               <Check className="size-3.5 text-success" aria-hidden />{' '}
-              {translateUi('every_render_is_saved_to_this_brand_ffb52ac1')}{' '}
+              {translateUi('every_render_is_saved_to_this_brand_ffb52ac1')}
             </p>
           </Section>
           {web ? null : (
@@ -188,8 +187,7 @@ export function RenderSetSettingsDialog({
               <Section title={translateUi('meta_ads_default_ad_set_3b2bf12d')}>
                 {!connected ? (
                   <p className="text-muted-foreground">
-                    {' '}
-                    {translateUi('no_meta_ad_account_is_connected_to__bc2eeb85')}{' '}
+                    {translateUi('no_meta_ad_account_is_connected_to__bc2eeb85')}
                   </p>
                 ) : (
                   <>
@@ -205,8 +203,7 @@ export function RenderSetSettingsDialog({
                           </>
                         ) : (
                           <span className="text-muted-foreground">
-                            {' '}
-                            {translateUi('none_rows_without_an_ad_of_their_ow_6f58c08d')}{' '}
+                            {translateUi('none_rows_without_an_ad_of_their_ow_6f58c08d')}
                           </span>
                         )}
                       </span>
@@ -257,14 +254,12 @@ export function RenderSetSettingsDialog({
                       </>
                     ) : null}
                     <p className="text-muted-foreground">
-                      {' '}
                       {translateUi('a_row_can_still_replace_a_specific__d34d074a')}{' '}
                       {translateUi('adApprovalExplanation')}
                     </p>
                     {metaWritesAllowed === false ? (
                       <p role="status" className="text-warning">
-                        {' '}
-                        {translateUi('meta_writes_are_off_for_this_brand__791f2ff2')}{' '}
+                        {translateUi('meta_writes_are_off_for_this_brand__791f2ff2')}
                       </p>
                     ) : null}
                   </>
@@ -303,7 +298,7 @@ export function RenderSetSettingsDialog({
             >
               <div className="flex flex-col gap-0.5">
                 <Label className="text-xs">
-                  <RadioGroupItem value="proof" /> {translateUi('proof_7fbb3ccf')}{' '}
+                  <RadioGroupItem value="proof" /> {translateUi('proof_7fbb3ccf')}
                 </Label>
                 <span className="pl-6 text-muted-foreground">
                   {translateUi('for_review_recorded_as_a_proof_be78783b')}
@@ -312,7 +307,7 @@ export function RenderSetSettingsDialog({
               <div className="flex flex-col gap-0.5">
                 <Label className="text-xs">
                   <RadioGroupItem value="final" disabled={finalBlocked !== null && !draft.final} />{' '}
-                  {translateUi('final_f4ed8fa6')}{' '}
+                  {translateUi('final_f4ed8fa6')}
                 </Label>
                 <span className="pl-6 text-muted-foreground">
                   {finalBlocked ?? translateUi('ready_to_go_recorded_as_final_b4448611')}
@@ -329,11 +324,11 @@ export function RenderSetSettingsDialog({
             onClick={() => onOpenChange(false)}
           >
             {' '}
-            {translateUi('cancel_19766ed6')}{' '}
+            {translateUi('cancel_19766ed6')}
           </Button>
           <Button type="button" disabled={saving} onClick={() => void save()}>
             {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}{' '}
-            {translateUi('save_1509f561')}{' '}
+            {translateUi('save_1509f561')}
           </Button>
         </DialogFooter>
       </DialogContent>

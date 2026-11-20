@@ -447,8 +447,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                             </EmptyMedia>
                             <EmptyTitle>Omni 1.1 Flash</EmptyTitle>
                             <EmptyDescription>
-                              {' '}
-                              {translateUi('describe_a_clip_then_chat_to_edit_i_19538a48')}{' '}
+                              {translateUi('describe_a_clip_then_chat_to_edit_i_19538a48')}
                             </EmptyDescription>
                           </EmptyHeader>
                         </Empty>
@@ -554,8 +553,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
-                          {' '}
-                          {translateUi('prompt_5c391238')}{' '}
+                          {translateUi('prompt_5c391238')}
                         </span>
                       </div>
                     }
@@ -582,8 +580,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
-                          {' '}
-                          {translateUi('ref_images_max_3_8852cf8e')}{' '}
+                          {translateUi('ref_images_max_3_8852cf8e')}
                         </span>
                       </div>
                     }
@@ -610,8 +607,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
-                          {' '}
-                          {translateUi('clip_in_1_a1483dbe')}{' '}
+                          {translateUi('clip_in_1_a1483dbe')}
                         </span>
                       </div>
                     }
@@ -636,7 +632,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Omni 1.1 Flash</ContextMenuLabel>
           <ContextMenuItem onClick={() => setEditorOpen(true)}>
-            <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_3883a4f4')}{' '}
+            <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_3883a4f4')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun}>
@@ -651,7 +647,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!previewVideo}>
-            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}{' '}
+            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem

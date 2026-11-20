@@ -71,8 +71,7 @@ export function CanvasMediaLoader({
             {translateUi('preparing_media_canvas_f4db731b')}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {' '}
-            {translateUi('restoring_your_workspace_syncing_co_e244f481')}{' '}
+            {translateUi('restoring_your_workspace_syncing_co_e244f481')}
           </p>
         </div>
 
@@ -127,21 +126,21 @@ export function CanvasMediaLoader({
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-success animate-pulse motion-reduce:animate-none" />{' '}
-            {translateUi('session_6959b415')}{' '}
+            {translateUi('session_6959b415')}
           </span>
           <span className="inline-flex items-center gap-2">
             <span
               className="h-2 w-2 rounded-full bg-primary animate-pulse motion-reduce:animate-none"
               style={{ animationDelay: '180ms' }}
             />{' '}
-            {translateUi('nodes_7ac36206')}{' '}
+            {translateUi('nodes_7ac36206')}
           </span>
           <span className="inline-flex items-center gap-2">
             <span
               className="h-2 w-2 rounded-full bg-primary animate-pulse motion-reduce:animate-none"
               style={{ animationDelay: '360ms' }}
             />{' '}
-            {translateUi('media_engine_415840c3')}{' '}
+            {translateUi('media_engine_415840c3')}
           </span>
         </div>
       </div>

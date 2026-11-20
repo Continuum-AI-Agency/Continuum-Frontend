@@ -544,7 +544,7 @@ export function TemplateLayerTimeline({
         className="border-t border-border px-3 py-2 text-xs text-muted-foreground"
       >
         {' '}
-        {translateUi('select_a_layer_to_inspect_its_timin_fa4abefa')}{' '}
+        {translateUi('select_a_layer_to_inspect_its_timin_fa4abefa')}
       </section>
     );
 
@@ -751,7 +751,7 @@ export function TemplateLayerTimeline({
                 ? translateUi('hide_keyframes_e3eacccc')
                 : translateUi('edit_keyframes_f6c1e501')}{' '}
               · {channels.reduce((sum, channel) => sum + channel.keyframes.length, 0)}{' '}
-              {translateUi('keys_48a53f07')}{' '}
+              {translateUi('keys_48a53f07')}
             </CollapsibleTrigger>
           ) : null}
         </div>
@@ -802,7 +802,7 @@ export function TemplateLayerTimeline({
                     }
                     onClick={addKeyframe}
                   >
-                    <Plus aria-hidden="true" /> {translateUi('add_at_playhead_1c335439')}{' '}
+                    <Plus aria-hidden="true" /> {translateUi('add_at_playhead_1c335439')}
                   </Button>
                   <Button
                     size="xs"
@@ -815,7 +815,7 @@ export function TemplateLayerTimeline({
                     }}
                   >
                     {' '}
-                    {translateUi('clear_keys_b21cc08d')}{' '}
+                    {translateUi('clear_keys_b21cc08d')}
                   </Button>
                 </li>
               ) : null}

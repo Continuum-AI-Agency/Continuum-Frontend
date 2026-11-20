@@ -73,7 +73,7 @@ export function Toolbar() {
       {!isRunning ? (
         <div className="flex items-center gap-1">
           <Button data-tour-id="studio-run-flow" variant="default" size="sm" onClick={handleRun}>
-            <Play className="w-4 h-4 mr-2" /> {translateUi('run_flow_63465f6d')}{' '}
+            <Play className="w-4 h-4 mr-2" /> {translateUi('run_flow_63465f6d')}
           </Button>
           <TooltipProvider>
             <Tooltip>
@@ -99,7 +99,7 @@ export function Toolbar() {
       ) : (
         <div className="flex items-center gap-2">
           <Button variant="destructive" size="sm" onClick={handleAbort}>
-            <Square className="w-4 h-4 mr-2" /> {translateUi('abort_7a3a94a8')}{' '}
+            <Square className="w-4 h-4 mr-2" /> {translateUi('abort_7a3a94a8')}
           </Button>
           {streamState.progressPct !== undefined && (
             <div className="flex items-center gap-2 w-24">

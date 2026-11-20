@@ -580,7 +580,6 @@ export function RenderSetTabs({
               disabled={sets.length === 0}
               render={
                 <Button type="button" size="xs" variant="ghost" className="gap-1">
-                  {' '}
                   {translateUi('all_sets_9d5e2c25')} <ChevronDown aria-hidden />
                 </Button>
               }
@@ -684,8 +683,7 @@ export function RenderSetTabs({
           </>
         ) : (
           <span className="text-muted-foreground">
-            {' '}
-            {translateUi('not_saved_yet_name_the_set_with_to__73205d6b')}{' '}
+            {translateUi('not_saved_yet_name_the_set_with_to__73205d6b')}
           </span>
         )}
         {delivery ? <span className="ml-auto flex min-w-0 items-center">{delivery}</span> : null}
@@ -697,7 +695,7 @@ export function RenderSetTabs({
             className={delivery ? undefined : 'ml-auto'}
             onClick={() => confirmDiscard(onImportDraft)}
           >
-            <History data-icon="inline-start" /> {translateUi('import_browser_draft_0694875c')}{' '}
+            <History data-icon="inline-start" /> {translateUi('import_browser_draft_0694875c')}
           </Button>
         ) : null}
       </div>
@@ -732,13 +730,11 @@ export function RenderSetTabs({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {' '}
               {translateUi('delete_fdd77e66')}
               {dialog?.kind === 'delete' ? dialog.set.name : ''}”?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {' '}
-              {translateUi('the_saved_rows_go_renders_already_m_8314b90e')}{' '}
+              {translateUi('the_saved_rows_go_renders_already_m_8314b90e')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -760,7 +756,7 @@ export function RenderSetTabs({
               }}
             >
               {' '}
-              {translateUi('delete_e2d0a549')}{' '}
+              {translateUi('delete_e2d0a549')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

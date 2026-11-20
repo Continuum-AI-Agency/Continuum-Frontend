@@ -664,11 +664,10 @@ export function LayerEditorDialog({
           <DialogHeader className="flex flex-row items-center justify-between space-y-0 border-b border-border/60 px-4 py-3 text-left">
             <div>
               <DialogTitle className="flex items-center gap-2 text-base">
-                <Layers className="h-4 w-4" /> {translateUi('layer_editor_328aef07')}{' '}
+                <Layers className="h-4 w-4" /> {translateUi('layer_editor_328aef07')}
               </DialogTitle>
               <DialogDescription className="text-xs">
-                {' '}
-                {translateUi('stack_place_and_blend_stills_into_o_6a8c9c4a')}{' '}
+                {translateUi('stack_place_and_blend_stills_into_o_6a8c9c4a')}
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -681,7 +680,7 @@ export function LayerEditorDialog({
                   onCheckedChange={setSnapEnabled}
                   aria-label={translateUi('align_to_the_frame_and_other_layers_c6fc9542')}
                 />{' '}
-                {translateUi('snap_98df9a59')}{' '}
+                {translateUi('snap_98df9a59')}
               </span>
               <Button
                 type="button"
@@ -712,7 +711,7 @@ export function LayerEditorDialog({
                       ) : (
                         <Plus className="mr-1 h-3.5 w-3.5" />
                       )}{' '}
-                      {translateUi('add_layer_3fc8b134')}{' '}
+                      {translateUi('add_layer_3fc8b134')}
                     </Button>
                   }
                 />
@@ -728,7 +727,7 @@ export function LayerEditorDialog({
                   {brandId ? (
                     <DropdownMenuItem className="text-2xs" onSelect={() => setLibraryOpen(true)}>
                       <ImageIcon className="mr-2 h-3 w-3" />{' '}
-                      {translateUi('from_the_library_7520b8c5')}{' '}
+                      {translateUi('from_the_library_7520b8c5')}
                     </DropdownMenuItem>
                   ) : null}
                   {unplaced.length > 0 ? <DropdownMenuSeparator /> : null}
@@ -775,7 +774,7 @@ export function LayerEditorDialog({
               ) : null}
               <Button type="button" size="sm" onClick={() => void compose()} disabled={composing}>
                 {composing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}{' '}
-                {translateUi('compose_98652afe')}{' '}
+                {translateUi('compose_98652afe')}
               </Button>
             </div>
           </DialogHeader>

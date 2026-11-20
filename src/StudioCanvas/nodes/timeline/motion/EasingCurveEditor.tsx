@@ -152,7 +152,6 @@ export function EasingCurveEditor({
       </div>
       {current.interpolation === 'spring' ? (
         <label className="flex items-center justify-between gap-2 text-2xs text-muted-foreground">
-          {' '}
           {translateUi('bounce_24b6ed11')}{' '}
           <input
             type="range"
@@ -172,7 +171,6 @@ export function EasingCurveEditor({
         </label>
       ) : null}
       <label className="block text-2xs text-muted-foreground">
-        {' '}
         {translateUi('expression_c67415bc')}{' '}
         <input
           aria-label={translateUi('motion_expression_ac6b569b')}

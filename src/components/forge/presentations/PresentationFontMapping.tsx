@@ -51,12 +51,10 @@ export function PresentationFontMapping({
           <FieldError errors={[form.formState.errors.to]} />
         </Field>
         <p className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('this_explicitly_replaces_the_missin_2073f8d0')}{' '}
+          {translateUi('this_explicitly_replaces_the_missin_2073f8d0')}
         </p>
         <Button type="submit" variant="outline" disabled={busy}>
-          {' '}
-          {translateUi('apply_font_mapping_f12df7a0')}{' '}
+          {translateUi('apply_font_mapping_f12df7a0')}
         </Button>
       </FieldGroup>
     </form>

@@ -46,7 +46,7 @@ export function ViewingVersionBanner({
         onClick={onBackToLatest}
       >
         {' '}
-        {translateUi('back_to_latest_86cf0aef')}{' '}
+        {translateUi('back_to_latest_86cf0aef')}
       </Button>
     </div>
   );

@@ -557,8 +557,7 @@ export function LibrarySidebar({
       <ScrollArea className="min-h-0 flex-1 px-1.5 pt-2">
         <div className="px-2 pb-1 pt-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {' '}
-            {translateUi('browse_3227aa96')}{' '}
+            {translateUi('browse_3227aa96')}
           </span>
         </div>
         {BROWSE_FOLDERS.map((folder) => (
@@ -575,8 +574,7 @@ export function LibrarySidebar({
           <>
             <div className="mt-3 px-2 pb-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {' '}
-                {translateUi('views_69c40459')}{' '}
+                {translateUi('views_69c40459')}
               </span>
             </div>
             {systemViews.map((view) => (
@@ -593,8 +591,7 @@ export function LibrarySidebar({
 
         <div className="mt-3 flex items-center justify-between px-2 pb-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {' '}
-            {translateUi('saved_views_81184cb5')}{' '}
+            {translateUi('saved_views_81184cb5')}
           </span>
           <button
             type="button"
@@ -674,8 +671,7 @@ export function LibrarySidebar({
           )}
         >
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {' '}
-            {translateUi('collections_9f9feade')}{' '}
+            {translateUi('collections_9f9feade')}
           </span>
           {canEdit ? (
             <button

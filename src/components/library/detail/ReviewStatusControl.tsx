@@ -336,7 +336,7 @@ export function ReviewStatusControl({
           ])}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setLabelsOpen(true)} className="gap-2 text-xs">
-            <Palette className="size-3.5" /> {translateUi('customize_status_labels_649e9ecb')}{' '}
+            <Palette className="size-3.5" /> {translateUi('customize_status_labels_649e9ecb')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -357,7 +357,6 @@ export function ReviewStatusControl({
         />
         <PopoverContent align="start" className="w-72 p-3">
           <p className="mb-1 font-medium text-xs">
-            {' '}
             {translateUi('review_history_063ea299')}
             {version ? ` · v${version.versionNumber}` : ''}
           </p>
@@ -395,8 +394,7 @@ export function ReviewStatusControl({
           <DialogHeader>
             <DialogTitle className="text-sm">{translateUi('request_changes_cb5d9f98')}</DialogTitle>
             <DialogDescription className="text-xs">
-              {' '}
-              {translateUi('add_an_optional_note_explaining_wha_26666f2d')}{' '}
+              {translateUi('add_an_optional_note_explaining_wha_26666f2d')}
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -409,10 +407,9 @@ export function ReviewStatusControl({
           <DialogFooter>
             <Button type="button" variant="ghost" size="sm" onClick={() => setNoteTarget(null)}>
               {' '}
-              {translateUi('cancel_19766ed6')}{' '}
+              {translateUi('cancel_19766ed6')}
             </Button>
             <Button type="button" size="sm" onClick={submitNoteDialog}>
-              {' '}
               {translateUi('move_to_beb8194b')}{' '}
               {noteTarget
                 ? reviewDisplay(noteTarget.status, noteTarget.stateId, labels, customStates).label

@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useUiErrorMessage } from '@/i18n/errors';
+import { useUiErrorSentence } from '@/i18n/errors';
 import { useRouter } from '@/i18n/navigation';
 import { type StudioVideoOrigin, studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
 import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
@@ -37,7 +37,7 @@ export function VariantSwitcher({
 }): React.ReactNode {
   const translateUi = useUiTranslations('studio');
 
-  const uiErrorText = useUiErrorMessage();
+  const uiErrorText = useUiErrorSentence();
 
   const uiText = useTranslations('common');
   const router = useRouter();
@@ -128,7 +128,7 @@ export function VariantSwitcher({
         disabled={answeredFor !== projectId}
         onClick={() => onRedraft(Math.max(tabs.length, 1))}
       >
-        <RotateCcw className="size-3.5" /> {translateUi('redraft_all_variants_d6f5147d')}{' '}
+        <RotateCcw className="size-3.5" /> {translateUi('redraft_all_variants_d6f5147d')}
       </Button>
       <Button
         size="sm"
@@ -137,7 +137,7 @@ export function VariantSwitcher({
         disabled={answeredFor !== projectId}
         onClick={() => setExportOpen(true)}
       >
-        <Download className="size-3.5" /> {translateUi('export_all_variants_bc8f1f20')}{' '}
+        <Download className="size-3.5" /> {translateUi('export_all_variants_bc8f1f20')}
       </Button>
       {readError ? (
         <span role="alert" className="flex items-center gap-1 text-xs text-destructive">

@@ -219,7 +219,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
         <PopoverTrigger
           render={
             <Button variant="outline" size="sm">
-              <Link2 className="size-3.5" aria-hidden /> {translateUi('share_29887a5f')}{' '}
+              <Link2 className="size-3.5" aria-hidden /> {translateUi('share_29887a5f')}
             </Button>
           }
         />
@@ -297,7 +297,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
               }
             >
               {creating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
-              {translateUi('create_link_e6b850cf')}{' '}
+              {translateUi('create_link_e6b850cf')}
             </Button>
           </div>
 
@@ -310,8 +310,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
               </p>
             ) : links.length === 0 ? (
               <p className="py-2 text-xs text-muted-foreground">
-                {' '}
-                {translateUi('no_links_yet_anyone_with_a_link_can_8fb435fd')}{' '}
+                {translateUi('no_links_yet_anyone_with_a_link_can_8fb435fd')}
               </p>
             ) : (
               links.map((link) => {
@@ -364,7 +363,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
                             onClick={() => void handleRevoke(link)}
                           >
                             {' '}
-                            {translateUi('revoke_87e6d00b')}{' '}
+                            {translateUi('revoke_87e6d00b')}
                           </Button>
                         </>
                       ) : null}
@@ -377,7 +376,6 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
 
           <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
             <h3 className="text-xs font-semibold text-foreground">
-              {' '}
               {translateUi('reviewer_activity_on_this_asset_19c12b55')}{' '}
             </h3>
             <ShareLinkActivity
@@ -396,8 +394,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
           <DialogHeader>
             <DialogTitle>{translateUi('customize_share_link_e07be3a6')}</DialogTitle>
             <DialogDescription>
-              {' '}
-              {translateUi('how_reviewers_see_this_link_and_wha_34a9fcc1')}{' '}
+              {translateUi('how_reviewers_see_this_link_and_wha_34a9fcc1')}
             </DialogDescription>
           </DialogHeader>
           {customizingId ? <ShareLinkPanel by={{ id: customizingId }} /> : null}

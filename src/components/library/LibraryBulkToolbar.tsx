@@ -252,7 +252,7 @@ export function LibraryBulkToolbar({
           data-testid="bulk-compare"
           onClick={() => setCompareOpen(true)}
         >
-          <Columns2 className="size-3.5" /> {translateUi('compare_e888155d')}{' '}
+          <Columns2 className="size-3.5" /> {translateUi('compare_e888155d')}
         </Button>
         <CompareAssetsDialog
           brandId={brandId}
@@ -273,8 +273,7 @@ export function LibraryBulkToolbar({
           {targetIds.length} {translateUi('selected_d7cbbb68')}{' '}
         </span>
         <span className="flex-1 text-xs text-muted-foreground">
-          {' '}
-          {translateUi('view_only_your_role_cannot_change_t_f08a89b7')}{' '}
+          {translateUi('view_only_your_role_cannot_change_t_f08a89b7')}
         </span>
         {compare}
         <Button
@@ -307,7 +306,7 @@ export function LibraryBulkToolbar({
           onClick={() => void selectAllMatching()}
         >
           {' '}
-          {translateUi('select_all_matching_76f5ac0c')}{' '}
+          {translateUi('select_all_matching_76f5ac0c')}
         </Button>
       ) : null}
       <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
@@ -363,7 +362,7 @@ export function LibraryBulkToolbar({
               }
             >
               {' '}
-              {translateUi('assign_8ece895c')}{' '}
+              {translateUi('assign_8ece895c')}
             </Button>
           </>
         ) : (
@@ -380,7 +379,7 @@ export function LibraryBulkToolbar({
             }
           >
             {' '}
-            {translateUi('add_an_assignee_field_323c3103')}{' '}
+            {translateUi('add_an_assignee_field_323c3103')}
           </Button>
         )}
       </div>
@@ -425,7 +424,7 @@ export function LibraryBulkToolbar({
           )
         }
       >
-        <FolderInput className="size-3.5" /> {translateUi('add_9fd728c6')}{' '}
+        <FolderInput className="size-3.5" /> {translateUi('add_9fd728c6')}
       </Button>
       {currentCollectionId ? (
         <Button
@@ -447,7 +446,7 @@ export function LibraryBulkToolbar({
           }
         >
           {' '}
-          {translateUi('remove_here_29f81498')}{' '}
+          {translateUi('remove_here_29f81498')}
         </Button>
       ) : null}
       {/* Rendered unconditionally, including at zero projects. It used to disappear when the
@@ -496,7 +495,7 @@ export function LibraryBulkToolbar({
           }
         >
           {' '}
-          {translateUi('tag_1503916a')}{' '}
+          {translateUi('tag_1503916a')}
         </Button>
         {/* Untag had no caller anywhere in the app, so the DELETE route was unreachable and
             a bulk mis-tag was permanent from the product. Undo belongs next to the action. */}
@@ -517,7 +516,7 @@ export function LibraryBulkToolbar({
           }
         >
           {' '}
-          {translateUi('untag_fecbff32')}{' '}
+          {translateUi('untag_fecbff32')}
         </Button>
       </div>
 
@@ -526,13 +525,12 @@ export function LibraryBulkToolbar({
           <DialogHeader>
             <DialogTitle>{translateUi('new_project_a41eb2bf')}</DialogTitle>
             <DialogDescription>
-              {' '}
               {translateUi('creates_the_project_and_adds_the_37a255f0')} {assetIds.length}{' '}
               {translateUi('selected_d7cbbb68')}{' '}
               {assetIds.length === 1
                 ? translateUi('asset_d59386e0')
                 : translateUi('assets_8bf729ff')}{' '}
-              {translateUi('to_it_661b490b')}{' '}
+              {translateUi('to_it_661b490b')}
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -552,7 +550,7 @@ export function LibraryBulkToolbar({
               onClick={() => void createAndTag()}
             >
               {' '}
-              {translateUi('create_and_add_1f0cce16')}{' '}
+              {translateUi('create_and_add_1f0cce16')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -582,7 +580,7 @@ export function LibraryBulkToolbar({
           }
         >
           {' '}
-          {translateUi('apply_31e392d1')}{' '}
+          {translateUi('apply_31e392d1')}
         </Button>
       </div>
       <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
@@ -629,7 +627,7 @@ export function LibraryBulkToolbar({
           }
         >
           {' '}
-          {translateUi('apply_31e392d1')}{' '}
+          {translateUi('apply_31e392d1')}
         </Button>
       </div>
       {customFields.length > 0 ? (
@@ -690,7 +688,7 @@ export function LibraryBulkToolbar({
             }
           >
             {' '}
-            {translateUi('set_b6f6f3ad')}{' '}
+            {translateUi('set_b6f6f3ad')}
           </Button>
         </div>
       ) : null}
@@ -719,7 +717,7 @@ export function LibraryBulkToolbar({
           })
         }
       >
-        <Link2 className="size-3.5" /> {translateUi('share_box_21c716f6')}{' '}
+        <Link2 className="size-3.5" /> {translateUi('share_box_21c716f6')}
       </Button>
       {compare}
       <Button
@@ -742,7 +740,7 @@ export function LibraryBulkToolbar({
           })
         }
       >
-        <Layers className="size-3.5" /> {translateUi('mark_as_element_29af581b')}{' '}
+        <Layers className="size-3.5" /> {translateUi('mark_as_element_29af581b')}
       </Button>
       <Button
         type="button"
@@ -752,13 +750,12 @@ export function LibraryBulkToolbar({
         disabled={Boolean(busy)}
         onClick={() => setConfirmingDelete(true)}
       >
-        <Trash2 className="size-3.5" /> {translateUi('delete_e2d0a549')}{' '}
+        <Trash2 className="size-3.5" /> {translateUi('delete_e2d0a549')}
       </Button>
       <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm">
-              {' '}
               {translateUi('delete_e2d0a549')}{' '}
               {assetIds.length === 1
                 ? translateUi('this_asset_ad2fbd56')
@@ -766,8 +763,7 @@ export function LibraryBulkToolbar({
               ?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
-              {' '}
-              {translateUi('they_leave_your_library_along_with__6d5939fa')}{' '}
+              {translateUi('they_leave_your_library_along_with__6d5939fa')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -784,7 +780,7 @@ export function LibraryBulkToolbar({
               }}
             >
               {' '}
-              {translateUi('delete_e2d0a549')}{' '}
+              {translateUi('delete_e2d0a549')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

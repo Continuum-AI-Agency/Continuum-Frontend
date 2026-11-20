@@ -356,8 +356,7 @@ function ShaderActionConfig({
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <Label htmlFor={`action-config-${nodeId}-mode`} className="text-xs">
-          {' '}
-          {translateUi('output_b2439bcb')}{' '}
+          {translateUi('output_b2439bcb')}
         </Label>
         <Select value={mode} onValueChange={(next: string) => onWrite('mode', next)}>
           <SelectTrigger id={`action-config-${nodeId}-mode`} size="sm" className="h-7 text-xs">
@@ -370,8 +369,7 @@ function ShaderActionConfig({
         </Select>
       </div>
       <p className="text-2xs text-muted-foreground">
-        {' '}
-        {translateUi('deferred_keeps_the_source_reference_8acbb40f')}{' '}
+        {translateUi('deferred_keeps_the_source_reference_8acbb40f')}
       </p>
       <ShaderEffectControls
         idPrefix={`action-${nodeId}`}

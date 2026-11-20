@@ -227,9 +227,8 @@ export function AssetInfoPanel({
     <div data-testid="asset-info-panel" className="flex flex-col gap-4 p-3 text-xs">
       {olderVersion ? (
         <p className="text-muted-foreground">
-          {' '}
           {translateUi('version_dd167905')} {olderVersion.versionNumber}
-          {translateUi('technical_and_workflow_details_desc_949a3513')}{' '}
+          {translateUi('technical_and_workflow_details_desc_949a3513')}
         </p>
       ) : null}
 
@@ -239,7 +238,7 @@ export function AssetInfoPanel({
           variant="warning"
           title={translateUi('this_file_carries_gps_coordinates_s_0d50a50f')}
         >
-          <MapPin /> {translateUi('location_data_f94fade1')}{' '}
+          <MapPin /> {translateUi('location_data_f94fade1')}
         </Badge>
       ) : null}
 
@@ -317,7 +316,6 @@ export function AssetInfoPanel({
 
           <section className="flex flex-col gap-1.5">
             <h3 className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-              {' '}
               {translateUi('notes_8a7525b1')}{' '}
             </h3>
             <NotesEditor asset={asset} canEdit={canEdit} />

@@ -592,7 +592,7 @@ export function OutputSettingsPanel({
           className="gap-1.5"
         >
           {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
-          {translateUi('save_1509f561')}{' '}
+          {translateUi('save_1509f561')}
         </Button>
       </div>
       <EncodeSettingsFields

@@ -886,7 +886,7 @@ export function EditWorkspace({
           className="h-7 gap-1 text-xs"
           onClick={() => void cutPauses()}
         >
-          <AudioLines className="size-3.5" /> {translateUi('cut_pauses_ded96bea')}{' '}
+          <AudioLines className="size-3.5" /> {translateUi('cut_pauses_ded96bea')}
         </Button>
         <Button
           size="sm"
@@ -894,7 +894,7 @@ export function EditWorkspace({
           className="h-7 gap-1 text-xs"
           onClick={() => void autoCaptions()}
         >
-          <Captions className="size-3.5" /> {translateUi('auto_captions_90ab215c')}{' '}
+          <Captions className="size-3.5" /> {translateUi('auto_captions_90ab215c')}
         </Button>
         <Button
           size="sm"
@@ -902,7 +902,7 @@ export function EditWorkspace({
           className="h-7 gap-1 text-xs"
           onClick={() => void cutOnBeat()}
         >
-          <Music className="size-3.5" /> {translateUi('quick_cuts_86dbac6a')}{' '}
+          <Music className="size-3.5" /> {translateUi('quick_cuts_86dbac6a')}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -930,8 +930,7 @@ export function EditWorkspace({
               </DropdownMenuItem>
             ))}
             <div className="px-2 py-1 text-xs text-muted-foreground">
-              {' '}
-              {translateUi('select_2_4_picture_clips_first_31fd98f3')}{' '}
+              {translateUi('select_2_4_picture_clips_first_31fd98f3')}
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -941,7 +940,7 @@ export function EditWorkspace({
           className="h-7 gap-1 text-xs"
           onClick={() => void detectBeats()}
         >
-          <Waves className="size-3.5" /> {translateUi('beats_b886ee35')}{' '}
+          <Waves className="size-3.5" /> {translateUi('beats_b886ee35')}
         </Button>
       </div>
     ),
@@ -978,7 +977,6 @@ export function EditWorkspace({
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold tracking-tight">{project.title}</h1>
           <p className="text-2xs text-muted-foreground" data-testid="project-revision">
-            {' '}
             {translateUi('revision_2e516d68')} {project.revision}
             {busy ? ` · ${busy.replaceAll('_', ' ')}…` : ''}
           </p>
@@ -1000,7 +998,6 @@ export function EditWorkspace({
               <Undo2 className="size-4" />
             </TooltipTrigger>
             <TooltipContent>
-              {' '}
               {translateUi('undo_a8283ade')}{' '}
               <span className="ml-1 text-muted-foreground">{key.undo}</span>
             </TooltipContent>
@@ -1021,7 +1018,6 @@ export function EditWorkspace({
               <Redo2 className="size-4" />
             </TooltipTrigger>
             <TooltipContent>
-              {' '}
               {translateUi('redo_74273989')}{' '}
               <span className="ml-1 text-muted-foreground">{key.redo}</span>
             </TooltipContent>
@@ -1066,7 +1062,7 @@ export function EditWorkspace({
               data-testid="draft-running"
               onClick={() => setBriefOpen(true)}
             >
-              <Spinner className="size-3.5" /> {translateUi('drafting_bafe3bfa')}{' '}
+              <Spinner className="size-3.5" /> {translateUi('drafting_bafe3bfa')}
             </Button>
           ) : null}
           <Button
@@ -1075,7 +1071,7 @@ export function EditWorkspace({
             className="h-8 gap-1 text-xs"
             onClick={() => openBrief()}
           >
-            <Sparkles className="size-3.5" /> {translateUi('first_cut_e5063f71')}{' '}
+            <Sparkles className="size-3.5" /> {translateUi('first_cut_e5063f71')}
           </Button>
           {productionAvailable ? (
             <Button
@@ -1084,7 +1080,7 @@ export function EditWorkspace({
               className="h-8 gap-1 text-xs"
               onClick={onOpenProduction}
             >
-              <Clapperboard className="size-3.5" /> {translateUi('production_13a7c655')}{' '}
+              <Clapperboard className="size-3.5" /> {translateUi('production_13a7c655')}
             </Button>
           ) : null}
           <Tooltip>
@@ -1102,7 +1098,6 @@ export function EditWorkspace({
               <CommandIcon className="size-3.5" /> K
             </TooltipTrigger>
             <TooltipContent>
-              {' '}
               {translateUi('every_action_ad22c1fa')}{' '}
               <span className="ml-1 text-muted-foreground">{key.palette}</span>
             </TooltipContent>
@@ -1122,7 +1117,7 @@ export function EditWorkspace({
             disabled={!canExport}
             onClick={() => setExportOpen(true)}
           >
-            <Download className="size-3.5" /> {translateUi('export_36648955')}{' '}
+            <Download className="size-3.5" /> {translateUi('export_36648955')}
           </Button>
         </div>
       </header>

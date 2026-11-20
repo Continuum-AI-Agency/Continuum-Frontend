@@ -457,14 +457,13 @@ export function DeliveryTargetPicker({
         <div className="rounded-md border border-dashed px-3 py-3 text-xs">
           <p className="font-medium">{translateUi('no_ad_account_connected_783f04c9')}</p>
           <p className="mt-0.5 text-muted-foreground">
-            {' '}
             {translateUi('connect_a_meta_ad_account_to_this_b_a616dbdc')}{' '}
             <Link
               href={INTEGRATIONS_HREF}
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
               {' '}
-              {translateUi('open_integrations_93ff028b')}{' '}
+              {translateUi('open_integrations_93ff028b')}
             </Link>
           </p>
         </div>
@@ -480,7 +479,7 @@ export function DeliveryTargetPicker({
               }}
             >
               {' '}
-              {translateUi('clear_ad_targets_91abe306')}{' '}
+              {translateUi('clear_ad_targets_91abe306')}
             </Button>
           </div>
         ) : null}
@@ -795,7 +794,7 @@ export function AdDrillDown({
           }}
         >
           {' '}
-          {translateUi('campaigns_30e9a089')}{' '}
+          {translateUi('campaigns_30e9a089')}
         </button>
         {campaign ? (
           <>
@@ -817,8 +816,7 @@ export function AdDrillDown({
           </>
         ) : null}
         <Button type="button" size="xs" variant="ghost" className="ml-auto" onClick={onCancel}>
-          {' '}
-          {translateUi('close_7d9eb7ac')}{' '}
+          {translateUi('close_7d9eb7ac')}
         </Button>
       </div>
       {adset ? (
@@ -830,7 +828,7 @@ export function AdDrillDown({
           disabled={!page}
           onClick={createHere}
         >
-          <Plus aria-hidden /> {translateUi('new_paused_ad_in_this_ad_set_87daa6e4')}{' '}
+          <Plus aria-hidden /> {translateUi('new_paused_ad_in_this_ad_set_87daa6e4')}
         </Button>
       ) : null}
       <Input
@@ -953,7 +951,6 @@ export function PasteAdIds({
     <div className="space-y-1.5 rounded-md border p-2 text-xs">
       <div className="flex flex-col gap-1">
         <span className="text-muted-foreground">
-          {' '}
           {translateUi('one_line_per_row_40e0b3f6')}{' '}
           <code>{translateUi('row_name_ad_id_4ce48b4d')}</code>
           {translateUi('or_bare_ad_ids_in_row_order_3710f502')}{' '}
@@ -970,7 +967,6 @@ export function PasteAdIds({
       {result ? (
         <div role="status" className="space-y-0.5">
           <p className="text-muted-foreground">
-            {' '}
             {translateUi('matched_0d6346e0')} {result.matched} {translateUi('ad_70ba3370')}
             {result.matched === 1 ? '' : 's'}.
           </p>
@@ -987,7 +983,7 @@ export function PasteAdIds({
       <div className="flex justify-end gap-1.5">
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
           {' '}
-          {translateUi('close_7d9eb7ac')}{' '}
+          {translateUi('close_7d9eb7ac')}
         </Button>
         <Button
           type="button"
@@ -997,7 +993,7 @@ export function PasteAdIds({
           onClick={() => void apply()}
         >
           {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
-          {translateUi('apply_ad_ids_4c351b51')}{' '}
+          {translateUi('apply_ad_ids_4c351b51')}
         </Button>
       </div>
     </div>

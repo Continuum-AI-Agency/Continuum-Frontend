@@ -96,7 +96,7 @@ export function SharedTemplateDetail({
       <header className="flex flex-wrap items-center justify-between gap-2 px-[var(--card-pad)] py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={onBack}>
-            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}{' '}
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}
           </Button>
           <h2 className="min-w-0 truncate text-base font-semibold">{name}</h2>
           <p className="truncate text-xs text-muted-foreground">
@@ -231,12 +231,10 @@ export function SharedTemplateDetail({
           <Panel title={translateUi('variables_02db55ba')} bodyClassName="p-0">
             {contract.isPending ? (
               <p className="p-[var(--card-pad)] text-xs text-muted-foreground">
-                {' '}
-                {translateUi('reading_what_this_template_asks_for_23027302')}{' '}
+                {translateUi('reading_what_this_template_asks_for_23027302')}
               </p>
             ) : contract.isError ? (
               <p role="alert" className="p-[var(--card-pad)] text-xs text-destructive">
-                {' '}
                 {translateUi('could_not_read_this_template_11971a82')}{' '}
                 {contract.error instanceof Error
                   ? contract.error.message
@@ -244,8 +242,7 @@ export function SharedTemplateDetail({
               </p>
             ) : variables.length === 0 ? (
               <p className="p-[var(--card-pad)] text-xs text-muted-foreground">
-                {' '}
-                {translateUi('this_template_takes_no_variables_d0f3d2e2')}{' '}
+                {translateUi('this_template_takes_no_variables_d0f3d2e2')}
               </p>
             ) : (
               <ul

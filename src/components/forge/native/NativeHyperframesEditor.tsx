@@ -292,13 +292,11 @@ function NativeEditorBody({
           <>
             {onBack ? (
               <Button variant="ghost" onClick={onBack}>
-                {' '}
-                {translateUi('back_to_templates_1b58f427')}{' '}
+                {translateUi('back_to_templates_1b58f427')}
               </Button>
             ) : (
               <Link className="text-sm text-primary hover:underline" href="/forge">
-                {' '}
-                {translateUi('templates_56b564b7')}{' '}
+                {translateUi('templates_56b564b7')}
               </Link>
             )}
             <Link
@@ -306,7 +304,7 @@ function NativeEditorBody({
               href={nativeEditorHref(view.brandId, view.assetId, view.revision.revisionId)}
             >
               {' '}
-              {translateUi('saved_revision_link_f75ab4ae')}{' '}
+              {translateUi('saved_revision_link_f75ab4ae')}
             </Link>
           </>
         }
@@ -318,8 +316,7 @@ function NativeEditorBody({
         >
           {!canEdit ? (
             <p role="status" className="text-sm text-muted-foreground">
-              {' '}
-              {translateUi('this_revision_uses_an_older_upload__f6bf8d4a')}{' '}
+              {translateUi('this_revision_uses_an_older_upload__f6bf8d4a')}
             </p>
           ) : null}
           <form
@@ -349,8 +346,7 @@ function NativeEditorBody({
                               {translateUi('new_variant_a5ad40f9')}
                             </SelectItem>
                             <SelectItem value="current" disabled={!canUpdate}>
-                              {' '}
-                              {translateUi('current_variant_e3460250')}{' '}
+                              {translateUi('current_variant_e3460250')}
                             </SelectItem>
                           </SelectGroup>
                         </SelectContent>
@@ -391,8 +387,7 @@ function NativeEditorBody({
                       />
                       {field.reveal ? (
                         <FieldDescription>
-                          {' '}
-                          {translateUi('preserves_the_source_s_text_reveal__524bef47')}{' '}
+                          {translateUi('preserves_the_source_s_text_reveal__524bef47')}
                         </FieldDescription>
                       ) : null}
                       <FieldError errors={[form.formState.errors.texts?.[index]?.value]} />
@@ -409,10 +404,9 @@ function NativeEditorBody({
                       onClick={() => setTextPage((page) => page - 1)}
                     >
                       {' '}
-                      {translateUi('previous_text_fields_28d83be8')}{' '}
+                      {translateUi('previous_text_fields_28d83be8')}
                     </Button>
                     <span>
-                      {' '}
                       {translateUi('text_71988c4d')} {firstText + 1}–
                       {Math.min(firstText + 20, fields.length)} {translateUi('of_28391d3b')}{' '}
                       {fields.length}
@@ -425,7 +419,7 @@ function NativeEditorBody({
                       onClick={() => setTextPage((page) => page + 1)}
                     >
                       {' '}
-                      {translateUi('next_text_fields_d21c2075')}{' '}
+                      {translateUi('next_text_fields_d21c2075')}
                     </Button>
                   </div>
                 ) : null}
@@ -459,14 +453,12 @@ function NativeEditorBody({
                       </p>
                       {order.isPending && view.sourceSceneSha256 ? (
                         <p role="status" className="text-xs text-muted-foreground">
-                          {' '}
-                          {translateUi('loading_saved_element_order_7a181f3b')}{' '}
+                          {translateUi('loading_saved_element_order_7a181f3b')}
                         </p>
                       ) : null}
                       {order.isError ? (
                         <p role="status" className="text-xs text-muted-foreground">
-                          {' '}
-                          {translateUi('element_order_is_unavailable_for_th_d81c1b5e')}{' '}
+                          {translateUi('element_order_is_unavailable_for_th_d81c1b5e')}
                         </p>
                       ) : null}
                       {order.data ? (
@@ -478,16 +470,14 @@ function NativeEditorBody({
                       ) : null}
                       {order.data?.groups.length ? (
                         <FieldDescription>
-                          {' '}
-                          {translateUi('earlier_elements_come_first_in_the__fed6aead')}{' '}
+                          {translateUi('earlier_elements_come_first_in_the__fed6aead')}
                         </FieldDescription>
                       ) : null}
                     </div>
                   )}
                 />
                 <FieldDescription>
-                  {' '}
-                  {translateUi('saving_compiles_the_original_source_147768c1')}{' '}
+                  {translateUi('saving_compiles_the_original_source_147768c1')}
                 </FieldDescription>
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit">
@@ -496,8 +486,7 @@ function NativeEditorBody({
                       : translateUi('save_variant_dd7b39f1')}
                   </Button>
                   <Button type="button" variant="outline" disabled={!dirty} onClick={discard}>
-                    {' '}
-                    {translateUi('discard_changes_f9bfa3dc')}{' '}
+                    {translateUi('discard_changes_f9bfa3dc')}
                   </Button>
                 </div>
               </FieldGroup>
@@ -531,8 +520,7 @@ function NativeEditorBody({
             </details>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            {' '}
-            {translateUi('this_inspector_exposes_copy_viewpor_364ab636')}{' '}
+            {translateUi('this_inspector_exposes_copy_viewpor_364ab636')}
           </p>
           <Panel title={translateUi('variants_and_revisions_b7baa6d5')} bodyClassName="p-0">
             {historyError ? (
@@ -541,8 +529,7 @@ function NativeEditorBody({
                 <AlertDescription>
                   {problem(historyError)}{' '}
                   <Button variant="outline" size="sm" onClick={reloadHistory}>
-                    {' '}
-                    {translateUi('retry_revisions_95e8bf97')}{' '}
+                    {translateUi('retry_revisions_95e8bf97')}
                   </Button>
                 </AlertDescription>
               </Alert>

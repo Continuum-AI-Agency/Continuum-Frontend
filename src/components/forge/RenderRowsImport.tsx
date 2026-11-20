@@ -814,8 +814,7 @@ export function RenderRowsImport({
         <DialogHeader>
           <DialogTitle>{translateUi('import_render_rows_8fb35a18')}</DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('choose_an_xlsx_or_csv_every_tab_is__68f55cc5')}{' '}
+            {translateUi('choose_an_xlsx_or_csv_every_tab_is__68f55cc5')}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
@@ -846,7 +845,7 @@ export function RenderRowsImport({
                 ) : (
                   <FileSpreadsheet data-icon="inline-start" />
                 )}{' '}
-                {translateUi('choose_xlsx_or_csv_177bed6c')}{' '}
+                {translateUi('choose_xlsx_or_csv_177bed6c')}
               </Button>
               <Button
                 type="button"
@@ -854,7 +853,7 @@ export function RenderRowsImport({
                 onClick={() => downloadTemplateCsv(contract, 'render-rows-template.csv')}
               >
                 {' '}
-                {translateUi('download_csv_template_67f46a1d')}{' '}
+                {translateUi('download_csv_template_67f46a1d')}
               </Button>
             </div>
             {/* A drop takes the same review path as the picker. A label carries the drop and clicks
@@ -888,8 +887,7 @@ export function RenderRowsImport({
               </span>
             </label>
             <FieldDescription>
-              {' '}
-              {translateUi('title_rows_notes_and_a_colour_legen_6582f817')}{' '}
+              {translateUi('title_rows_notes_and_a_colour_legen_6582f817')}
             </FieldDescription>
           </Field>
 
@@ -919,7 +917,7 @@ export function RenderRowsImport({
                                 translateUi('sheet_value0_a685fb73', {
                                   value0: String(index + 1),
                                 })}{' '}
-                              · {entry.table.rows.length} {translateUi('rows_bc51e9e6')}{' '}
+                              · {entry.table.rows.length} {translateUi('rows_bc51e9e6')}
                             </SelectItem>
                           ))}
                         </SelectGroup>
@@ -1041,7 +1039,7 @@ export function RenderRowsImport({
                             </SelectItem>
                             {[0, 1, 2, 3].map((places) => (
                               <SelectItem key={places} value={String(places)}>
-                                {places} {translateUi('decimals_ee80fd2f')}{' '}
+                                {places} {translateUi('decimals_ee80fd2f')}
                               </SelectItem>
                             ))}
                           </SelectGroup>
@@ -1102,7 +1100,6 @@ export function RenderRowsImport({
               {kitTargets.length ? (
                 <div className="flex flex-col gap-1 rounded-md border p-2 text-xs">
                   <p className="font-medium">
-                    {' '}
                     {translateUi('pictures_by_name_dfca04c9')}{' '}
                     {kitTargets
                       .map(([key, header]) => `${byKey.get(key)?.label ?? key} ← ${header}`)
@@ -1145,7 +1142,7 @@ export function RenderRowsImport({
                       onClick={() => kitsRef.current?.click()}
                     >
                       <FolderOpen data-icon="inline-start" />{' '}
-                      {translateUi('add_a_folder_of_pictures_named_by_t_c2464243')}{' '}
+                      {translateUi('add_a_folder_of_pictures_named_by_t_c2464243')}
                     </Button>
                   ) : null}
                 </div>
@@ -1155,7 +1152,7 @@ export function RenderRowsImport({
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <TriangleAlert className="size-3.5" aria-hidden />
                   {folderColumns.map(([header]) => header).join(', ')}{' '}
-                  {translateUi('hold_a_drive_folder_link_not_a_pict_8cd3c7ef')}{' '}
+                  {translateUi('hold_a_drive_folder_link_not_a_pict_8cd3c7ef')}
                 </p>
               ) : null}
               {overCap ? (
@@ -1170,19 +1167,18 @@ export function RenderRowsImport({
               {review?.duplicate ? (
                 <p role="alert" className="text-xs text-destructive">
                   {labelOf(review.duplicate)}{' '}
-                  {translateUi('is_mapped_more_than_once_choose_one_70328e8f')}{' '}
+                  {translateUi('is_mapped_more_than_once_choose_one_70328e8f')}
                 </p>
               ) : null}
               {checking ? (
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Loader2 className="size-3 animate-spin" />{' '}
-                  {translateUi('importing_links_and_checking_librar_f0132e1b')}{' '}
+                  {translateUi('importing_links_and_checking_librar_f0132e1b')}
                 </p>
               ) : null}
               {failedLinks.length > 0 ? (
                 <Button type="button" variant="outline" size="xs" onClick={retryFailedLinks}>
-                  {' '}
-                  {translateUi('retry_linked_media_ab52079a')}{' '}
+                  {translateUi('retry_linked_media_ab52079a')}
                 </Button>
               ) : null}
 
@@ -1247,9 +1243,8 @@ export function RenderRowsImport({
                 >
                   {errors.map((error) => (
                     <li key={`${cellKey(error.row, error.column)}:${error.message}`}>
-                      {' '}
                       {translateUi('row_95110d74')} {error.row + 1} · {error.column}:{' '}
-                      {error.message} {translateUi('imported_empty_28db3dde')}{' '}
+                      {error.message} {translateUi('imported_empty_28db3dde')}
                     </li>
                   ))}
                 </ul>
@@ -1262,12 +1257,12 @@ export function RenderRowsImport({
             <p className="mr-auto text-2xs text-muted-foreground">
               {errors.length} {translateUi('cell_39d02b42')}
               {errors.length === 1 ? '' : 's'}{' '}
-              {translateUi('will_be_left_empty_for_you_to_fill__853cdca5')}{' '}
+              {translateUi('will_be_left_empty_for_you_to_fill__853cdca5')}
             </p>
           ) : null}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             {' '}
-            {translateUi('cancel_19766ed6')}{' '}
+            {translateUi('cancel_19766ed6')}
           </Button>
           <Button type="button" disabled={!canImport} onClick={() => void importRows()}>
             {uploading ? (

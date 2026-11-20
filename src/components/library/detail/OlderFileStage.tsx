@@ -39,8 +39,7 @@ export function OlderFileStage({ version }: OlderFileStageProps) {
           v{version.versionNumber} · {version.mimeType} · {formatBytes(version.sizeBytes ?? 0)}
         </p>
         <p className="text-xs text-muted-foreground/60">
-          {' '}
-          {translateUi('source_file_no_preview_download_to__80791377')}{' '}
+          {translateUi('source_file_no_preview_download_to__80791377')}
         </p>
       </div>
 

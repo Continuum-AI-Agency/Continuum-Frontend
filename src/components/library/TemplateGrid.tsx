@@ -164,7 +164,7 @@ function TemplateCard({
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 {fonts.missing} {translateUi('of_28391d3b')} {fonts.fonts.length}{' '}
-                {translateUi('fonts_are_not_in_the_engine_renders_b55e5031')}{' '}
+                {translateUi('fonts_are_not_in_the_engine_renders_b55e5031')}
               </span>
             </div>
           ) : null}
@@ -212,7 +212,7 @@ function TemplateCard({
           onClick={() => void sendToForge()}
         >
           {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}{' '}
-          {translateUi('send_to_forge_27b7284f')}{' '}
+          {translateUi('send_to_forge_27b7284f')}
         </Button>
       </div>
     </div>
@@ -268,19 +268,17 @@ export function TemplateGrid({
             {translateUi('add_an_after_effects_template_dc4e0bf4')}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {' '}
-            {translateUi('drop_an_aep_aepx_aet_or_collected_z_706f2401')}{' '}
+            {translateUi('drop_an_aep_aepx_aet_or_collected_z_706f2401')}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            {' '}
             {translateUi('upload_865e89de')} <span aria-hidden="true">→</span>{' '}
             {translateUi('unpack_and_inspect_4b40aeb4')} <span aria-hidden="true">→</span>{' '}
             {translateUi('review_slots_71476f16')} <span aria-hidden="true">→</span>{' '}
-            {translateUi('render_variants_630d4334')}{' '}
+            {translateUi('render_variants_630d4334')}
           </p>
         </div>
         <Button type="button" onClick={onChooseFiles} className="shrink-0">
-          <Upload className="size-4" /> {translateUi('choose_template_43fcd78f')}{' '}
+          <Upload className="size-4" /> {translateUi('choose_template_43fcd78f')}
         </Button>
       </section>
 
@@ -294,8 +292,7 @@ export function TemplateGrid({
         <div className="rounded-lg border border-dashed border-border/60 p-8 text-center">
           <p className="text-sm font-medium">{translateUi('no_templates_yet_2d1ae3be')}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {' '}
-            {translateUi('choose_a_project_above_or_drop_it_a_32412ac8')}{' '}
+            {translateUi('choose_a_project_above_or_drop_it_a_32412ac8')}
           </p>
         </div>
       ) : (

@@ -209,8 +209,7 @@ export function ElementDetail({
           </Badge>
         </div>
         <Button type="button" size="sm" variant="ghost" onClick={onBack}>
-          {' '}
-          {translateUi('back_76900f1b')}{' '}
+          {translateUi('back_76900f1b')}
         </Button>
       </div>
 
@@ -264,8 +263,7 @@ export function ElementDetail({
                 <DialogTitle>{element.name}</DialogTitle>
                 <DialogDescription>
                   <a href={referenceUrl} target="_blank" rel="noreferrer" className="underline">
-                    {' '}
-                    {translateUi('open_full_size_f7eb1c9b')}{' '}
+                    {translateUi('open_full_size_f7eb1c9b')}
                   </a>
                 </DialogDescription>
               </DialogHeader>
@@ -288,7 +286,7 @@ export function ElementDetail({
         {emission?.mode === 'fallback' && emission.droppedCount > 0 ? (
           <p className="text-xs text-destructive">
             {emission.droppedCount} {translateUi('of_28391d3b')} {element.members.length}{' '}
-            {translateUi('images_will_be_dropped_generate_a_r_0c2e088c')}{' '}
+            {translateUi('images_will_be_dropped_generate_a_r_0c2e088c')}
           </p>
         ) : null}
         <Button
@@ -324,9 +322,8 @@ export function ElementDetail({
         </p>
         {generateError ? (
           <p className="text-xs text-destructive" role="alert">
-            {' '}
             {translateUi('sheet_generation_failed_aa1c37ad')} {generateError.message}
-            {translateUi('nothing_changed_the_approved_refere_076322bd')}{' '}
+            {translateUi('nothing_changed_the_approved_refere_076322bd')}
           </p>
         ) : null}
       </div>
@@ -422,7 +419,6 @@ export function ElementDetail({
           </div>
           {setDefaultError ? (
             <p className="text-xs text-destructive" role="alert">
-              {' '}
               {translateUi('could_not_change_the_default_611dc0a5')} {setDefaultError.message}
             </p>
           ) : null}
@@ -607,7 +603,7 @@ export function ElementDetail({
             if (window.confirm('Restore the previous complete Element version?')) onRestore(index);
           }}
         >
-          <History className="mr-2 h-4 w-4" /> {translateUi('restore_previous_7ee9e26e')}{' '}
+          <History className="mr-2 h-4 w-4" /> {translateUi('restore_previous_7ee9e26e')}
         </Button>
         <Button
           type="button"
@@ -627,7 +623,7 @@ export function ElementDetail({
           }
         >
           {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{' '}
-          {translateUi('replace_element_f7062476')}{' '}
+          {translateUi('replace_element_f7062476')}
         </Button>
       </div>
     </div>

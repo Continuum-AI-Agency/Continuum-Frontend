@@ -140,7 +140,7 @@ export function WebComponentPreview({
             className="pointer-events-none absolute inset-0 m-0 grid place-items-center text-xs text-muted-foreground"
           >
             {' '}
-            {translateUi('loading_the_preview_b737abb4')}{' '}
+            {translateUi('loading_the_preview_b737abb4')}
           </p>
         ) : null}
         {error ? (

@@ -535,8 +535,7 @@ export function TimelineEditorBlock({
 
                   {isAwaiting ? (
                     <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400">
-                      {' '}
-                      {translateUi('paused_open_the_editor_and_click_re_c47a0bec')}{' '}
+                      {translateUi('paused_open_the_editor_and_click_re_c47a0bec')}
                     </div>
                   ) : null}
 
@@ -710,10 +709,10 @@ export function TimelineEditorBlock({
           <ContextMenuLabel>{translateUi('video_editor_d9393765')}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => openStudio('assembly')} disabled={!data.videoProjectId}>
-            <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_550697e0')}{' '}
+            <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_550697e0')}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => openStudio('motion')} disabled={!data.videoProjectId}>
-            <Diamond className="mr-2 h-4 w-4" /> {translateUi('edit_motion_8d0989c4')}{' '}
+            <Diamond className="mr-2 h-4 w-4" /> {translateUi('edit_motion_8d0989c4')}
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => {
@@ -733,7 +732,7 @@ export function TimelineEditorBlock({
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}{' '}
+            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem

@@ -163,13 +163,11 @@ export function RenderModePill({ test }: { test: boolean }) {
 
   return test ? (
     <Pill variant="muted" title={translateUi('a_proof_for_review_not_marked_ready_8985a405')}>
-      {' '}
-      {translateUi('proof_7fbb3ccf')}{' '}
+      {translateUi('proof_7fbb3ccf')}
     </Pill>
   ) : (
     <Pill variant="violet" title={translateUi('a_final_render_marked_ready_to_use__45181b08')}>
-      {' '}
-      {translateUi('final_f4ed8fa6')}{' '}
+      {translateUi('final_f4ed8fa6')}
     </Pill>
   );
 }
@@ -195,20 +193,18 @@ export function RenderEnginePill({
         })}
       >
         {' '}
-        {translateUi('new_renderer_after_effects_6fd456a6')}{' '}
+        {translateUi('new_renderer_after_effects_6fd456a6')}
       </Pill>
     );
   if (job.engine === 'web')
     return (
       <Pill variant="muted" title={translateUi('rendered_from_the_web_component_in__c088b463')}>
-        {' '}
-        {translateUi('web_29751047')}{' '}
+        {translateUi('web_29751047')}
       </Pill>
     );
   return job.engine === 'micro' ? (
     <Pill variant="muted" title={translateUi('rendered_by_continuum_s_new_rendere_3cf9d8d6')}>
-      {' '}
-      {translateUi('new_renderer_23459184')}{' '}
+      {translateUi('new_renderer_23459184')}
     </Pill>
   ) : null;
 }
@@ -233,8 +229,7 @@ export function TemplateVersion({
   if (view.state === 'unrecorded') {
     return (
       <span className="text-muted-foreground" title={templateVersionTitle(view, translateUi)}>
-        {' '}
-        {translateUi('unrecorded_8526102b')}{' '}
+        {translateUi('unrecorded_8526102b')}
       </span>
     );
   }
@@ -424,7 +419,7 @@ export function RenderJobDetail({
     <div className="flex flex-col divide-y divide-border">
       <div className="flex flex-wrap items-start gap-2 p-[var(--card-pad)]">
         <Button type="button" size="sm" variant="ghost" className="gap-1.5" onClick={onBack}>
-          <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('all_renders_91c99c5f')}{' '}
+          <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('all_renders_91c99c5f')}
         </Button>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-base font-semibold">{name}</h2>
@@ -434,7 +429,7 @@ export function RenderJobDetail({
           </p>
         </div>
         <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={onRefresh}>
-          <RefreshCw className="size-3.5" aria-hidden /> {translateUi('refresh_0e916101')}{' '}
+          <RefreshCw className="size-3.5" aria-hidden /> {translateUi('refresh_0e916101')}
         </Button>
       </div>
 
@@ -517,7 +512,7 @@ export function RenderJobDetail({
                 ) : (
                   <Download className="size-3" aria-hidden />
                 )}{' '}
-                {translateUi('remake_broadcast_mxf_427b5e40')}{' '}
+                {translateUi('remake_broadcast_mxf_427b5e40')}
               </Button>
             ) : null}
             {job.status === 'finished' &&
@@ -574,14 +569,12 @@ export function RenderJobDetail({
             : null}
           {job.status === 'finished' && existingMxf ? (
             <p className="m-0 text-xs text-muted-foreground">
-              {' '}
-              {translateUi('remake_preserves_the_picture_and_re_0547e5ae')}{' '}
+              {translateUi('remake_preserves_the_picture_and_re_0547e5ae')}
             </p>
           ) : null}
           {job.status === 'finished' && source && missingMasters.length > 0 ? (
             <p className="m-0 text-2xs text-muted-foreground">
-              {' '}
-              {translateUi('generated_files_are_converted_from__59f10b2b')}{' '}
+              {translateUi('generated_files_are_converted_from__59f10b2b')}
             </p>
           ) : null}
           {downloadError ? (
@@ -639,7 +632,6 @@ export function RenderJobDetail({
                         <span className="break-words">
                           After Effects{' '}
                           <span className="text-muted-foreground">
-                            {' '}
                             {translateUi('handed_over_by_continuum_s_new_rend_c36e04c3')}{' '}
                             {job.engineFallback}
                           </span>

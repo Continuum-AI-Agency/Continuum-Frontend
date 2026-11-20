@@ -54,15 +54,13 @@ export function EditorAgentPanel({
       <div className="border-b border-border p-4">
         <h2 className="text-sm font-semibold">{translateUi('editor_agent_acb612aa')}</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          {' '}
-          {translateUi('gemini_3_8_flash_edits_this_project_3ff2fe5f')}{' '}
+          {translateUi('gemini_3_8_flash_edits_this_project_3ff2fe5f')}
         </p>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">
         {messages.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            {' '}
-            {translateUi('try_slow_the_opening_zoom_trim_scen_b9486276')}{' '}
+            {translateUi('try_slow_the_opening_zoom_trim_scen_b9486276')}
           </p>
         ) : (
           messages.map((message, index) => (
@@ -104,7 +102,7 @@ export function EditorAgentPanel({
           />
         </div>
         <Button type="submit" size="sm" className="w-full" disabled={sending || !draft.trim()}>
-          <Send className="size-3.5" /> {translateUi('apply_edit_d539998e')}{' '}
+          <Send className="size-3.5" /> {translateUi('apply_edit_d539998e')}
         </Button>
       </form>
     </aside>

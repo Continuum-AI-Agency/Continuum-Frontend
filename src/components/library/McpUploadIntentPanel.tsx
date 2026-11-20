@@ -85,14 +85,12 @@ export function McpUploadIntentPanel({ brandId }: Props) {
               <CloudUpload className="size-4 text-primary" />
             )}
             <h2 id="mcp-upload-title" className="text-sm font-semibold">
-              {' '}
               {translateUi('cloud_mcp_image_handoff_2f46d11c')}{' '}
             </h2>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {' '}
             {translateUi('upload_up_to_5fc858fa')} {MAX_FILES}{' '}
-            {translateUi('images_they_will_enter_the_library__e2293175')}{' '}
+            {translateUi('images_they_will_enter_the_library__e2293175')}
           </p>
           {message ? (
             <p
@@ -104,13 +102,12 @@ export function McpUploadIntentPanel({ brandId }: Props) {
           ) : null}
           {invalidFile ? (
             <p className="mt-2 text-xs text-destructive" role="alert">
-              {invalidFile.name} {translateUi('is_not_a_supported_raster_image_2f828e19')}{' '}
+              {invalidFile.name} {translateUi('is_not_a_supported_raster_image_2f828e19')}
             </p>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <label className="cursor-pointer rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent">
-            {' '}
             {translateUi('choose_images_2d39bc2f')}{' '}
             <input
               type="file"

@@ -281,7 +281,7 @@ export function OverlayConfig({
             className="h-7 flex-1 text-xs"
             onClick={() => fileRef.current?.click()}
           >
-            <Upload className="mr-1 size-3" /> {translateUi('upload_865e89de')}{' '}
+            <Upload className="mr-1 size-3" /> {translateUi('upload_865e89de')}
           </Button>
           <Button
             type="button"
@@ -292,7 +292,7 @@ export function OverlayConfig({
             title={logo.status === 'ready' ? undefined : logo.reason}
             onClick={() => void useBrandLogo()}
           >
-            <Sparkles className="mr-1 size-3" /> {translateUi('brand_logo_e458e2b5')}{' '}
+            <Sparkles className="mr-1 size-3" /> {translateUi('brand_logo_e458e2b5')}
           </Button>
         </div>
         <input
@@ -328,8 +328,7 @@ export function OverlayConfig({
           />
         </div>
         <p className="text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('preview_assumes_a_16_9_clip_and_a_s_74aa8705')}{' '}
+          {translateUi('preview_assumes_a_16_9_clip_and_a_s_74aa8705')}
         </p>
       </section>
 
@@ -364,8 +363,7 @@ export function OverlayConfig({
 
       {isWatermark ? (
         <p className="text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('a_watermark_covers_the_whole_clip_u_0c1c2e3f')}{' '}
+          {translateUi('a_watermark_covers_the_whole_clip_u_0c1c2e3f')}
         </p>
       ) : (
         <section className="flex flex-col gap-1.5">
@@ -381,7 +379,7 @@ export function OverlayConfig({
               }
             >
               {' '}
-              {translateUi('whole_clip_09e01b53')}{' '}
+              {translateUi('whole_clip_09e01b53')}
             </Button>
           </div>
           <div className="flex items-start gap-1">

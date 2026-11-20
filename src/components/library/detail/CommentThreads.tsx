@@ -500,7 +500,7 @@ function ThreadCard({
             onClick={() => setReplying((v) => !v)}
           >
             {' '}
-            {translateUi('reply_c253f451')}{' '}
+            {translateUi('reply_c253f451')}
           </Button>
         )}
         {href ? (
@@ -563,7 +563,7 @@ function ThreadCard({
             className="ml-auto h-6 px-1.5 text-2xs text-muted-foreground hover:text-destructive"
             onClick={() => onDelete(thread.root.id)}
           >
-            <Trash2 className="size-3" /> {translateUi('delete_e2d0a549')}{' '}
+            <Trash2 className="size-3" /> {translateUi('delete_e2d0a549')}
           </Button>
         )}
       </div>
@@ -696,8 +696,7 @@ export function CommentThreads({
       <div className="flex flex-1 flex-col items-center justify-center gap-1 p-6 text-center">
         <p className="text-sm text-muted-foreground">{translateUi('no_comments_yet_b7cba957')}</p>
         <p className="text-xs text-muted-foreground/60">
-          {' '}
-          {translateUi('drag_on_the_image_or_pin_a_moment_i_6602d891')}{' '}
+          {translateUi('drag_on_the_image_or_pin_a_moment_i_6602d891')}
         </p>
       </div>
     );
@@ -730,7 +729,7 @@ export function CommentThreads({
             title={translateUi('open_a_compact_comment_list_to_keep_8e9350db')}
             className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-2xs text-muted-foreground hover:bg-accent hover:text-foreground"
           >
-            <PanelRight className="size-3" /> {translateUi('editor_view_1d183389')}{' '}
+            <PanelRight className="size-3" /> {translateUi('editor_view_1d183389')}
           </a>
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -742,7 +741,7 @@ export function CommentThreads({
                   className="h-6 px-1.5 text-2xs text-muted-foreground"
                   aria-label={translateUi('export_comments_as_markers_364ffdbf')}
                 >
-                  <Download className="size-3" /> {translateUi('export_markers_87f171d6')}{' '}
+                  <Download className="size-3" /> {translateUi('export_markers_87f171d6')}
                 </Button>
               }
             />

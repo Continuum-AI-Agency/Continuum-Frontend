@@ -288,7 +288,6 @@ export function ElementCreateForm({
 
       {needsRights ? (
         <p className="text-xs text-muted-foreground">
-          {' '}
           {translateUi('elementCharacterCreationGuidance', {
             category: elementCategoryLabel(category, translateUi).toLowerCase(),
           })}
@@ -297,8 +296,7 @@ export function ElementCreateForm({
 
       <div className="flex items-center justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          {' '}
-          {translateUi('cancel_19766ed6')}{' '}
+          {translateUi('cancel_19766ed6')}
         </Button>
         <Button type="submit" size="sm" disabled={!canSubmit}>
           {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

@@ -76,8 +76,7 @@ function SingleSelectEditor({ field, value, disabled, onChange }: CustomFieldVal
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={CLEAR_VALUE} className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('not_set_4895f731')}{' '}
+          {translateUi('not_set_4895f731')}
         </SelectItem>
         {customFieldChoiceOptions(field).map((option) => (
           <SelectItem key={option.id} value={option.id} className="text-xs">
@@ -252,8 +251,7 @@ function StatusEditor({ field, value, disabled, onChange }: CustomFieldValueEdit
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={CLEAR_VALUE} className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('not_set_4895f731')}{' '}
+          {translateUi('not_set_4895f731')}
         </SelectItem>
         {customFieldChoiceOptions(field).map((option) => (
           <SelectItem key={option.id} value={option.id} className="text-xs">
@@ -387,13 +385,11 @@ function UserEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={CLEAR_VALUE} className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('unassigned_14d33bd0')}{' '}
+          {translateUi('unassigned_14d33bd0')}
         </SelectItem>
         {selected && !knownSelected ? (
           <SelectItem value={selected} className="text-xs text-muted-foreground">
-            {' '}
-            {translateUi('former_member_1ef15417')}{' '}
+            {translateUi('former_member_1ef15417')}
           </SelectItem>
         ) : null}
         {(members ?? []).map((member) => (

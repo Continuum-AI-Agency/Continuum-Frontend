@@ -318,7 +318,7 @@ export function VariationStrip({
       ))}
       {rows.length > STRIP_MAX ? (
         <span className="shrink-0 text-2xs text-muted-foreground">
-          +{rows.length - STRIP_MAX} {translateUi('more_187897ce')}{' '}
+          +{rows.length - STRIP_MAX} {translateUi('more_187897ce')}
         </span>
       ) : null}
     </fieldset>

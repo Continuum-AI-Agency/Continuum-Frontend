@@ -209,7 +209,7 @@ export function LibraryNodeStatus({ nodeId, data }: { nodeId: string; data: unkn
           ) : (
             <RefreshCw className="size-3" aria-hidden />
           )}
-          v{head.versionNumber} {translateUi('available_use_latest_f9f9539f')}{' '}
+          v{head.versionNumber} {translateUi('available_use_latest_f9f9539f')}
         </button>
       ) : null}
 
@@ -279,7 +279,7 @@ function NodeCommentThreads({
       <div className="flex items-center justify-between text-xs">
         <span className="font-medium">
           {threads.open.length} {translateUi('open_0f9f0d27')} {threads.resolved.length}{' '}
-          {translateUi('resolved_dc676b42')}{' '}
+          {translateUi('resolved_dc676b42')}
         </span>
         {threads.resolved.length > 0 ? (
           <button
@@ -459,7 +459,7 @@ function SaveAsRevision({
             )}
           >
             <GitBranchPlus className="size-3" aria-hidden />{' '}
-            {translateUi('save_as_revision_bc959dc5')}{' '}
+            {translateUi('save_as_revision_bc959dc5')}
           </button>
         }
       />
@@ -467,8 +467,7 @@ function SaveAsRevision({
         <div data-testid="library-node-revision-panel" className="flex flex-col gap-2 text-xs">
           {sources.length === 0 ? (
             <p className="text-muted-foreground">
-              {' '}
-              {translateUi('wire_a_library_reference_into_this__084fa103')}{' '}
+              {translateUi('wire_a_library_reference_into_this__084fa103')}
             </p>
           ) : (
             sources.map((source) => {
@@ -493,7 +492,6 @@ function SaveAsRevision({
                     <Loader2 className="size-3 animate-spin" aria-hidden />
                   ) : null}
                   <span className="truncate">
-                    {' '}
                     {translateUi('revise_f1323f09')} {name}
                     {version
                       ? translateUi('from_v_value0_1c78f2f1', { value0: String(version) })

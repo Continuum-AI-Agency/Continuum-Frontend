@@ -125,8 +125,7 @@ export function AIStudioChat({
               <span className="font-medium text-sm">{translateUi('team_chat_87ba4c56')}</span>
             </div>
             <span className="text-2xs text-muted-foreground">
-              {' '}
-              {translateUi('talk_to_your_teammates_on_this_canv_42704115')}{' '}
+              {translateUi('talk_to_your_teammates_on_this_canv_42704115')}
             </span>
           </div>
           <Button

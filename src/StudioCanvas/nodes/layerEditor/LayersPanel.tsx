@@ -128,8 +128,7 @@ function LayersPanelImpl({
   if (layers.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-4 text-center text-2xs text-muted-foreground">
-        {' '}
-        {translateUi('connect_images_to_this_node_then_ad_1675a7e3')}{' '}
+        {translateUi('connect_images_to_this_node_then_ad_1675a7e3')}
       </div>
     );
   }
@@ -326,8 +325,7 @@ function LayerRow({
                     }
                   />
                   <TooltipContent>
-                    {' '}
-                    {translateUi('another_layer_shares_this_name_kept_112fea89')}{' '}
+                    {translateUi('another_layer_shares_this_name_kept_112fea89')}
                   </TooltipContent>
                 </Tooltip>
               ) : null}

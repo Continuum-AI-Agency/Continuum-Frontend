@@ -459,7 +459,7 @@ export function AddNodeCommandPalette({
       }}
     >
       <ContextMenuSubTrigger inset>
-        <Plus className="mr-2 h-4 w-4" /> {translateUi('add_node_a70aa008')}{' '}
+        <Plus className="mr-2 h-4 w-4" /> {translateUi('add_node_a70aa008')}
       </ContextMenuSubTrigger>
       {/* `nowheel` keeps a scroll inside the popup from zooming the React Flow pane; the
           height cap is Base UI's positioner var, so the Action category scrolls instead of
@@ -515,7 +515,7 @@ export function AddNodeCommandPalette({
         {query ? null : (
           <ContextMenuSub>
             <ContextMenuSubTrigger inset data-testid="add-node-techniques-trigger">
-              <Blocks className="mr-2 h-4 w-4" /> {translateUi('techniques_52551d32')}{' '}
+              <Blocks className="mr-2 h-4 w-4" /> {translateUi('techniques_52551d32')}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="nowheel w-72" data-testid="add-node-techniques">
               <ContextMenuCheckboxItem
@@ -524,7 +524,7 @@ export function AddNodeCommandPalette({
                 data-testid="add-node-techniques-collapsed"
               >
                 {' '}
-                {translateUi('drop_collapsed_7258b51e')}{' '}
+                {translateUi('drop_collapsed_7258b51e')}
               </ContextMenuCheckboxItem>
               <ContextMenuSeparator />
               {renderTechniqueRows()}

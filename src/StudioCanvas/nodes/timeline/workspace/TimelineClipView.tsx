@@ -308,10 +308,10 @@ export function TimelineClipView({
           <>
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => actions.cutPauses(clip.id)}>
-              <AudioLines /> {translateUi('cut_pauses_in_this_clip_309eb87f')}{' '}
+              <AudioLines /> {translateUi('cut_pauses_in_this_clip_309eb87f')}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => actions.detectBeats(clip.id)}>
-              <Waves /> {translateUi('detect_beats_from_this_clip_9d534871')}{' '}
+              <Waves /> {translateUi('detect_beats_from_this_clip_9d534871')}
             </ContextMenuItem>
           </>
         ) : null}
@@ -324,7 +324,7 @@ export function TimelineClipView({
         {isMain ? null : (
           <ContextMenuItem variant="destructive" onClick={() => actions.deleteLeaveGap(clip.id)}>
             {' '}
-            {translateUi('delete_leave_gap_51283952')}{' '}
+            {translateUi('delete_leave_gap_51283952')}
           </ContextMenuItem>
         )}
       </ContextMenuContent>

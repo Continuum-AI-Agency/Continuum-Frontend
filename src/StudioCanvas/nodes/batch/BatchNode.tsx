@@ -458,8 +458,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
           <div className="nodrag -mx-1 min-h-0 flex-1 overflow-y-auto border-y border-border/60 bg-muted/20">
             {items.length === 0 ? (
               <p className="p-2 text-center text-xs leading-snug text-muted-foreground">
-                {' '}
-                {translateUi('add_items_to_fan_every_node_downstr_bf7024f2')}{' '}
+                {translateUi('add_items_to_fan_every_node_downstr_bf7024f2')}
               </p>
             ) : (
               <ul className="divide-y divide-border/60">
@@ -548,7 +547,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 }}
               >
                 {' '}
-                {translateUi('add_items_13583d03')}{' '}
+                {translateUi('add_items_13583d03')}
               </Button>
             </div>
           ) : null}
@@ -564,7 +563,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 fileInputRef.current?.click();
               }}
             >
-              <Upload className="size-3" /> {translateUi('upload_865e89de')}{' '}
+              <Upload className="size-3" /> {translateUi('upload_865e89de')}
             </Button>
             <Button
               variant="outline"
@@ -576,7 +575,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 setCsvOpen((open) => !open);
               }}
             >
-              <Table className="size-3" /> {translateUi('paste_text_9328724b')}{' '}
+              <Table className="size-3" /> {translateUi('paste_text_9328724b')}
             </Button>
             <input
               ref={fileInputRef}
@@ -646,12 +645,10 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="zip" className="text-xs">
-                    {' '}
-                    {translateUi('zip_4a70fe9a')}{' '}
+                    {translateUi('zip_4a70fe9a')}
                   </SelectItem>
                   <SelectItem value="cross" className="text-xs">
-                    {' '}
-                    {translateUi('cross_b3986952')}{' '}
+                    {translateUi('cross_b3986952')}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -665,8 +662,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
               ) : null}
               {partnerDetached ? (
                 <p className="text-2xs leading-snug text-muted-foreground">
-                  {' '}
-                  {translateUi('the_other_batch_feeds_the_pairing_w_b6882cda')}{' '}
+                  {translateUi('the_other_batch_feeds_the_pairing_w_b6882cda')}
                 </p>
               ) : null}
             </div>

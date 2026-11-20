@@ -31,10 +31,7 @@ export function ActionSection({ nodeId, data }: { nodeId: string; data: ActionNo
   if (!actionId || !def) {
     return (
       <InspectorSection title={translateUi('operation_0f044feb')}>
-        <InspectorNote>
-          {' '}
-          {translateUi('no_operation_is_set_pick_one_from_t_68bf558c')}{' '}
-        </InspectorNote>
+        <InspectorNote>{translateUi('no_operation_is_set_pick_one_from_t_68bf558c')}</InspectorNote>
       </InspectorSection>
     );
   }
@@ -62,8 +59,7 @@ export function ActionSection({ nodeId, data }: { nodeId: string; data: ActionNo
               {translateUi('keep_in_library_0bd372b9')}
             </FieldLabel>
             <FieldDescription>
-              {' '}
-              {translateUi('always_stored_so_it_can_be_wired_ke_45fa656b')}{' '}
+              {translateUi('always_stored_so_it_can_be_wired_ke_45fa656b')}
             </FieldDescription>
           </FieldContent>
           <Switch

@@ -22,7 +22,7 @@ export function CanvasShortcutsPanel() {
               className="h-8 gap-2 bg-background/90 px-2.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
               aria-label={translateUi('show_canvas_keyboard_shortcuts_0433f3ee')}
             >
-              <Keyboard className="h-3.5 w-3.5" /> {translateUi('shortcuts_46e978d0')}{' '}
+              <Keyboard className="h-3.5 w-3.5" /> {translateUi('shortcuts_46e978d0')}
             </Button>
           }
         />

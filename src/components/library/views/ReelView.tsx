@@ -148,7 +148,7 @@ export function ReelView({
         className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground"
       >
         {' '}
-        {translateUi('no_media_yet_78144e53')}{' '}
+        {translateUi('no_media_yet_78144e53')}
       </div>
     );
   }
@@ -202,7 +202,7 @@ export function ReelView({
           onClick={() => onOpenDetail(asset)}
           className="text-white hover:bg-white/10 hover:text-white"
         >
-          <Maximize2 className="size-3.5" /> {translateUi('details_45989de4')}{' '}
+          <Maximize2 className="size-3.5" /> {translateUi('details_45989de4')}
         </Button>
       </div>
     </section>

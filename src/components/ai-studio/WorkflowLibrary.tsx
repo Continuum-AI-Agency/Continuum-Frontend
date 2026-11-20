@@ -70,8 +70,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
   if (rawNodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-        {' '}
-        {translateUi('no_nodes_10c28b2e')}{' '}
+        {translateUi('no_nodes_10c28b2e')}
       </div>
     );
   }
@@ -91,8 +90,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
   if (!isFinite(minX)) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-        {' '}
-        {translateUi('no_layout_data_6a30f423')}{' '}
+        {translateUi('no_layout_data_6a30f423')}
       </div>
     );
   }
@@ -230,7 +228,7 @@ export function WorkflowCard({
         )}
         <Button size="sm" className="mt-3 w-full" onClick={() => onUse(item)}>
           {' '}
-          {translateUi('use_workflow_e5bbc47c')}{' '}
+          {translateUi('use_workflow_e5bbc47c')}
         </Button>
       </div>
     </div>
@@ -326,7 +324,7 @@ export function WorkflowLibrary() {
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <BookOpen className="mr-1.5 h-3.5 w-3.5" /> {translateUi('templates_56b564b7')}{' '}
+            <BookOpen className="mr-1.5 h-3.5 w-3.5" /> {translateUi('templates_56b564b7')}
           </Button>
         }
       />
@@ -334,7 +332,6 @@ export function WorkflowLibrary() {
         <div className="border-b border-border p-3">
           <p className="text-sm font-semibold">{translateUi('workflow_templates_2c05d1fd')}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {' '}
             {translateUi('pre_built_starting_points_pick_one__df5cd633')}{' '}
             <span className="font-medium">{translateUi('my_workflows_a749a3fd')}</span>.
           </p>
@@ -359,7 +356,7 @@ export function WorkflowLibrary() {
               }`}
             >
               {' '}
-              {translateUi('all_a52ace42')}{' '}
+              {translateUi('all_a52ace42')}
             </button>
             {allTags.map((tag) => (
               <button
@@ -393,8 +390,7 @@ export function WorkflowLibrary() {
                   {translateUi('templates_unavailable_a36850ff')}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {' '}
-                  {translateUi('could_not_load_the_template_library_5dc86626')}{' '}
+                  {translateUi('could_not_load_the_template_library_5dc86626')}
                 </p>
               </div>
               <button
@@ -402,7 +398,7 @@ export function WorkflowLibrary() {
                 onClick={() => void refetch()}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
               >
-                <RefreshCw className="h-3 w-3" /> {translateUi('retry_942087cc')}{' '}
+                <RefreshCw className="h-3 w-3" /> {translateUi('retry_942087cc')}
               </button>
             </div>
           )}
@@ -429,7 +425,7 @@ export function WorkflowLibrary() {
                   className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                 >
                   {' '}
-                  {translateUi('clear_search_3b7ea517')}{' '}
+                  {translateUi('clear_search_3b7ea517')}
                 </button>
               )}
             </div>

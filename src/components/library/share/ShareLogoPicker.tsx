@@ -51,7 +51,7 @@ export function ShareLogoPicker({
         onClick={() => onChange(undefined)}
       >
         {' '}
-        {translateUi('brand_kit_52fe7719')}{' '}
+        {translateUi('brand_kit_52fe7719')}
       </button>
       {images.map((image) => (
         <button

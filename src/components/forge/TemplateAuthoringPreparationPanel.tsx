@@ -716,12 +716,11 @@ export function TemplateAuthoringPreparationPanel({
                       onClick={onOpenFontRepair}
                     >
                       {' '}
-                      {translateUi('open_fonts_check_ca16c0e2')}{' '}
+                      {translateUi('open_fonts_check_ca16c0e2')}
                     </Button>
                   ) : null}
                   {fontLayerContext(diagnostic.affectedFontPostScriptNames).length ? (
                     <span className="block pl-2">
-                      {' '}
                       {translateUi('affected_layers_a3797d08')}{' '}
                       {fontLayerContext(diagnostic.affectedFontPostScriptNames)
                         .map(
@@ -746,7 +745,7 @@ export function TemplateAuthoringPreparationPanel({
                             onClick={() => onInspectComposition(target.compId!)}
                           >
                             {' '}
-                            {translateUi('inspect_affected_composition_a1177775')}{' '}
+                            {translateUi('inspect_affected_composition_a1177775')}
                           </Button>
                         );
                       })()
@@ -765,7 +764,7 @@ export function TemplateAuthoringPreparationPanel({
                         onClick={() => onInspectComposition(target.compId!)}
                       >
                         {' '}
-                        {translateUi('inspect_affected_composition_a1177775')}{' '}
+                        {translateUi('inspect_affected_composition_a1177775')}
                       </Button>
                     );
                   })()
@@ -804,7 +803,7 @@ export function TemplateAuthoringPreparationPanel({
                               onClick={() => onRelinkDependency(exact.footageItemId)}
                             >
                               {' '}
-                              {translateUi('relink_from_library_ba87d929')}{' '}
+                              {translateUi('relink_from_library_ba87d929')}
                             </Button>
                             {onInspectComposition && affectedCompositions.length === 1 ? (
                               <Button
@@ -817,7 +816,7 @@ export function TemplateAuthoringPreparationPanel({
                                 }
                               >
                                 {' '}
-                                {translateUi('inspect_affected_composition_a1177775')}{' '}
+                                {translateUi('inspect_affected_composition_a1177775')}
                               </Button>
                             ) : null}
                           </>
@@ -825,13 +824,11 @@ export function TemplateAuthoringPreparationPanel({
                           <span className="ml-1">· {exact.relinkReason}</span>
                         ) : matches.length > 1 ? (
                           <span className="ml-1">
-                            {' '}
-                            {translateUi('multiple_package_dependencies_match_a3bb7c03')}{' '}
+                            {translateUi('multiple_package_dependencies_match_a3bb7c03')}
                           </span>
                         ) : (
                           <span className="ml-1">
-                            {' '}
-                            {translateUi('no_exact_editable_package_dependenc_bf896472')}{' '}
+                            {translateUi('no_exact_editable_package_dependenc_bf896472')}
                           </span>
                         );
                       })()}
@@ -854,7 +851,6 @@ export function TemplateAuthoringPreparationPanel({
       {workflow.preparation ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>
-            {' '}
             {translateUi('preparation_55084680')}{' '}
             <span className="font-medium text-foreground">
               {workflow.preparation.state.replaceAll('_', ' ')}
@@ -870,7 +866,6 @@ export function TemplateAuthoringPreparationPanel({
 
       {preflight?.stage ? (
         <p role="status" className="text-xs text-muted-foreground">
-          {' '}
           {translateUi('package_preflight_format_12c2641f')} {checkLabel(preflight.checks?.format)}
           {translateUi('dependencies_603accd6')} {checkLabel(preflight.checks?.dependencies)}
           {preflight.providerActivation
@@ -933,7 +928,6 @@ export function TemplateAuthoringPreparationPanel({
       {workflow.artifact || checks ? (
         <Collapsible className="rounded-md border border-border bg-muted/20">
           <CollapsibleTrigger className="flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-accent">
-            {' '}
             {translateUi('package_details_and_verification_90e2ad56')}{' '}
             <span aria-hidden className="text-muted-foreground">
               {checks ? translateUi('view_checks_d9afefde') : translateUi('view_details_d1bf045b')}
@@ -1054,32 +1048,28 @@ export function TemplateAuthoringPreparationPanel({
       {workflow.state === 'needs-input' || workflow.state === 'failed' ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" size="xs" variant="outline" onClick={() => void workflow.retry()}>
-            <RefreshCw data-icon="inline-start" /> {translateUi('retry_preparation_e42e093a')}{' '}
+            <RefreshCw data-icon="inline-start" /> {translateUi('retry_preparation_e42e093a')}
           </Button>
           <span className="text-xs text-muted-foreground">
-            {' '}
-            {translateUi('retry_keeps_this_private_draft_and__d4752866')}{' '}
+            {translateUi('retry_keeps_this_private_draft_and__d4752866')}
           </span>
         </div>
       ) : null}
 
       {workflow.artifact?.state === 'committed' ? (
         <p role="status" className="text-xs font-medium text-foreground">
-          {' '}
           {translateUi('published_version_e5dfd8a7')}{' '}
           {workflow.artifact.commit?.versionId ?? translateUi('confirmed_9599915b')}{' '}
-          {translateUi('from_this_exact_private_package_f5d0835f')}{' '}
+          {translateUi('from_this_exact_private_package_f5d0835f')}
         </p>
       ) : workflow.artifact?.state === 'reviewed' ? (
         <p role="status" className="text-xs font-medium text-foreground">
-          {' '}
-          {translateUi('reviewed_for_version_saving_the_ver_aeb69cb9')}{' '}
+          {translateUi('reviewed_for_version_saving_the_ver_aeb69cb9')}
         </p>
       ) : workflow.canReview ? (
         reviewInVersionAction ? (
           <p role="status" className="text-xs text-muted-foreground">
-            {' '}
-            {translateUi('all_checks_passed_for_this_exact_pa_298a0b2a')}{' '}
+            {translateUi('all_checks_passed_for_this_exact_pa_298a0b2a')}
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
@@ -1098,25 +1088,22 @@ export function TemplateAuthoringPreparationPanel({
               ) : (
                 <Check data-icon="inline-start" />
               )}{' '}
-              {translateUi('approve_for_version_saving_241ad219')}{' '}
+              {translateUi('approve_for_version_saving_241ad219')}
             </Button>
             <span className="text-xs text-muted-foreground">
-              {' '}
-              {translateUi('this_decision_is_available_only_aft_92736d11')}{' '}
+              {translateUi('this_decision_is_available_only_aft_92736d11')}
             </span>
           </div>
         )
       ) : workflow.artifact ? (
         <p className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('version_review_stays_locked_until_p_242004b4')}{' '}
+          {translateUi('version_review_stays_locked_until_p_242004b4')}
         </p>
       ) : null}
 
       {workflow.state === 'failed' && !workflow.artifact ? (
         <p className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('the_local_and_private_server_draft__2bfdd59e')}{' '}
+          {translateUi('the_local_and_private_server_draft__2bfdd59e')}
         </p>
       ) : null}
       <span className="sr-only">

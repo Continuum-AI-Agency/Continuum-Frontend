@@ -180,7 +180,7 @@ export const DataTypeEdge = memo(
                     onClick={() => setShowDetails((value) => !value)}
                   >
                     {' '}
-                    {translateUi('inspect_e0723a86')}{' '}
+                    {translateUi('inspect_e0723a86')}
                   </Button>
                   <Button
                     type="button"
@@ -190,7 +190,7 @@ export const DataTypeEdge = memo(
                     onClick={() => setShowReconnectHint(true)}
                   >
                     {' '}
-                    {translateUi('reconnect_bf8a9eab')}{' '}
+                    {translateUi('reconnect_bf8a9eab')}
                   </Button>
                   <Button
                     type="button"
@@ -200,7 +200,7 @@ export const DataTypeEdge = memo(
                     onClick={() => void deleteElements({ edges: [{ id }] })}
                   >
                     {' '}
-                    {translateUi('delete_e2d0a549')}{' '}
+                    {translateUi('delete_e2d0a549')}
                   </Button>
                   {showDetails ? (
                     <span className="px-1 text-muted-foreground">
@@ -209,8 +209,7 @@ export const DataTypeEdge = memo(
                   ) : null}
                   {showReconnectHint ? (
                     <span className="px-1 text-muted-foreground" role="status">
-                      {' '}
-                      {translateUi('drag_either_endpoint_to_a_compatibl_c0ad6ea9')}{' '}
+                      {translateUi('drag_either_endpoint_to_a_compatibl_c0ad6ea9')}
                     </span>
                   ) : null}
                 </div>

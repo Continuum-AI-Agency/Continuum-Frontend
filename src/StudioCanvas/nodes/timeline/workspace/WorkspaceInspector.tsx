@@ -812,8 +812,7 @@ function NestedSequenceInspector({
         />
         {view.keyframes.length > 0 && (
           <p className="text-2xs text-muted-foreground">
-            {' '}
-            {translateUi('edit_animated_properties_in_keyfram_68293a98')}{' '}
+            {translateUi('edit_animated_properties_in_keyfram_68293a98')}
           </p>
         )}
         <span className={SECTION_LABEL}>{translateUi('source_window_8cc44335')}</span>
@@ -864,7 +863,7 @@ function NestedSequenceInspector({
           onClick={() => patch({ audioEnabled: !view.audioEnabled }, 'Toggle composition audio')}
         >
           {' '}
-          {translateUi('composition_audio_3cb32959')}{' '}
+          {translateUi('composition_audio_3cb32959')}
         </Button>
       </div>
       <MotionPresetsSection clip={clip} getPlayheadSec={store.getSec} runOp={runOp} />
@@ -944,8 +943,7 @@ function TextClipInspector({
         />
         <div className="flex flex-col gap-1">
           <Label htmlFor={`${ids}-font`} className="text-2xs">
-            {' '}
-            {translateUi('font_64d0b3ad')}{' '}
+            {translateUi('font_64d0b3ad')}
           </Label>
           <Input
             id={`${ids}-font`}
@@ -970,8 +968,7 @@ function TextClipInspector({
           />
           <div className="flex flex-col gap-1">
             <Label htmlFor={`${ids}-weight`} className="text-2xs">
-              {' '}
-              {translateUi('weight_81d27ef6')}{' '}
+              {translateUi('weight_81d27ef6')}
             </Label>
             <select
               id={`${ids}-weight`}
@@ -989,7 +986,6 @@ function TextClipInspector({
         </div>
         <div className="grid grid-cols-2 gap-2 text-2xs">
           <div className="flex flex-col gap-1">
-            {' '}
             {translateUi('color_6b73191a')}{' '}
             <ColorField
               label={translateUi('text_71988c4d')}
@@ -999,7 +995,6 @@ function TextClipInspector({
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
-              {' '}
               {translateUi('background_ea2b8a87')}{' '}
               {view.style.backgroundColor ? (
                 <button
@@ -1008,7 +1003,7 @@ function TextClipInspector({
                   onClick={() => setStyle({ backgroundColor: undefined })}
                 >
                   {' '}
-                  {translateUi('clear_83b12c22')}{' '}
+                  {translateUi('clear_83b12c22')}
                 </button>
               ) : null}
             </div>
@@ -1019,7 +1014,6 @@ function TextClipInspector({
             />
           </div>
           <div className="flex flex-col gap-1">
-            {' '}
             {translateUi('outline_eabbf3ab')}{' '}
             <ColorField
               label={translateUi('text_outline_f2944adb')}

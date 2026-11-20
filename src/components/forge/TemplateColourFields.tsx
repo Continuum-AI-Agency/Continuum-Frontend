@@ -54,8 +54,7 @@ export function TemplateColourFields({
   return (
     <div className="flex flex-col gap-1.5 border-t border-border pt-3">
       <p className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-        {' '}
-        {translateUi('colour_fields_a82fcdbc')}{' '}
+        {translateUi('colour_fields_a82fcdbc')}
       </p>
       {fields.map((field) => {
         const isMarked = keys.includes(field.key);
@@ -87,7 +86,6 @@ export function TemplateColourFields({
       })}
       {save.isError ? (
         <p role="alert" className="text-xs text-destructive">
-          {' '}
           {translateUi('colour_fields_could_not_be_saved_03f3b0a4')} {save.error.message}
         </p>
       ) : null}

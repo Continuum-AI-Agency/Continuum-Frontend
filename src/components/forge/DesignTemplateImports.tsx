@@ -115,7 +115,7 @@ export function DesignTemplateImports({
               onClick={() => onOpen(item.result!.assetId)}
             >
               {' '}
-              {translateUi('open_template_42b4387d')}{' '}
+              {translateUi('open_template_42b4387d')}
             </Button>
           ) : null}
         </div>

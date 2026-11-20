@@ -649,8 +649,7 @@ export function ModelViewer({
       {status === 'error' && (
         <div className="absolute inset-0 flex items-center justify-center p-8">
           <p data-testid="model-viewer-error" className="text-xs text-muted-foreground">
-            {' '}
-            {translateUi('could_not_open_this_3d_model_809e37b5')}{' '}
+            {translateUi('could_not_open_this_3d_model_809e37b5')}
           </p>
         </div>
       )}

@@ -2212,8 +2212,7 @@ export function TemplateAuthoringEditor({
   if (!effectiveVersionId)
     return (
       <p className="text-xs text-muted-foreground">
-        {' '}
-        {translateUi('import_and_parse_the_source_to_edit_14d0109c')}{' '}
+        {translateUi('import_and_parse_the_source_to_edit_14d0109c')}
       </p>
     );
   return (
@@ -2238,12 +2237,12 @@ export function TemplateAuthoringEditor({
             ) : null}
             {lineage?.role === 'golden' ? (
               <Pill variant="warning">
-                <Lock className="size-3" aria-hidden /> {translateUi('golden_source_db333f6d')}{' '}
+                <Lock className="size-3" aria-hidden /> {translateUi('golden_source_db333f6d')}
               </Pill>
             ) : null}
             {onVariant ? (
               <Pill variant="violet">
-                <GitFork className="size-3" aria-hidden /> {translateUi('variant_3f19fe84')}{' '}
+                <GitFork className="size-3" aria-hidden /> {translateUi('variant_3f19fe84')}
               </Pill>
             ) : null}
             {lineage ? (
@@ -2295,7 +2294,7 @@ export function TemplateAuthoringEditor({
             authoringDraft.error ? (
               <Button size="xs" variant="outline" onClick={() => void authoringDraft.retry()}>
                 {' '}
-                {translateUi('retry_draft_save_ed1f81a2')}{' '}
+                {translateUi('retry_draft_save_ed1f81a2')}
               </Button>
             ) : null}
             <Button
@@ -2335,7 +2334,6 @@ export function TemplateAuthoringEditor({
               {translateUi('authoring_is_unavailable_for_this_s_e27825aa')}
             </p>
             <p className="mt-1 text-muted-foreground">
-              {' '}
               {translateUi('forge_has_not_returned_a_scoped_aut_7535e5cc')}{' '}
               {authoringDraft.error ? ` ${authoringDraft.error}` : ''}
             </p>
@@ -2351,8 +2349,7 @@ export function TemplateAuthoringEditor({
               {translateUi('private_composition_workspace_attac_00590fcb')}
             </p>
             <p className="mt-1 text-muted-foreground">
-              {' '}
-              {translateUi('editing_this_composition_privately__0bade28b')}{' '}
+              {translateUi('editing_this_composition_privately__0bade28b')}
             </p>
           </div>
         ) : hyperframesRevisionId ? (
@@ -2364,18 +2361,15 @@ export function TemplateAuthoringEditor({
               {translateUi('hyperframes_composition_ready_for_t_68a15072')}
             </p>
             <p className="mt-1 text-muted-foreground">
-              {' '}
-              {translateUi('forge_will_privately_stage_and_veri_d6f6bb01')}{' '}
+              {translateUi('forge_will_privately_stage_and_veri_d6f6bb01')}
             </p>
             {hasUnreconciledLocalCommands ? (
               <p className="mt-2 text-amber-700 dark:text-amber-300">
-                {' '}
-                {translateUi('resolve_the_saved_local_recovery_co_b6c9e7cd')}{' '}
+                {translateUi('resolve_the_saved_local_recovery_co_b6c9e7cd')}
               </p>
             ) : authoringDraft.persistedDraft?.commands.length ? (
               <p className="mt-2 text-amber-700 dark:text-amber-300">
-                {' '}
-                {translateUi('save_or_reset_the_existing_private__2de505f9')}{' '}
+                {translateUi('save_or_reset_the_existing_private__2de505f9')}
               </p>
             ) : null}
             {seedImportError ? (
@@ -2462,7 +2456,7 @@ export function TemplateAuthoringEditor({
               onClick={() => void authoringDraft.adoptServerDraft()}
             >
               {' '}
-              {translateUi('use_server_draft_keep_local_recover_4e8f4ca2')}{' '}
+              {translateUi('use_server_draft_keep_local_recover_4e8f4ca2')}
             </Button>
           </div>
         ) : null}
@@ -2600,7 +2594,7 @@ export function TemplateAuthoringEditor({
             className="border-b border-border px-3 py-2 text-xs text-muted-foreground"
           >
             {' '}
-            {translateUi('the_source_version_changed_while_th_a1457228')}{' '}
+            {translateUi('the_source_version_changed_while_th_a1457228')}
           </p>
         ) : null}
 
@@ -2755,7 +2749,6 @@ export function TemplateAuthoringEditor({
                   <>
                     <Collapsible open={creationToolsOpen} onOpenChange={setCreationToolsOpen}>
                       <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium hover:bg-accent">
-                        {' '}
                         {translateUi('create_and_artboard_tools_d9260521')}{' '}
                         <ChevronDown
                           className={`size-3 transition-transform ${creationToolsOpen ? 'rotate-180' : ''}`}
@@ -2784,7 +2777,7 @@ export function TemplateAuthoringEditor({
                             }
                             onClick={createArtboard}
                           >
-                            <Plus aria-hidden /> {translateUi('add_artboard_291b8762')}{' '}
+                            <Plus aria-hidden /> {translateUi('add_artboard_291b8762')}
                           </Button>
                           <Button
                             size="xs"
@@ -2800,7 +2793,7 @@ export function TemplateAuthoringEditor({
                             }
                             onClick={duplicateArtboard}
                           >
-                            <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}{' '}
+                            <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}
                           </Button>
                         </div>
                         <p className="text-2xs font-medium text-muted-foreground">
@@ -2859,7 +2852,7 @@ export function TemplateAuthoringEditor({
                             onClick={resizeArtboard}
                           >
                             {' '}
-                            {translateUi('apply_composition_size_1a235cde')}{' '}
+                            {translateUi('apply_composition_size_1a235cde')}
                           </Button>
                         ) : (
                           <p className="text-2xs text-muted-foreground">
@@ -2883,7 +2876,7 @@ export function TemplateAuthoringEditor({
                             onClick={() => createShape('rectangle')}
                           >
                             {' '}
-                            {translateUi('rectangle_03069962')}{' '}
+                            {translateUi('rectangle_03069962')}
                           </Button>
                           <Button
                             size="xs"
@@ -2896,7 +2889,7 @@ export function TemplateAuthoringEditor({
                             onClick={() => createShape('ellipse')}
                           >
                             {' '}
-                            {translateUi('ellipse_cb1ee8cb')}{' '}
+                            {translateUi('ellipse_cb1ee8cb')}
                           </Button>
                         </div>
                         {selectedAuthoringComposition?.shapeCreationReason ? (
@@ -2918,7 +2911,7 @@ export function TemplateAuthoringEditor({
                           }
                           onClick={openArtworkCreation}
                         >
-                          <Plus aria-hidden /> {translateUi('choose_from_library_626d06a7')}{' '}
+                          <Plus aria-hidden /> {translateUi('choose_from_library_626d06a7')}
                         </Button>
                         <p className="text-2xs font-medium text-muted-foreground">
                           {translateUi('add_text_1b4d1003')}
@@ -2993,7 +2986,7 @@ export function TemplateAuthoringEditor({
                           }
                           onClick={createText}
                         >
-                          <Plus aria-hidden /> {translateUi('add_text_layer_20d15151')}{' '}
+                          <Plus aria-hidden /> {translateUi('add_text_layer_20d15151')}
                         </Button>
                         {selectedAuthoringComposition?.creationReason ? (
                           <p className="text-2xs text-muted-foreground">
@@ -3041,7 +3034,7 @@ export function TemplateAuthoringEditor({
                         onClick={ungroupSelected}
                       >
                         {' '}
-                        {translateUi('ungroup_b57ef478')}{' '}
+                        {translateUi('ungroup_b57ef478')}
                       </Button>
                     ) : null}
                     <Button
@@ -3052,7 +3045,7 @@ export function TemplateAuthoringEditor({
                       title={selectedNode.duplicateReason ?? undefined}
                       onClick={duplicateSelected}
                     >
-                      <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}{' '}
+                      <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}
                     </Button>
                     <Button
                       size="xs"
@@ -3062,7 +3055,7 @@ export function TemplateAuthoringEditor({
                       title={selectedNode.deleteReason ?? undefined}
                       onClick={deleteSelected}
                     >
-                      <Trash2 aria-hidden /> {translateUi('delete_e2d0a549')}{' '}
+                      <Trash2 aria-hidden /> {translateUi('delete_e2d0a549')}
                     </Button>
                   </div>
                 ) : null}
@@ -3083,7 +3076,7 @@ export function TemplateAuthoringEditor({
                       disabled={busy || staleSource || !groupSelectionReady}
                       onClick={createGroup}
                     >
-                      <Layers aria-hidden /> {translateUi('group_34ca0e76')}{' '}
+                      <Layers aria-hidden /> {translateUi('group_34ca0e76')}
                     </Button>
                   </div>
                 ) : null}
@@ -3145,7 +3138,7 @@ export function TemplateAuthoringEditor({
                     {inventoryError?.message}
                     <Button size="xs" variant="outline" onClick={() => void inventoryRefetch()}>
                       {' '}
-                      {translateUi('retry_942087cc')}{' '}
+                      {translateUi('retry_942087cc')}
                     </Button>
                   </div>
                 ) : (
@@ -3380,8 +3373,7 @@ export function TemplateAuthoringEditor({
                 </ResizablePanel>
               </ResizablePanelGroup>
               <p id="template-preview-help" className="sr-only">
-                {' '}
-                {translateUi('click_a_layer_for_controls_drag_to__e74a760b')}{' '}
+                {translateUi('click_a_layer_for_controls_drag_to__e74a760b')}
               </p>
               {sceneIsError || compositionError || shownScene?.warnings.length ? (
                 <div className="max-h-24 overflow-y-auto border-t border-border px-3 py-2">
@@ -3403,7 +3395,7 @@ export function TemplateAuthoringEditor({
                         }
                       >
                         {' '}
-                        {translateUi('retry_preview_ceba3527')}{' '}
+                        {translateUi('retry_preview_ceba3527')}
                       </Button>
                     </div>
                   ) : null}
@@ -3434,7 +3426,6 @@ export function TemplateAuthoringEditor({
                   className="mb-3 border-b border-border pb-3"
                 >
                   <CollapsibleTrigger className="group flex w-full items-center justify-between text-xs font-medium text-foreground">
-                    {' '}
                     {translateUi('repair_and_checks_5f30e53e')}{' '}
                     <ChevronDown
                       className={`size-3 transition-transform ${preparationDetailsOpen ? 'rotate-180' : ''}`}
@@ -3890,8 +3881,7 @@ export function TemplateAuthoringEditor({
               )}
               {fonts.isError ? (
                 <p role="alert" className="mt-3 text-xs text-destructive">
-                  {' '}
-                  {translateUi('available_font_faces_could_not_be_l_afa93115')}{' '}
+                  {translateUi('available_font_faces_could_not_be_l_afa93115')}
                 </p>
               ) : null}
               <Collapsible
@@ -3900,7 +3890,6 @@ export function TemplateAuthoringEditor({
                 className="mt-5 border-t border-border pt-3"
               >
                 <CollapsibleTrigger className="group flex w-full items-center justify-between text-xs font-medium text-foreground">
-                  {' '}
                   {translateUi('fields_each_render_row_asks_for_fa55a962')}{' '}
                   <ChevronDown
                     className="size-3 transition-transform group-data-[panel-open]:rotate-180"
@@ -3911,8 +3900,7 @@ export function TemplateAuthoringEditor({
                   {fields.isPending ? <Skeleton className="h-16 w-full" /> : null}
                   {fields.isError ? (
                     <p role="alert" className="text-xs text-destructive">
-                      {' '}
-                      {translateUi('template_fields_could_not_be_loaded_07238082')}{' '}
+                      {translateUi('template_fields_could_not_be_loaded_07238082')}
                     </p>
                   ) : null}
                   {fields.data?.variables.map((field) => (
@@ -4033,7 +4021,7 @@ export function TemplateAuthoringEditor({
                 onClick={() => void save('this_variant')}
               >
                 {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}{' '}
-                {translateUi('review_and_publish_revision_05597d26')}{' '}
+                {translateUi('review_and_publish_revision_05597d26')}
               </Button>
             ) : null}
             <Button
@@ -4071,7 +4059,7 @@ export function TemplateAuthoringEditor({
                   }
                 >
                   {' '}
-                  {translateUi('render_this_revision_fc84170f')}{' '}
+                  {translateUi('render_this_revision_fc84170f')}
                 </Button>
               ) : null}
               <Button
@@ -4087,7 +4075,7 @@ export function TemplateAuthoringEditor({
                 }}
               >
                 {' '}
-                {translateUi('open_variant_a9b56930')}{' '}
+                {translateUi('open_variant_a9b56930')}
               </Button>
             </div>
           ) : null}

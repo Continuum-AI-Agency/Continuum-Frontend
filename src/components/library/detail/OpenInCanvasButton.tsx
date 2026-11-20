@@ -172,7 +172,7 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
               ) : (
                 <Workflow className="size-3.5" aria-hidden />
               )}{' '}
-              {translateUi('open_in_canvas_e3850337')}{' '}
+              {translateUi('open_in_canvas_e3850337')}
             </Button>
           }
         />

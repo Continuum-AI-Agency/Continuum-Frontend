@@ -66,8 +66,7 @@ export function FontSubstitutions({
   return (
     <div className="flex flex-col gap-2 rounded-md border border-warning/40 bg-warning/5 p-2">
       <p className="text-muted-foreground">
-        {' '}
-        {translateUi('for_each_missing_font_pick_one_you__89e1459c')}{' '}
+        {translateUi('for_each_missing_font_pick_one_you__89e1459c')}
       </p>
       <ul className="flex flex-col gap-1.5" aria-label={translateUi('missing_typefaces_81aa9433')}>
         {rows.map((row) => (
@@ -76,8 +75,7 @@ export function FontSubstitutions({
               <span className="text-foreground">{row.family}</span>
               {row.candidates.length === 0 ? (
                 <span className="block text-2xs text-muted-foreground">
-                  {' '}
-                  {translateUi('we_don_t_have_anything_close_please_34fbaa73')}{' '}
+                  {translateUi('we_don_t_have_anything_close_please_34fbaa73')}
                 </span>
               ) : null}
             </span>
@@ -130,11 +128,10 @@ export function FontSubstitutions({
           }
         >
           {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
-          {translateUi('use_these_fonts_9a011288')}{' '}
+          {translateUi('use_these_fonts_9a011288')}
         </Button>
         <Button type="button" size="xs" variant="outline" disabled={busy} onClick={onUpload}>
-          {' '}
-          {translateUi('add_the_real_files_dfa63d52')}{' '}
+          {translateUi('add_the_real_files_dfa63d52')}
         </Button>
         <span className="text-muted-foreground">
           {changed.length === 0

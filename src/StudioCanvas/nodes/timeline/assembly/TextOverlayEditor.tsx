@@ -60,7 +60,7 @@ export function TextOverlayEditor({
           }}
         />
         <Button size="sm" className="h-8" onClick={addText} disabled={!draft.trim()}>
-          <Plus className="size-3.5" /> {translateUi('add_9fd728c6')}{' '}
+          <Plus className="size-3.5" /> {translateUi('add_9fd728c6')}
         </Button>
       </div>
       <div className="max-h-52 space-y-2 overflow-y-auto">
@@ -75,8 +75,7 @@ export function TextOverlayEditor({
         ))}
         {!textTrack?.clips.length ? (
           <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-            {' '}
-            {translateUi('no_text_overlays_yet_e44afe85')}{' '}
+            {translateUi('no_text_overlays_yet_e44afe85')}
           </p>
         ) : null}
       </div>
@@ -237,7 +236,7 @@ function TextOverlayRow({
           }
         >
           {' '}
-          {translateUi('save_1509f561')}{' '}
+          {translateUi('save_1509f561')}
         </Button>
       </div>
     </div>

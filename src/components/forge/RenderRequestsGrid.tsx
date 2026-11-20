@@ -2910,11 +2910,10 @@ export function RenderRequestsGrid({
                 : translateUi('revision_value0_76f40621', {
                     value0: String(activeSet.templateRevision.revisionId.slice(0, 8)),
                   })}{' '}
-              {translateUi('pinned_to_this_set_b23bb654')}{' '}
+              {translateUi('pinned_to_this_set_b23bb654')}
             </span>
           ) : null}
           <label className="flex items-center gap-2">
-            {' '}
             {translateUi('variant_revision_e804ec1f')}{' '}
             <select
               aria-label={translateUi('published_template_revision_02172571')}
@@ -3107,8 +3106,7 @@ export function RenderRequestsGrid({
         <Alert className="shrink-0 py-2">
           <AlertTitle>{translateUi('your_edited_rows_are_not_assigned_t_5ebc2f8d')}</AlertTitle>
           <AlertDescription>
-            {' '}
-            {translateUi('choose_an_existing_set_or_use_save__feab5ff6')}{' '}
+            {translateUi('choose_an_existing_set_or_use_save__feab5ff6')}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -3140,7 +3138,7 @@ export function RenderRequestsGrid({
             }}
           >
             {' '}
-            {translateUi('update_set_d5491ff4')}{' '}
+            {translateUi('update_set_d5491ff4')}
           </Button>
         </section>
       ) : null}
@@ -3152,11 +3150,11 @@ export function RenderRequestsGrid({
         >
           <p className="min-w-0 flex-1">
             “{conflict.name}
-            {translateUi('was_changed_elsewhere_on_some_of_th_446dfd1e')}{' '}
+            {translateUi('was_changed_elsewhere_on_some_of_th_446dfd1e')}
           </p>
           <Button type="button" size="xs" variant="outline" onClick={() => loadRenderSet(conflict)}>
             {' '}
-            {translateUi('load_their_version_00c60e1b')}{' '}
+            {translateUi('load_their_version_00c60e1b')}
           </Button>
           <Button
             type="button"
@@ -3168,7 +3166,7 @@ export function RenderRequestsGrid({
             }}
           >
             {' '}
-            {translateUi('keep_mine_as_a_new_set_7da75732')}{' '}
+            {translateUi('keep_mine_as_a_new_set_7da75732')}
           </Button>
         </section>
       ) : null}
@@ -3209,7 +3207,7 @@ export function RenderRequestsGrid({
             }
           >
             {' '}
-            {translateUi('keep_all_9b80a741')}{' '}
+            {translateUi('keep_all_9b80a741')}
           </Button>
           <Button
             type="button"
@@ -3226,7 +3224,7 @@ export function RenderRequestsGrid({
             }
           >
             {' '}
-            {translateUi('discard_all_5f30ee87')}{' '}
+            {translateUi('discard_all_5f30ee87')}
           </Button>
         </section>
       ) : null}
@@ -3363,14 +3361,14 @@ export function RenderRequestsGrid({
                   }
                   onClick={() => changeDelivery(selectedIds, null)}
                 >
-                  <Undo2 data-icon="inline-start" /> {translateUi('use_set_default_0accd8c3')}{' '}
+                  <Undo2 data-icon="inline-start" /> {translateUi('use_set_default_0accd8c3')}
                 </Button>
                 <Popover>
                   <PopoverTrigger
                     render={
                       <Button type="button" size="xs" variant="ghost">
                         <ClipboardPaste data-icon="inline-start" />{' '}
-                        {translateUi('ad_targets_b3645622')}{' '}
+                        {translateUi('ad_targets_b3645622')}
                       </Button>
                     }
                   />
@@ -3538,8 +3536,7 @@ export function RenderRequestsGrid({
               </span>
               {fit.state === 'unmeasured' && rows.length ? (
                 <span className="min-w-0 truncate text-muted-foreground">
-                  {' '}
-                  {translateUi('layout_fit_isn_t_measured_for_this__74050533')}{' '}
+                  {translateUi('layout_fit_isn_t_measured_for_this__74050533')}
                 </span>
               ) : null}
               {fireHint && selected.length ? (
@@ -3559,7 +3556,6 @@ export function RenderRequestsGrid({
                 </ul>
               ) : null}
               <p>
-                {' '}
                 {translateUi('to_add_a_field_or_change_the_layout_7a9ca81a')}{' '}
                 {contract.template.contractSource === 'template_forge'
                   ? ''
@@ -3588,8 +3584,7 @@ export function RenderRequestsGrid({
         </>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
-          {' '}
-          {translateUi('choose_a_template_to_set_up_renders_5491f196')}{' '}
+          {translateUi('choose_a_template_to_set_up_renders_5491f196')}
         </div>
       )}
       {contract ? (
@@ -3699,7 +3694,7 @@ export function RenderRequestsGrid({
               }}
             >
               {' '}
-              {translateUi('continue_31fbef16')}{' '}
+              {translateUi('continue_31fbef16')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -3732,7 +3727,7 @@ export function RenderRequestsGrid({
               }}
             >
               {' '}
-              {translateUi('discard_eb1a70e3')}{' '}
+              {translateUi('discard_eb1a70e3')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

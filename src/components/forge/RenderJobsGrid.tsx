@@ -789,7 +789,7 @@ export function RenderJobsGrid({
             className="gap-1.5"
             onClick={() => void refreshJobs().catch(() => undefined)}
           >
-            <RefreshCw className="size-3.5" aria-hidden /> {translateUi('refresh_0e916101')}{' '}
+            <RefreshCw className="size-3.5" aria-hidden /> {translateUi('refresh_0e916101')}
           </Button>
         </div>
       </div>
@@ -859,7 +859,7 @@ export function RenderJobsGrid({
         <div className="flex justify-center">
           <Button type="button" size="sm" variant="outline" onClick={() => void loadMore()}>
             {' '}
-            {translateUi('load_older_renders_79128701')}{' '}
+            {translateUi('load_older_renders_79128701')}
           </Button>
         </div>
       ) : null}

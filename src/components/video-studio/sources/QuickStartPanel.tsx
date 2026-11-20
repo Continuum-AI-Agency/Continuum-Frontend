@@ -210,7 +210,6 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
       {jobs.length > 0 ? (
         <section className="space-y-2">
           <h3 className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-            {' '}
             {translateUi('results_219c4a6c')}{' '}
           </h3>
           {jobs.map((job) => {
@@ -412,8 +411,7 @@ function QuickStartDialog({
         <div className="space-y-3">
           {card.slots.length > 0 && stills.length === 0 ? (
             <p className="rounded-md border border-dashed p-2 text-2xs text-muted-foreground">
-              {' '}
-              {translateUi('no_stills_in_this_edit_s_pool_yet_w_ad6899cf')}{' '}
+              {translateUi('no_stills_in_this_edit_s_pool_yet_w_ad6899cf')}
             </p>
           ) : null}
           {card.slots.map((slot) => (
@@ -488,8 +486,7 @@ function QuickStartDialog({
           {card.id === 'voiceover' ? (
             <div className="space-y-1.5">
               <Label htmlFor="quick-start-voice" className="text-xs">
-                {' '}
-                {translateUi('voice_and_delivery_28742da1')}{' '}
+                {translateUi('voice_and_delivery_28742da1')}
               </Label>
               <Input
                 id="quick-start-voice"
@@ -516,8 +513,7 @@ function QuickStartDialog({
             <>
               <div className="grid grid-cols-[7rem_1fr] items-center gap-2">
                 <Label htmlFor="quick-start-length" className="text-xs">
-                  {' '}
-                  {translateUi('length_s_ce044674')}{' '}
+                  {translateUi('length_s_ce044674')}
                 </Label>
                 <Input
                   id="quick-start-length"
@@ -534,8 +530,7 @@ function QuickStartDialog({
               </div>
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="quick-start-duck" className="text-xs">
-                  {' '}
-                  {translateUi('duck_under_speech_ba8ca61b')}{' '}
+                  {translateUi('duck_under_speech_ba8ca61b')}
                 </Label>
                 <Switch id="quick-start-duck" size="sm" checked={duck} onCheckedChange={setDuck} />
               </div>
@@ -658,7 +653,6 @@ function ConceptPicker({
   return (
     <div className="space-y-1">
       <Label className="text-xs">
-        {' '}
         {translateUi('concept_54287be8')}
         <span className="text-destructive"> *</span>
       </Label>

@@ -87,11 +87,9 @@ export function TextAnimationPicker({
     <Tabs defaultValue="in" className="gap-2" data-testid="text-animation-picker">
       <TabsList className="h-7">
         <TabsTrigger value="in" className="text-2xs">
-          {' '}
           {translateUi('in_cb09f130')} {TEXT_ANIMATION_LABELS[current.in]}
         </TabsTrigger>
         <TabsTrigger value="out" className="text-2xs">
-          {' '}
           {translateUi('out_16cb2f98')} {TEXT_ANIMATION_LABELS[current.out]}
         </TabsTrigger>
       </TabsList>

@@ -37,14 +37,15 @@ for (const [locale, forge, studio] of [
   describe(`${locale} code-based failure guidance`, () => {
     const forgeText = createTranslator({ locale, messages: { forge }, namespace: 'forge' });
     const studioText = createTranslator({ locale, messages: { studio }, namespace: 'studio' });
-    it('uses stable generation codes and keeps provider diagnostics out of rendered guidance', () => {
+    it('rewords known generation codes and keeps the Backend sentence for unknown ones', () => {
       const blocked = generationErrorCopy('image_blocked', 'finishReason=IMAGE_SAFETY', studioText);
-      const unknown = generationErrorCopy('future_code', 'private provider diagnostic', studioText);
+      const unknown = generationErrorCopy('future_code', 'The prompt is too long.', studioText);
+      const silent = generationErrorCopy('future_code', undefined, studioText);
       expect(blocked.title).toBe(studio.generationImageBlockedTitle);
       expect(blocked.guidance).toBe(studio.generationImageBlockedGuidance);
-      expect(unknown.guidance).toBe(studio.generationFailedGuidance);
       expect(JSON.stringify(blocked)).not.toContain('IMAGE_SAFETY');
-      expect(JSON.stringify(unknown)).not.toContain('provider diagnostic');
+      expect(unknown).toEqual({ title: studio.generationFailedTitle, guidance: 'The prompt is too long.' });
+      expect(silent.guidance).toBe(studio.generationFailedGuidance);
     });
     it('localizes delivery and render codes, keeps the Backend sentence, and preserves receipt and source values', () => {
       expect(approvalState(job, forgeText)).toEqual({ text: forge.deliveryHeld, tone: 'muted' });

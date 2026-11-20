@@ -178,14 +178,13 @@ export function PlannerDraftBrowser({
         {loading ? (
           <p className="flex items-center gap-1.5 p-2 text-2xs text-muted-foreground">
             <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
-            {translateUi('searching_c31723ab')}{' '}
+            {translateUi('searching_c31723ab')}
           </p>
         ) : null}
         {error ? <p className="p-2 text-2xs text-destructive">{error}</p> : null}
         {!loading && !error && items.length === 0 ? (
           <p className="p-2 text-2xs text-muted-foreground">
-            {' '}
-            {translateUi('no_drafts_yet_switch_to_new_draft_t_e0bd8f00')}{' '}
+            {translateUi('no_drafts_yet_switch_to_new_draft_t_e0bd8f00')}
           </p>
         ) : null}
 
@@ -289,13 +288,12 @@ function DraftRow({
           <span className="mt-1 flex flex-wrap items-center gap-1">
             {target.empty ? (
               <Pill variant="outline" className="text-2xs">
-                {' '}
-                {translateUi('empty_slot_f8b4d62d')}{' '}
+                {translateUi('empty_slot_f8b4d62d')}
               </Pill>
             ) : null}
             {target.mediaCount > 0 ? (
               <Pill variant="outline" className="text-2xs">
-                {target.mediaCount} {translateUi('attached_55d9067e')}{' '}
+                {target.mediaCount} {translateUi('attached_55d9067e')}
               </Pill>
             ) : null}
             {target.blockers.map((blocker) => (

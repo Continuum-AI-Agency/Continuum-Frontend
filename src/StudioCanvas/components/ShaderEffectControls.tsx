@@ -74,8 +74,7 @@ export function ShaderEffectControls({
     <div className="flex flex-col gap-3" data-testid={`${idPrefix}-shader-effects`}>
       <div className="flex items-center justify-between">
         <Label htmlFor={`${idPrefix}-chroma`} className="text-2xs">
-          {' '}
-          {translateUi('chroma_key_34faa6ec')}{' '}
+          {translateUi('chroma_key_34faa6ec')}
         </Label>
         <Switch
           id={`${idPrefix}-chroma`}

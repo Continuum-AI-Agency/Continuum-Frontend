@@ -221,7 +221,7 @@ export function MatrixResultsDialog({
                       className="sticky top-0 z-20 border-b border-border/60 bg-background p-2 text-left text-xs font-medium"
                     >
                       {' '}
-                      {translateUi('result_6e7d50e8')}{' '}
+                      {translateUi('result_6e7d50e8')}
                     </th>
                   )}
                 </tr>

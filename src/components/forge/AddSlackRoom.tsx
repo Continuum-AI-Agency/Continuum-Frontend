@@ -102,14 +102,13 @@ export function AddSlackRoom({
       {channels === null ? (
         <p className="flex items-center gap-1.5 text-muted-foreground">
           <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
-          {translateUi('loading_this_brand_s_slack_channels_5f3e90b6')}{' '}
+          {translateUi('loading_this_brand_s_slack_channels_5f3e90b6')}
         </p>
       ) : channels.channels.length ? (
         <>
           <div className="flex flex-col gap-1">
             <Label htmlFor="slack-room-channel" className="text-muted-foreground">
-              {' '}
-              {translateUi('channel_ce4683e7')}{' '}
+              {translateUi('channel_ce4683e7')}
             </Label>
             <Select value={channelId} onValueChange={setChannelId}>
               <SelectTrigger
@@ -152,8 +151,7 @@ export function AddSlackRoom({
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="slack-room-role" className="text-muted-foreground">
-              {' '}
-              {translateUi('who_reads_it_7b68c4d4')}{' '}
+              {translateUi('who_reads_it_7b68c4d4')}
             </Label>
             <Select value={role} onValueChange={(next) => setRole(next as SlackRoomRole)}>
               <SelectTrigger
@@ -182,8 +180,7 @@ export function AddSlackRoom({
       {problem ? <p className="text-muted-foreground">{problem}</p> : null}
       <div className="flex justify-end gap-1.5">
         <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={onCancel}>
-          {' '}
-          {translateUi('cancel_19766ed6')}{' '}
+          {translateUi('cancel_19766ed6')}
         </Button>
         <Button
           type="button"
@@ -193,7 +190,7 @@ export function AddSlackRoom({
           onClick={() => void add()}
         >
           {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
-          {translateUi('add_channel_62f66a6a')}{' '}
+          {translateUi('add_channel_62f66a6a')}
         </Button>
       </div>
     </div>

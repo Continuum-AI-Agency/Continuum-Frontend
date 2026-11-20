@@ -385,7 +385,6 @@ export function RenderToolbar({
         ) : null}
         {ready && siblings.length > 0 ? (
           <label className="flex items-center gap-1.5 text-xs">
-            {' '}
             {translateUi('variant_3f19fe84')}{' '}
             <select
               aria-label={translateUi('template_source_variant_04aa003a')}
@@ -409,7 +408,6 @@ export function RenderToolbar({
         ) : null}
         {ready && variants.length > 1 && onVariantChange ? (
           <label className="flex items-center gap-1.5 text-xs">
-            {' '}
             {translateUi('artboard_6536eef7')}{' '}
             <select
               aria-label={translateUi('artboard_6536eef7')}
@@ -421,8 +419,7 @@ export function RenderToolbar({
               <option value="">{translateUi('all_artboards_bc5dc688')}</option>
               {variant === null ? (
                 <option value="mixed:" disabled>
-                  {' '}
-                  {translateUi('mixed_selections_0403cf49')}{' '}
+                  {translateUi('mixed_selections_0403cf49')}
                 </option>
               ) : null}
               {variants.map((item) => (
@@ -457,14 +454,14 @@ export function RenderToolbar({
               />
               <DropdownMenuContent align="start" className="w-56">
                 <DropdownMenuItem disabled={!canAddRows} onClick={onAddRow}>
-                  <Plus aria-hidden /> {translateUi('blank_row_a35c43ee')}{' '}
+                  <Plus aria-hidden /> {translateUi('blank_row_a35c43ee')}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={!canAddRows} onClick={() => onDraftWithAi()}>
-                  <Sparkles aria-hidden /> {translateUi('draft_with_ai_27ee7657')}{' '}
+                  <Sparkles aria-hidden /> {translateUi('draft_with_ai_27ee7657')}
                 </DropdownMenuItem>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger disabled={inputSets.length === 0 || !canAddRows}>
-                    <FolderOpen aria-hidden /> {translateUi('from_saved_inputs_2104de04')}{' '}
+                    <FolderOpen aria-hidden /> {translateUi('from_saved_inputs_2104de04')}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className="w-56">
                     {inputSets.map((set) => (
@@ -477,13 +474,12 @@ export function RenderToolbar({
                 {layerSwitches.length > 0 ? (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
-                      <Eye aria-hidden /> {translateUi('switch_a_layer_per_row_621d6fc7')}{' '}
+                      <Eye aria-hidden /> {translateUi('switch_a_layer_per_row_621d6fc7')}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-64">
                       <DropdownMenuGroup>
                         <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
-                          {' '}
-                          {translateUi('adds_a_shown_hidden_column_to_this__1e2fefe5')}{' '}
+                          {translateUi('adds_a_shown_hidden_column_to_this__1e2fefe5')}
                         </DropdownMenuLabel>
                         {layerSwitches.map((variable) => (
                           <DropdownMenuItem
@@ -513,7 +509,7 @@ export function RenderToolbar({
               />
               <DropdownMenuContent align="start" className="w-72">
                 <DropdownMenuItem onClick={onUpload}>
-                  <Upload aria-hidden /> {translateUi('upload_csv_or_xlsx_f1301fab')}{' '}
+                  <Upload aria-hidden /> {translateUi('upload_csv_or_xlsx_f1301fab')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onDownloadTemplate}>
                   <Download aria-hidden /> {translateUi(
@@ -525,8 +521,7 @@ export function RenderToolbar({
                   <DropdownMenuLabel className="flex gap-1.5 font-normal text-muted-foreground">
                     <ClipboardPaste className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                     <span className="text-2xs">
-                      {' '}
-                      {translateUi('or_paste_rows_onto_the_grid_copy_a__ef4c25e9')}{' '}
+                      {translateUi('or_paste_rows_onto_the_grid_copy_a__ef4c25e9')}
                     </span>
                   </DropdownMenuLabel>
                 </DropdownMenuGroup>
@@ -563,8 +558,7 @@ export function RenderToolbar({
             </span>
             {saveStatus?.phase === 'failed' && saveStatus.onRepair ? (
               <Button type="button" size="xs" variant="outline" onClick={saveStatus.onRepair}>
-                {' '}
-                {translateUi('open_template_42b4387d')}{' '}
+                {translateUi('open_template_42b4387d')}
               </Button>
             ) : saveStatus?.phase === 'failed' && !saveStatus.retrying && saveStatus.onRetry ? (
               <Button
@@ -575,7 +569,7 @@ export function RenderToolbar({
                 onClick={saveStatus.onRetry}
               >
                 {' '}
-                {translateUi('retry_save_71fdfa79')}{' '}
+                {translateUi('retry_save_71fdfa79')}
               </Button>
             ) : null}
             <RenderButton
@@ -631,22 +625,19 @@ function CheckpointPicker({
       <DropdownMenuContent align="start" className="w-80">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
-            {' '}
-            {translateUi('which_checkpoint_of_this_template_r_d9412270')}{' '}
+            {translateUi('which_checkpoint_of_this_template_r_d9412270')}
           </DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={templateRef ?? 'live'}
             onValueChange={(value) => onChange(value === 'live' ? null : value)}
           >
             <DropdownMenuRadioItem value="live">
-              {' '}
-              {translateUi('follow_live_whatever_is_live_when_i_55d24408')}{' '}
+              {translateUi('follow_live_whatever_is_live_when_i_55d24408')}
             </DropdownMenuRadioItem>
             {graph.liveRef ? (
               <DropdownMenuRadioItem value={graph.liveRef}>
-                {' '}
                 {translateUi('pin_ff1cee74')} {live.kind.toLowerCase()} {shortSha(live.id)}{' '}
-                {translateUi('refuse_if_live_moves_cccf6821')}{' '}
+                {translateUi('refuse_if_live_moves_cccf6821')}
               </DropdownMenuRadioItem>
             ) : null}
           </DropdownMenuRadioGroup>
@@ -656,8 +647,7 @@ function CheckpointPicker({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
-                {' '}
-                {translateUi('not_live_make_one_live_to_render_fr_5b92aee4')}{' '}
+                {translateUi('not_live_make_one_live_to_render_fr_5b92aee4')}
               </DropdownMenuLabel>
               {others.map((row) => (
                 <DropdownMenuItem key={row.id} disabled>
@@ -749,7 +739,7 @@ function RenderButton({
             <span>
               {files.byRatio.length ? '· ' : ''}
               {plural(files.replacements, 'ad replacement')}
-              {translateUi('one_file_each_940efb14')}{' '}
+              {translateUi('one_file_each_940efb14')}
             </span>
           ) : null}
         </TooltipContent>

@@ -193,7 +193,7 @@ export function CheckTable({
       }}
     >
       {' '}
-      {translateUi('investigate_e2641093')}{' '}
+      {translateUi('investigate_e2641093')}
     </Button>
   ) : null;
 

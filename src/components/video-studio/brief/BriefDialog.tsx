@@ -439,8 +439,7 @@ export function BriefDialog({
         <DialogHeader>
           <DialogTitle>{translateUi('first_cut_e5063f71')}</DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('say_what_you_want_every_spoken_line_a3467a4a')}{' '}
+            {translateUi('say_what_you_want_every_spoken_line_a3467a4a')}
           </DialogDescription>
         </DialogHeader>
 
@@ -558,8 +557,7 @@ export function BriefDialog({
           </div>
           <div className="flex items-center justify-between gap-2 sm:col-span-2">
             <Label htmlFor="brief-captions" className="text-xs">
-              {' '}
-              {translateUi('word_timed_captions_3626d2db')}{' '}
+              {translateUi('word_timed_captions_3626d2db')}
             </Label>
             <Switch
               id="brief-captions"
@@ -660,8 +658,7 @@ export function BriefDialog({
           <span className="text-xs font-medium">{translateUi('footage_it_will_use_b7e0a3e0')}</span>
           {footage.length === 0 ? (
             <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-              {' '}
-              {translateUi('drop_a_video_or_recording_on_the_wo_79b2b5ea')}{' '}
+              {translateUi('drop_a_video_or_recording_on_the_wo_79b2b5ea')}
             </p>
           ) : (
             <ul className="max-h-40 overflow-y-auto rounded-md border" data-testid="brief-footage">
@@ -685,7 +682,6 @@ export function BriefDialog({
           )}
           {tooMany ? (
             <p className="text-xs text-destructive" data-testid="brief-too-many">
-              {' '}
               {translateUi('a_first_cut_reads_at_most_7af20171')} {MAX_SOURCES}{' '}
               {translateUi('clips_untick_a626b31b')} {chosen.length - MAX_SOURCES}.
             </p>

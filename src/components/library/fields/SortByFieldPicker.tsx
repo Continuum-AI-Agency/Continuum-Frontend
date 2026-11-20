@@ -109,7 +109,7 @@ export function SortByFieldPicker({ fields }: { fields: readonly CustomField[] }
               onSelect={() => apply(null, direction)}
             >
               {' '}
-              {translateUi('clear_field_sort_28488781')}{' '}
+              {translateUi('clear_field_sort_28488781')}
             </DropdownMenuItem>
           </>
         ) : null}

@@ -60,8 +60,7 @@ export function MediaOverlayEditor({
       ))}
       {!overlayTrack?.clips.length ? (
         <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('add_a_pinned_image_or_video_from_th_ae1026e1')}{' '}
+          {translateUi('add_a_pinned_image_or_video_from_th_ae1026e1')}
         </p>
       ) : null}
     </section>
@@ -526,7 +525,7 @@ function MediaOverlayRow({
           }
         >
           {' '}
-          {translateUi('save_1509f561')}{' '}
+          {translateUi('save_1509f561')}
         </Button>
       </div>
     </div>

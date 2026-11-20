@@ -134,7 +134,7 @@ export function SaveFiltersAsCollection({
             type="button"
             className="flex min-h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground active:scale-[0.96]"
           >
-            <BookmarkPlus className="size-3.5" /> {translateUi('save_as_collection_05a17142')}{' '}
+            <BookmarkPlus className="size-3.5" /> {translateUi('save_as_collection_05a17142')}
           </button>
         }
       />
@@ -143,8 +143,7 @@ export function SaveFiltersAsCollection({
           {translateUi('save_these_filters_as_a_collection_c2f53641')}
         </p>
         <p className="text-2xs text-muted-foreground">
-          {' '}
-          {translateUi('it_stays_live_assets_that_match_lat_7f661f6d')}{' '}
+          {translateUi('it_stays_live_assets_that_match_lat_7f661f6d')}
         </p>
         <Input
           value={name}
@@ -195,7 +194,7 @@ export function SaveFiltersAsCollection({
           onClick={() => void save()}
         >
           {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}{' '}
-          {translateUi('save_collection_bca66b42')}{' '}
+          {translateUi('save_collection_bca66b42')}
         </Button>
       </PopoverContent>
     </Popover>

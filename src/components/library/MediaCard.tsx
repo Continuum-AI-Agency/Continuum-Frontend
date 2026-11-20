@@ -225,7 +225,7 @@ function StatusBadge({ status }: { status: MediaAsset['status'] }) {
   const content =
     status === 'analyzing' ? (
       <span className={cn(BADGE_BASE, 'bg-black/60 text-white backdrop-blur-sm')}>
-        <Loader2 className="size-2.5 animate-spin" /> {translateUi('analyzing_0141ee95')}{' '}
+        <Loader2 className="size-2.5 animate-spin" /> {translateUi('analyzing_0141ee95')}
       </span>
     ) : status === 'skipped_free' ? (
       <span className={cn(BADGE_BASE, 'bg-amber-900/80 text-amber-200')}>
@@ -715,7 +715,7 @@ function GenerateClipsButton({
       className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground/70 transition-colors hover:text-foreground disabled:opacity-50"
       title={title}
     >
-      <Scissors className="size-3" /> {translateUi('clips_4b782ddc')}{' '}
+      <Scissors className="size-3" /> {translateUi('clips_4b782ddc')}
     </button>
   );
 }
@@ -883,8 +883,7 @@ export function MediaCard({
                 {previewFrame !== 'native' &&
                 placementPreviewCrops(asset.width, asset.height, previewFrame) ? (
                   <span className="absolute bottom-1.5 right-1.5 z-10 rounded bg-black/60 px-1.5 py-0.5 text-2xs text-white">
-                    {' '}
-                    {translateUi('cropped_a54e16d8')}{' '}
+                    {translateUi('cropped_a54e16d8')}
                   </span>
                 ) : null}
                 {onToggleSelected ? (
@@ -1038,8 +1037,7 @@ export function MediaCard({
       </HoverCard>
       {stackTarget ? (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/10 p-3 text-center text-xs font-medium text-primary backdrop-blur-[1px]">
-          {' '}
-          {translateUi('drop_to_stack_as_a_new_version_98fc7ee6')}{' '}
+          {translateUi('drop_to_stack_as_a_new_version_98fc7ee6')}
         </div>
       ) : null}
     </div>

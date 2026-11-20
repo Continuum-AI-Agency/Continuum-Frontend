@@ -20,7 +20,7 @@ export function SmartResizeMenu({ brandId, asset, onAssetChanged }: SmartResizeM
   const disabled = asset.kind !== 'image';
   const button = (
     <Button variant="outline" size="sm" disabled={disabled}>
-      <Scaling className="size-3.5" aria-hidden /> {translateUi('reformat_122f391e')}{' '}
+      <Scaling className="size-3.5" aria-hidden /> {translateUi('reformat_122f391e')}
     </Button>
   );
 

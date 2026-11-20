@@ -236,8 +236,7 @@ export function NodeInspectorPanel({
         {multiple ? (
           <>
             <p className="text-xs text-muted-foreground">
-              {' '}
-              {translateUi('per_node_settings_stay_on_the_node__d98d8127')}{' '}
+              {translateUi('per_node_settings_stay_on_the_node__d98d8127')}
             </p>
             <div className="flex flex-col gap-1.5">
               {onRunSelection ? (

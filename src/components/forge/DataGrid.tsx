@@ -235,7 +235,7 @@ function ColumnVisibilityMenu<T>({ table }: { table: TanTable<T> }) {
       <DropdownMenuTrigger
         render={
           <Button type="button" size="sm" variant="ghost" className="h-7 gap-1.5 text-xs">
-            <Columns3 className="size-3.5" aria-hidden /> {translateUi('columns_53aade77')}{' '}
+            <Columns3 className="size-3.5" aria-hidden /> {translateUi('columns_53aade77')}
           </Button>
         }
       />

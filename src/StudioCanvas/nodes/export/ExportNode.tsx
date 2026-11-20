@@ -213,8 +213,7 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
             </>
           ) : (
             <p className="my-auto text-center text-xs text-muted-foreground">
-              {' '}
-              {translateUi('connect_an_image_or_a_clip_to_save__bc17d823')}{' '}
+              {translateUi('connect_an_image_or_a_clip_to_save__bc17d823')}
             </p>
           )}
           {wrote ? (

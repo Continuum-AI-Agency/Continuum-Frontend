@@ -499,7 +499,7 @@ export const EditTimeline = memo(function EditTimeline({
           <DropdownMenuTrigger
             render={<Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" />}
           >
-            <Plus className="size-3.5" /> {translateUi('track_051f01f0')}{' '}
+            <Plus className="size-3.5" /> {translateUi('track_051f01f0')}
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             {(['video', 'overlay', 'text', 'caption', 'audio'] as const).map((kind) => {
@@ -510,7 +510,7 @@ export const EditTimeline = memo(function EditTimeline({
                   {kind === 'caption'
                     ? translateUi('captions_43bf6af8')
                     : kind[0].toUpperCase() + kind.slice(1)}{' '}
-                  {translateUi('track_2bb8bf72')}{' '}
+                  {translateUi('track_2bb8bf72')}
                 </DropdownMenuItem>
               );
             })}
@@ -677,10 +677,10 @@ export const EditTimeline = memo(function EditTimeline({
                           : track.kind === 'caption'
                             ? translateUi('captions_dcb3eeed')
                             : track.kind}{' '}
-                        {translateUi('track_2bb8bf72')}{' '}
+                        {translateUi('track_2bb8bf72')}
                       </ContextMenuItem>
                       <ContextMenuItem variant="destructive" onClick={() => onRemoveTrack(track)}>
-                        <Trash2 /> {translateUi('delete_track_3c99bb0b')}{' '}
+                        <Trash2 /> {translateUi('delete_track_3c99bb0b')}
                       </ContextMenuItem>
                     </ContextMenuContent>
                   </ContextMenu>
@@ -724,8 +724,7 @@ export const EditTimeline = memo(function EditTimeline({
             >
               {lanes.length === 0 ? (
                 <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
-                  {' '}
-                  {translateUi('drop_a_video_audio_or_image_here_or_162d3f2d')}{' '}
+                  {translateUi('drop_a_video_audio_or_image_here_or_162d3f2d')}
                 </div>
               ) : null}
               {lanes.map((track) => (

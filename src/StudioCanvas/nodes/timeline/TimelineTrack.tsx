@@ -146,7 +146,7 @@ export function TimelineTrack({
           onClick={handleSplit}
           disabled={layout.clips.length === 0}
         >
-          <Scissors className="h-3.5 w-3.5" /> {translateUi('split_at_playhead_c4a4b9c3')}{' '}
+          <Scissors className="h-3.5 w-3.5" /> {translateUi('split_at_playhead_c4a4b9c3')}
         </Button>
         {onZoomChange ? (
           <div className="ml-auto flex items-center gap-2">
@@ -218,8 +218,7 @@ export function TimelineTrack({
 
             {layout.clips.length === 0 ? (
               <div className="pointer-events-none flex h-14 flex-1 items-center justify-center rounded-md border border-dashed border-border/50 text-2xs text-muted-foreground">
-                {' '}
-                {translateUi('drop_clips_here_2dedd3e8')}{' '}
+                {translateUi('drop_clips_here_2dedd3e8')}
               </div>
             ) : null}
           </div>

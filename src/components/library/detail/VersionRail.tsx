@@ -489,7 +489,6 @@ export function VersionRail({
     <section className="space-y-1.5">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-medium text-muted-foreground">
-          {' '}
           {translateUi('versions_f89ea270')}
           {versions && versions.length > 0 ? ` · ${versions.length}` : ''}
         </h3>
@@ -503,7 +502,7 @@ export function VersionRail({
               data-testid="version-compare-open"
               onClick={() => setComparePair({ a: versions[1].id, b: versions[0].id })}
             >
-              <Columns2 className="size-3" /> {translateUi('compare_versions_9e053092')}{' '}
+              <Columns2 className="size-3" /> {translateUi('compare_versions_9e053092')}
             </Button>
           ) : null}
           {uploading ? (
@@ -567,8 +566,7 @@ export function VersionRail({
             <p className="text-2xs text-destructive">
               {loadError}{' '}
               <button type="button" className="underline" onClick={onRetry}>
-                {' '}
-                {translateUi('retry_942087cc')}{' '}
+                {translateUi('retry_942087cc')}
               </button>
             </p>
           ) : null}
@@ -608,8 +606,7 @@ export function VersionRail({
           </div>
           {versions && versions.length === 0 ? (
             <p className="text-2xs text-muted-foreground">
-              {' '}
-              {translateUi('no_version_history_yet_upload_a_new_0e753835')}{' '}
+              {translateUi('no_version_history_yet_upload_a_new_0e753835')}
             </p>
           ) : null}
         </>
@@ -622,22 +619,20 @@ export function VersionRail({
         <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm">
-              {' '}
               {translateUi('roll_back_to_v_a848c873')}
               {rollbackTarget?.versionNumber}?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
-              {' '}
               {translateUi('the_current_file_stays_in_history_v_ea4e6011')}
               {rollbackTarget?.versionNumber}
-              {translateUi('s_file_becomes_the_new_current_vers_37223b0a')}{' '}
+              {translateUi('s_file_becomes_the_new_current_vers_37223b0a')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleRollbackConfirmed()}>
               {' '}
-              {translateUi('roll_back_931f703d')}{' '}
+              {translateUi('roll_back_931f703d')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -650,20 +645,19 @@ export function VersionRail({
         <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm">
-              {' '}
               {translateUi('unstack_v_09314288')}
-              {unstackTarget?.versionNumber} {translateUi('into_its_own_asset_c6ec149f')}{' '}
+              {unstackTarget?.versionNumber} {translateUi('into_its_own_asset_c6ec149f')}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
               v{unstackTarget?.versionNumber}{' '}
-              {translateUi('leaves_this_stack_and_appears_in_th_393d62db')}{' '}
+              {translateUi('leaves_this_stack_and_appears_in_th_393d62db')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleUnstackConfirmed()}>
               {' '}
-              {translateUi('unstack_c59c101f')}{' '}
+              {translateUi('unstack_c59c101f')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

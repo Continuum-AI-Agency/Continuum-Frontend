@@ -82,7 +82,7 @@ export function InstagramSlidePicker({
   return (
     <div className="flex flex-col gap-3">
       <Button type="button" variant="ghost" size="sm" className="w-fit px-1" onClick={onBack}>
-        <ArrowLeft className="mr-1 h-4 w-4" /> {translateUi('back_to_results_c7ef0e27')}{' '}
+        <ArrowLeft className="mr-1 h-4 w-4" /> {translateUi('back_to_results_c7ef0e27')}
       </Button>
 
       {post.items.length === 0 ? (
@@ -104,8 +104,7 @@ export function InstagramSlidePicker({
       )}
 
       <Button type="button" onClick={onAdd} disabled={selectedCount === 0}>
-        {' '}
-        {translateUi('add_9fd728c6')} {selectedCount || ''} {translateUi('to_canvas_6e332ed5')}{' '}
+        {translateUi('add_9fd728c6')} {selectedCount || ''} {translateUi('to_canvas_6e332ed5')}
       </Button>
     </div>
   );

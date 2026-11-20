@@ -56,8 +56,7 @@ export function HyperframesFilmPanel({
           <>
             {onBack ? (
               <Button variant="ghost" onClick={onBack}>
-                {' '}
-                {translateUi('back_to_templates_1b58f427')}{' '}
+                {translateUi('back_to_templates_1b58f427')}
               </Button>
             ) : null}
             <Button disabled={!fields.data || film.isPending} onClick={() => film.mutate()}>
@@ -82,8 +81,7 @@ export function HyperframesFilmPanel({
             <Skeleton className="h-40" />
           ) : fields.data.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {' '}
-              {translateUi('this_template_has_no_editable_copy__7c845ef8')}{' '}
+              {translateUi('this_template_has_no_editable_copy__7c845ef8')}
             </p>
           ) : (
             <FieldGroup>
@@ -116,8 +114,7 @@ export function HyperframesFilmPanel({
           ) : null}
           {film.isPending ? (
             <p role="status" className="text-sm text-muted-foreground">
-              {' '}
-              {translateUi('rendering_every_frame_a_short_templ_3b64d915')}{' '}
+              {translateUi('rendering_every_frame_a_short_templ_3b64d915')}
             </p>
           ) : film.data ? (
             <>
@@ -129,8 +126,7 @@ export function HyperframesFilmPanel({
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {' '}
-              {translateUi('render_the_template_to_see_it_play__d0eff61e')}{' '}
+              {translateUi('render_the_template_to_see_it_play__d0eff61e')}
             </p>
           )}
         </Panel>

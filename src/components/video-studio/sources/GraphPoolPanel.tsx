@@ -110,8 +110,7 @@ export function GraphPoolPanel({ studio }: { studio: VideoStudioContext }): Reac
         <div className="flex flex-col items-center gap-2 rounded-md border border-dashed p-4 text-center">
           <Workflow className="size-5 text-muted-foreground" />
           <p className="text-2xs text-muted-foreground">
-            {' '}
-            {translateUi('nothing_feeds_this_edit_yet_wire_me_d3e3d332')}{' '}
+            {translateUi('nothing_feeds_this_edit_yet_wire_me_d3e3d332')}
           </p>
         </div>
       ) : null}

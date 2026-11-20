@@ -184,14 +184,14 @@ export function AssetDownloadButton({
             aria-label={label}
             className={cn('gap-1.5', className)}
           >
-            {icon} {translateUi('download_d6eafe82')}{' '}
+            {icon} {translateUi('download_d6eafe82')}
           </Button>
         }
       />
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem data-testid="download-original" onClick={() => void downloadOriginal()}>
           {' '}
-          {translateUi('original_88d759ea')}{' '}
+          {translateUi('original_88d759ea')}
         </DropdownMenuItem>
         {/\.psd$/i.test(fileName) ? (
           <>
@@ -202,7 +202,7 @@ export function AssetDownloadButton({
               onClick={() => void downloadPsd('png')}
             >
               {' '}
-              {translateUi('png_preserves_transparency_275a8ae4')}{' '}
+              {translateUi('png_preserves_transparency_275a8ae4')}
             </DropdownMenuItem>
             <DropdownMenuItem
               data-testid="download-psd-jpeg"
@@ -210,7 +210,7 @@ export function AssetDownloadButton({
               onClick={() => void downloadPsd('jpeg')}
             >
               {' '}
-              {translateUi('jpeg_white_background_5cb4496a')}{' '}
+              {translateUi('jpeg_white_background_5cb4496a')}
             </DropdownMenuItem>
           </>
         ) : null}
@@ -234,7 +234,7 @@ export function AssetDownloadButton({
                 onClick={() => saveSignedUrl(audioProxy.signedUrl, `${stem}-proxy.m4a`)}
               >
                 {' '}
-                {translateUi('audio_proxy_aac_f4ea2d20')}{' '}
+                {translateUi('audio_proxy_aac_f4ea2d20')}
               </DropdownMenuItem>
             ) : null}
           </>
@@ -250,7 +250,7 @@ export function AssetDownloadButton({
               }}
             >
               {' '}
-              {translateUi('download_still_c4247cf2')}{' '}
+              {translateUi('download_still_c4247cf2')}
             </DropdownMenuItem>
           </>
         ) : null}

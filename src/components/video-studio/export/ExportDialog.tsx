@@ -201,8 +201,7 @@ export function ExportDialog({
         <DialogHeader>
           <DialogTitle>{uiText('export_3664895')}</DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('pick_where_it_s_going_the_timeline__d75a0150')}{' '}
+            {translateUi('pick_where_it_s_going_the_timeline__d75a0150')}
           </DialogDescription>
         </DialogHeader>
 
@@ -220,12 +219,10 @@ export function ExportDialog({
             }}
           >
             <ToggleGroupItem value="one" disabled={busy}>
-              {' '}
-              {translateUi('this_cut_e59af306')}{' '}
+              {translateUi('this_cut_e59af306')}
             </ToggleGroupItem>
             <ToggleGroupItem value="all" disabled={busy}>
-              {' '}
-              {translateUi('all_variants_9b016a7a')}{' '}
+              {translateUi('all_variants_9b016a7a')}
             </ToggleGroupItem>
           </ToggleGroup>
         ) : null}
@@ -277,12 +274,10 @@ export function ExportDialog({
             }}
           >
             <ToggleGroupItem value="cover" disabled={busy}>
-              {' '}
-              {translateUi('fill_crop_2e3a0f02')}{' '}
+              {translateUi('fill_crop_2e3a0f02')}
             </ToggleGroupItem>
             <ToggleGroupItem value="contain" disabled={busy}>
-              {' '}
-              {translateUi('fit_letterbox_1b0f383d')}{' '}
+              {translateUi('fit_letterbox_1b0f383d')}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -335,7 +330,7 @@ export function ExportDialog({
           <div className="flex flex-wrap items-center gap-2" data-testid="export-complete">
             {status.downloadUrl ? (
               <a href={status.downloadUrl} download className={buttonVariants()}>
-                <Download data-icon="inline-start" /> {translateUi('download_mp4_4ec38a29')}{' '}
+                <Download data-icon="inline-start" /> {translateUi('download_mp4_4ec38a29')}
               </a>
             ) : null}
             {status.assetId ? (

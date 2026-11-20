@@ -243,8 +243,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                       />
                     ) : (
                       <p className="px-3 text-center text-muted-foreground">
-                        {' '}
-                        {translateUi('wire_clips_stills_or_elements_into__3556add1')}{' '}
+                        {translateUi('wire_clips_stills_or_elements_into__3556add1')}
                       </p>
                     )}
                   </div>
@@ -433,8 +432,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                     className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                   />
                   <span className="studio-handle-pill pointer-events-none absolute left-6 top-1/2 z-50 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100">
-                    {' '}
-                    {translateUi('footage_pool_clips_stills_elements_10303071')}{' '}
+                    {translateUi('footage_pool_clips_stills_elements_10303071')}
                   </span>
                 </div>
                 <div
@@ -448,8 +446,7 @@ export function FastCutNode({ id, data, selected }: NodeProps<ReactFlowNode<Fast
                     className="studio-handle pointer-events-auto !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                   />
                   <span className="studio-handle-pill pointer-events-none absolute left-6 top-1/2 z-50 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100">
-                    {' '}
-                    {translateUi('music_bed_one_audio_node_3ec39200')}{' '}
+                    {translateUi('music_bed_one_audio_node_3ec39200')}
                   </span>
                 </div>
               </div>

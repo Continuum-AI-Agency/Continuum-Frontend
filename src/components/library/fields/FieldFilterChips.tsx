@@ -186,7 +186,7 @@ function SelectFieldChip({
           className="text-xs text-muted-foreground"
         >
           {' '}
-          {translateUi('is_empty_f92b4770')}{' '}
+          {translateUi('is_empty_f92b4770')}
         </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -268,7 +268,7 @@ function LiteralFieldChip({ field, filter, summary, compact, filters, onChange }
             }}
           >
             {' '}
-            {translateUi('is_empty_f92b4770')}{' '}
+            {translateUi('is_empty_f92b4770')}
           </Button>
           {filter ? (
             <Button
@@ -282,7 +282,7 @@ function LiteralFieldChip({ field, filter, summary, compact, filters, onChange }
               }}
             >
               {' '}
-              {translateUi('clear_83b12c22')}{' '}
+              {translateUi('clear_83b12c22')}
             </Button>
           ) : null}
         </div>

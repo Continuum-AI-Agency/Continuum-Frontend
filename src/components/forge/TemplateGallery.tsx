@@ -604,21 +604,19 @@ export function TemplateGallery({
     <div className="flex min-w-0 flex-col gap-4">
       {catalogError ? (
         <p role="alert" className="text-xs text-destructive">
-          {' '}
           {translateUi('could_not_read_source_types_and_var_aaae5ed6')}{' '}
           <Button size="xs" variant="outline" onClick={() => void reloadCatalog()}>
             {' '}
-            {translateUi('retry_942087cc')}{' '}
+            {translateUi('retry_942087cc')}
           </Button>
         </p>
       ) : null}
       {variantsError ? (
         <p role="alert" className="text-xs text-destructive">
-          {' '}
           {translateUi('could_not_read_template_variants_so_40188131')}{' '}
           <Button size="xs" variant="outline" onClick={() => void reloadVariants()}>
             {' '}
-            {translateUi('retry_942087cc')}{' '}
+            {translateUi('retry_942087cc')}
           </Button>
         </p>
       ) : null}
@@ -998,7 +996,7 @@ export function TemplateGallery({
                                         }
                                       >
                                         {' '}
-                                        {translateUi('render_6d89eb7d')}{' '}
+                                        {translateUi('render_6d89eb7d')}
                                       </Button>
                                     ) : null}
                                   </>
@@ -1203,7 +1201,7 @@ export function TemplateGallery({
                                         }
                                       >
                                         {' '}
-                                        {translateUi('render_6d89eb7d')}{' '}
+                                        {translateUi('render_6d89eb7d')}
                                       </Button>
                                     ) : null}
                                     <Button

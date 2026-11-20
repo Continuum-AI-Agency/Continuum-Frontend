@@ -102,7 +102,7 @@ export function VideoGenSection({
         {referenceModes.length === 1 ? (
           <InspectorNote>
             {VIDEO_GENERATOR_MODEL_LABELS[model]}{' '}
-            {translateUi('accepts_one_input_mode_it_swaps_the_1f5e5723')}{' '}
+            {translateUi('accepts_one_input_mode_it_swaps_the_1f5e5723')}
           </InspectorNote>
         ) : null}
       </InspectorSection>
@@ -126,7 +126,7 @@ export function VideoGenSection({
         {durationSeconds === undefined ? (
           <InspectorNote>
             {VIDEO_GENERATOR_MODEL_LABELS[model]}{' '}
-            {translateUi('has_no_fixed_clip_length_duration_i_908abbcb')}{' '}
+            {translateUi('has_no_fixed_clip_length_duration_i_908abbcb')}
           </InspectorNote>
         ) : (
           <>
@@ -142,12 +142,11 @@ export function VideoGenSection({
             />
             {lockedByResolution ? (
               <InspectorNote>
-                {resolution} {translateUi('renders_at_8_seconds_only_switch_to_2710bbeb')}{' '}
+                {resolution} {translateUi('renders_at_8_seconds_only_switch_to_2710bbeb')}
               </InspectorNote>
             ) : lockedByReference ? (
               <InspectorNote>
-                {' '}
-                {translateUi('veo_renders_8_seconds_only_when_a_r_7ec91003')}{' '}
+                {translateUi('veo_renders_8_seconds_only_when_a_r_7ec91003')}
               </InspectorNote>
             ) : null}
           </>

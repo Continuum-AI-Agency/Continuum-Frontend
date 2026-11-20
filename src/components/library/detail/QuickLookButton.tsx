@@ -149,7 +149,7 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
               <span>
                 <Button variant="outline" size="sm" disabled className="pointer-events-none">
                   <Sparkles className="size-3.5" aria-hidden />{' '}
-                  {translateUi('brand_quick_look_60951b72')}{' '}
+                  {translateUi('brand_quick_look_60951b72')}
                 </Button>
               </span>
             }
@@ -175,8 +175,7 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
           <DialogHeader>
             <DialogTitle>{translateUi('brand_quick_look_60951b72')}</DialogTitle>
             <DialogDescription>
-              {' '}
-              {translateUi('re_render_this_image_aligned_to_you_97df463f')}{' '}
+              {translateUi('re_render_this_image_aligned_to_you_97df463f')}
             </DialogDescription>
           </DialogHeader>
 
@@ -273,7 +272,7 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
                   {saving === 'version' ? (
                     <Loader2 className="size-3.5 animate-spin" aria-hidden />
                   ) : null}{' '}
-                  {translateUi('save_as_new_version_ad8907dd')}{' '}
+                  {translateUi('save_as_new_version_ad8907dd')}
                 </Button>
                 <Button
                   variant="outline"
@@ -284,7 +283,7 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
                   {saving === 'asset' ? (
                     <Loader2 className="size-3.5 animate-spin" aria-hidden />
                   ) : null}{' '}
-                  {translateUi('save_as_new_asset_a42a78f2')}{' '}
+                  {translateUi('save_as_new_asset_a42a78f2')}
                 </Button>
               </>
             ) : null}

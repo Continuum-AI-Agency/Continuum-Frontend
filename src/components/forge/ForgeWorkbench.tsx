@@ -815,17 +815,16 @@ export function ForgeWorkbench({
               {askingName} {translateUi('already_has_this_file_name_61067934')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {' '}
               {translateUi('upload_865e89de')} {asking?.file.name}{' '}
               {translateUi('as_the_next_revision_of_212045ae')} {askingName}{' '}
-              {translateUi('you_compare_the_changes_before_it_r_85bfabbd')}{' '}
+              {translateUi('you_compare_the_changes_before_it_r_85bfabbd')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
             <Button type="button" variant="outline" onClick={() => answer('template')}>
               {' '}
-              {translateUi('new_template_30d87ec4')}{' '}
+              {translateUi('new_template_30d87ec4')}
             </Button>
             <Button type="button" onClick={() => answer('revision')}>
               {' '}
@@ -842,15 +841,13 @@ export function ForgeWorkbench({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {' '}
               {translateUi('remove_5b7e3a54')}
               {removing ? sourceDisplayName(removing) : ''}”?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {' '}
               {translateUi('this_removes_the_template_from_3768016e')}{' '}
               {brandName ?? translateUi('this_brand_c31b658a')}{' '}
-              {translateUi('and_its_library_existing_renders_an_0fc3d33a')}{' '}
+              {translateUi('and_its_library_existing_renders_an_0fc3d33a')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

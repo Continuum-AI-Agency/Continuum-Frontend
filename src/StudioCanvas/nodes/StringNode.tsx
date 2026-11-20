@@ -352,7 +352,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
           disabled={getConnectedEdges(id).length === 0}
           onClick={() => detachNodeConnections(id)}
         >
-          <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
+          <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem

@@ -83,8 +83,7 @@ export function AudioTracks({
           ))}
           {placements.length === 0 ? (
             <div className="pointer-events-none flex h-full items-center justify-center text-2xs text-muted-foreground">
-              {' '}
-              {translateUi('drop_audio_here_or_use_add_in_the_m_638ff4ba')}{' '}
+              {translateUi('drop_audio_here_or_use_add_in_the_m_638ff4ba')}
             </div>
           ) : null}
         </div>

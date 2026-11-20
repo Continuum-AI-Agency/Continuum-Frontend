@@ -233,8 +233,7 @@ export function PresentationInspector({
       </div>
       {locked ? (
         <p className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('this_object_is_locked_unlock_it_to__adfc2184')}{' '}
+          {translateUi('this_object_is_locked_unlock_it_to__adfc2184')}
         </p>
       ) : null}
       <form onSubmit={update}>
@@ -274,7 +273,7 @@ export function PresentationInspector({
                 onClick={() => imageInput.current?.click()}
               >
                 {' '}
-                {translateUi('replace_image_fcedcb5e')}{' '}
+                {translateUi('replace_image_fcedcb5e')}
               </Button>
             </Field>
           ) : null}
@@ -283,7 +282,6 @@ export function PresentationInspector({
               {(['cropLeft', 'cropTop', 'cropRight', 'cropBottom'] as const).map((name) => (
                 <Field key={name}>
                   <FieldLabel htmlFor={`${prefix}-${name}`}>
-                    {' '}
                     {translateUi('crop_98caf7c4')} {name.slice(4).toLowerCase()} (%)
                   </FieldLabel>
                   <Input
@@ -444,8 +442,7 @@ export function PresentationInspector({
               </Field>
               <Field>
                 <FieldLabel htmlFor={`${prefix}-categories`}>
-                  {' '}
-                  {translateUi('categories_separated_by_commas_f6b4ca54')}{' '}
+                  {translateUi('categories_separated_by_commas_f6b4ca54')}
                 </FieldLabel>
                 <Input
                   id={`${prefix}-categories`}
@@ -457,7 +454,6 @@ export function PresentationInspector({
                 <FieldGroup key={`series-${index}`}>
                   <Field>
                     <FieldLabel htmlFor={`${prefix}-series-${index}`}>
-                      {' '}
                       {translateUi('series_a8295e08')} {index + 1} {translateUi(
                         'name_82a3537f',
                       )}{' '}
@@ -470,8 +466,7 @@ export function PresentationInspector({
                   </Field>
                   <Field>
                     <FieldLabel htmlFor={`${prefix}-values-${index}`}>
-                      {' '}
-                      {translateUi('values_separated_by_commas_ae23403e')}{' '}
+                      {translateUi('values_separated_by_commas_ae23403e')}
                     </FieldLabel>
                     <Input
                       id={`${prefix}-values-${index}`}
@@ -484,8 +479,7 @@ export function PresentationInspector({
             </>
           ) : null}
           <Button type="submit" disabled={busy || locked}>
-            {' '}
-            {translateUi('apply_changes_85045ccc')}{' '}
+            {translateUi('apply_changes_85045ccc')}
           </Button>
         </FieldGroup>
       </form>
@@ -556,8 +550,7 @@ export function PresentationInspector({
               onCheckedChange={(value) => fields.setValue('locked', value === true)}
             />
             <FieldLabel htmlFor={`${prefix}-field-lock`}>
-              {' '}
-              {translateUi('lock_this_property_for_people_and_a_16d4522a')}{' '}
+              {translateUi('lock_this_property_for_people_and_a_16d4522a')}
             </FieldLabel>
           </Field>
           <Field orientation="horizontal">

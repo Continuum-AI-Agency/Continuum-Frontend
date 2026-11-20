@@ -558,7 +558,7 @@ export function HyperframesAgentBlock({
                 {item.kind === 'image'
                   ? translateUi('visual_a5961f3f')
                   : translateUi('motion_30523827')}{' '}
-                {translateUi('reference_only_6f0c08f2')}{' '}
+                {translateUi('reference_only_6f0c08f2')}
               </label>
             ))}
 
@@ -768,8 +768,7 @@ export function HyperframesAgentBlock({
               ) : null}
               {!planCurrent && data.storyboardInputKey ? (
                 <p className="text-amber-600">
-                  {' '}
-                  {translateUi('inputs_changed_generate_new_angles__7b668cdd')}{' '}
+                  {translateUi('inputs_changed_generate_new_angles__7b668cdd')}
                 </p>
               ) : null}
               {planError ? (
@@ -837,14 +836,13 @@ export function HyperframesAgentBlock({
               data-testid="hyperframes-edit-in-forge"
             >
               {' '}
-              {translateUi('edit_composition_in_forge_3da99313')}{' '}
+              {translateUi('edit_composition_in_forge_3da99313')}
             </a>
           ) : null}
 
           {quality ? (
             <details className="rounded-lg border border-border/60 bg-muted/20 p-2 text-2xs" open>
               <summary className="cursor-pointer font-semibold text-foreground">
-                {' '}
                 {translateUi('production_slate_0574176b')}{' '}
                 {quality.gate === 'passed'
                   ? translateUi('passed_284d1e8c')
@@ -904,14 +902,13 @@ export function HyperframesAgentBlock({
                           })}
                         >
                           {' '}
-                          {translateUi('revise_scene_20faf316')}{' '}
+                          {translateUi('revise_scene_20faf316')}
                         </Button>
                       </div>
                     </div>
                   );
                 })}
                 <p className="text-muted-foreground">
-                  {' '}
                   {translateUi('creator_88447b83')} {quality.modelProvenance.draftModelId}
                   {quality.modelProvenance.repairModelIds.length
                     ? translateUi('repair_value0_92da5d02', {
@@ -977,7 +974,7 @@ export function HyperframesAgentBlock({
                 onClick={() => setPreviewMode('interactive')}
               >
                 {' '}
-                {translateUi('interactive_composition_37c6a428')}{' '}
+                {translateUi('interactive_composition_37c6a428')}
               </Button>
             </fieldset>
           ) : null}
@@ -1001,14 +998,12 @@ export function HyperframesAgentBlock({
                 <Film className="h-6 w-6 animate-pulse text-violet-400" />
                 <Progress value={(data.progress ?? 0) * 100} className="h-1.5 w-full" />
                 <span className="text-2xs text-muted-foreground">
-                  {' '}
-                  {translateUi('you_can_leave_ai_studio_the_film_re_5b911193')}{' '}
+                  {translateUi('you_can_leave_ai_studio_the_film_re_5b911193')}
                 </span>
               </div>
             ) : (
               <span className="text-xs text-muted-foreground">
-                {' '}
-                {translateUi('connect_media_add_a_prompt_then_run_eb64b265')}{' '}
+                {translateUi('connect_media_add_a_prompt_then_run_eb64b265')}
               </span>
             )}
           </div>
@@ -1080,7 +1075,6 @@ export function HyperframesAgentBlock({
           {embedCode ? (
             <div className="space-y-1">
               <label className="block text-2xs">
-                {' '}
                 {translateUi('mp4_embed_309cc07a')}{' '}
                 <textarea
                   readOnly
@@ -1090,7 +1084,6 @@ export function HyperframesAgentBlock({
                 />
               </label>
               <label className="block text-2xs">
-                {' '}
                 {translateUi('interactive_embed_dfcf87fb')}{' '}
                 <textarea
                   readOnly

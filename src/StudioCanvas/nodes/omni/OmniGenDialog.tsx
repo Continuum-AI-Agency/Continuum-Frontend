@@ -177,8 +177,7 @@ export function OmniGenDialog({
               <Sparkles className="h-4 w-4" /> Omni 1.1 Flash
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {' '}
-              {translateUi('describe_a_clip_then_keep_talking_t_abddaf91')}{' '}
+              {translateUi('describe_a_clip_then_keep_talking_t_abddaf91')}
             </DialogDescription>
           </div>
 
@@ -235,11 +234,11 @@ export function OmniGenDialog({
             </select>
 
             <Button variant="ghost" size="sm" onClick={onDownload} disabled={!previewSrc}>
-              <Download className="mr-1.5 h-4 w-4" /> {translateUi('download_d6eafe82')}{' '}
+              <Download className="mr-1.5 h-4 w-4" /> {translateUi('download_d6eafe82')}
             </Button>
             <Button size="sm" onClick={() => onOpenChange(false)}>
               {' '}
-              {translateUi('done_11a6767d')}{' '}
+              {translateUi('done_11a6767d')}
             </Button>
           </div>
         </DialogHeader>

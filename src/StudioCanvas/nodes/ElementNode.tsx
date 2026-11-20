@@ -326,7 +326,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                       ? translateUi('video_d534be82')
                       : translateUi('image_1aa4cb0b')}{' '}
                     {translateUi('output_457f4957')} {outputConnections}{' '}
-                    {translateUi('connections_1e5fac86')}{' '}
+                    {translateUi('connections_1e5fac86')}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -344,7 +344,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
+            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}
           </ContextMenuItem>
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
@@ -384,8 +384,7 @@ function ElementNodeSetup({
       {elements.length > 0 ? (
         <div className="nodrag nowheel flex h-full w-full flex-col gap-1.5 overflow-y-auto p-3">
           <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-            {' '}
-            {translateUi('choose_an_element_a5f12fb6')}{' '}
+            {translateUi('choose_an_element_a5f12fb6')}
           </p>
           {elements.map((candidate) => (
             <Button
@@ -409,7 +408,7 @@ function ElementNodeSetup({
             className="w-full shrink-0 justify-start"
             onClick={() => setCreateOpen(true)}
           >
-            <Plus className="mr-2 h-4 w-4" /> {translateUi('new_element_45e3dc5d')}{' '}
+            <Plus className="mr-2 h-4 w-4" /> {translateUi('new_element_45e3dc5d')}
           </Button>
         </div>
       ) : (
@@ -423,7 +422,7 @@ function ElementNodeSetup({
           </EmptyHeader>
           <EmptyContent>
             <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> {translateUi('create_an_element_574bb0e4')}{' '}
+              <Plus className="mr-2 h-4 w-4" /> {translateUi('create_an_element_574bb0e4')}
             </Button>
           </EmptyContent>
         </Empty>

@@ -146,8 +146,7 @@ export function FontUploadReviewDialog({
         <DialogHeader>
           <DialogTitle>{translateUi('review_font_metadata_b6c828c5')}</DialogTitle>
           <DialogDescription>
-            {' '}
-            {translateUi('confirm_the_family_and_optional_fac_82837381')}{' '}
+            {translateUi('confirm_the_family_and_optional_fac_82837381')}
           </DialogDescription>
         </DialogHeader>
 
@@ -240,12 +239,11 @@ export function FontUploadReviewDialog({
             ))}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-                {' '}
-                {translateUi('cancel_19766ed6')}{' '}
+                {translateUi('cancel_19766ed6')}
               </Button>
               <Button type="submit" disabled={saving}>
                 {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}{' '}
-                {translateUi('add_to_engine_a8987bd6')}{' '}
+                {translateUi('add_to_engine_a8987bd6')}
               </Button>
             </DialogFooter>
           </form>
@@ -256,8 +254,7 @@ export function FontUploadReviewDialog({
             </p>
             <DialogFooter>
               <Button type="button" onClick={onClose}>
-                {' '}
-                {translateUi('done_11a6767d')}{' '}
+                {translateUi('done_11a6767d')}
               </Button>
             </DialogFooter>
           </div>

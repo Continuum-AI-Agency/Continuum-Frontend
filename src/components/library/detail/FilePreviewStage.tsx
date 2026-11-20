@@ -37,7 +37,7 @@ export function PdfPreview({ src, title }: { src: string; title: string }) {
           rel="noopener noreferrer"
           className={buttonVariants({ size: 'sm', variant: 'ghost' })}
         >
-          <ExternalLink className="size-4" /> {translateUi('open_pdf_5b103479')}{' '}
+          <ExternalLink className="size-4" /> {translateUi('open_pdf_5b103479')}
         </a>
       </div>
     </div>
@@ -151,12 +151,10 @@ export function FilePreviewStage({ brandId, asset, version, review, onPreviewCha
           </p>
         ) : isMxf ? (
           <p className="text-xs font-medium text-foreground/80">
-            {' '}
-            {translateUi('broadcast_mxf_plays_via_h_264_proxy_58f1ff84')}{' '}
+            {translateUi('broadcast_mxf_plays_via_h_264_proxy_58f1ff84')}
           </p>
         ) : null}
         <p className="text-xs text-muted-foreground/70">
-          {' '}
           {translateUi('modified_e8ce5dca')}{' '}
           {new Date(asset.updatedAt).toLocaleString(displayLocale, {
             dateStyle: 'medium',
@@ -170,8 +168,7 @@ export function FilePreviewStage({ brandId, asset, version, review, onPreviewCha
         </p>
         {officeType ? (
           <p data-testid="stage-no-preview" className="text-xs text-muted-foreground/60">
-            {' '}
-            {translateUi('no_preview_download_to_open_2a5c1eb0')}{' '}
+            {translateUi('no_preview_download_to_open_2a5c1eb0')}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground/60">
@@ -198,7 +195,7 @@ export function FilePreviewStage({ brandId, asset, version, review, onPreviewCha
             ) : (
               <ImagePlus className="size-4" />
             )}{' '}
-            {translateUi('add_preview_cff47e69')}{' '}
+            {translateUi('add_preview_cff47e69')}
           </Button>
         )}
         <Button type="button" size="sm" onClick={() => void download()} disabled={downloading}>
@@ -207,7 +204,7 @@ export function FilePreviewStage({ brandId, asset, version, review, onPreviewCha
           ) : (
             <Download className="size-4" />
           )}{' '}
-          {translateUi('download_d6eafe82')}{' '}
+          {translateUi('download_d6eafe82')}
         </Button>
       </div>
       <input

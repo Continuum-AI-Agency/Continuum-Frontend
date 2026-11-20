@@ -59,7 +59,6 @@ function CheckSummary({ job }: { job: ApiRenderJob }) {
     if (job.judge.state === 'unknown') {
       return (
         <Badge variant="muted" className="mt-1">
-          {' '}
           {translateUi('not_checked_042a2629')}{' '}
           {job.judge.why ?? translateUi('the_judge_could_not_run_73bba933')}
         </Badge>
@@ -68,8 +67,7 @@ function CheckSummary({ job }: { job: ApiRenderJob }) {
     if (job.judge.state === 'pass' && findings.length === 0) {
       return (
         <Badge variant="success" className="mt-1">
-          {' '}
-          {translateUi('checked_nothing_found_46f292fe')}{' '}
+          {translateUi('checked_nothing_found_46f292fe')}
         </Badge>
       );
     }
@@ -77,7 +75,7 @@ function CheckSummary({ job }: { job: ApiRenderJob }) {
       <Alert className="mt-1 border-warning/40">
         <AlertTitle className="text-2xs">
           {findings.length} {translateUi('finding_8bf18252')}
-          {findings.length === 1 ? '' : 's'} {translateUi('on_the_rendered_frame_8ca5dac9')}{' '}
+          {findings.length === 1 ? '' : 's'} {translateUi('on_the_rendered_frame_8ca5dac9')}
         </AlertTitle>
         <AlertDescription className="flex flex-col gap-1">
           {job.judge.escalatedBecause ? (
@@ -105,7 +103,6 @@ function CheckSummary({ job }: { job: ApiRenderJob }) {
   if (job.fit && !job.fit.escalate) {
     return (
       <Badge variant="success" className="mt-1">
-        {' '}
         {translateUi('placement_checked_6daddf0c')} {job.fit.why}
       </Badge>
     );
@@ -113,8 +110,7 @@ function CheckSummary({ job }: { job: ApiRenderJob }) {
   if (job.fit?.escalate) {
     return (
       <Badge variant="muted" className="mt-1">
-        {' '}
-        {translateUi('checking_the_frame_da621cde')}{' '}
+        {translateUi('checking_the_frame_da621cde')}
       </Badge>
     );
   }
@@ -193,8 +189,7 @@ export function RenderJobCard({
           <span className="truncate font-medium">{job.templateName}</span>
           {job.test ? (
             <Badge variant="warning" className="shrink-0">
-              {' '}
-              {translateUi('test_watermarked_2c573ba5')}{' '}
+              {translateUi('test_watermarked_2c573ba5')}
             </Badge>
           ) : null}
         </span>
@@ -255,7 +250,7 @@ export function RenderJobCard({
                   onClick={() => onUseAsReference(output)}
                 >
                   {' '}
-                  {translateUi('use_as_reference_b9f850ea')}{' '}
+                  {translateUi('use_as_reference_b9f850ea')}
                 </Button>
               ) : null}
               <span className="text-muted-foreground">

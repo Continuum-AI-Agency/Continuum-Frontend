@@ -333,8 +333,7 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
             node promises nothing yet. */}
         {section ? (
           <p className="shrink-0 border-t border-border/60 px-1.5 py-1 text-left text-2xs leading-tight text-muted-foreground">
-            {' '}
-            {translateUi('informs_the_generation_and_its_crit_5a4dc173')}{' '}
+            {translateUi('informs_the_generation_and_its_crit_5a4dc173')}
           </p>
         ) : null}
       </CanvasNode>

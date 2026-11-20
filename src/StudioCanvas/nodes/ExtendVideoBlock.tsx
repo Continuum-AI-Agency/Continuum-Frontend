@@ -182,8 +182,7 @@ export function ExtendVideoBlock({
                     className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
                   />
                   <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                    {' '}
-                    {translateUi('video_input_4116f980')}{' '}
+                    {translateUi('video_input_4116f980')}
                   </span>
                 </div>
 
@@ -198,8 +197,7 @@ export function ExtendVideoBlock({
                     className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
                   />
                   <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                    {' '}
-                    {translateUi('prompt_optional_f2087c97')}{' '}
+                    {translateUi('prompt_optional_f2087c97')}
                   </span>
                 </div>
               </div>
@@ -248,7 +246,7 @@ export function ExtendVideoBlock({
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}{' '}
+            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem

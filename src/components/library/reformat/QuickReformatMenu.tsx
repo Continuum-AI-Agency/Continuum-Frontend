@@ -128,16 +128,15 @@ export function QuickReformatMenu({
           ) : (
             <Scaling className="size-3.5" />
           )}{' '}
-          {translateUi('reformat_for_placement_eecace7c')}{' '}
+          {translateUi('reformat_for_placement_eecace7c')}
         </DropdownMenuLabel>
         <p className="px-2 pb-2 text-xs text-muted-foreground">
-          {' '}
-          {translateUi('the_original_stays_unchanged_each_s_fc4e703d')}{' '}
+          {translateUi('the_original_stays_unchanged_each_s_fc4e703d')}
         </p>
         <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger disabled={unavailable || Boolean(running)}>
-            <Crop className="mr-2 size-3.5" /> {translateUi('fast_crop_6fae1d28')}{' '}
+            <Crop className="mr-2 size-3.5" /> {translateUi('fast_crop_6fae1d28')}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
             {IMAGE_REFORMAT_PRESETS.map((preset) => (
@@ -152,7 +151,7 @@ export function QuickReformatMenu({
         </DropdownMenuSub>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger disabled={unavailable || Boolean(running)}>
-            <Expand className="mr-2 size-3.5" /> {translateUi('smart_expand_7ac343b0')}{' '}
+            <Expand className="mr-2 size-3.5" /> {translateUi('smart_expand_7ac343b0')}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
             {IMAGE_REFORMAT_PRESETS.map((preset) => (
@@ -168,8 +167,7 @@ export function QuickReformatMenu({
         <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger disabled={unavailable || Boolean(running)}>
-            {' '}
-            {translateUi('save_crop_as_new_version_0adbf18f')}{' '}
+            {translateUi('save_crop_as_new_version_0adbf18f')}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
             {IMAGE_REFORMAT_PRESETS.map((preset) => (

@@ -157,7 +157,7 @@ export function TemplateLayerInspector({
             className="text-xs"
           >
             {' '}
-            {translateUi('visible_in_template_105b588a')}{' '}
+            {translateUi('visible_in_template_105b588a')}
           </label>
           <Switch
             id={`${idPrefix}-visible-${layer.compId}-${layer.layerId}`}
@@ -296,7 +296,6 @@ export function TemplateLayerInspector({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
-            {' '}
             {translateUi('font_face_565a166e')}{' '}
             <select
               aria-label={translateUi('font_face_565a166e')}
@@ -349,13 +348,12 @@ export function TemplateLayerInspector({
                   if (weight.target?.postScriptName) onEdit({ font: weight.target.postScriptName });
                 }}
               />{' '}
-              {translateUi('bold_94fee62e')}{' '}
+              {translateUi('bold_94fee62e')}
             </label>
           </div>
           {invalidFields.includes('size') ? (
             <p role="alert" className="text-xs text-destructive">
-              {' '}
-              {translateUi('enter_a_size_from_1_to_1000_5d9bb0da')}{' '}
+              {translateUi('enter_a_size_from_1_to_1000_5d9bb0da')}
             </p>
           ) : null}
           {font ? <Note>{font}</Note> : null}
@@ -393,9 +391,8 @@ export function TemplateLayerInspector({
           </div>
           {boxErrors.length ? (
             <p role="alert" className="text-xs text-destructive">
-              {' '}
               {translateUi('enter_valid_values_for_64758329')} {boxErrors.join(', ')}
-              {translateUi('text_box_dimensions_must_be_positiv_85d70dcd')}{' '}
+              {translateUi('text_box_dimensions_must_be_positiv_85d70dcd')}
             </p>
           ) : null}
           {layer.geometryReason ? <Note>{layer.geometryReason}</Note> : null}

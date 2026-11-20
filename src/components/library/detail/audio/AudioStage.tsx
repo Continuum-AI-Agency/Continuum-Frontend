@@ -192,8 +192,7 @@ export function AudioStage({
   if (!playSrc) {
     return (
       <div className="flex size-full items-center justify-center text-xs text-muted-foreground">
-        {' '}
-        {translateUi('this_audio_file_has_no_playable_url_808de2e1')}{' '}
+        {translateUi('this_audio_file_has_no_playable_url_808de2e1')}
       </div>
     );
   }
@@ -301,7 +300,7 @@ export function AudioStage({
           title={translateUi('mark_in_i_8334ffcc')}
         >
           {' '}
-          {translateUi('in_8bc1d53c')}{' '}
+          {translateUi('in_8bc1d53c')}
         </Button>
         <Button
           type="button"
@@ -311,7 +310,7 @@ export function AudioStage({
           title={translateUi('mark_out_o_8072f874')}
           disabled={(range?.inMs ?? pointMs) === null}
         >
-          <SquareDashedBottom className="size-3.5" /> {translateUi('out_9a3c5460')}{' '}
+          <SquareDashedBottom className="size-3.5" /> {translateUi('out_9a3c5460')}
         </Button>
         {range ? (
           <span className="flex items-center gap-1 rounded bg-amber-400/15 px-1.5 py-0.5 text-xs tabular-nums text-amber-700 dark:text-amber-300">

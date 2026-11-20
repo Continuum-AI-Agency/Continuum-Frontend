@@ -111,7 +111,7 @@ export function FrameExtractBlock({
             onClick={() => void extract()}
           >
             {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}{' '}
-            {translateUi('extract_c15301c0')}{' '}
+            {translateUi('extract_c15301c0')}
           </Button>
           <NodeDownloadButton
             nodeType="frameExtract"

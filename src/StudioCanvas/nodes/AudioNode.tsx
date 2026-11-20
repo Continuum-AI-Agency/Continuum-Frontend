@@ -403,7 +403,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
+            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}
           </ContextMenuItem>
           <ContextMenuItem
             className="text-destructive focus:text-destructive"

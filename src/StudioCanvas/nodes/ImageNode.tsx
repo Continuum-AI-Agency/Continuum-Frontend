@@ -866,12 +866,12 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 <ContextMenuSubTrigger
                   disabled={quickReformat.unavailable || Boolean(quickReformat.running)}
                 >
-                  <Scaling className="mr-2 h-4 w-4" /> {translateUi('reformat_image_b86c06cf')}{' '}
+                  <Scaling className="mr-2 h-4 w-4" /> {translateUi('reformat_image_b86c06cf')}
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent className="w-52">
                   <ContextMenuSub>
                     <ContextMenuSubTrigger>
-                      <Crop className="mr-2 h-4 w-4" /> {translateUi('fast_crop_6fae1d28')}{' '}
+                      <Crop className="mr-2 h-4 w-4" /> {translateUi('fast_crop_6fae1d28')}
                     </ContextMenuSubTrigger>
                     <ContextMenuSubContent className="w-48">
                       {IMAGE_REFORMAT_PRESETS.map((preset) => (
@@ -904,7 +904,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 </ContextMenuSubContent>
               </ContextMenuSub>
               <ContextMenuItem onClick={() => setMarkupOpen(true)}>
-                <SquarePen className="mr-2 h-4 w-4" /> {translateUi('markup_image_b4118435')}{' '}
+                <SquarePen className="mr-2 h-4 w-4" /> {translateUi('markup_image_b4118435')}
               </ContextMenuItem>
               {data.hasMarkup && (data.originalImage ?? data.image) && (
                 <ContextMenuItem onClick={handleResetToOriginal}>
@@ -914,7 +914,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 </ContextMenuItem>
               )}
               <ContextMenuItem onClick={handleClearReference}>
-                <X className="mr-2 h-4 w-4" /> {translateUi('clear_reference_0f68291d')}{' '}
+                <X className="mr-2 h-4 w-4" /> {translateUi('clear_reference_0f68291d')}
               </ContextMenuItem>
             </>
           )}
@@ -927,7 +927,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
+            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}
           </ContextMenuItem>
           <ContextMenuItem
             className="text-destructive focus:text-destructive"

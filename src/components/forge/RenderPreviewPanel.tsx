@@ -462,8 +462,7 @@ export function RenderPreviewPanel(props: RenderPreviewPanelProps): JSX.Element 
     </div>
   ) : (
     <div className="flex h-full items-center justify-center p-2 text-xs text-muted-foreground">
-      {' '}
-      {translateUi('select_a_row_to_preview_it_d1aa8057')}{' '}
+      {translateUi('select_a_row_to_preview_it_d1aa8057')}
     </div>
   );
 }
@@ -787,8 +786,7 @@ function TemplatePreviewPanel({
   if (!rowId || !row) {
     return (
       <div className="flex h-full items-center justify-center p-2 text-xs text-muted-foreground">
-        {' '}
-        {translateUi('select_a_row_to_preview_it_d1aa8057')}{' '}
+        {translateUi('select_a_row_to_preview_it_d1aa8057')}
       </div>
     );
   }
@@ -1054,7 +1052,7 @@ function TemplatePreviewPanel({
               className="px-2 text-2xs"
             >
               {' '}
-              {translateUi('live_b64ac05f')}{' '}
+              {translateUi('live_b64ac05f')}
             </ToggleGroupItem>
             <ToggleGroupItem
               value="exact"
@@ -1062,7 +1060,7 @@ function TemplatePreviewPanel({
               className="px-2 text-2xs"
             >
               {' '}
-              {translateUi('exact_b5aee780')}{' '}
+              {translateUi('exact_b5aee780')}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -1100,7 +1098,7 @@ function TemplatePreviewPanel({
           className="m-0 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-2xs"
         >
           {' '}
-          {translateUi('use_a_254_305_px_canvas_for_left_je_4089ee2d')}{' '}
+          {translateUi('use_a_254_305_px_canvas_for_left_je_4089ee2d')}
         </p>
       ) : null}
       {format ? (
@@ -1134,7 +1132,6 @@ function TemplatePreviewPanel({
       isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
         <div aria-live="polite" className="shrink-0 text-2xs text-muted-foreground">
           <span>
-            {' '}
             {translateUi('full_animation_proof_6d0e6627')} {format.label}{' '}
             {translateUi('source_7bb73e1f')}{' '}
             {currentProof?.templateCommitSha?.slice(0, 8) ??

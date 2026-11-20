@@ -297,8 +297,7 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('sent_with_every_generation_this_ele_6b3c9aaa')}{' '}
+          {translateUi('sent_with_every_generation_this_ele_6b3c9aaa')}
         </p>
         {styleHint ? <p className="text-xs text-destructive">{styleHint}</p> : null}
       </div>
@@ -322,7 +321,7 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
           }
         >
           {update.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{' '}
-          {translateUi('save_board_3bbd889c')}{' '}
+          {translateUi('save_board_3bbd889c')}
         </Button>
         {saveError ? (
           <p className="text-xs text-destructive" role="alert">
@@ -341,8 +340,7 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
           </p>
         ) : update.isSuccess ? (
           <p className="text-xs text-muted-foreground" role="status">
-            {' '}
-            {translateUi('board_saved_60a975e3')}{' '}
+            {translateUi('board_saved_60a975e3')}
           </p>
         ) : null}
       </div>

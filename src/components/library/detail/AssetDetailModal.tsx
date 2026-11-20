@@ -751,7 +751,7 @@ function AssetDetailDialog({
                       onClick={() => setComparePickerOpen(true)}
                       className="flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors hover:bg-muted"
                     >
-                      <Columns2 className="size-3.5" /> {translateUi('compare_e888155d')}{' '}
+                      <Columns2 className="size-3.5" /> {translateUi('compare_e888155d')}
                     </button>
                     {stage.kind === 'video' && stage.src ? (
                       <PosterFramePicker
@@ -789,7 +789,7 @@ function AssetDetailDialog({
                 count={openCount}
               >
                 {' '}
-                {translateUi('comments_355f79f2')}{' '}
+                {translateUi('comments_355f79f2')}
               </SidebarTabButton>
               {transcriptEnabled && (
                 <SidebarTabButton
@@ -800,7 +800,7 @@ function AssetDetailDialog({
                   }
                 >
                   {' '}
-                  {translateUi('transcript_721164f0')}{' '}
+                  {translateUi('transcript_721164f0')}
                 </SidebarTabButton>
               )}
               {transcriptEnabled && asset.videoInsights ? (
@@ -809,26 +809,26 @@ function AssetDetailDialog({
                   onClick={() => chooseTab('insights')}
                 >
                   {' '}
-                  {translateUi('insights_2a932f90')}{' '}
+                  {translateUi('insights_2a932f90')}
                 </SidebarTabButton>
               ) : null}
               <SidebarTabButton active={sidebarTab === 'info'} onClick={() => chooseTab('info')}>
                 {' '}
-                {translateUi('info_170322a3')}{' '}
+                {translateUi('info_170322a3')}
               </SidebarTabButton>
               <SidebarTabButton
                 active={sidebarTab === 'fields'}
                 onClick={() => chooseTab('fields')}
               >
                 {' '}
-                {translateUi('fields_616f48c1')}{' '}
+                {translateUi('fields_616f48c1')}
               </SidebarTabButton>
               <SidebarTabButton
                 active={sidebarTab === 'performance'}
                 onClick={() => chooseTab('performance')}
               >
                 {' '}
-                {translateUi('performance_442aded8')}{' '}
+                {translateUi('performance_442aded8')}
               </SidebarTabButton>
             </div>
 

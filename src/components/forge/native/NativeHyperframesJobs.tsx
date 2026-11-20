@@ -149,8 +149,7 @@ export function NativeHyperframesJobs({
       </p>
       {!view.renderer ? (
         <p role="status" className="text-xs text-muted-foreground">
-          {' '}
-          {translateUi('native_rendering_is_unavailable_in__467b04ba')}{' '}
+          {translateUi('native_rendering_is_unavailable_in__467b04ba')}
         </p>
       ) : null}
       <form
@@ -163,7 +162,6 @@ export function NativeHyperframesJobs({
         <FieldGroup>
           <Field data-invalid={!!form.formState.errors.frame}>
             <FieldLabel htmlFor="native-preview-frame">
-              {' '}
               {translateUi('preview_frame_0_523675cc')}
               {view.clock.frameCount - 1})
             </FieldLabel>
@@ -179,8 +177,7 @@ export function NativeHyperframesJobs({
           </Field>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="outline" disabled={busy || dirty || !view.renderer}>
-              {' '}
-              {translateUi('preview_frame_49bc3a3e')}{' '}
+              {translateUi('preview_frame_49bc3a3e')}
             </Button>
             <Button
               type="button"
@@ -194,7 +191,7 @@ export function NativeHyperframesJobs({
               onClick={() => void submit(false)}
             >
               {' '}
-              {translateUi('render_mp4_dbf320c3')}{' '}
+              {translateUi('render_mp4_dbf320c3')}
             </Button>
           </div>
         </FieldGroup>
@@ -217,7 +214,7 @@ export function NativeHyperframesJobs({
             {message(job.error)}{' '}
             <Button variant="outline" size="sm" onClick={() => void job.refetch()}>
               {' '}
-              {translateUi('retry_job_61d9e1d5')}{' '}
+              {translateUi('retry_job_61d9e1d5')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -238,19 +235,18 @@ export function NativeHyperframesJobs({
               )}
             >
               {' '}
-              {translateUi('saved_job_link_0a251aea')}{' '}
+              {translateUi('saved_job_link_0a251aea')}
             </Link>
             {!terminal(job.data.state) ? (
               <Button variant="outline" size="sm" disabled={busy} onClick={() => void cancel()}>
                 {' '}
-                {translateUi('cancel_render_cec72286')}{' '}
+                {translateUi('cancel_render_cec72286')}
               </Button>
             ) : null}
           </div>
           {job.data.revision.revisionId !== view.revision.revisionId ? (
             <p className="text-xs text-muted-foreground">
-              {' '}
-              {translateUi('this_job_uses_another_saved_revisio_d11ad8a0')}{' '}
+              {translateUi('this_job_uses_another_saved_revisio_d11ad8a0')}
             </p>
           ) : null}
           {job.data.error ? (
@@ -281,7 +277,7 @@ export function NativeHyperframesJobs({
             {message(history.error)}{' '}
             <Button variant="outline" size="sm" onClick={() => void history.refetch()}>
               {' '}
-              {translateUi('retry_history_5663075c')}{' '}
+              {translateUi('retry_history_5663075c')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -303,7 +299,7 @@ export function NativeHyperframesJobs({
               <span>{item.state}</span>
               <Button size="xs" variant="ghost" onClick={() => setJobId(item.jobId)}>
                 {' '}
-                {translateUi('view_output_d01c6d1f')}{' '}
+                {translateUi('view_output_d01c6d1f')}
               </Button>
             </li>
           ))}

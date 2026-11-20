@@ -30,8 +30,7 @@ export function NativeHyperframesOrder({
   if (!group)
     return (
       <p className="text-xs text-muted-foreground">
-        {' '}
-        {translateUi('this_source_has_no_reorderable_sibl_dd239c2d')}{' '}
+        {translateUi('this_source_has_no_reorderable_sibl_dd239c2d')}
       </p>
     );
   const selectGroup = (offset: number) => {
@@ -57,10 +56,9 @@ export function NativeHyperframesOrder({
             onClick={() => selectGroup(-1)}
           >
             {' '}
-            {translateUi('previous_group_821e5053')}{' '}
+            {translateUi('previous_group_821e5053')}
           </Button>
           <span>
-            {' '}
             {translateUi('group_34ca0e76')} {groupIndex + 1} {translateUi('of_28391d3b')}{' '}
             {view.groups.length}
           </span>
@@ -72,7 +70,7 @@ export function NativeHyperframesOrder({
             onClick={() => selectGroup(1)}
           >
             {' '}
-            {translateUi('next_group_83532bcb')}{' '}
+            {translateUi('next_group_83532bcb')}
           </Button>
         </div>
       ) : null}
@@ -105,7 +103,7 @@ export function NativeHyperframesOrder({
                   onClick={() => move(position, -1)}
                 >
                   {' '}
-                  {translateUi('earlier_e10ae990')}{' '}
+                  {translateUi('earlier_e10ae990')}
                 </Button>
                 <Button
                   type="button"
@@ -116,7 +114,7 @@ export function NativeHyperframesOrder({
                   onClick={() => move(position, 1)}
                 >
                   {' '}
-                  {translateUi('later_73b6e48a')}{' '}
+                  {translateUi('later_73b6e48a')}
                 </Button>
               </div>
             </li>
@@ -133,10 +131,9 @@ export function NativeHyperframesOrder({
             onClick={() => setPage(page - 1)}
           >
             {' '}
-            {translateUi('previous_elements_b111ac13')}{' '}
+            {translateUi('previous_elements_b111ac13')}
           </Button>
           <span>
-            {' '}
             {translateUi('elements_e1ff7a90')} {first + 1}–{Math.min(first + 20, nodeIds.length)}{' '}
             {translateUi('of_28391d3b')} {nodeIds.length}
           </span>
@@ -148,7 +145,7 @@ export function NativeHyperframesOrder({
             onClick={() => setPage(page + 1)}
           >
             {' '}
-            {translateUi('next_elements_d4547c3f')}{' '}
+            {translateUi('next_elements_d4547c3f')}
           </Button>
         </div>
       ) : null}

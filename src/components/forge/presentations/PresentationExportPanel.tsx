@@ -59,13 +59,11 @@ export function PresentationExportPanel({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        {' '}
-        {translateUi('create_an_editable_powerpoint_file__ac5b2d6c')}{' '}
+        {translateUi('create_an_editable_powerpoint_file__ac5b2d6c')}
       </p>
       {blocked ? (
         <p role="alert" className="text-sm text-destructive">
-          {' '}
-          {translateUi('resolve_the_blocking_import_issues__55c6d981')}{' '}
+          {translateUi('resolve_the_blocking_import_issues__55c6d981')}
         </p>
       ) : null}
       <form
@@ -112,7 +110,7 @@ export function PresentationExportPanel({
           {dirty ? (
             <Button type="button" variant="outline" onClick={() => void save()}>
               {' '}
-              {translateUi('save_before_exporting_5d93cc9d')}{' '}
+              {translateUi('save_before_exporting_5d93cc9d')}
             </Button>
           ) : null}
           <Button type="submit" variant="outline" disabled={busy || dirty || blocked}>
@@ -135,13 +133,12 @@ export function PresentationExportPanel({
             {preview.formats.map((format) => format.toUpperCase()).join(' and ')}.
           </p>
           <p className="text-xs text-muted-foreground">
-            {' '}
             {translateUi('approval_expires_c1c99fa7')}{' '}
             {new Date(preview.expiresAt).toLocaleTimeString(displayLocale, {
               hour: 'numeric',
               minute: '2-digit',
             })}{' '}
-            {translateUi('further_edits_require_a_new_review_389f075e')}{' '}
+            {translateUi('further_edits_require_a_new_review_389f075e')}
           </p>
           <Button
             disabled={busy || dirty || blocked || preview.revision !== revision}

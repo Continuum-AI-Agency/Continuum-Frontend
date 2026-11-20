@@ -98,14 +98,13 @@ export function SceneTemplateDetail({
       <header className="flex flex-wrap items-center justify-between gap-2 px-[var(--card-pad)] py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={onBack}>
-            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}{' '}
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}
           </Button>
           <h2 className="min-w-0 text-base font-semibold">
             {source.house ? name : <InlineRename value={name} onRename={onRename} />}
           </h2>
           {source.house ? <HouseScenePill /> : null}
           <p className="truncate text-xs text-muted-foreground">
-            {' '}
             {translateUi('blender_scene_15f109bd')}{' '}
             {view.data
               ? translateUi('value0_fields_value1_outputs_e561e8d7', {
@@ -127,7 +126,7 @@ export function SceneTemplateDetail({
                 className="gap-1.5 text-destructive"
                 onClick={onRemove}
               >
-                <Trash2 className="size-3.5" aria-hidden /> {translateUi('remove_c3812fc4')}{' '}
+                <Trash2 className="size-3.5" aria-hidden /> {translateUi('remove_c3812fc4')}
               </Button>
             </>
           )}
@@ -136,7 +135,7 @@ export function SceneTemplateDetail({
               href={sceneEditorHref(assetId)}
               className={buttonVariants({ size: 'sm', className: 'gap-1.5' })}
             >
-              <Box className="size-3.5" aria-hidden /> {translateUi('open_editor_550697e0')}{' '}
+              <Box className="size-3.5" aria-hidden /> {translateUi('open_editor_550697e0')}
             </Link>
           ) : null}
         </div>
@@ -159,13 +158,12 @@ export function SceneTemplateDetail({
           {sceneProblem(view.error).message}
           <Button size="sm" variant="outline" onClick={() => void view.refetch()}>
             {' '}
-            {translateUi('retry_942087cc')}{' '}
+            {translateUi('retry_942087cc')}
           </Button>
         </div>
       ) : !view.data ? (
         <p role="status" className="m-0 p-[var(--card-pad)] text-sm text-muted-foreground">
-          {' '}
-          {translateUi('reading_the_scene_708494d1')}{' '}
+          {translateUi('reading_the_scene_708494d1')}
         </p>
       ) : (
         <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:divide-x lg:divide-y-0">
@@ -220,10 +218,9 @@ export function SceneTemplateDetail({
               )}
               {view.data.externals.length ? (
                 <p className="m-0 text-xs text-destructive">
-                  {' '}
                   {translateUi('missing_from_the_file_22ab4a66')}{' '}
                   {view.data.externals.map((x) => x.path).join(', ')}
-                  {translateUi('pack_them_in_blender_before_renderi_5741fe2f')}{' '}
+                  {translateUi('pack_them_in_blender_before_renderi_5741fe2f')}
                 </p>
               ) : null}
             </section>
