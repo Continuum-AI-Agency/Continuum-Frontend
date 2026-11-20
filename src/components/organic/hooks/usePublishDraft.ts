@@ -347,7 +347,7 @@ export function usePublishDraft(): UsePublishDraftResult {
         if (failures.length > 0) setError(failures.join('; '));
         show({
           title: uiText('publishResultTitle', { status: complete.groupStatus }),
-          description: `${sentence}.`,
+          description: /[.!?]$/.test(sentence) ? sentence : `${sentence}.`,
           variant:
             complete.groupStatus === 'published'
               ? 'success'

@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'bun:test';
+import { createTranslator } from 'next-intl';
 
 import type {
   OrganicCalendarDraft,
   OrganicDraftGroupMember,
 } from '@/components/organic/primitives/types';
+import organic from '../../../messages/organic/en.json';
 import {
   defaultPublishAccount,
+  describePublishError,
   groupPublishBlocker,
   inferPublishPlatform,
   unpublishedMembers,
@@ -168,5 +171,24 @@ describe('defaultPublishAccount', () => {
       ),
     ).toBeNull();
     expect(defaultPublishAccount([candidate('a')], 'instagram')).toBeNull();
+  });
+});
+
+describe('describePublishError', () => {
+  const t = createTranslator({ locale: 'en', namespace: 'organic', messages: { organic } });
+
+  it("keeps the platform's own reason for an unknown code: it says what to fix", () => {
+    const reason = '(#200) The permission(s) pages_manage_posts are not available';
+    expect(describePublishError('api_error', reason, 'Facebook', t)).toBe(reason);
+  });
+
+  it('gives generic copy for a library string or JSON', () => {
+    const generic = t('publishErrorUnknown');
+    expect(describePublishError('api_error', 'TypeError: Failed to fetch', 'Facebook', t)).toBe(
+      generic,
+    );
+    expect(describePublishError('api_error', '{"error":{"code":190}}', 'Facebook', t)).toBe(
+      generic,
+    );
   });
 });

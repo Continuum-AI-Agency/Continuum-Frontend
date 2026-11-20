@@ -7,6 +7,7 @@ import {
 import type { useTranslations } from 'next-intl';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import type { UiLocale } from '@/i18n/config';
+import { isPlainSentence } from '@/lib/api/loadFailure';
 // draftReadiness reads inferPublishPlatform from here: a cycle that only resolves at call time.
 import { evaluateDraftReadiness } from './draftReadiness';
 import { groupMemberDrafts } from './groupDraft';
@@ -140,12 +141,13 @@ export function describePublishError(
       `Reconnect ${platform}: its connection expired or was revoked. Reconnect it in Integrations, then try again. We always post to the account you selected.`
     );
   }
-  if (translate && code !== 'unsupported_format')
-    return translate(
-      Object.hasOwn(PUBLISH_ERROR_KEYS, code)
-        ? PUBLISH_ERROR_KEYS[code as keyof typeof PUBLISH_ERROR_KEYS]
-        : 'publishErrorUnknown',
-    );
+  if (translate && code !== 'unsupported_format') {
+    if (Object.hasOwn(PUBLISH_ERROR_KEYS, code))
+      return translate(PUBLISH_ERROR_KEYS[code as keyof typeof PUBLISH_ERROR_KEYS]);
+    // An unknown code keeps the platform's own reason ("(#200) … pages_manage_posts …"): it is
+    // the only thing that says what to fix. A library string or JSON gets the generic copy.
+    return isPlainSentence(fallback) ? fallback.trim() : translate('publishErrorUnknown');
+  }
   return PUBLISH_ERROR_MESSAGES[code] ?? fallback;
 }
 

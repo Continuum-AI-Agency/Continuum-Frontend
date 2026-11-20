@@ -333,7 +333,7 @@ describe('usePublishDraft', () => {
     const toast = showMock.mock.calls.at(-1)?.[0];
     expect(toast.title).toBe('Partly published');
     expect(toast.description).toBe(
-      'Published to Instagram (@acme_a), Facebook (@acme_fb); LinkedIn (@acme_li) failed: The platform is temporarily rate-limiting requests. Wait a few minutes and try again..',
+      'Published to Instagram (@acme_a), Facebook (@acme_fb); LinkedIn (@acme_li) failed: The platform is temporarily rate-limiting requests. Wait a few minutes and try again.',
     );
     expect(result.current.error).toContain('LinkedIn (@acme_li) failed');
   });
