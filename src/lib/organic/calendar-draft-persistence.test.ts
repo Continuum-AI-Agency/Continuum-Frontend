@@ -750,6 +750,24 @@ describe('field-edit read derivations', () => {
     expect(mapped?.draft.hasCopy).toBe(true);
   });
 
+  // The row an approved plan leaves behind: status approved, content_json NULL, a brief.
+  it('reads an approved plan placement with no copy as its brief, not an empty "Saved draft"', () => {
+    const brief = 'Why typing invoices by hand costs a day a week';
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({
+        status: 'approved',
+        media_stage: 'text_only',
+        content_json: null,
+        slot_data: { dayId: '2026-04-21', brief, format: 'carousel', platform: 'linkedin' },
+      }),
+      days(),
+    );
+    expect(mapped?.draft.title).toBe(brief);
+    expect(mapped?.draft.brief).toBe(brief);
+    expect(mapped?.draft.hasCopy).toBe(false);
+    expect(mapped?.draft.status).toBe('draft');
+  });
+
   // The publisher reads the snapshot's format first (a format edit rewrites it too), so a
   // preview that read content first showed a carousel for a post that goes out as a reel.
   it("format follows the publisher's order: the snapshot's format first", () => {

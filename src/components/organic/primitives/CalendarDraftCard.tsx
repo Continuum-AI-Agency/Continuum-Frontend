@@ -21,6 +21,7 @@ import Image from 'next/image';
 import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveScheduleDraft';
+import { useLadderStepRequest } from '@/components/organic/hooks/useDraftEnrichmentLadder';
 import {
   scheduleFieldPatch,
   useDraftFieldEditor,
@@ -44,6 +45,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
+import { draftCopyGap } from '@/lib/organic/draftReadiness';
 import {
   isUnpublishedPastDue,
   ORGANIC_ACTION_LABELS,
@@ -264,6 +266,10 @@ export function CalendarDraftCard({
     (draft.status === 'draft' || draft.status === 'placeholder') &&
     (mediaStage === 'text_only' || mediaStage === 'storyboard_ready');
   const showHoverPreview = draft.status !== 'streaming' && draft.status !== 'placeholder';
+  // An empty draft offers nothing to enrich or publish yet: its one action is writing the copy.
+  const copyGap = draftCopyGap(draft);
+  const brandId = useCalendarStore((state) => state.accountContext.brandId);
+  const { requestStep, isBusy: isRequestingCopy } = useLadderStepRequest(brandId ?? undefined);
 
   // Drag start has to close an already-open preview, not merely refuse to open a new one.
   React.useEffect(() => {
@@ -552,6 +558,22 @@ export function CalendarDraftCard({
                       className="mt-1 text-2xs text-muted-foreground @max-[14rem]/draft-card:mt-0.5"
                     />
 
+                    {copyGap ? (
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <span className="min-w-0 truncate text-2xs italic text-muted-foreground/60 @max-[14rem]/draft-card:hidden">
+                          {copyGap === 'brief' ? 'Needs copy' : 'Empty draft — nothing written yet'}
+                        </span>
+                        {draft.backendDraftId ? (
+                          <CardStageAction
+                            label={copyGap === 'brief' ? 'Generate copy' : 'Generate with AI'}
+                            onActivate={() => {
+                              if (!isRequestingCopy) void requestStep(draft, 'copy');
+                            }}
+                          />
+                        ) : null}
+                      </p>
+                    ) : null}
+
                     {/* The compact card hides the error panel, but not the one action a failed
                         card exists to offer. A refused publish has none: regenerating cannot fix it. */}
                     {isFailed && onRegenerate && (draft.generationError || !draft.publishError) ? (
@@ -798,7 +820,7 @@ export function CalendarDraftCard({
                         <p className="mt-1.5">
                           <MediaStagePill mediaStage="failed" />
                         </p>
-                      ) : isTextOnlyDraft ? (
+                      ) : isTextOnlyDraft && !copyGap ? (
                         // The row wraps and the sentence truncates so the action keeps its full
                         // width at the narrowest planner column — it used to render as "En…".
                         <p className="mt-1.5 flex flex-wrap items-center gap-1.5">

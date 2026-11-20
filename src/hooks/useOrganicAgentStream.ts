@@ -149,7 +149,7 @@ export function useOrganicAgentStream(
         },
         isCurrent: (cancelledRunId) => runIdRef.current === cancelledRunId,
         reconcileCurrent: () => {
-          dispatch({ type: 'STREAM_COMPLETE' });
+          dispatch({ type: 'STREAM_COMPLETE', cancelled: true });
           detach();
         },
       });

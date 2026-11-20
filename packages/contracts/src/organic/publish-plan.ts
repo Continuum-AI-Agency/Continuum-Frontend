@@ -711,9 +711,14 @@ export const PUBLISH_PLATFORM_LABELS: Readonly<Record<PublishPlatform, string>> 
 
 const label = (platform: PublishPlatform): string => PUBLISH_PLATFORM_LABELS[platform];
 
-/** A format as people write it, on that platform: LinkedIn calls a reel a video post. */
+/**
+ * A format as people write it, on that platform: LinkedIn calls a reel a video post, and what
+ * we publish there as a carousel is a multi-image post (LinkedIn's own "carousel" is a PDF
+ * document, which the publisher does not send).
+ */
 export function publishFormatLabel(platform: PublishPlatform, format: PublishFormat): string {
   if (format === 'REEL' && platform === 'linkedin') return 'video post';
+  if (format === 'CAROUSEL' && platform === 'linkedin') return 'multi-image post';
   if (format === 'REEL' && platform === 'youtube') return 'Short';
   if (format === 'REEL' && (platform === 'facebook' || platform === 'x' || platform === 'tiktok'))
     return 'video';
@@ -755,6 +760,26 @@ export function unsupportedFormatMessage(platform: PublishPlatform, format: Publ
   const noun = publishFormatLabel(platform, format);
   const plural = noun === 'Story' ? 'Stories' : `${noun}s`;
   return `${label(platform)} doesn't publish ${plural}. Use ${article} ${list} instead.`;
+}
+
+// LinkedIn has neither shape under that name, and an agent that did not know it told users a
+// LinkedIn reel or carousel could not be made. Both publish; these say what goes out instead.
+const LINKEDIN_FORMAT_NOTICES: Partial<Record<PublishFormat, string>> = {
+  REEL: 'LinkedIn has no Reels: this one publishes as a native LinkedIn video post.',
+  CAROUSEL:
+    'LinkedIn publishes this carousel as a multi-image post; a PDF document carousel is not supported.',
+};
+
+/**
+ * What the user needs to hear about `format` on `platform`, or null: why it cannot publish
+ * and what to use instead, or what a format LinkedIn names differently publishes as.
+ */
+export function publishFormatNotice(
+  platform: PublishPlatform,
+  format: PublishFormat,
+): string | null {
+  if (!supportsFormat(platform, format)) return unsupportedFormatMessage(platform, format);
+  return platform === 'linkedin' ? (LINKEDIN_FORMAT_NOTICES[format] ?? null) : null;
 }
 
 /**

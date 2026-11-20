@@ -87,7 +87,9 @@ export function applyOrganicFrame(
       dispatch({ type: 'STREAM_RETRYING', attempt: parsed.attempt, reason: parsed.reason });
       break;
     case 'complete':
-      if (mode === 'chat') dispatch({ type: 'STREAM_COMPLETE' });
+      if (mode === 'chat') {
+        dispatch({ type: 'STREAM_COMPLETE', ...(parsed.cancelled ? { cancelled: true } : {}) });
+      }
       return true;
     case 'uiCard':
       if (mode === 'control') break;

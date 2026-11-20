@@ -479,7 +479,8 @@ export type BillingPaymentRequiredInput = Pick<
   'error' | 'product' | 'planCode'
 > & { brandId?: string | null };
 
-const PLAN_DISPLAY_NAMES: Record<PlanCode, string> = {
+/** The self-serve plans as the UI names them. */
+export const PLAN_DISPLAY_NAMES: Record<PlanCode, string> = {
   organic_studio: 'Organic Plus',
   paid_media: 'Performance Plus',
   trends_plus: 'Trends+',
@@ -651,6 +652,19 @@ export const adminAccessUpdateResponseSchema = z
     changes: z.array(adminAccessChangeSchema),
     access: adminBrandAccessSchema,
     entitlements: brandEntitlementsSchema,
+    /**
+     * Present when the request turned on studio / organic_agent (or full access): whether
+     * `billing.ensure_admin_plan_period` opened the brand's Organic Plus period, and why not.
+     */
+    planPeriod: z
+      .object({
+        opened: z.boolean(),
+        reason: z.string(),
+        periodStart: z.string().optional(),
+        periodEnd: z.string().optional(),
+      })
+      .strict()
+      .optional(),
     note: z.string().optional(),
   })
   .strict();
