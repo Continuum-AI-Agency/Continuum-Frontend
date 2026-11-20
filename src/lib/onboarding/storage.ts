@@ -7,7 +7,11 @@ import type { AuthIdentity } from '@/lib/auth/identity';
 import { getFunctionsInvokeErrorMessage } from '@/lib/supabase/functions-errors';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database, Json } from '@/lib/supabase/types';
-import { canPersistBrandRecord } from './brandRecordGuard';
+import {
+  adoptBrandRecord,
+  type BrandRecordFields,
+  canPersistBrandRecord,
+} from './brandRecordGuard';
 import {
   findMatchingActiveBrandId,
   findPendingInviteBrandId,
@@ -78,6 +82,20 @@ function resolveBrandProfileName(state?: OnboardingState): string {
     return candidate;
   }
   return 'Untitled Brand';
+}
+
+async function fetchBrandRecordFields(
+  supabase: SupabaseOnboardingClient,
+  brandId: string,
+): Promise<BrandRecordFields | null> {
+  const { data, error } = await supabase
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .select('brand_name, logo_path, completed_at, email_report_opt_in')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (error && error.code !== 'PGRST116') throw error;
+  return (data as BrandRecordFields | null) ?? null;
 }
 
 /** The state fields ensureBrandProfileRecord writes to the brand row. */
@@ -773,6 +791,8 @@ async function loadOnboardingContext(requestedBrandId?: string): Promise<Onboard
     }
   }
 
+  const savedBrandIds = new Set(Object.keys(metadata.brands));
+
   if (Object.keys(metadata.brands).length === 0) {
     // Prefer a brand the user already has access to (owner OR member). If none,
     // check for a PENDING invite by email BEFORE minting a new brand: an invited
@@ -792,6 +812,17 @@ async function loadOnboardingContext(requestedBrandId?: string): Promise<Onboard
     brandId,
     dirty,
   } = ensureActiveBrand(metadata, owner, requestedBrandId);
+
+  if (!savedBrandIds.has(brandId)) {
+    const record = await fetchBrandRecordFields(supabase, brandId);
+    if (record) {
+      normalizedMetadata.brands[brandId] = adoptBrandRecord(
+        normalizedMetadata.brands[brandId],
+        record,
+      );
+      dirty = true;
+    }
+  }
 
   if (dirty) {
     await persistMetadata(supabase, user, normalizedMetadata);
