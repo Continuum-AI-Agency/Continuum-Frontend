@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HomeBoardTile } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { homeCtx } from './__fixtures__/ctx';
 import {
   EASY_FIT_FLIGHT,

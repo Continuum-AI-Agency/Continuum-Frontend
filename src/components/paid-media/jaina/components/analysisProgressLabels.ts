@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // What a Jaina progress line says, in words the person waiting can read.
 //
 // The Backend's `response.analysis.progress` rows carry a stable code — a layer id from
@@ -41,7 +45,13 @@ const HYPOTHESIS_LABEL: Record<JainaHypothesis, string> = {
 
 /** The line a progress row prints. A code this build does not know yet reads as a generic
  *  step rather than leaking the engine's own label. */
-export function analysisProgressLabel(row: JainaAnalysisProgress): string {
+export function analysisProgressLabel(row: JainaAnalysisProgress, uiTranslate?: ScaleCopy): string {
+  if (uiTranslate) {
+    if (row.kind === 'layer') return uiTranslate('jainaAnalysisLayer', { layer: row.id });
+    if (row.kind === 'hypothesis')
+      return uiTranslate('jainaAnalysisHypothesis', { hypothesis: row.id });
+    return row.label;
+  }
   switch (row.kind) {
     case 'layer': {
       const layer = jainaLayerSchema.safeParse(row.id);

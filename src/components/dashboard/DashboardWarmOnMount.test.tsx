@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { WARM_LEASE_LONG_MS, warmLeaseKey } from '@/lib/dashboard/warm-lease';
 

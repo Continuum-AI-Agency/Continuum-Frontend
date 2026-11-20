@@ -1,4 +1,5 @@
 import { isStudioGenerationErrorCode, type StudioGenerationErrorCode } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 
 // What the person at the canvas is told when a generation fails, keyed on the code
 // the Backend stamps on the SSE error frame.
@@ -48,10 +49,27 @@ const MODEL_UNAVAILABLE_SUGGESTION = 'Nano Banana 2 is the closest match.';
 export const generationErrorCopy = (
   code: unknown,
   fallbackMessage?: string,
+  translate?: ReturnType<typeof useTranslations<'studio'>>,
 ): GenerationErrorCopy => {
+  const message = fallbackMessage?.trim();
+  if (translate) {
+    if (!isStudioGenerationErrorCode(code)) {
+      return {
+        title: translate(GENERATION_FALLBACK_KEYS.title),
+        guidance: message || translate(GENERATION_FALLBACK_KEYS.guidance),
+      };
+    }
+    const keys = GENERATION_ERROR_KEYS[code];
+    if (code === 'model_unavailable' && message) {
+      return {
+        title: translate(keys.title),
+        guidance: `${message} ${translate('nano_banana_2_is_the_closest_match_4f86d98')}`,
+      };
+    }
+    return { title: translate(keys.title), guidance: translate(keys.guidance) };
+  }
   if (isStudioGenerationErrorCode(code)) {
     const copy = COPY[code];
-    const message = fallbackMessage?.trim();
     if (code === 'model_unavailable' && message) {
       return { title: copy.title, guidance: `${message} ${MODEL_UNAVAILABLE_SUGGESTION}` };
     }
@@ -59,6 +77,21 @@ export const generationErrorCopy = (
   }
   return {
     title: FALLBACK_TITLE,
-    guidance: fallbackMessage?.trim() || 'Something went wrong while generating. Try again.',
+    guidance: message || 'Something went wrong while generating. Try again.',
   };
 };
+
+const GENERATION_FALLBACK_KEYS = {
+  title: 'generationFailedTitle',
+  guidance: 'generationFailedGuidance',
+} as const;
+const GENERATION_ERROR_KEYS = {
+  image_blocked: {
+    title: 'generationImageBlockedTitle',
+    guidance: 'generationImageBlockedGuidance',
+  },
+  image_empty_response: { title: 'generationEmptyTitle', guidance: 'generationEmptyGuidance' },
+  model_unavailable: { title: 'generationModelTitle', guidance: 'generationModelGuidance' },
+  credits_exhausted: { title: 'generationCreditsTitle', guidance: 'generationCreditsGuidance' },
+  product_required: { title: 'generationPlanTitle', guidance: 'generationPlanGuidance' },
+} as const satisfies Record<StudioGenerationErrorCode, { title: string; guidance: string }>;

@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, Loader2, Search } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrandAvatar } from '@/components/brand/BrandAvatar';
 import type { BrandPermission, BrandSummary } from '@/components/DashboardLayoutShell';
@@ -17,6 +18,8 @@ type UserBrandsPanelProps = {
 };
 
 export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
+  const tUi = useTranslations('settings');
+
   const { activeBrandId, brandSummaries, isSwitching, switchingToBrandId, user } =
     useActiveBrandContext();
   const switchBrand = useSwitchBrand();
@@ -87,7 +90,7 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
   if (!isLoading && brands.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-5 py-10 text-center text-sm text-muted-foreground">
-        You haven&apos;t joined any brands yet.
+        {tUi('m_dbecdf5a29')}
       </div>
     );
   }
@@ -102,8 +105,8 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
         <Input
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search brands"
-          aria-label="Search your brands"
+          placeholder={tUi('m_18bae3e520')}
+          aria-label={tUi('m_26364067c7')}
           className="pl-9"
         />
       </div>
@@ -112,7 +115,7 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
         className="max-h-[min(520px,calc(100vh-21rem))] overflow-y-auto rounded-lg border border-border/60 bg-card/20"
       >
         {isLoading && loadedBrands.length === 0 ? (
-          <div className="space-y-3 px-4 py-4" role="status" aria-label="Loading brands">
+          <div className="space-y-3 px-4 py-4" role="status" aria-label={tUi('m_6f77e61352')}>
             {Array.from({ length: 5 }).map((_, index) => (
               <div key={index} className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-muted/70" />
@@ -143,22 +146,18 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
           </ul>
         ) : (
           <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-            No brands match your search.
+            {tUi('m_f737f9400e')}
           </div>
         )}
         <div ref={sentinelRef} className="h-px" aria-hidden />
         {isFetchingNextPage ? (
           <div className="flex items-center justify-center gap-2 border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            Loading more brands
+            {tUi('m_a7a883080e')}
           </div>
         ) : null}
       </div>
-      {isError ? (
-        <p className="text-xs text-destructive">
-          Brand pagination failed. Showing the brands already loaded for this session.
-        </p>
-      ) : null}
+      {isError ? <p className="text-xs text-destructive">{tUi('m_f7c0bbbc35')}</p> : null}
     </div>
   );
 }
@@ -182,6 +181,8 @@ function BrandRow({
   disabled,
   onSwitch,
 }: BrandRowProps) {
+  const tUi = useTranslations('settings');
+
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <BrandAvatar name={brand.name} logoUrl={brand.logoUrl ?? null} size="lg" />
@@ -191,19 +192,19 @@ function BrandRow({
           {isActive ? (
             <Badge variant="secondary" className="gap-1 text-2xs">
               <Check className="h-3 w-3" />
-              Active
+              {tUi('m_a733b809d2')}
             </Badge>
           ) : null}
           {isPending ? (
             <Badge variant="outline" className="text-2xs">
-              Invite pending
+              {tUi('m_639770fefc')}
             </Badge>
           ) : null}
         </div>
         {role ? <p className="text-xs capitalize text-muted-foreground">{role}</p> : null}
       </div>
       {isActive ? (
-        <span className="text-xs text-muted-foreground">Current</span>
+        <span className="text-xs text-muted-foreground">{tUi('m_4fc0e2bc80')}</span>
       ) : (
         <Button
           variant="outline"
@@ -215,10 +216,10 @@ function BrandRow({
           {isSwitching ? (
             <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              Switching…
+              {tUi('m_ca40b0ec34')}
             </>
           ) : (
-            'Switch'
+            tUi('m_3e44c92042')
           )}
         </Button>
       )}

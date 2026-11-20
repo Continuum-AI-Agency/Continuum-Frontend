@@ -12,6 +12,7 @@ import {
   type MediaComment,
   parseCommentMentions,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type CommentAuthor,
@@ -26,8 +27,8 @@ import {
   upsertComment,
 } from '@/lib/library/comments';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { getSessionUser } from '@/lib/supabase/sessionUser';
 import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
+import { getSessionUser } from '@/lib/supabase/sessionUser';
 
 export type PostCommentInput = {
   body: string;
@@ -71,6 +72,8 @@ export type UseAssetCommentsResult = {
 };
 
 export function useAssetComments(brandId: string, assetId: string): UseAssetCommentsResult {
+  const translateUi = useUiTranslations('library');
+
   const [comments, setComments] = useState<MediaComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +119,7 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
       .catch((err: unknown) => {
         if (cancelled) return;
         console.error('[useAssetComments] list failed', err);
-        setError('Could not load comments.');
+        setError(translateUi('could_not_load_comments_87295f6a'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -125,7 +128,7 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
     return () => {
       cancelled = true;
     };
-  }, [brandId, assetId]);
+  }, [brandId, assetId, translateUi]);
 
   useEffect(() => {
     const applyComment = (row: MediaCommentRow) => {
@@ -219,7 +222,7 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
           created = await applyReviewMetadata(created, input, brandId);
         } catch (metadataError: unknown) {
           console.error('[useAssetComments] review metadata failed', metadataError);
-          setError('Comment posted, but its attachments or sharing could not be saved.');
+          setError(translateUi('comment_posted_but_its_attachments__cd981a95'));
         }
         setComments((prev) =>
           upsertComment(
@@ -231,13 +234,13 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
       } catch (err: unknown) {
         console.error('[useAssetComments] post failed', err);
         setComments((prev) => prev.filter((c) => c.id !== tempId));
-        setError('Could not post comment.');
+        setError(translateUi('could_not_post_comment_7cc9ca09'));
         return null;
       } finally {
         markPending(tempId, false);
       }
     },
-    [brandId, assetId, markPending],
+    [brandId, assetId, markPending, translateUi],
   );
 
   const setResolved = useCallback(
@@ -248,10 +251,14 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
         setComments((prev) => upsertComment(prev, updated));
       } catch (err: unknown) {
         console.error('[useAssetComments] resolve failed', err);
-        setError(resolved ? 'Could not resolve thread.' : 'Could not reopen thread.');
+        setError(
+          resolved
+            ? translateUi('could_not_resolve_thread_08ed9637')
+            : translateUi('could_not_reopen_thread_002da427'),
+        );
       }
     },
-    [brandId],
+    [brandId, translateUi],
   );
 
   const removeComment = useCallback(
@@ -262,10 +269,10 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
         setComments((prev) => prev.filter((c) => c.id !== commentId));
       } catch (err: unknown) {
         console.error('[useAssetComments] delete failed', err);
-        setError('Could not delete comment.');
+        setError(translateUi('could_not_delete_comment_cd440da1'));
       }
     },
-    [brandId],
+    [brandId, translateUi],
   );
 
   return useMemo(

@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // The engine half of the brand surface.
 //
@@ -15,7 +16,7 @@
 
 import type { DesignSystemFontFace, DesignSystemSnapshot } from '@continuum/contracts';
 import { useMemo } from 'react';
-import { NO_SPECIMEN_NOTE, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
+import { NoSpecimenText, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import {
   type BrandFacts,
@@ -38,14 +39,19 @@ export interface BrandEnginePanelsProps {
 }
 
 export function BrandEnginePanels({ snapshot, fontsInStore }: BrandEnginePanelsProps) {
-  const layout = useMemo(() => deriveLayoutSpec(snapshot), [snapshot]);
-  const typography = useMemo(
-    () => deriveTypeInventory(snapshot, fontsInStore),
-    [snapshot, fontsInStore],
+  const uiLocale = useLocale();
+  const tUi = useTranslations('settings');
+  const layout = useMemo(
+    () => deriveLayoutSpec(snapshot, tUi, uiLocale),
+    [snapshot, tUi, uiLocale],
   );
-  const colours = useMemo(() => deriveColourUsage(snapshot), [snapshot]);
-  const facts = useMemo(() => deriveBrandFacts(snapshot), [snapshot]);
-  const ledger = useMemo(() => deriveRuleLedger(snapshot), [snapshot]);
+  const typography = useMemo(
+    () => deriveTypeInventory(snapshot, fontsInStore, tUi),
+    [snapshot, fontsInStore, tUi],
+  );
+  const colours = useMemo(() => deriveColourUsage(snapshot, tUi), [snapshot, tUi]);
+  const facts = useMemo(() => deriveBrandFacts(snapshot, tUi), [snapshot, tUi]);
+  const ledger = useMemo(() => deriveRuleLedger(snapshot, tUi), [snapshot, tUi]);
 
   return (
     <div className="space-y-4" data-testid="brand-engine-panels">
@@ -121,6 +127,8 @@ function Row({ row, testId, valueTestId }: { row: SpecRow; testId: string; value
 
 /** Right-aligned, small, grey — the receipt, not the claim. */
 function Provenance({ source, testId }: { source: string | null; testId: string }) {
+  const tUi = useTranslations('settings');
+
   return source ? (
     <span
       className="shrink-0 text-right text-xs text-secondary"
@@ -135,7 +143,7 @@ function Provenance({ source, testId }: { source: string | null; testId: string 
       data-testid={testId}
       data-provenance="none"
     >
-      no source recorded
+      {tUi('m_4ecc0f8bba')}
     </span>
   );
 }
@@ -143,13 +151,15 @@ function Provenance({ source, testId }: { source: string | null; testId: string 
 /* ── 1. Layout spec ─────────────────────────────────────────────────────────── */
 
 function LayoutSpecPanel({ spec }: { spec: LayoutSpec }) {
+  const tUi = useTranslations('settings');
+
   return (
     <Panel
-      title="Layout spec"
+      title={tUi('m_6851c4712c')}
       note={
         spec.baseWidth === null
-          ? 'Ratios and fractions only — a pixel is true for exactly one canvas.'
-          : `Measured against a ${spec.baseWidth} px base. Every value below is a ratio or a fraction of the frame; a format's own size is the only pixel pair here, and it sits in the note.`
+          ? tUi('brandLayoutFractionNote')
+          : tUi('brandLayoutMeasuredNote', { width: spec.baseWidth })
       }
       testId="brand-panel-layout"
     >
@@ -169,22 +179,19 @@ function LayoutSpecPanel({ spec }: { spec: LayoutSpec }) {
 /* ── 2. Typography ──────────────────────────────────────────────────────────── */
 
 function TypeInventoryPanel({ inventory }: { inventory: TypeInventory }) {
+  const tUi = useTranslations('settings');
+
   return (
     <Panel
-      title="Typography — what the engine can actually set"
-      note="One row per family per weight. The badge is a fact about the font store, not about the document: a face we do not hold is a face your pieces will not ship in."
+      title={tUi('m_c3b1b863ae')}
+      note={tUi('brandFontInventoryNote')}
       testId="brand-panel-type"
     >
       {inventory.absent ? (
         <Instruction>{inventory.absent}</Instruction>
       ) : (
         <>
-          {inventory.storeUnknown ? (
-            <Instruction>
-              This Backend did not report the font store, so no row below can be trusted either way.
-              Update the Backend, or re-open this page once it is running.
-            </Instruction>
-          ) : null}
+          {inventory.storeUnknown ? <Instruction>{tUi('m_9f4f114247')}</Instruction> : null}
           <div>
             {inventory.rows.map((row) => (
               <div
@@ -208,7 +215,9 @@ function TypeInventoryPanel({ inventory }: { inventory: TypeInventory }) {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-secondary">{NO_SPECIMEN_NOTE}</p>
+          <p className="mt-3 text-xs text-secondary">
+            <NoSpecimenText />
+          </p>
         </>
       )}
     </Panel>
@@ -218,17 +227,16 @@ function TypeInventoryPanel({ inventory }: { inventory: TypeInventory }) {
 /* ── 3. Colour, twice ───────────────────────────────────────────────────────── */
 
 function ColourUsagePanel({ rows }: { rows: ColourRow[] }) {
+  const tUi = useTranslations('settings');
+
   return (
     <Panel
-      title="Colour"
-      note="The strip is recognition. The table under it is the rule — the part a generator can be held to."
+      title={tUi('m_f28563a477')}
+      note={tUi('brandPaletteRulesNote')}
       testId="brand-panel-colour"
     >
       {rows.length === 0 ? (
-        <Instruction>
-          No literal colour token in this system. A palette reaches generation only as resolvable
-          hex values — import a token file, or record the hexes on the Palette card above.
-        </Instruction>
+        <Instruction>{tUi('m_2bc35d0446')}</Instruction>
       ) : (
         <>
           <div className="flex flex-wrap gap-1.5" data-testid="colour-strip">
@@ -239,7 +247,7 @@ function ColourUsagePanel({ rows }: { rows: ColourRow[] }) {
                 // as a hole in the card.
                 className="size-8 rounded-md border border-black/15 dark:border-white/20"
                 style={{ backgroundColor: row.hex }}
-                title={`${row.name} ${row.hex}`}
+                title={tUi('m_a79fb214ea', { v0: String(row.name), v1: String(row.hex) })}
                 data-testid="colour-swatch"
                 data-hex={row.hex}
               />
@@ -280,22 +288,23 @@ function ColourUsagePanel({ rows }: { rows: ColourRow[] }) {
 /* ── 4. Facts ───────────────────────────────────────────────────────────────── */
 
 function BrandFactsPanel({ facts }: { facts: BrandFacts }) {
+  const tUi = useTranslations('settings');
+
   return (
     <Panel
-      title="Facts an agent may state"
+      title={tUi('m_ac07178510')}
       note={
         facts.withoutProvenance === 0
-          ? 'Every fact below carries a source. Anything not on this list, a model is inventing.'
-          : `${facts.withoutProvenance} of ${facts.rows.length} facts below carry no source. They still reach the model — that gap is shown rather than filled in.`
+          ? tUi('brandFactsSourcesNote')
+          : tUi('brandFactsMissingSourcesNote', {
+              count: facts.withoutProvenance,
+              total: facts.rows.length,
+            })
       }
       testId="brand-panel-facts"
     >
       {facts.rows.length === 0 ? (
-        <Instruction>
-          Nothing recorded that an agent could state as fact. Import a design system or record the
-          palette, typefaces and formats on the cards above — until then every brand detail in a
-          generated piece is the model&apos;s invention.
-        </Instruction>
+        <Instruction>{tUi('m_ad764e13d0')}</Instruction>
       ) : (
         <div>
           {facts.rows.map((row) => (
@@ -317,14 +326,16 @@ function BrandFactsPanel({ facts }: { facts: BrandFacts }) {
 /* ── 5. Rules, by measurement ───────────────────────────────────────────────── */
 
 function RuleMeasurementPanel({ ledger }: { ledger: RuleLedger }) {
+  const tUi = useTranslations('settings');
+
   const inert = ledger.rules.filter((rule) => rule.enforcedBy === null).length;
   return (
     <Panel
-      title="Rules, by measurement"
+      title={tUi('m_2b28d77721')}
       note={
         ledger.rules.length === 0
-          ? 'A rule carries a measurement. Without one it is a preference, and it is filed below.'
-          : `${ledger.rules.length} measurable, of which ${inert} are stored and nothing runs them yet. Storing a rule is not enforcing it, and this panel will not say otherwise.`
+          ? tUi('brandRuleMeasurementNote')
+          : tUi('brandStoredRulesNote', { count: ledger.rules.length, inert })
       }
       testId="brand-panel-rules"
     >
@@ -346,9 +357,9 @@ function RuleMeasurementPanel({ ledger }: { ledger: RuleLedger }) {
                 </p>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <Badge variant={rule.severity === 'blocking' ? 'destructive' : 'warning'}>
-                    {rule.severity === 'blocking' ? 'blocks' : 'warns'}
+                    {rule.severity === 'blocking' ? tUi('m_f7d5b2b958') : tUi('m_a5ee1e8d24')}
                   </Badge>
-                  {rule.learned ? <Badge variant="muted">learned</Badge> : null}
+                  {rule.learned ? <Badge variant="muted">{tUi('m_de31af58da')}</Badge> : null}
                 </div>
               </div>
               <p className="mt-0.5 text-xs text-secondary">
@@ -359,14 +370,15 @@ function RuleMeasurementPanel({ ledger }: { ledger: RuleLedger }) {
                   className="mt-1 text-xs text-amber-700 dark:text-amber-300"
                   data-testid="rule-inert"
                 >
-                  stored, not wired to a checker — nothing runs this against a rendered piece
+                  {tUi('m_935e82eb84')}
                 </p>
               ) : (
                 <p
                   className="mt-1 text-xs text-emerald-700 dark:text-emerald-300"
                   data-testid="rule-checker"
                 >
-                  run by {rule.enforcedBy}
+                  {tUi('m_53360b93a8')}
+                  {rule.enforcedBy}
                 </p>
               )}
             </div>
@@ -377,7 +389,8 @@ function RuleMeasurementPanel({ ledger }: { ledger: RuleLedger }) {
       {ledger.pending.length > 0 ? (
         <div className="mt-4 border-t border-border pt-3">
           <p className="text-xs font-medium text-foreground">
-            Pending — real, and not yet machine-checkable ({ledger.pending.length})
+            {tUi('m_ae17b8a7c3')}
+            {ledger.pending.length})
           </p>
           <div className="mt-1">
             {ledger.pending.map((row) => (

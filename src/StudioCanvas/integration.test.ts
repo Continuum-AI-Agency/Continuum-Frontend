@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { Edge } from '@xyflow/react';
+import { createTranslator } from 'next-intl';
+import studioMessages from '../../messages/studio/en.json';
 import { useStudioStore } from './stores/useStudioStore';
 import type { StudioNode } from './types';
 import { executeWorkflow } from './utils/executeWorkflow';
@@ -108,6 +110,11 @@ describe('StudioCanvas Integration', () => {
     });
 
     const controls = {
+      translateUi: createTranslator({
+        locale: 'en',
+        messages: { studio: studioMessages },
+        namespace: 'studio',
+      }),
       executeGeneration,
       cancel: () => {},
       reset: () => {},

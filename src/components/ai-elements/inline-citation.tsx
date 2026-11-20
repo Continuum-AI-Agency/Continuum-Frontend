@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowLeftIcon, ArrowRightIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -35,21 +36,24 @@ export const InlineCitationCardTrigger = ({
   sources,
   className,
   ...props
-}: InlineCitationCardTriggerProps) => (
-  <HoverCardTrigger
-    render={
-      <Badge className={cn('ml-1 rounded-full', className)} variant="secondary" {...props}>
-        {sources[0] ? (
-          <>
-            {new URL(sources[0]).hostname} {sources.length > 1 && `+${sources.length - 1}`}
-          </>
-        ) : (
-          'unknown'
-        )}
-      </Badge>
-    }
-  />
-);
+}: InlineCitationCardTriggerProps) => {
+  const tUi = useTranslations('common');
+  return (
+    <HoverCardTrigger
+      render={
+        <Badge className={cn('ml-1 rounded-full', className)} variant="secondary" {...props}>
+          {sources[0] ? (
+            <>
+              {new URL(sources[0]).hostname} {sources.length > 1 && `+${sources.length - 1}`}
+            </>
+          ) : (
+            tUi('m_50d8b4a941')
+          )}
+        </Badge>
+      }
+    />
+  );
+};
 
 export type InlineCitationCardBodyProps = ComponentProps<'div'>;
 
@@ -161,6 +165,7 @@ export const InlineCitationCarouselPrev = ({
   className,
   ...props
 }: InlineCitationCarouselPrevProps) => {
+  const uiText = useTranslations('common');
   const api = useCarouselApi();
 
   const handleClick = useCallback(() => {
@@ -171,7 +176,7 @@ export const InlineCitationCarouselPrev = ({
 
   return (
     <button
-      aria-label="Previous"
+      aria-label={uiText('previous_a57b08a')}
       className={cn('shrink-0', className)}
       onClick={handleClick}
       type="button"
@@ -188,6 +193,7 @@ export const InlineCitationCarouselNext = ({
   className,
   ...props
 }: InlineCitationCarouselNextProps) => {
+  const uiText = useTranslations('common');
   const api = useCarouselApi();
 
   const handleClick = useCallback(() => {
@@ -198,7 +204,7 @@ export const InlineCitationCarouselNext = ({
 
   return (
     <button
-      aria-label="Next"
+      aria-label={uiText('next_1ff57a2')}
       className={cn('shrink-0', className)}
       onClick={handleClick}
       type="button"

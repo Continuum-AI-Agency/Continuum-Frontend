@@ -8,7 +8,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -37,11 +38,21 @@ describe('touch targets that sit side by side', () => {
   it("the Scale bar's right-hand controls are a row of pads, Creative Insights included", () => {
     // PaidMediaClient is not rendered here (it reads every paid-media hook); its source is.
     const source = readFileSync(
-      join(import.meta.dir, '..', '..', 'app', '(post-auth)', 'scale', 'PaidMediaClient.tsx'),
+      join(
+        import.meta.dir,
+        '..',
+        '..',
+        'app',
+        '[locale]',
+        '(post-auth)',
+        'scale',
+        'PaidMediaClient.tsx',
+      ),
       'utf8',
     );
+    // The Full screen label is localized, so the source carries its catalog key.
     expect(source).toMatch(
-      /className="[^"]*\bhit-area-row\b[^"]*"[^>]*>\s*\{\/\*[\s\S]*?Full screen/,
+      /className="[^"]*\bhit-area-row\b[^"]*"[^>]*>\s*\{\/\*[\s\S]*?uiText\('full_screen_/,
     );
     const insights = /data-testid="whats-working-link"[\s\S]*?className=\{cn\(\s*'([^']*)'/.exec(
       source,

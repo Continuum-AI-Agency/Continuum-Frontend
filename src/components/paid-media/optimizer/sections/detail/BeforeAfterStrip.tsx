@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // The last cycle in one line (portafolio.html, idea 09, folded into the module of
 // portafolio-unificado.html, idea D): what the last cycle proposed and what landed, and the
@@ -27,6 +28,8 @@ const ifThePausesLand = (pauses: number): string =>
   pauses === 1 ? 'If the pause lands' : `If the ${pauses} pauses land`;
 
 export function BeforeAfterStrip({ model, currency, words, target }: BeforeAfterStripProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const { lastCycle, projection } = model;
   return (
     <section
@@ -37,12 +40,13 @@ export function BeforeAfterStrip({ model, currency, words, target }: BeforeAfter
       <p>
         <span data-testid="before-after-cycle">
           {lastCycle
-            ? `Last cycle, ${lastCycle.when}: ${
-                lastCycle.proposed
+            ? uiText('template_2363ae960d35', {
+                v0: lastCycle.when,
+                v1: lastCycle.proposed
                   ? `${lastCycle.proposed}; ${lastCycle.applied}.`
-                  : 'nothing proposed.'
-              }`
-            : 'No cycle yet.'}
+                  : uiText('nothing_proposed_dadf78b'),
+              })
+            : uiText('no_cycle_yet_4d642d8')}
         </span>
         {projection ? (
           <>
@@ -50,28 +54,33 @@ export function BeforeAfterStrip({ model, currency, words, target }: BeforeAfter
             <span data-testid="before-after-projection">
               {projection.cost == null ? (
                 <>
-                  {ifThePausesLand(projection.pauses)}, the {count(projection.remaining)} remaining
-                  ad sets bought no {words.many} in this window.
+                  {uiText.rich('sentence_07a4edb57386', {
+                    pauses: projection.pauses,
+                    remaining: projection.remaining,
+                    results: words.many,
+                  })}
                 </>
               ) : (
                 <>
-                  {ifThePausesLand(projection.pauses)}, the projected cost with the{' '}
-                  {count(projection.remaining)} remaining ad sets is{' '}
-                  <span
-                    className="font-mono text-foreground tabular-nums"
-                    {...figureProps(
-                      'before-after.projection.cost',
-                      projection.cost,
-                      currency,
-                      projection.window,
-                    )}
-                  >
-                    {formatCurrency(projection.cost, currency)}
-                  </span>
-                  {projection.vsTarget && target != null
-                    ? `, ${projection.vsTarget} the target of ${formatCurrency(target, currency)}`
-                    : ''}
-                  .
+                  {uiText.rich('sentence_d6cde29543f7', {
+                    pauses: projection.pauses,
+                    remaining: projection.remaining,
+                    cost: () => (
+                      <span
+                        className="font-mono text-foreground tabular-nums"
+                        {...figureProps(
+                          'before-after.projection.cost',
+                          projection.cost,
+                          currency,
+                          projection.window,
+                        )}
+                      >
+                        {formatCurrency(projection.cost, currency, uiLocale)}
+                      </span>
+                    ),
+                    comparison: target != null ? (projection.vsTarget ?? 'none') : 'none',
+                    target: target != null ? formatCurrency(target, currency, uiLocale) : '',
+                  })}
                 </>
               )}
             </span>

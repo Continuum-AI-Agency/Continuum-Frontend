@@ -7,6 +7,7 @@ import {
   deriveEfficiency,
   formatCpa,
   formatCurrency,
+  formatCurrencyExact,
   formatHeadline,
   formatPercent,
   formatPerPeriod,
@@ -14,6 +15,23 @@ import {
   nextCycleLabel,
   soonestNextCycle,
 } from './format';
+
+describe('localized account figures', () => {
+  it('changes separators without changing the account currency or precision', () => {
+    expect(formatCurrency(4200, 'MXN', 'pt-BR')).toBe('$4.200 MXN');
+    expect(formatCpa(28.6, 'USD', 'es')).toBe('$28,60 USD');
+    expect(formatCurrencyExact(-957.68, 'MXN', 2, 'pt-BR')).toBe('-$957,68 MXN');
+    expect(formatCurrency(25.54, null, 'pt-BR')).toBe('25,54');
+  });
+
+  it('keeps percentages in display units and localizes only presentation', () => {
+    expect(formatPercent(33.25, { fractionDigits: 2 }, 'pt-BR')).toBe('33,25%');
+    expect(formatPercent(33.25, { signed: true, fractionDigits: 2 }, 'es')).toBe('+33,25%');
+    expect(
+      formatHeadline({ value: 4200, unit: 'count', label: 'source-owned label' }, null, 'pt-BR'),
+    ).toEqual({ figure: '4.200', label: 'source-owned label' });
+  });
+});
 
 describe('formatCurrency', () => {
   it('formats a USD figure at or above 100 whole', () => {

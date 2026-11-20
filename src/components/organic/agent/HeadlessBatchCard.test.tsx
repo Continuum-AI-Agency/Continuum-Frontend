@@ -15,8 +15,9 @@ import {
   QueryClientProvider,
   timeoutManager,
 } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import type { ReadHeadlessBatchStatus } from '@/lib/organic-agent/headlessBatch';
 

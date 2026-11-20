@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { appendDictation, DictationButton } from './DictationButton';
 
 type Handler = ((event: unknown) => void) | null;

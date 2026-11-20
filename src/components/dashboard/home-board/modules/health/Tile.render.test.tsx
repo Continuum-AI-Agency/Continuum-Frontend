@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HomeAccountHygieneData, HomeBoardTile } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { deriveDashboardSetup } from '@/components/dashboard/first-run/setupState';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeReadLoad } from '../../homeRead';
 import { EASY_FIT_GOOGLE, EASY_FIT_META, homeCtx } from '../pacing/__fixtures__/ctx';
 import {

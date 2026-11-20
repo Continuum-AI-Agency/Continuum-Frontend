@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { type AccountCandidate, accountCandidateSchema } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { GoogleDeliveryStatus } from './GoogleDeliveryStatus';
 
 // The status block the Google tab leads with when Google shows no ad in the whole account

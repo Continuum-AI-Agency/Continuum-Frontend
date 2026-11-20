@@ -1,13 +1,9 @@
 'use client';
-
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
-
 import { useToast } from '@/components/ui/ToastProvider';
-import {
-  DraftEnrichmentConflictError,
-  enqueueBlueprintExpansion,
-  enqueueCopyGeneration,
-} from '@/lib/organic/draftEnrichment';
+import { useUiErrorSentence } from '@/i18n/errors';
+import { enqueueBlueprintExpansion, enqueueCopyGeneration } from '@/lib/organic/draftEnrichment';
 import { useCalendarStore } from '@/lib/organic/store';
 import { useDestructiveConfirmation } from '../primitives/DestructiveConfirmation';
 import { resolveDraftMediaStage } from '../primitives/DraftLifecycle';
@@ -65,6 +61,8 @@ type LadderOptions = {
  * card's own Generate action both run through it, so the two cannot behave differently.
  */
 export function useLadderStepRequest(brandProfileId: string | undefined) {
+  const uiText = useTranslations('organic');
+  const formatUiError = useUiErrorSentence();
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const { show } = useToast();
   const [isBusy, setIsBusy] = React.useState(false);
@@ -94,20 +92,16 @@ export function useLadderStepRequest(brandProfileId: string | undefined) {
           generationStage: step === 'copy' ? 'Generating copy…' : 'Building blueprint…',
         }));
       } catch (error) {
-        const description =
-          error instanceof DraftEnrichmentConflictError || error instanceof Error
-            ? error.message
-            : 'Please try again.';
         show({
-          title: `Could not ${ACTION_LABELS[step].toLowerCase()}`,
-          description,
+          title: uiText('enrichmentActionFailed', { step }),
+          description: formatUiError(error),
           variant: 'error',
         });
       } finally {
         setIsBusy(false);
       }
     },
-    [brandProfileId, show, updateDraft],
+    [brandProfileId, show, updateDraft, formatUiError, uiText],
   );
 
   return { requestStep, isBusy };
@@ -125,6 +119,7 @@ export function useDraftEnrichmentLadder(
   draft: OrganicCalendarDraft,
   { brandProfileId, onMediaStep }: LadderOptions,
 ): DraftLadder {
+  const uiText = useTranslations('organic');
   const { requestDestructiveConfirmation } = useDestructiveConfirmation();
   const { requestStep, isBusy } = useLadderStepRequest(brandProfileId);
 
@@ -213,9 +208,8 @@ export function useDraftEnrichmentLadder(
     if (!canRewriteCopy || isBusy || !draft.backendDraftId) return;
     void (async () => {
       const confirmed = await requestDestructiveConfirmation({
-        title: 'Rewrite the copy?',
-        description:
-          'The current caption and hashtags are replaced by a fresh generation. This cannot be undone.',
+        title: uiText('rewrite_the_copy_62adc52'),
+        description: uiText('the_current_caption_and_hashtags_are_replaced_3cc8ff5'),
         confirmLabel: 'Rewrite copy',
       });
       if (!confirmed) return;
@@ -227,6 +221,7 @@ export function useDraftEnrichmentLadder(
     isBusy,
     requestDestructiveConfirmation,
     runLadderRequest,
+    uiText,
   ]);
 
   return {

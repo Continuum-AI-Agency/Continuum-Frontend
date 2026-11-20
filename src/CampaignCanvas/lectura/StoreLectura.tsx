@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { campaignViewFromCanvasGraph, scaffoldMarksOf } from '@/lib/campaign-canvas/lectura';
 import { diffForCanvas, type ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
@@ -31,6 +32,7 @@ export function StoreLectura({
   /** The Backend's diff of a campaign copy, from the chat beside the canvas. */
   structureDiff?: ScaffoldStructureDiff | null;
 }) {
+  const uiText = useTranslations('scale');
   const nodes = useCampaignStore((store) => store.nodes);
   const edges = useCampaignStore((store) => store.edges);
   const marks = useStoreScaffoldMarks(structureDiff);
@@ -41,7 +43,7 @@ export function StoreLectura({
   if (model.campaigns.length === 0) {
     return (
       <div className="grid h-full place-items-center p-6 text-center text-[13px] text-muted-foreground">
-        No campaign on the canvas yet. When Jaina proposes one, it appears here.
+        {uiText('no_campaign_on_the_canvas_yet_when_jaina_prop_16133c8')}
       </div>
     );
   }

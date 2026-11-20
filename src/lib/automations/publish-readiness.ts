@@ -1,3 +1,4 @@
+import type { useTranslations } from 'next-intl';
 // Pure pre-publish readiness check for an automation workflow definition.
 //
 // Publishing locks the graph and activates the schedule, so the checks here are
@@ -48,6 +49,8 @@ export type PublishBlocker = {
   message: string;
   /** What to do about it, or the server's own reason when it gave one. */
   detail: string;
+  configurationPath?: string;
+  placeholder?: string;
 };
 
 export type PublishWarning = {
@@ -125,6 +128,8 @@ const collectNodeBlockers = (
     blockers.push({
       ...base,
       code: 'unset_configuration',
+      configurationPath: field.path,
+      placeholder: field.sentinel,
       message: `${node.label} still has a placeholder in ${field.path}.`,
       detail: `"${field.sentinel}" is the value the node ships with. Choose a real one in the inspector.`,
     });
@@ -221,12 +226,14 @@ export type TestFreshness = {
  */
 export function summarizeTestFreshness(
   testResult: TestAutomationWorkflowResponse | null | undefined,
+  translate?: ReturnType<typeof useTranslations<'automations'>>,
 ): TestFreshness {
   if (!testResult) {
     return {
       state: 'unknown',
-      message:
-        'No test run in this session. Publishing needs a passing server test for this exact graph — run one if publishing is refused as stale.',
+      message: translate
+        ? translate('no_test_run_in_this_session_publishing_needs__54090f1')
+        : 'No test run in this session. Publishing needs a passing server test for this exact graph — run one if publishing is refused as stale.',
     };
   }
 
@@ -237,14 +244,18 @@ export function summarizeTestFreshness(
   if (failed > 0) {
     return {
       state: 'failing',
-      message: `The last test failed on ${failed} node${failed === 1 ? '' : 's'}. Fix those before publishing.`,
+      message: translate
+        ? translate('m_6138c4af09', { count: failed })
+        : `The last test failed on ${failed} node${failed === 1 ? '' : 's'}. Fix those before publishing.`,
     };
   }
 
   return {
     state: 'passing',
-    message: `Last test passed ${testResult.nodeExecutions.length} node${
-      testResult.nodeExecutions.length === 1 ? '' : 's'
-    }.`,
+    message: translate
+      ? translate('m_57a95aa369', { count: testResult.nodeExecutions.length })
+      : `Last test passed ${testResult.nodeExecutions.length} node${
+          testResult.nodeExecutions.length === 1 ? '' : 's'
+        }.`,
   };
 }

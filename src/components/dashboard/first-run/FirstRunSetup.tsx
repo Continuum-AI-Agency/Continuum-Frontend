@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 // First-run guided-setup experience (IMP-001 / IMP-003 / IMP-005 / IMP-015).
 // Composes the setup checklist, the Brand Book milestone card, and the workflow
 // map into the "onboarding as the default dashboard experience" surface shown
@@ -17,9 +18,10 @@ export function FirstRunSetup({
   setup: DashboardSetupState;
   brandBookRefreshedAt: string | null;
 }) {
+  const uiText = useTranslations('dashboard');
   const headerDescription = setup.hasConnectedData
-    ? 'A few steps left to unlock the full picture. Your live data is below.'
-    : 'Connect your accounts and generate your Brand Book to bring this dashboard to life.';
+    ? uiText('firstRunConnectedDescription')
+    : uiText('firstRunDisconnectedDescription');
 
   return (
     <div
@@ -27,7 +29,10 @@ export function FirstRunSetup({
       className="flex w-full min-w-0 flex-col divide-y divide-border"
     >
       <div className="px-[var(--card-pad)] py-[var(--section-header-pad-block)]">
-        <PageHeader title="Set up your workspace" description={headerDescription} />
+        <PageHeader
+          title={uiText('set_up_your_workspace_195cbdb')}
+          description={headerDescription}
+        />
       </div>
       <div className="grid grid-cols-1 items-stretch divide-y divide-border lg:grid-cols-2 lg:divide-x lg:divide-y-0">
         <SetupChecklist setup={setup} />

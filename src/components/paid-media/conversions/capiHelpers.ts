@@ -3,12 +3,37 @@ import {
   CAPI_MAX_EVENTS_PER_REQUEST,
   type CapiActionSource,
   type CapiEventInput,
+  type CapiEventIssue,
+  type CapiEventIssueCode,
   capiCsvFieldMap,
+  capiEventTimeIssue,
   capiEventTimeProblem,
   capiInvalidEventsErrorSchema,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import { parseDelimited, recordsFromTable } from '@/components/forge/renderRequestRows';
 import { ApiError } from '@/lib/api/errors';
+
+type CapiCopy = ReturnType<typeof useTranslations<'scale'>>;
+const ISSUE_KEYS = {
+  invalid_event_fields: 'capi_issue_invalid_fields',
+  missing_identifier: 'capi_issue_identifier',
+  website_context_required: 'capi_issue_website',
+  purchase_value_currency_required: 'capi_issue_purchase',
+  event_time_future: 'capi_issue_future',
+  event_time_too_old: 'capi_issue_old',
+} as const satisfies Record<CapiEventIssueCode, string>;
+export function capiIssueMessage(
+  issue: Pick<CapiEventIssue, 'code' | 'path' | 'details'>,
+  translate: CapiCopy,
+): string {
+  const path = issue.path?.join('.') ?? '';
+  return translate(ISSUE_KEYS[issue.code ?? 'invalid_event_fields'], {
+    hasPath: path ? 'yes' : 'no',
+    path,
+    maxAgeDays: issue.details?.maxAgeDays ?? 7,
+  });
+}
 
 export const nowSeconds = () => Math.floor(Date.now() / 1_000);
 
@@ -41,6 +66,7 @@ export function reviewCsv(
   text: string,
   defaults: { eventName: string; actionSource: CapiActionSource },
   now: number,
+  translate?: CapiCopy,
 ): CsvReview {
   const { headers, rows } = recordsFromTable(parseDelimited(text));
   const fieldMap = capiCsvFieldMap(headers);
@@ -49,12 +75,24 @@ export function reviewCsv(
     const line = index + 2;
     const mapped = applyCapiFieldMap(row, { ...defaults, fieldMap }, now);
     if (!mapped.ok) {
-      review.issues.push({ line, message: mapped.issues.join('; ') });
+      review.issues.push({
+        line,
+        message: translate
+          ? mapped.issueDetails?.map((issue) => capiIssueMessage(issue, translate)).join('; ') ||
+            capiIssueMessage({}, translate)
+          : mapped.issues.join('; '),
+      });
       return;
     }
     // One stale event makes Meta refuse the whole request, so it is dropped here, not sent.
     const timeProblem = capiEventTimeProblem(mapped.event, now);
-    if (timeProblem) review.issues.push({ line, message: timeProblem });
+    if (timeProblem)
+      review.issues.push({
+        line,
+        message: translate
+          ? capiIssueMessage(capiEventTimeIssue(mapped.event, now) ?? {}, translate)
+          : timeProblem,
+      });
     else review.events.push(mapped.event);
   });
   return review;
@@ -75,7 +113,18 @@ const ERROR_COPY: Record<string, string> = {
   not_found: 'That no longer exists. Refresh and try again.',
 };
 
-export function capiErrorMessage(error: unknown, fallback: string): string {
+export function capiErrorMessage(error: unknown, fallback: string, translate?: CapiCopy): string {
+  if (translate) {
+    const keys = {
+      capi_not_configured: 'capi_configure_first',
+      invalid_forward_destination: 'capi_invalid_destination',
+      not_found: 'capi_not_found',
+    } as const;
+    const code = error instanceof Error ? error.message : '';
+    return Object.hasOwn(keys, code)
+      ? translate(keys[code as keyof typeof keys])
+      : translate('capi_request_failed');
+  }
   if (!(error instanceof Error)) return fallback;
   return ERROR_COPY[error.message] ?? error.message;
 }
@@ -156,10 +205,15 @@ export type CapiPanelProps = {
 };
 
 /** A write failure as one line to show, or null after a 403 (the section turns read-only). */
-export function writeFailure(error: unknown, onForbidden: () => void, fallback: string) {
+export function writeFailure(
+  error: unknown,
+  onForbidden: () => void,
+  fallback: string,
+  translate?: CapiCopy,
+) {
   if (isForbidden(error)) {
     onForbidden();
     return null;
   }
-  return capiErrorMessage(error, fallback);
+  return capiErrorMessage(error, fallback, translate);
 }

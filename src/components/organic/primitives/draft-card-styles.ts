@@ -107,8 +107,24 @@ export const DRAFT_STATUS_PRESENTATION = {
   failed: presentationFor('failed'),
 } satisfies Record<OrganicDraftStatus, DraftStatusPresentation>;
 
-export function draftStatusPresentation(status: OrganicDraftStatus): DraftStatusPresentation {
-  return DRAFT_STATUS_PRESENTATION[status] ?? DRAFT_STATUS_PRESENTATION.draft;
+type DraftStatusMessageKey =
+  | `draftStatus_${OrganicDraftStatus}`
+  | `draftHint_${OrganicDraftStatus}`;
+type DraftStatusTranslator = (key: DraftStatusMessageKey) => string;
+
+export function draftStatusPresentation(
+  status: OrganicDraftStatus,
+  translate?: DraftStatusTranslator,
+): DraftStatusPresentation {
+  const resolved = DRAFT_STATUS_PRESENTATION[status] ? status : 'draft';
+  const presentation = DRAFT_STATUS_PRESENTATION[resolved];
+  return translate
+    ? {
+        ...presentation,
+        label: translate(`draftStatus_${resolved}`),
+        hint: translate(`draftHint_${resolved}`),
+      }
+    : presentation;
 }
 
 /**
@@ -138,9 +154,11 @@ export type DraftStatusLegendEntry = {
 };
 
 /** Every status, in legend order, with the exact words the planner's pills use. */
-export function draftStatusLegendEntries(): DraftStatusLegendEntry[] {
+export function draftStatusLegendEntries(
+  translate?: DraftStatusTranslator,
+): DraftStatusLegendEntry[] {
   return DRAFT_STATUS_LEGEND_ORDER.map((status) => {
-    const { label, hint } = DRAFT_STATUS_PRESENTATION[status];
+    const { label, hint } = draftStatusPresentation(status, translate);
     return { status, label, hint };
   });
 }

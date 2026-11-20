@@ -1,9 +1,12 @@
 import { Plus, X } from '@phosphor-icons/react';
+import { useTranslations } from 'next-intl';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { BRAND_VOICE_TAGS, type BrandVoiceTag } from '@/lib/onboarding/state';
 import { EditablePopover } from './EditablePopover';
 
 export function TonePicker() {
+  const tUi = useTranslations('onboarding');
+
   const { state, updateState } = useOnboarding();
   const tags = state.brand.brandVoiceTags;
 
@@ -23,7 +26,7 @@ export function TonePicker() {
           <button
             type="button"
             onClick={() => toggle(tag)}
-            aria-label={`Remove ${tag}`}
+            aria-label={tUi('m_a31c68e147', { v0: String(tag) })}
             className="opacity-50 transition-opacity hover:opacity-100"
           >
             <X className="h-3 w-3" />
@@ -37,13 +40,14 @@ export function TonePicker() {
             type="button"
             className="inline-flex items-center gap-1 rounded-full border border-dashed border-muted-foreground/60 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
           >
-            <Plus className="h-3 w-3" /> Add
+            <Plus className="h-3 w-3" />
+            {tUi('m_576a9d4383')}
           </button>
         }
         content={(close) => (
           <div className="space-y-1">
             <p className="px-1 pb-1 text-2xs font-bold uppercase tracking-wide text-muted-foreground">
-              Tone of voice
+              {tUi('m_5ee7eed40a')}
             </p>
             {BRAND_VOICE_TAGS.map((tag) => {
               const active = tags.includes(tag);

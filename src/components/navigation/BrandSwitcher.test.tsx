@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 // happy-dom ships no ResizeObserver, and Base UI's positioner constructs one while the
 // popover opens — without it the popover throws instead of mounting, which reads as a
@@ -37,7 +38,7 @@ mock.module('@/hooks/useSwitchBrand', () => ({
   useSwitchBrand: () => switchBrand,
 }));
 
-mock.module('@/app/(post-auth)/settings/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/settings/actions', () => ({
   createBrandProfileAction: mock(async () => {}),
 }));
 

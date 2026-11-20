@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowDown, Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
@@ -55,6 +56,8 @@ export function ChatTranscript({
   contentClassName,
   children,
 }: ChatTranscriptProps) {
+  const tUi = useTranslations('common');
+
   // The gutter exists solely to keep the minimap off the text. Reserving it unconditionally
   // narrowed every transcript that has no minimap — including the composer's own column.
   const hasMinimap = showMinimap && anchors.length > 1;
@@ -143,7 +146,7 @@ export function ChatTranscript({
         {hasMinimap ? <ChatMinimap anchors={anchors} /> : null}
         <MessageScrollerButton direction="end" size="sm" className="gap-1.5 rounded-full px-3">
           <ArrowDown className="size-3.5" aria-hidden="true" />
-          Jump to latest
+          {tUi('m_5aa2e089d4')}
         </MessageScrollerButton>
       </MessageScroller>
     </MessageScrollerProvider>
@@ -151,6 +154,8 @@ export function ChatTranscript({
 }
 
 function LoadEarlierSentinel({ loading, onReached }: { loading: boolean; onReached: () => void }) {
+  const tUi = useTranslations('common');
+
   const ref = useRef<HTMLButtonElement>(null);
   const scrollable = useMessageScrollerScrollable();
   const onReachedRef = useRef(onReached);
@@ -190,10 +195,10 @@ function LoadEarlierSentinel({ loading, onReached }: { loading: boolean; onReach
       {loading ? (
         <span className="flex items-center gap-2">
           <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          Loading earlier messages…
+          {tUi('m_e7077a0e5f')}
         </span>
       ) : (
-        <span>Load earlier messages</span>
+        <span>{tUi('m_4ac08d16b8')}</span>
       )}
     </button>
   );

@@ -7,6 +7,7 @@
 
 import type { ViewerPage } from '@continuum/contracts';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,8 @@ export function pinPage(pin: OverlayPin): number {
 }
 
 export function PagedViewer({ pages, pageCount, label, review, onAnchor }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const [index, setIndex] = useState(0);
   const [jump, setJump] = useState('');
   const page = pages[index] ?? pages[0];
@@ -91,8 +94,10 @@ export function PagedViewer({ pages, pageCount, label, review, onAnchor }: Props
         className="flex size-full items-center justify-center p-8 text-center text-sm text-muted-foreground"
       >
         {pageCount
-          ? `${pageCount} pages, but the file was saved without page previews. Re-save it in InDesign with "Save Preview Images" on.`
-          : 'This file carries no page previews.'}
+          ? translateUi('value0_pages_but_the_file_was_saved_a8ef4a8e', {
+              value0: String(pageCount),
+            })
+          : translateUi('this_file_carries_no_page_previews_772b7fc3')}
       </div>
     );
   }
@@ -111,7 +116,7 @@ export function PagedViewer({ pages, pageCount, label, review, onAnchor }: Props
       className="flex size-full min-h-0"
     >
       <nav
-        aria-label="Pages"
+        aria-label={translateUi('pages_9046da16')}
         className="flex w-28 shrink-0 flex-col gap-2 overflow-y-auto border-r border-border p-2"
       >
         <div className="sticky top-0 z-10 flex flex-col items-center gap-1 bg-background pb-1">
@@ -120,7 +125,7 @@ export function PagedViewer({ pages, pageCount, label, review, onAnchor }: Props
               type="button"
               size="icon-sm"
               variant="ghost"
-              aria-label="Previous page"
+              aria-label={translateUi('previous_page_1208ec01')}
               disabled={index === 0}
               onClick={() => turnTo(index - 1)}
             >
@@ -133,7 +138,7 @@ export function PagedViewer({ pages, pageCount, label, review, onAnchor }: Props
               type="button"
               size="icon-sm"
               variant="ghost"
-              aria-label="Next page"
+              aria-label={translateUi('next_page_c08ac736')}
               disabled={index >= pages.length - 1}
               onClick={() => turnTo(index + 1)}
             >
@@ -150,8 +155,8 @@ export function PagedViewer({ pages, pageCount, label, review, onAnchor }: Props
               value={jump}
               onChange={(event) => setJump(event.target.value)}
               inputMode="numeric"
-              placeholder="Go to"
-              aria-label="Go to page"
+              placeholder={translateUi('go_to_a8aa078b')}
+              aria-label={translateUi('go_to_page_7ecbeceb')}
               data-testid="paged-viewer-jump"
               className="h-7 w-20 rounded-md border border-border bg-background px-2 text-xs"
             />
@@ -186,7 +191,10 @@ export function PagedViewer({ pages, pageCount, label, review, onAnchor }: Props
             <ImageAnnotationLayer
               key={page.url}
               src={page.url}
-              alt={`${label} · page ${pageNumber}`}
+              alt={translateUi('value0_page_value1_c8398794', {
+                value0: String(label),
+                value1: String(pageNumber),
+              })}
               pins={pagePins}
               onSelectPin={review.onSelectPin}
               posting={review.posting}
@@ -208,7 +216,10 @@ export function PagedViewer({ pages, pageCount, label, review, onAnchor }: Props
               {/* biome-ignore lint/performance/noImgElement: signed storage URL, not a Next asset */}
               <img
                 src={page.url}
-                alt={`${label} · page ${pageNumber}`}
+                alt={translateUi('value0_page_value1_c8398794', {
+                  value0: String(label),
+                  value1: String(pageNumber),
+                })}
                 className="max-h-full max-w-full object-contain"
               />
             </div>

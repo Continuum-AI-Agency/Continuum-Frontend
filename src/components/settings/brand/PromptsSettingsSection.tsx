@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The prompt browser for Settings → Prompts — the one place prompts are authored.
 // The composer only *applies* a prompt (picking one types its text into the box) and
@@ -14,6 +15,8 @@ import { archiveBrandPrompt, useBrandPrompts } from '@/lib/organic/prompts-api';
 type Screen = { kind: 'list' } | { kind: 'form'; prompt: Prompt | null };
 
 export function PromptsSettingsSection({ brandId }: { brandId: string }) {
+  const tUi = useTranslations('settings');
+
   const { prompts, isLoading, refresh } = useBrandPrompts(brandId);
   const [screen, setScreen] = useState<Screen>({ kind: 'list' });
 
@@ -26,13 +29,13 @@ export function PromptsSettingsSection({ brandId }: { brandId: string }) {
           className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back to prompts
+          {tUi('m_c340b5be1c')}
         </button>
       )}
 
       {screen.kind === 'list' &&
         (isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading prompts…</p>
+          <p className="text-sm text-muted-foreground">{tUi('m_415af8d5e4')}</p>
         ) : (
           <PromptList
             prompts={prompts}

@@ -11,10 +11,12 @@ import {
   type HomeObjective,
   homeGoalPeriodSchema,
 } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { type FormEvent, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { GOAL_PERIOD_LABELS, goalTargetRequest } from './goalTargetModel';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+import { goalTargetRequest } from './goalTargetModel';
 import type { GoalTargetsApi } from './useGoalTargets';
 
 type Outcome = { kind: 'saved' | 'removed' } | { kind: 'failed'; message: string } | null;
@@ -22,6 +24,14 @@ type Outcome = { kind: 'saved' | 'removed' } | { kind: 'failed'; message: string
 const SELECT_CLASS =
   'h-8 w-full rounded-md border border-border bg-background px-2 text-foreground text-sm';
 const LABEL_CLASS = 'text-2xs text-muted-foreground uppercase tracking-wide';
+
+/** GOAL_PERIOD_LABELS' catalog keys: each period said in the UI language. */
+const PERIOD_LABEL_KEYS = {
+  week: 'this_week_8c4eef5',
+  month: 'this_month_fd787ef',
+  quarter: 'this_quarter_bfc63bd',
+  custom: 'custom_dates_9c855ce',
+} as const satisfies Record<HomeGoalPeriod, string>;
 
 export function GoalTargetForm({
   brandId,
@@ -39,6 +49,7 @@ export function GoalTargetForm({
   currencies: string[];
   targets: Pick<GoalTargetsApi, 'save' | 'remove'>;
 }) {
+  const uiText = useTranslations('dashboard');
   const id = useId();
   const isMoney = HOME_OBJECTIVE_METRICS[objective.metric].unit === 'currency';
   const [target, setTarget] = useState(existing ? String(existing.target) : '');
@@ -92,11 +103,15 @@ export function GoalTargetForm({
       onChange={() => setOutcome(null)}
       onSubmit={submit}
     >
-      <p className="font-medium text-xs">Target for {objective.label.toLowerCase()}</p>
+      <p className="font-medium text-xs">
+        {uiText('target_for_goal_936a24b', {
+          goal: localizeDashboardCopy(objective.label, uiText).toLowerCase(),
+        })}
+      </p>
       <div className="grid grid-cols-2 gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <label className={LABEL_CLASS} htmlFor={`${id}-target`}>
-            Target
+            {uiText('target_978354d')}
           </label>
           <Input
             className="h-8 text-sm"
@@ -111,7 +126,7 @@ export function GoalTargetForm({
         </div>
         <div className="flex min-w-0 flex-col gap-1">
           <label className={LABEL_CLASS} htmlFor={`${id}-period`}>
-            Period
+            {uiText('period_6e795d4')}
           </label>
           <select
             className={SELECT_CLASS}
@@ -121,7 +136,7 @@ export function GoalTargetForm({
           >
             {homeGoalPeriodSchema.options.map((option) => (
               <option key={option} value={option}>
-                {GOAL_PERIOD_LABELS[option]}
+                {uiText(PERIOD_LABEL_KEYS[option])}
               </option>
             ))}
           </select>
@@ -129,7 +144,7 @@ export function GoalTargetForm({
         {isMoney ? (
           <div className="flex min-w-0 flex-col gap-1">
             <label className={LABEL_CLASS} htmlFor={`${id}-currency`}>
-              Currency
+              {uiText('currency_3ac1a9e')}
             </label>
             <Input
               className="h-8 text-sm uppercase"
@@ -150,7 +165,7 @@ export function GoalTargetForm({
           <>
             <div className="flex min-w-0 flex-col gap-1">
               <label className={LABEL_CLASS} htmlFor={`${id}-start`}>
-                Starts
+                {uiText('starts_96dbede')}
               </label>
               <Input
                 className="h-8 text-sm"
@@ -162,7 +177,7 @@ export function GoalTargetForm({
             </div>
             <div className="flex min-w-0 flex-col gap-1">
               <label className={LABEL_CLASS} htmlFor={`${id}-end`}>
-                Ends
+                {uiText('ends_e98982c')}
               </label>
               <Input
                 className="h-8 text-sm"
@@ -185,12 +200,14 @@ export function GoalTargetForm({
           data-testid="home-goals-target-status"
           role="status"
         >
-          {outcome.kind === 'saved' ? 'Target saved.' : 'Target removed.'}
+          {outcome.kind === 'saved'
+            ? uiText('target_saved_f02fdb0')
+            : uiText('target_removed_d7527aa')}
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button className="h-7 text-xs" disabled={busy} size="sm" type="submit">
-          Save target
+          {uiText('save_target_769075e')}
         </Button>
         {existing ? (
           <Button
@@ -201,7 +218,7 @@ export function GoalTargetForm({
             type="button"
             variant="ghost"
           >
-            Remove target
+            {uiText('remove_target_efdbbce')}
           </Button>
         ) : null}
       </div>

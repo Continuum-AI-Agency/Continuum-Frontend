@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { PromptInput } from './prompt-input';
 import { MENTION_DRAG_TYPE } from './SessionContentTray';
 import type { ChatAttachmentsController } from './useChatAttachments';

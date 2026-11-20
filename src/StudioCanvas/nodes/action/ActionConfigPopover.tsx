@@ -5,6 +5,7 @@
 
 import type { ActionId } from '@continuum/contracts';
 import { Settings2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -20,6 +21,8 @@ export function ActionConfigPopover({
   actionId: ActionId;
   config: Record<string, unknown>;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <Popover>
       <PopoverTrigger
@@ -28,7 +31,7 @@ export function ActionConfigPopover({
             variant="ghost"
             size="icon"
             className="nodrag size-5 shrink-0 text-muted-foreground"
-            aria-label="Operation settings"
+            aria-label={translateUi('operation_settings_df9a0175')}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <Settings2 className="size-3" />

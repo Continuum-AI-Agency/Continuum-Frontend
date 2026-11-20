@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The real path the bench drives: asset modal → version rail → View v1 → pill.
 const BRAND = '11111111-1111-4111-8111-111111111111';

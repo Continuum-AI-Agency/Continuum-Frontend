@@ -1,8 +1,11 @@
 'use client';
 
 import type { DocumentCategory } from '@continuum/contracts';
+
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type { OnboardingState } from '@/lib/onboarding/state';
 import type { DocumentView } from './types';
 import type { DocumentMutationsHandle } from './useDocumentMutations';
@@ -26,13 +29,17 @@ export function useDocumentActions(
   mutations: DocumentMutationsHandle,
   onStateChange?: (state: OnboardingState) => void,
 ): DocumentRowActionHandlers {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+
   const { show } = useToast();
 
   return useMemo<DocumentRowActionHandlers>(() => {
     const fail = (title: string, err: unknown, fallback: string) => {
       show({
         title,
-        description: err instanceof Error ? err.message : fallback,
+        description: getUiErrorMessage(err),
         variant: 'error',
       });
     };
@@ -68,8 +75,8 @@ export function useDocumentActions(
         try {
           await mutations.replaceDocumentFile(doc.id, doc.version ?? 1, file, onStateChange);
           show({
-            title: 'Replacing document',
-            description: 'The new file is being indexed. The old version is kept until it is done.',
+            title: tUi('m_e8144c4c24'),
+            description: tUi('m_bf472e4d80'),
             variant: 'info',
           });
         } catch (err) {
@@ -81,11 +88,11 @@ export function useDocumentActions(
         try {
           await mutations.archiveDocument(doc.id, onStateChange);
           show({
-            title: 'Document taken down',
-            description: 'Agents can no longer use it. Find it under Archived.',
+            title: tUi('m_66558a531a'),
+            description: tUi('m_a5a7345c0c'),
             variant: 'success',
             action: {
-              label: 'Undo',
+              label: tUi('undo_a8283ad'),
               onClick: () => {
                 void mutations
                   .restoreDocument(doc.id, onStateChange)
@@ -105,8 +112,8 @@ export function useDocumentActions(
           // document is readable but NOT searchable until it is re-ingested. Saying so
           // beats letting someone assume the agent can see it again.
           show({
-            title: 'Document restored',
-            description: 'Replace the file to make it searchable by agents again.',
+            title: tUi('m_2026f383a3'),
+            description: tUi('m_c2bec20c56'),
             variant: 'success',
           });
         } catch (err) {
@@ -117,7 +124,7 @@ export function useDocumentActions(
       onDeletePermanently: async (doc) => {
         try {
           await mutations.deleteDocumentPermanently(doc.id, onStateChange);
-          show({ title: 'Document deleted', variant: 'success' });
+          show({ title: tUi('m_e4db4d66b4'), variant: 'success' });
         } catch (err) {
           fail('Delete failed', err, 'Could not delete document.');
         }
@@ -127,8 +134,8 @@ export function useDocumentActions(
         try {
           await mutations.saveDocumentPermanently(doc.id, onStateChange);
           show({
-            title: 'Saved to Knowledge',
-            description: 'This document is now permanent brand knowledge for every agent.',
+            title: tUi('m_137c95c29f'),
+            description: tUi('m_01fc6c4a71'),
             variant: 'success',
           });
         } catch (err) {
@@ -144,5 +151,5 @@ export function useDocumentActions(
         }
       },
     };
-  }, [mutations, onStateChange, show]);
+  }, [mutations, onStateChange, show, getUiErrorMessage, tUi]);
 }

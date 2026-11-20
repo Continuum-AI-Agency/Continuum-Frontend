@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import React from 'react';
-
 import { IntegrationErrorBanner } from '@/components/ui/IntegrationErrorBanner';
+import { render } from '@/i18n/__tests__/render';
 
 afterEach(cleanup);
 

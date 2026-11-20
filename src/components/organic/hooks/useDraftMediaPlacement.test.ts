@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaAsset } from '@continuum/contracts';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -234,8 +235,22 @@ describe('useDraftMediaPlacement', () => {
       format: 'CAROUSEL',
       mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
       publishingAssets: [
-        { kind: 'image', slideIndex: 0, assetId: 'i1', bucket: 'media-library', storagePath: 'i1.jpg', storageUrl: 'https://cdn/i1.jpg' },
-        { kind: 'image', slideIndex: 1, assetId: 'i2', bucket: 'media-library', storagePath: 'i2.jpg', storageUrl: 'https://cdn/i2.jpg' },
+        {
+          kind: 'image',
+          slideIndex: 0,
+          assetId: 'i1',
+          bucket: 'media-library',
+          storagePath: 'i1.jpg',
+          storageUrl: 'https://cdn/i1.jpg',
+        },
+        {
+          kind: 'image',
+          slideIndex: 1,
+          assetId: 'i2',
+          bucket: 'media-library',
+          storagePath: 'i2.jpg',
+          storageUrl: 'https://cdn/i2.jpg',
+        },
       ],
     };
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
@@ -247,8 +262,9 @@ describe('useDraftMediaPlacement', () => {
     });
 
     expect(err).toBeNull();
-    const assets = (storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const assets = (
+      storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number }> }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(assets.map((asset) => asset.kind)).toEqual(['video', 'image']);
     expect(mockUpdateDraft).toHaveBeenCalledTimes(1);
   });
@@ -298,9 +314,9 @@ describe('useDraftMediaPlacement', () => {
     };
     expect(draft.format).toBe('CAROUSEL');
     expect(draft.publishingAssets).toHaveLength(7);
-    expect(draft.publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex).map((a) => a.assetId)).toEqual([
-      'i1', 'i2', 'i3', 'i4', 'i5', 'replacement', 'v2',
-    ]);
+    expect(
+      draft.publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex).map((a) => a.assetId),
+    ).toEqual(['i1', 'i2', 'i3', 'i4', 'i5', 'replacement', 'v2']);
   });
 
   // empty selection
@@ -359,8 +375,9 @@ describe('useDraftMediaPlacement', () => {
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
     await act(async () => result.current.reorderSlides(0, 2));
 
-    const sorted = (storedDraft as { publishingAssets: Array<{ slideIndex: number; storagePath: string }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const sorted = (
+      storedDraft as { publishingAssets: Array<{ slideIndex: number; storagePath: string }> }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(sorted.map((asset) => asset.storagePath)).toEqual(['b.mp4', 'c.jpg', 'a.jpg']);
     expect(sorted.map((asset) => asset.slideIndex)).toEqual([0, 1, 2]);
   });
@@ -432,8 +449,9 @@ describe('useDraftMediaPlacement', () => {
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
     await act(async () => result.current.removeSlide(1));
 
-    const sorted = (storedDraft as { publishingAssets: Array<{ slideIndex: number; storagePath: string }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const sorted = (
+      storedDraft as { publishingAssets: Array<{ slideIndex: number; storagePath: string }> }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(sorted.map((asset) => asset.storagePath)).toEqual(['a.jpg', 'c.jpg']);
     expect(sorted.map((asset) => asset.slideIndex)).toEqual([0, 1]);
   });
@@ -490,8 +508,9 @@ describe('useDraftMediaPlacement', () => {
     });
 
     expect(err).toBeNull();
-    const assets = (storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const assets = (
+      storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number }> }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(assets.map((asset) => asset.kind)).toEqual(['video', 'image']);
     expect(assets).toHaveLength(2);
   });
@@ -508,10 +527,15 @@ describe('useDraftMediaPlacement', () => {
     };
 
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
-    await act(async () => result.current.addSlide(makeVideoAsset({ id: 'v3', storagePath: 'c.mp4' })));
+    await act(async () =>
+      result.current.addSlide(makeVideoAsset({ id: 'v3', storagePath: 'c.mp4' })),
+    );
 
-    const sorted = (storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number; storagePath: string }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const sorted = (
+      storedDraft as {
+        publishingAssets: Array<{ kind: string; slideIndex: number; storagePath: string }>;
+      }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(sorted.map((asset) => [asset.kind, asset.storagePath])).toEqual([
       ['image', 'a.jpg'],
       ['video', 'b.mp4'],
@@ -802,14 +826,19 @@ describe('useDraftMediaPlacement', () => {
       useCalendarStore.mockImplementation((selector: (state: unknown) => unknown) =>
         selector({
           updateDraft: (draftId: string, updater: (draft: unknown) => unknown) => {
-            const card = storedDraft as { id: string; groupMembers: Array<{ draft?: { id: string } }> };
+            const card = storedDraft as {
+              id: string;
+              groupMembers: Array<{ draft?: { id: string } }>;
+            };
             storedDraft =
               card.id === draftId
                 ? (updater(card) as Record<string, unknown>)
                 : {
                     ...card,
                     groupMembers: card.groupMembers.map((entry) =>
-                      entry.draft?.id === draftId ? { ...entry, draft: updater(entry.draft) } : entry,
+                      entry.draft?.id === draftId
+                        ? { ...entry, draft: updater(entry.draft) }
+                        : entry,
                     ),
                   };
           },
@@ -832,7 +861,9 @@ describe('useDraftMediaPlacement', () => {
         'brands/brand-1/img.jpg',
       ]);
       const facebook = (
-        storedDraft as { groupMembers: Array<{ platform: string; draft?: Record<string, unknown> }> }
+        storedDraft as {
+          groupMembers: Array<{ platform: string; draft?: Record<string, unknown> }>;
+        }
       ).groupMembers.find((entry) => entry.platform === 'facebook')?.draft;
       expect(facebook?.mediaStage).toBe('realized');
     });

@@ -52,9 +52,47 @@ export type NotificationDisplay = {
 // also names the comment, so the modal opens on that thread and its moment.
 // Legacy rows without an assetId in their payload still land on /library.
 // A claimed pre-payment is about billing, not an asset, so it opens Billing settings.
-export function describeNotification(notification: AppNotification): NotificationDisplay {
-  const actorName = payloadString(notification, 'actorName') ?? 'A teammate';
-  const assetName = payloadString(notification, 'assetName') ?? 'a creative';
+export type NotificationMessageKey =
+  | 'notificationActor'
+  | 'notificationAsset'
+  | 'notificationReviewRequest'
+  | 'notificationStatusChanged'
+  | 'notificationReviewChanged'
+  | 'notificationReply'
+  | 'notificationMention'
+  | 'notificationAssignedMany'
+  | 'notificationAssignedOne'
+  | 'notificationReminder'
+  | 'notificationOverdue'
+  | 'notificationStateNone'
+  | 'notificationStateDraft'
+  | 'notificationStateInReview'
+  | 'notificationStateNeedsChanges'
+  | 'notificationStateApproved'
+  | 'notificationPrepaymentClaimed'
+  | 'notificationPrepaymentClaimedFor'
+  | 'notificationPrepaymentActive'
+  | 'notificationPrepaymentActiveAs';
+
+export type NotificationTranslator = (
+  key: NotificationMessageKey,
+  values?: Record<string, string | number>,
+) => string;
+
+const stateMessages = {
+  none: 'notificationStateNone',
+  draft: 'notificationStateDraft',
+  in_review: 'notificationStateInReview',
+  needs_changes: 'notificationStateNeedsChanges',
+  approved: 'notificationStateApproved',
+} as const;
+
+export function describeNotification(
+  notification: AppNotification,
+  t: NotificationTranslator,
+): NotificationDisplay {
+  const actorName = payloadString(notification, 'actorName') ?? t('notificationActor');
+  const assetName = payloadString(notification, 'assetName') ?? t('notificationAsset');
   const message = payloadString(notification, 'message');
   const assetId = payloadString(notification, 'assetId');
   const commentId = payloadString(notification, 'commentId');
@@ -68,29 +106,34 @@ export function describeNotification(notification: AppNotification): Notificatio
   switch (notification.kind) {
     case 'review_request':
       return {
-        title: `${actorName} asked you to review “${assetName}”`,
+        title: t('notificationReviewRequest', { actorName, assetName }),
         detail: message,
         href,
       };
     case 'review_status_change': {
-      const status = payloadString(notification, 'status');
+      const state = payloadString(notification, 'status');
+      const status =
+        payloadString(notification, 'statusLabel') ??
+        (state && Object.hasOwn(stateMessages, state)
+          ? t(stateMessages[state as keyof typeof stateMessages])
+          : null);
       return {
         title: status
-          ? `“${assetName}” moved to ${status.replaceAll('_', ' ')}`
-          : `“${assetName}” review status changed`,
+          ? t('notificationStatusChanged', { assetName, status })
+          : t('notificationReviewChanged', { assetName }),
         detail: message,
         href,
       };
     }
     case 'comment_reply':
       return {
-        title: `${actorName} replied on “${assetName}”`,
+        title: t('notificationReply', { actorName, assetName }),
         detail: message ?? payloadString(notification, 'excerpt'),
         href,
       };
     case 'comment_mention':
       return {
-        title: `${actorName} mentioned you on “${assetName}”`,
+        title: t('notificationMention', { actorName, assetName }),
         detail: message ?? payloadString(notification, 'excerpt'),
         href,
       };
@@ -99,21 +142,21 @@ export function describeNotification(notification: AppNotification): Notificatio
       return {
         title:
           count > 1
-            ? `${actorName} assigned you ${count} assets`
-            : `${actorName} assigned you “${assetName}”`,
+            ? t('notificationAssignedMany', { actorName, count })
+            : t('notificationAssignedOne', { actorName, assetName }),
         detail: payloadString(notification, 'fieldName'),
         href,
       };
     }
     case 'review_reminder':
       return {
-        title: `Reminder: “${assetName}” is waiting for your review`,
+        title: t('notificationReminder', { assetName }),
         detail: message,
         href,
       };
     case 'review_escalation':
       return {
-        title: `“${assetName}” review is overdue`,
+        title: t('notificationOverdue', { assetName }),
         detail: message,
         href,
       };
@@ -121,10 +164,12 @@ export function describeNotification(notification: AppNotification): Notificatio
       const brandName = payloadString(notification, 'brandName');
       const payerEmail = payloadString(notification, 'payerEmail');
       return {
-        title: brandName ? `Pre-Payment claimed for ${brandName}` : 'Pre-Payment claimed',
+        title: brandName
+          ? t('notificationPrepaymentClaimedFor', { brandName })
+          : t('notificationPrepaymentClaimed'),
         detail: payerEmail
-          ? `The plan you paid for as ${payerEmail} is now active on this brand.`
-          : 'The plan you paid for is now active on this brand.',
+          ? t('notificationPrepaymentActiveAs', { payerEmail })
+          : t('notificationPrepaymentActive'),
         href: '/settings?section=billing',
       };
     }

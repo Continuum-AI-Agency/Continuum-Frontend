@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { createEditorProjectV2, type VideoEditorOpName } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { VideoStudioContext } from '../types';
 
 // Export all variants against a faked ops client: A is this project (edited through the

@@ -10,6 +10,19 @@ import type {
 // The workflow rail's sentence and the attention dock under the grid read ONE classification
 // of ONE set of drafts, so the rail cannot say "2 overdue" while the dock lists three.
 
+export type PlannerIntelligenceKey =
+  | 'plannerGroupLabel'
+  | 'plannerGroupCount'
+  | 'plannerNeedsAttention'
+  | 'plannerLookahead'
+  | 'plannerStartWeek'
+  | 'plannerNothingNeedsAttention'
+  | 'plannerAllSet';
+export type PlannerIntelligenceTranslator = (
+  key: PlannerIntelligenceKey,
+  values?: { group?: string; count?: number },
+) => string;
+
 export type PlannerAttentionGroupKey =
   | 'overdue'
   | 'failed'
@@ -80,6 +93,7 @@ function classifyDraft(
 export function derivePlannerAttention(
   days: readonly OrganicCalendarDay[],
   todayId: string,
+  translate?: PlannerIntelligenceTranslator,
 ): PlannerAttentionGroup[] {
   const byKey = new Map<PlannerAttentionGroupKey, PlannerAttentionItem[]>();
   for (const day of days) {
@@ -93,7 +107,15 @@ export function derivePlannerAttention(
   }
   return GROUP_ORDER.flatMap(({ key, label }) => {
     const items = byKey.get(key);
-    return items ? [{ key, label, items }] : [];
+    return items
+      ? [
+          {
+            key,
+            label: translate?.('plannerGroupLabel', { group: key.replace(/-/g, '_') }) ?? label,
+            items,
+          },
+        ]
+      : [];
   });
 }
 
@@ -106,21 +128,36 @@ const GROUP_PHRASE: Record<PlannerAttentionGroupKey, readonly [string, string]> 
   unscheduled: ['unscheduled', 'unscheduled'],
 };
 
-function groupPhrases(groups: readonly PlannerAttentionGroup[]): string[] {
+function groupPhrases(
+  groups: readonly PlannerAttentionGroup[],
+  translate?: PlannerIntelligenceTranslator,
+): string[] {
   return groups.map(({ key, items }) => {
+    if (translate)
+      return translate('plannerGroupCount', { group: key.replace(/-/g, '_'), count: items.length });
     const [one, many] = GROUP_PHRASE[key];
     return `${items.length} ${items.length === 1 ? one : many}`;
   });
 }
 
 /** "Needs attention · 2 overdue · 1 needs approval": the dock section's heading. */
-export function attentionHeading(groups: readonly PlannerAttentionGroup[]): string {
-  return ['Needs attention', ...groupPhrases(groups)].join(' · ');
+export function attentionHeading(
+  groups: readonly PlannerAttentionGroup[],
+  translate?: PlannerIntelligenceTranslator,
+): string {
+  return [
+    translate?.('plannerNeedsAttention') ?? 'Needs attention',
+    ...groupPhrases(groups, translate),
+  ].join(' · ');
 }
 
 const pluralDays = (count: number) => `${count} open ${count === 1 ? 'day' : 'days'}`;
 
-export function lookaheadHeading(openDays: number): string {
+export function lookaheadHeading(
+  openDays: number,
+  translate?: PlannerIntelligenceTranslator,
+): string {
+  if (translate) return translate('plannerLookahead', { count: openDays });
   return `Next 4 weeks · ${pluralDays(openDays)}`;
 }
 
@@ -160,8 +197,14 @@ function railSentence(
   groups: readonly PlannerAttentionGroup[],
   openDays: number,
   hasDrafts: boolean,
+  translate?: PlannerIntelligenceTranslator,
 ): string {
-  if (groups.length > 0) return groupPhrases(groups).join(' · ');
+  if (groups.length > 0) return groupPhrases(groups, translate).join(' · ');
+  if (!hasDrafts && translate) return translate('plannerStartWeek');
+  if (translate)
+    return translate(openDays > 0 ? 'plannerNothingNeedsAttention' : 'plannerAllSet', {
+      count: openDays,
+    });
   if (!hasDrafts) return 'Start with 3–5 posts across at least two days to shape a useful week.';
   return openDays > 0
     ? `Nothing needs attention · ${pluralDays(openDays)} in the next 4 weeks`
@@ -176,22 +219,25 @@ function railSentence(
  * Attention reads the lensed `attentionDays` the grid shows; the lookahead reads every
  * loaded draft, because a draft hidden by a lens still occupies its day.
  */
-export function derivePlannerDock({
-  todayId,
-  attentionDays,
-  allDays,
-  postedContent,
-  platforms,
-}: {
-  /** The brand's today. */
-  todayId: string;
-  attentionDays: readonly OrganicCalendarDay[];
-  allDays: readonly OrganicCalendarDay[];
-  postedContent: readonly OrganicCalendarPostedContent[];
-  /** The rows a cell "+" creates on: only these are ever offered as open. */
-  platforms: readonly PlannerPlatform[];
-}): PlannerDock {
-  const attention = derivePlannerAttention(attentionDays, todayId);
+export function derivePlannerDock(
+  {
+    todayId,
+    attentionDays,
+    allDays,
+    postedContent,
+    platforms,
+  }: {
+    /** The brand's today. */
+    todayId: string;
+    attentionDays: readonly OrganicCalendarDay[];
+    allDays: readonly OrganicCalendarDay[];
+    postedContent: readonly OrganicCalendarPostedContent[];
+    /** The rows a cell "+" creates on: only these are ever offered as open. */
+    platforms: readonly PlannerPlatform[];
+  },
+  translate?: PlannerIntelligenceTranslator,
+): PlannerDock {
+  const attention = derivePlannerAttention(attentionDays, todayId, translate);
 
   const planned = new Map<string, number>();
   const taken = new Map<string, Set<string>>();
@@ -229,6 +275,6 @@ export function derivePlannerDock({
     attention,
     lookahead,
     openDays,
-    insight: railSentence(attention, openDays, hasDrafts),
+    insight: railSentence(attention, openDays, hasDrafts, translate),
   };
 }

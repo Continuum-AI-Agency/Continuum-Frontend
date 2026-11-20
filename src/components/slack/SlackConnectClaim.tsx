@@ -2,10 +2,10 @@
 
 import type { SlackClaimPreviewResponse, SlackConnectErrorCode } from '@continuum/contracts';
 import { Loader2, MessageSquareText } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Link, useRouter } from '@/i18n/navigation';
 import { ApiError } from '@/lib/api/errors';
 import {
   previewSlackClaim,
@@ -22,32 +22,25 @@ import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 const SLACK_CONNECT_PATH = '/slack/connect';
 
 // Typed over every contract code, so a code the Backend adds without copy fails the build.
-const ERROR_COPY: Record<SlackConnectErrorCode, string> = {
-  slack_denied: 'The install was cancelled in Slack, so nothing was added to your workspace.',
-  missing_params: 'Slack sent back an incomplete answer. Start the install again.',
-  invalid_state: 'This install could not be verified. Start it again.',
-  expired_state: 'The install took longer than 10 minutes to finish. Start it again.',
-  state_mismatch:
-    'This install was finished in a different browser from the one that started it. Start it again and finish it in the same browser.',
-  exchange_failed: 'Slack did not confirm the install. Try again in a moment.',
-  incomplete_grant:
-    'Slack granted fewer permissions than Continuum needs. Start the install again and approve every permission.',
-  not_configured: 'Slack installs are not set up for this environment yet.',
-  invalid_claim:
-    'This connect link is not valid. Install Continuum in Slack again to get a new one.',
-  expired_claim:
-    'This connect link is more than 24 hours old. Install Continuum in Slack again to get a new one.',
-  claim_used:
-    'This link has already been used to connect the workspace. Open Settings to see it, or add Slack to another brand from there.',
-  installation_revoked:
-    'Continuum has been removed from this Slack workspace. Reinstall it, then connect it to a brand.',
-  forbidden_brand: 'You need to be an owner or admin of that brand to connect Slack to it.',
-};
-
-const GENERIC_ERROR = 'Something went wrong connecting Slack. Try again.';
-
-function errorCopy(code: string): string {
-  return ERROR_COPY[code as SlackConnectErrorCode] ?? GENERIC_ERROR;
+const ERROR_KEYS = {
+  slack_denied: 'm_57efb17039',
+  missing_params: 'm_ca8c4fd1f7',
+  invalid_state: 'm_ffbea8bc06',
+  expired_state: 'm_ee7ad8dab3',
+  state_mismatch: 'm_99dd661982',
+  exchange_failed: 'm_ec0de39863',
+  incomplete_grant: 'm_611e8b7b71',
+  not_configured: 'm_8868c96ded',
+  invalid_claim: 'm_749c6335ba',
+  expired_claim: 'm_f2e0a1938e',
+  claim_used: 'm_d82bb33f9b',
+  installation_revoked: 'm_11740a51e7',
+  forbidden_brand: 'm_8376913f8a',
+} as const satisfies Record<SlackConnectErrorCode, string>;
+function errorCopy(code: string, t: ReturnType<typeof useTranslations<'common'>>) {
+  return Object.hasOwn(ERROR_KEYS, code)
+    ? t(ERROR_KEYS[code as keyof typeof ERROR_KEYS])
+    : t('m_96c2bb7ae4');
 }
 
 // The Backend answers `{ error: <code> }`, which ApiError carries as its message.
@@ -70,6 +63,7 @@ export function SlackConnectClaim({
   claim: string | null;
   error: string | null;
 }) {
+  const uiText = useTranslations('common');
   const router = useRouter();
   const [state, setState] = useState<ClaimState>(() =>
     error
@@ -121,7 +115,7 @@ export function SlackConnectClaim({
       const code = errorCode(failure);
       // A brand the caller cannot connect leaves the other choices open; every other failure
       // means this claim cannot be redeemed at all.
-      if (code === 'forbidden_brand') setRedeemError(errorCopy(code));
+      if (code === 'forbidden_brand') setRedeemError(errorCopy(code, uiText));
       else setState({ kind: 'failed', code });
       setRedeeming(false);
     }
@@ -134,28 +128,26 @@ export function SlackConnectClaim({
           <span className="flex size-9 items-center justify-center rounded-md border border-border bg-muted/30">
             <MessageSquareText className="size-4 text-muted-foreground" aria-hidden />
           </span>
-          <h1 className="text-base font-semibold">Connect Slack to Continuum</h1>
+          <h1 className="text-base font-semibold">{uiText('m_6798d8e0bb')}</h1>
         </header>
 
         {state.kind === 'checking' ? (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden /> Checking this link…
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            {uiText('m_51a7fce29c')}
           </p>
         ) : null}
 
         {state.kind === 'signed_out' ? (
           <div className="space-y-4">
-            <p className="text-sm leading-6">
-              Continuum is installed in your Slack workspace. Sign in as a brand admin to connect it
-              to a brand, or send this link to your Continuum admin — it works for 24 hours.
-            </p>
+            <p className="text-sm leading-6">{uiText('m_0489b9798d')}</p>
             <Link
               href={`/login?redirectTo=${encodeURIComponent(
                 `${SLACK_CONNECT_PATH}?${new URLSearchParams({ claim: claim ?? '' })}`,
               )}`}
               className={buttonVariants({ className: 'w-full' })}
             >
-              Sign in
+              {uiText('sign_in_bfd402b')}
             </Link>
           </div>
         ) : null}
@@ -165,10 +157,9 @@ export function SlackConnectClaim({
         {state.kind === 'ready' ? (
           state.preview.brands.length === 0 ? (
             <p className="text-sm leading-6">
-              Continuum is installed in{' '}
-              <strong>{state.preview.teamName ?? state.preview.teamId}</strong>, but you are not an
-              owner or admin of any brand. Ask a brand owner or admin to open this link, or to add
-              you as an admin first.
+              {uiText('m_1df91707e7')}{' '}
+              <strong>{state.preview.teamName ?? state.preview.teamId}</strong>
+              {uiText('m_00b5d068bc')}
             </p>
           ) : (
             <form
@@ -179,9 +170,9 @@ export function SlackConnectClaim({
               }}
             >
               <label className="flex flex-col gap-1.5 text-sm">
-                <span className="text-muted-foreground">Brand</span>
+                <span className="text-muted-foreground">{uiText('brand_090ed43')}</span>
                 <select
-                  aria-label="Brand"
+                  aria-label={uiText('brand_090ed43')}
                   value={brandId}
                   onChange={(event) => setBrandId(event.target.value)}
                   className="h-9 rounded-md border border-input bg-background px-2 text-sm"
@@ -194,16 +185,19 @@ export function SlackConnectClaim({
                 </select>
               </label>
               <p className="text-sm leading-6">
-                Connect <strong>{state.preview.teamName ?? state.preview.teamId}</strong> to{' '}
+                {uiText('m_6d2b01e492')}
+                <strong>{state.preview.teamName ?? state.preview.teamId}</strong>
+                {uiText('m_bcca28f832')}{' '}
                 <strong>
-                  {state.preview.brands.find((brand) => brand.id === brandId)?.name ?? 'this brand'}
+                  {state.preview.brands.find((brand) => brand.id === brandId)?.name ??
+                    uiText('this_brand_c31b658')}
                 </strong>
-                ? Everyone on the brand can then post renders and optimizer updates to its channels.
+                {uiText('m_2afabe21ee')}
               </p>
               {redeemError ? <p className="text-sm text-destructive">{redeemError}</p> : null}
               <Button type="submit" className="w-full" disabled={redeeming || !brandId}>
                 {redeeming ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                Connect workspace
+                {uiText('m_59db6e6cc0')}
               </Button>
             </form>
           )
@@ -214,26 +208,27 @@ export function SlackConnectClaim({
 }
 
 function FailedClaim({ code }: { code: string }) {
+  const uiText = useTranslations('common');
   // A used claim already connected something; everything else needs a fresh install.
   const toSettings = code === 'claim_used' || code === 'forbidden_brand';
   return (
     <div className="space-y-4">
       <p role="alert" className="text-sm leading-6">
-        {errorCopy(code)}
+        {errorCopy(code, uiText)}
       </p>
       {toSettings ? (
         <Link
           href={SLACK_SETTINGS_PATH}
           className={buttonVariants({ variant: 'outline', className: 'w-full' })}
         >
-          Open Slack settings
+          {uiText('open_slack_settings_d46e621')}
         </Link>
       ) : code === 'not_configured' ? null : (
         <a
           href={slackInstallStartHref(null)}
           className={buttonVariants({ variant: 'outline', className: 'w-full' })}
         >
-          Install Continuum in Slack again
+          {uiText('m_c72bfcd928')}
         </a>
       )}
     </div>

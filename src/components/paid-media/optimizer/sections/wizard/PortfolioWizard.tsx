@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // The four-step portfolio wizard. Owns the draft, the step, and the one create+enroll
 // pipeline both paths (a suggestion, from scratch) share — the two hand-duplicated
 // pipelines this replaces could disagree about what a portfolio was created with.
@@ -49,7 +52,6 @@ import {
   emptyDraft,
   enrollLabel,
   goalCostCapRequested,
-  MODE_COPY,
   memberPayload,
   platformHost,
   selectedMembers,
@@ -59,6 +61,7 @@ import {
   WIZARD_STEPS,
   type WizardDraft,
   type WizardStep,
+  wizardModeCopy,
 } from './wizardModel';
 
 type PortfolioWizardProps = {
@@ -90,14 +93,17 @@ type PortfolioWizardProps = {
 const STEP_ORDER: WizardStep[] = WIZARD_STEPS.map((step) => step.id);
 
 /** The short answer each step holds, shown beside it once it is done. */
-function stepValues(draft: WizardDraft): Partial<Record<WizardStep, string>> {
+function stepValues(
+  draft: WizardDraft,
+  uiText: ReturnType<typeof useTranslations<'scale'>>,
+): Partial<Record<WizardStep, string>> {
   const selection = selectionByPlatform(draft)
     .map((entry) => entry.label)
     .join(' + ');
   return {
-    start: draft.source === 'suggestion' ? 'Suggestion' : 'From scratch',
+    start: uiText('wizardSourceLabel', { source: draft.source ?? 'other' }),
     assets: selection || undefined,
-    goal: `${humanize(draft.objective)} · ${MODE_COPY[draft.mode].title}`,
+    goal: `${humanize(draft.objective, uiText)} · ${wizardModeCopy(draft.mode, uiText).title}`,
   };
 }
 
@@ -120,6 +126,8 @@ export function PortfolioWizard({
   onCreated,
   startExtras,
 }: PortfolioWizardProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const [step, setStep] = useState<WizardStep>('start');
   const [draft, setDraft] = useState<WizardDraft>(emptyDraft);
   const [completed, setCompleted] = useState<Set<WizardStep>>(new Set());
@@ -185,11 +193,16 @@ export function PortfolioWizard({
     currency,
   });
 
-  const issues = stepIssues(draft, step, {
-    selectedBudgetSum,
-    blockedCount,
-    metaCurrency: currency,
-  });
+  const issues = stepIssues(
+    draft,
+    step,
+    {
+      selectedBudgetSum,
+      blockedCount,
+      metaCurrency: currency,
+    },
+    uiText,
+  );
   const stepIndex = STEP_ORDER.indexOf(step);
   const isLast = stepIndex === STEP_ORDER.length - 1;
   const busy =
@@ -297,9 +310,10 @@ export function PortfolioWizard({
           await saveGoalAsCostCap(portfolio_id, true);
         } catch (err) {
           setCostCapFailure(
-            `The portfolio was created, but its goal wasn't set as the cost cap on the ad platforms. ${
-              err instanceof Error ? err.message : ''
-            } You can turn it on in the portfolio's settings.`,
+            uiText('the_portfolio_was_created_but_its_goal_wasn_t_0cda490', {
+              // saveGoalAsCostCap throws its own worded sentence; shown whole.
+              detail: err instanceof Error ? err.message : '',
+            }),
           );
           run.mutate(portfolio_id);
           return;
@@ -310,7 +324,7 @@ export function PortfolioWizard({
       run.mutate(portfolio_id);
       onCreated?.(portfolio_id);
     } catch (err) {
-      setFailure(err instanceof Error ? err.message : 'Could not create the portfolio.');
+      setFailure(formatUiError(err));
     }
   }
 
@@ -327,7 +341,7 @@ export function PortfolioWizard({
             completed={completed}
             current={step}
             onSelect={goTo}
-            values={stepValues(draft)}
+            values={stepValues(draft, uiText)}
           />
         </div>
 
@@ -410,7 +424,7 @@ export function PortfolioWizard({
               <div className="flex items-center gap-2">
                 <Button className="gap-1.5" onClick={back} size="sm" type="button" variant="ghost">
                   <ArrowLeftIcon aria-hidden className="size-3.5" />
-                  Back
+                  {uiText('back_76900f1')}
                 </Button>
                 {isLast ? (
                   <Button
@@ -425,7 +439,7 @@ export function PortfolioWizard({
                     ) : (
                       <CheckIcon aria-hidden className="size-3.5" />
                     )}
-                    {busy ? 'Creating…' : enrollLabel(draft)}
+                    {busy ? uiText('creating_c79ed94') : enrollLabel(draft, uiText)}
                   </Button>
                 ) : (
                   <Button
@@ -435,7 +449,7 @@ export function PortfolioWizard({
                     size="sm"
                     type="button"
                   >
-                    Next
+                    {uiText('next_1ff57a2')}
                     <ArrowRightIcon aria-hidden className="size-3.5" />
                   </Button>
                 )}
@@ -449,15 +463,13 @@ export function PortfolioWizard({
                     type="button"
                     variant="outline"
                   >
-                    Open the portfolio
+                    {uiText('open_the_portfolio_afc48b6')}
                   </Button>
                 </div>
               ) : failure ? (
                 <p className="text-destructive text-xs" role="alert">
                   {failure}
-                  {createdId
-                    ? ' The portfolio exists — fix the above and press Create again to enroll, or add members from Manage.'
-                    : ''}
+                  {createdId ? uiText('the_portfolio_exists_fix_the_above_and_press__7746c7b') : ''}
                 </p>
               ) : issues.length > 0 ? (
                 <p className="text-xs text-muted-foreground" role="status">

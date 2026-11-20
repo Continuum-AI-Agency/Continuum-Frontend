@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { ToastOptions } from '@/components/ui/ToastProvider';
 import { registerToastSink } from '@/components/ui/toast-imperative';
+import { render } from '@/i18n/__tests__/render';
 import type { RuleAction } from '@/lib/approvals/types';
 
 // PP-DT-C-approve-failure-toast-raw-edge-string: an Approve whose call never left the browser

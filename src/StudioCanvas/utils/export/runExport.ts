@@ -30,7 +30,7 @@ import {
   zipBlobs,
 } from '@/lib/export/transcode';
 import type { NodeOutput } from '../../types/execution';
-import { downloadAsset } from '../downloadAsset';
+import { downloadBlobAsset } from '../downloadAsset';
 
 /** One thing to write out. `ref` is a data URL, an http(s) URL, or bytes already in hand. */
 export interface ExportSource {
@@ -255,7 +255,7 @@ export async function runExport(options: RunExportOptions): Promise<ExportRunRes
       ];
 
   if (options.download !== false) {
-    for (const file of files) downloadAsset({ data: file.blob, baseName: file.name });
+    for (const file of files) downloadBlobAsset({ data: file.blob, baseName: file.name });
   }
 
   return { files, zipped: !single, fellBackToH264, format };

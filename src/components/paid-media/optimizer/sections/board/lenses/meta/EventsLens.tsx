@@ -10,6 +10,7 @@
 import type { BoardModuleSize } from '@continuum/contracts';
 import { AlertTriangleIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { figureProps, formatCurrency } from '@/components/paid-media/optimizer/format';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +43,10 @@ import { type MetaReadState, useMetaRanking } from './metaReads';
 
 const TEST_ID = 'board-module-events';
 
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 export default function EventsLens({ ctx, slot }: BoardModuleProps) {
+  const uiText = useTranslations('scale');
   const campaigns = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_campaigns');
   const model = useMemo(
     () =>
@@ -60,14 +64,19 @@ export default function EventsLens({ ctx, slot }: BoardModuleProps) {
     model.events.length > 0,
   );
   return (
-    <MetaFrame slot={slot} state={state} testId={TEST_ID} title="Optimization events">
+    <MetaFrame
+      slot={slot}
+      state={state}
+      testId={TEST_ID}
+      title={uiText('optimization_events_03a85d8')}
+    >
       {model.events.length === 0 ? (
         campaigns.status === 'ready' || campaigns.status === 'no-account' ? (
           <LensNote testId={`${TEST_ID}-empty`}>
-            No portfolio on this account yet, so no event is being optimized.
+            {uiText('no_portfolio_on_this_account_yet_so_no_event__a554fa7')}
           </LensNote>
         ) : (
-          <ReadNote size={slot.size} state={campaigns} testId={TEST_ID} what="campaigns" />
+          <ReadNote size={slot.size} state={campaigns} testId={TEST_ID} />
         )
       ) : (
         <EventsView campaigns={campaigns} currency={ctx.currency} model={model} size={slot.size} />
@@ -88,13 +97,14 @@ export function EventsView({
   size: BoardModuleSize;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const valueNote =
     campaigns.status === 'loading'
-      ? 'Reading what each event is worth…'
+      ? uiText('reading_what_each_event_is_worth_c2421d3')
       : campaigns.status === 'error'
-        ? 'The campaign read failed, so no event has a value yet.'
+        ? uiText('the_campaign_read_failed_so_no_event_has_a_va_59ab263')
         : campaigns.status === 'no-account'
-          ? 'Select a Meta ad account to read what each event is worth.'
+          ? uiText('select_a_meta_ad_account_to_read_what_each_ev_f26c13f')
           : null;
   return size === 's' ? (
     <EventsSmall currency={currency} model={model} valueNote={valueNote} />
@@ -120,16 +130,14 @@ function FlagBadge({ event }: { event: PortfolioEvent }) {
   );
 }
 
-function valueLine(event: PortfolioEvent, currency: string | null): string {
-  const worth =
-    event.valuePerResult != null
-      ? `Worth ${formatCurrency(event.valuePerResult, currency)} on average`
-      : 'No value reported';
-  const goal =
-    event.goal != null
-      ? `goal ${formatCurrency(event.goal, currency)} per ${event.unit}`
-      : 'no cost goal';
-  return `${worth} · ${goal}`;
+function valueLine(event: PortfolioEvent, currency: string | null, uiText: ScaleCopy): string {
+  return uiText('worth_select_yes_worth_value_on_average_other_78111a9', {
+    worth: event.valuePerResult != null ? 'yes' : 'no',
+    value: event.valuePerResult != null ? formatCurrency(event.valuePerResult, currency) : '',
+    hasGoal: event.goal != null ? 'yes' : 'no',
+    goal: event.goal != null ? formatCurrency(event.goal, currency) : '',
+    result: event.kind ?? 'none',
+  });
 }
 
 function EventsSmall({
@@ -141,6 +149,7 @@ function EventsSmall({
   currency: string | null;
   valueNote: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const valued = model.valued;
   const first = model.events[0];
   const flagged = model.events.find((event) => event.flag);
@@ -148,14 +157,20 @@ function EventsSmall({
     <div className="flex flex-col gap-3">
       {valued ? (
         <Headline
-          caption={`Average value per ${valued.en.one} · ROAS ${formatRoas(valued.roas)}`}
+          caption={uiText('average_value_per_result_select_purchases_pur_d322ed8', {
+            result: valued.kind,
+            roas: formatRoas(valued.roas),
+          })}
           figure={formatCurrency(valued.valuePerResult, currency)}
           figureAttrs={figureProps('board.events.value', valued.valuePerResult, currency, 'd30')}
           testId={`${TEST_ID}-headline`}
         />
       ) : first?.goal != null ? (
         <Headline
-          caption={`Goal per ${first.unit} · ${first.name}`}
+          caption={uiText('goal_per_result_select_purchases_purchase_lea_01f513f', {
+            result: first.kind ?? 'none',
+            name: first.name,
+          })}
           figure={formatCurrency(first.goal, currency)}
           testId={`${TEST_ID}-headline`}
         />
@@ -174,7 +189,7 @@ function EventsSmall({
               {event.valuePerResult != null
                 ? formatCurrency(event.valuePerResult, currency)
                 : event.goal != null
-                  ? `goal ${formatCurrency(event.goal, currency)}`
+                  ? uiText('goal_goal_118e036', { goal: formatCurrency(event.goal, currency) })
                   : '—'}
             </span>
           </li>
@@ -206,9 +221,13 @@ function EventsFull({
   currency: string | null;
   valueNote: string | null;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="flex flex-col gap-3">
-      <ul aria-label="What each portfolio optimizes for" className="grid gap-2 sm:grid-cols-2">
+      <ul
+        aria-label={uiText('what_each_portfolio_optimizes_for_824902f')}
+        className="grid gap-2 sm:grid-cols-2"
+      >
         {model.events.map((event) => (
           <li
             className={cn(
@@ -222,9 +241,14 @@ function EventsFull({
               {event.name}
             </span>
             <span className="text-muted-foreground text-xs">
-              Optimizes for <span className="font-medium text-foreground">{event.eventLabel}</span>
+              {uiText.rich('optimizes_for_b_event_b_129af52', {
+                event: event.eventLabel,
+                b: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+              })}
             </span>
-            <span className="text-muted-foreground text-xs">{valueLine(event, currency)}</span>
+            <span className="text-muted-foreground text-xs">
+              {valueLine(event, currency, uiText)}
+            </span>
             <FlagBadge event={event} />
           </li>
         ))}
@@ -234,7 +258,7 @@ function EventsFull({
       ) : valueNote ? (
         <LensNote>{valueNote}</LensNote>
       ) : (
-        <LensNote>No event on this account reported a value in the last 30 days.</LensNote>
+        <LensNote>{uiText('no_event_on_this_account_reported_a_value_in__c2fb5e7')}</LensNote>
       )}
       <Takeaway testId={`${TEST_ID}-takeaway`} text={model.takeaway} />
     </div>
@@ -242,32 +266,34 @@ function EventsFull({
 }
 
 function ValuedEconomics({ valued, currency }: { valued: ValuedEvent; currency: string | null }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
+  const result = valued.kind;
   const max = Math.max(valued.costPerResult, valued.valuePerResult, valued.goal ?? 0) || 1;
   const bars = [
     {
       key: 'cost',
-      label: `Cost per ${valued.en.one}`,
+      label: uiText('cost_per_result_select_purchases_purchase_lea_069c0b4', { result }),
       value: valued.costPerResult,
       color: toneColor(valued.tone),
     },
     ...(valued.goal != null
-      ? [{ key: 'goal', label: 'Goal', value: valued.goal, color: BOARD_COLOR.mid }]
+      ? [{ key: 'goal', label: uiText('goal_cdbf697'), value: valued.goal, color: BOARD_COLOR.mid }]
       : []),
     {
       key: 'value',
-      label: `Value of a ${valued.en.one}`,
+      label: uiText('value_of_a_result_select_purchases_purchase_l_c320e74', { result }),
       value: valued.valuePerResult,
       color: BOARD_COLOR.mid,
     },
   ];
   return (
     <section
-      aria-label={`One ${valued.en.one}: cost against value`}
+      aria-label={uiText('one_result_select_purchases_purchase_leads_le_1ad63bb', { result })}
       className="flex flex-col gap-2"
     >
       <WindowLine
-        detail={`one ${valued.en.one}: what it costs against what it is worth`}
+        detail={uiText('one_result_select_purchases_purchase_leads_le_8e7e864', { result })}
         testId={TEST_ID}
       />
       <ul className="flex flex-col gap-1.5">
@@ -308,18 +334,22 @@ function ValuedEconomics({ valued, currency }: { valued: ValuedEvent; currency: 
           color={toneColor(valued.tone)}
           label={
             valued.goal == null
-              ? 'No cost goal for this event'
+              ? uiText('no_cost_goal_for_this_event_af7b645')
               : valued.tone === 'above'
-                ? 'Cost over the goal'
+                ? uiText('cost_over_the_goal_6df6eeb')
                 : valued.tone === 'below'
-                  ? 'Cost under the goal'
-                  : 'Cost on the goal'
+                  ? uiText('cost_under_the_goal_08bdb1a')
+                  : uiText('cost_on_the_goal_442f414')
           }
         />
         <span data-testid={`${TEST_ID}-totals`}>
-          {valued.results.toLocaleString('en-US')} {valued.en.many} worth{' '}
-          {formatCurrency(valued.value, currency)} on {formatCurrency(valued.spend, currency)} of
-          spend · ROAS {formatRoas(valued.roas)}
+          {uiText('count_plural_one_result_select_purchases_purc_d8b37c8', {
+            count: valued.results,
+            result,
+            value: formatCurrency(valued.value, currency),
+            spend: formatCurrency(valued.spend, currency),
+            roas: formatRoas(valued.roas),
+          })}
         </span>
       </LegendRow>
     </section>

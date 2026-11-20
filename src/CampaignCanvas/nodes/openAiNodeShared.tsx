@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 /**
  * Bits every OpenAI node needs and none of the Meta nodes want.
  *
@@ -46,10 +48,11 @@ export function OpenAiRecordBadge({
   openAiStatus?: string;
   reviewStatus?: string;
 }) {
+  const uiText = useTranslations('scale');
   if (!openAiId) {
     return (
       <Badge variant="outline" className="text-3xs px-1 py-0 uppercase opacity-60">
-        Draft
+        {uiText('draft_ebf12ef')}
       </Badge>
     );
   }
@@ -57,7 +60,7 @@ export function OpenAiRecordBadge({
     <div className="flex flex-wrap items-center gap-1">
       <Badge variant="outline" className="gap-1 text-3xs px-1 py-0 uppercase opacity-80">
         <Link2 className="h-2.5 w-2.5" />
-        {openAiStatus ?? 'live'}
+        {openAiStatus ?? uiText('live_247610f')}
       </Badge>
       {reviewStatus ? (
         <Badge

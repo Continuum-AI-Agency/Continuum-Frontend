@@ -1,4 +1,7 @@
 'use client';
+import { useTranslations } from 'next-intl';
+
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // The picker grouped Platform → Campaign → Ad set / Ad group / Asset group. The Meta tree is
 // today's CampaignAdsetPicker, passed in unchanged; Google follows it under its own mark and
@@ -19,10 +22,10 @@ import { PlatformIcon, platformColor } from '../sections/platforms/PlatformChip'
 import { type AdPlatform, PLATFORM_NAMES } from '../sections/platforms/platformTabsModel';
 import {
   buildGooglePickerGroup,
-  CHILD_KIND_LABELS,
   type PickerCampaignNode,
   type PickerMember,
   type PlatformPickerGroup,
+  pickerChildKindLabels,
 } from './platformPickerModel';
 import {
   type GooglePickerInventoryState,
@@ -34,10 +37,6 @@ import {
   usePortfolioMembers,
   useSaveGoogleMembers,
 } from './usePortfolioPlatformMembers';
-
-const MEMBERS_UNREAD = "Which of these campaigns this portfolio holds can't be read yet.";
-const MEMBERS_EXPLAINED =
-  'Ticked campaigns are in this portfolio. A campaign another portfolio holds is refused when you save.';
 
 export function PlatformGroupHeader({
   platform,
@@ -71,7 +70,8 @@ function CampaignNode({
   /** Present when the group can save: whether it is ticked, and how to change that. */
   choice?: { chosen: boolean; disabled: boolean; toggle: (on: boolean) => void };
 }) {
-  const childLabel = CHILD_KIND_LABELS[campaign.childKind];
+  const uiText = useTranslations('scale');
+  const childLabel = pickerChildKindLabels(campaign.childKind, uiText);
   const id = `picker-google-${campaign.id}`;
   const title = (
     <p className="flex flex-wrap items-baseline gap-2 text-xs">
@@ -90,7 +90,7 @@ function CampaignNode({
       {choice ? (
         <div className="flex items-start gap-2">
           <Checkbox
-            aria-label={`Hold ${campaign.name} in this portfolio`}
+            aria-label={uiText('template_6b56b2226b9e', { v0: campaign.name })}
             checked={choice.chosen}
             className="mt-0.5"
             disabled={choice.disabled}
@@ -108,7 +108,7 @@ function CampaignNode({
         </p>
       ) : campaign.childKind === 'asset_group' ? (
         <p className="text-muted-foreground text-xs">
-          {childLabel.many} move with the campaign budget.
+          {uiText.rich('sentence_e602a7208d54', { v0: childLabel.many })}
         </p>
       ) : campaign.children.length > 0 ? (
         <ul className="mt-0.5 space-y-0.5 pl-3 text-muted-foreground text-xs">
@@ -131,6 +131,8 @@ export function PlatformGroupView({
   /** Present once the members read answered: the group's boxes then save through it. */
   save?: (change: GoogleMembersChange) => Promise<unknown>;
 }) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
   const held = group.campaigns.filter((campaign) => campaign.held).map((campaign) => campaign.id);
   const [chosen, setChosen] = useState<string[]>(held);
   const [saving, setSaving] = useState(false);
@@ -150,7 +152,7 @@ export function PlatformGroupView({
         remove,
       });
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'The campaigns could not be saved.');
+      setSaveError(formatUiError(error));
     } finally {
       setSaving(false);
     }
@@ -158,13 +160,13 @@ export function PlatformGroupView({
 
   return (
     <section
-      aria-label={`${PLATFORM_NAMES[group.platform]} campaigns`}
+      aria-label={uiText('template_92fb0970aa45', { v0: PLATFORM_NAMES[group.platform] })}
       className="space-y-1.5"
       data-testid="picker-platform-group"
     >
       <PlatformGroupHeader
         account={group.accountName ?? group.accountId}
-        hierarchy="Campaign → Ad group / Asset group"
+        hierarchy={uiText('pickerHierarchyGoogle')}
         platform={group.platform}
       />
       {group.refusal ? (
@@ -173,7 +175,7 @@ export function PlatformGroupView({
         </p>
       ) : (
         <p className="text-muted-foreground text-xs">
-          {editable ? MEMBERS_EXPLAINED : MEMBERS_UNREAD}
+          {uiText(editable ? 'pickerMembersExplained' : 'pickerMembersUnread')}
         </p>
       )}
       {group.refusal ? null : (
@@ -210,8 +212,9 @@ export function PlatformGroupView({
             type="button"
             variant="outline"
           >
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            Save Google campaigns
+            {uiText.rich('sentence_5080fd437121', {
+              v0: () => (saving ? <Loader2 className="size-3.5 animate-spin" /> : null),
+            })}
           </Button>
           {add.length > 0 || remove.length > 0 ? (
             <p className="text-muted-foreground text-xs tabular-nums">
@@ -250,6 +253,7 @@ export function MultiPlatformPickerView({
   metaAccount: string;
   children: ReactNode;
 }) {
+  const uiText = useTranslations('scale');
   // Every campaign shown as held during this visit, so one just let go stays on the list.
   const known = useRef(new Map<string, PickerMember>());
   if (google.status === 'none') return <>{children}</>;
@@ -272,29 +276,38 @@ export function MultiPlatformPickerView({
   return (
     <div className="space-y-3" data-testid="multiplatform-picker">
       <div className="space-y-1.5">
-        <PlatformGroupHeader account={metaAccount} hierarchy="Campaign → Ad set" platform="meta" />
+        <PlatformGroupHeader
+          account={metaAccount}
+          hierarchy={uiText('pickerHierarchyMeta')}
+          platform="meta"
+        />
         {children}
       </div>
       {google.status === 'loading' ? (
-        <p className="text-muted-foreground text-xs">Reading Google Ads campaigns…</p>
+        <p className="text-muted-foreground text-xs">
+          {uiText('reading_google_ads_campaigns_c253e71')}
+        </p>
       ) : google.status === 'error' ? (
         <p
           className="text-muted-foreground text-xs"
           data-testid="picker-google-error"
           role="status"
         >
-          Google Ads campaigns could not be read: {google.message}
+          {uiText.rich('sentence_4e7300aeda6e', { v0: google.message })}
         </p>
       ) : (
         <PlatformGroupView
-          group={buildGooglePickerGroup({
-            account: google.inventory.account,
-            portfolioCurrency,
-            campaigns: google.inventory.campaigns,
-            adGroups: google.inventory.adGroups,
-            held,
-            known: [...known.current.values()],
-          })}
+          group={buildGooglePickerGroup(
+            {
+              account: google.inventory.account,
+              portfolioCurrency,
+              campaigns: google.inventory.campaigns,
+              adGroups: google.inventory.adGroups,
+              held,
+              known: [...known.current.values()],
+            },
+            uiText,
+          )}
           // Remount when the held set changes, so the boxes re-seed from what was saved.
           key={
             members.status === 'ready'

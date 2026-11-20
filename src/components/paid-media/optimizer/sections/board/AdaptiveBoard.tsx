@@ -11,6 +11,7 @@
 
 import { CircleAlertIcon } from 'lucide-react';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, Suspense } from 'react';
 import { cn } from '@/lib/utils';
 import { JainaEntryChips } from '../JainaEntryChips';
@@ -49,12 +50,13 @@ export type AdaptiveBoardProps = {
 };
 
 export function AdaptiveBoard({ ctx, loading = false, toggle, asks = [] }: AdaptiveBoardProps) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const { reading } = ctx;
   const notices = reading.notices ?? [];
   return (
     <section
-      aria-label="Adaptive overview"
+      aria-label={uiText('adaptive_overview_c709c9d')}
       className={cn('space-y-3', boardPaletteClass)}
       data-testid="adaptive-board-root"
     >
@@ -74,7 +76,12 @@ export function AdaptiveBoard({ ctx, loading = false, toggle, asks = [] }: Adapt
       ) : null}
       {asks.length > 0 ? (
         <div className="rounded-lg bg-primary/5 px-3 py-2" data-testid="board-asks">
-          <JainaEntryChips entries={asks} frame={false} label="Ask Jaina" platform={ctx.platform} />
+          <JainaEntryChips
+            entries={asks}
+            frame={false}
+            label={uiText('ask_jaina_0d70d16')}
+            platform={ctx.platform}
+          />
         </div>
       ) : null}
       <motion.div

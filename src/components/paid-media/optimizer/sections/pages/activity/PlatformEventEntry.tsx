@@ -5,6 +5,7 @@
 // started showing ads (read off its daily spend). A day has no clock time, so a day event says
 // "day" where a write prints its time.
 
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { TimelineEntry } from '../../feedTimeline';
 import { type ActivityPlatformItem, deliveryWords, SOURCE_COLOR } from './activityModel';
@@ -17,6 +18,7 @@ export function PlatformEventEntry({
   item: ActivityPlatformItem;
   highlighted: boolean;
 }) {
+  const uiText = useTranslations('scale');
   if (item.kind === 'log') {
     return <LifecycleLogRow eventId={item.id} highlighted={highlighted} row={item.row} />;
   }
@@ -55,7 +57,9 @@ export function PlatformEventEntry({
       data-highlighted={highlighted ? 'true' : undefined}
       data-testid="activity-delivery-entry"
     >
-      <span className="pt-0.5 font-mono text-muted-foreground text-xs">day</span>
+      <span className="pt-0.5 font-mono text-muted-foreground text-xs">
+        {uiText('day_944c27e')}
+      </span>
       <span
         aria-hidden="true"
         className="mt-1.5 size-2 rounded-full"

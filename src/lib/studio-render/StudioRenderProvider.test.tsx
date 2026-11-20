@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 const show = mock(() => undefined);
 
@@ -8,7 +9,7 @@ mock.module('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show }),
 }));
 
-mock.module('@/app/(post-auth)/settings/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/settings/actions', () => ({
   switchActiveBrandAction: mock(async () => undefined),
 }));
 

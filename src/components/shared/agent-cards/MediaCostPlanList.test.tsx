@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { mediaCostLine, mediaCostPlan } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { MediaCostPlanList } from './MediaCostPlanList';
 
 afterEach(cleanup);

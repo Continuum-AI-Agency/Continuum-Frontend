@@ -1,9 +1,12 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Button } from '@/components/ui/button';
 import { useVersionCheck } from '@/hooks/use-version-check';
 
 export function VersionBanner() {
+  const uiText = useTranslations('common');
   const { isUpdateAvailable, reason, reload } = useVersionCheck();
 
   if (!isUpdateAvailable) return null;
@@ -18,17 +21,17 @@ export function VersionBanner() {
         <div className="space-y-2">
           <p className="text-sm font-semibold text-foreground">
             {reason === 'stale_tab'
-              ? 'This tab is running an older version'
-              : 'New Continuum update available'}
+              ? uiText('this_tab_is_running_an_older_version_c391508')
+              : uiText('m_da5793a532')}
           </p>
           <p className="text-xs text-secondary">
             {reason === 'stale_tab'
-              ? 'Some buttons can’t respond until it reloads. Refresh to load the latest deployment.'
-              : 'Refresh to load the latest deployment.'}
+              ? uiText('some_buttons_can_t_respond_until_it_reloads_r_dabdf79')
+              : uiText('m_f955d78044')}
           </p>
         </div>
         <Button size="sm" onClick={reload} className="w-full sm:w-auto">
-          Refresh
+          {uiText('refresh_0e91610')}
         </Button>
       </div>
     </div>

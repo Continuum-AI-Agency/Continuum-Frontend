@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { buildInlineTextContextBlock } from '@/components/chat/attachmentReferences';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 
 // Bug #222: the composer card's X did not close it. `cancel()` aborted the fetch

@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * The surface against the AI SDK transcript.
  *
@@ -21,7 +22,7 @@ import {
   type JainaUIMessage,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import * as React from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';

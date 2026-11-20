@@ -6,6 +6,7 @@
 // the annotating player and the read-only public share player both render this,
 // so a marker looks and behaves identically wherever a video is reviewed.
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { formatTimecode, formatTimecodeRange, seekFraction, seekSpan } from './annotationGeometry';
 
@@ -49,6 +50,7 @@ export function TimelineMarkerStrip<M extends TimeMarker>({
   onSelect,
   readOnly = false,
 }: Props<M>) {
+  const translateUi = useUiTranslations('library');
   if (durationMs <= 0) return null;
 
   const isSelected = (marker: M) =>
@@ -60,8 +62,14 @@ export function TimelineMarkerStrip<M extends TimeMarker>({
         const selected = isSelected(marker);
         const label =
           marker.endMs === null
-            ? `Comment at ${formatTimecode(marker.timeMs)}: ${marker.title}`
-            : `Comment from ${formatTimecodeRange(marker.timeMs, marker.endMs)}: ${marker.title}`;
+            ? translateUi('commentMarkerAt', {
+                timecode: formatTimecode(marker.timeMs),
+                title: marker.title,
+              })
+            : translateUi('commentMarkerFrom', {
+                timecode: formatTimecodeRange(marker.timeMs, marker.endMs),
+                title: marker.title,
+              });
         const span =
           marker.endMs === null ? null : seekSpan(marker.timeMs, marker.endMs, durationMs);
         const left = `${seekFraction(marker.timeMs, durationMs) * 100}%`;

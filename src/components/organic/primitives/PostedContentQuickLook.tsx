@@ -1,13 +1,14 @@
 'use client';
 
 import { ExternalLink, GalleryHorizontalEnd, Play, Trash2 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
-
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { isCarouselMediaType } from '@/lib/organic/carousel';
 import { postPlatformLabel } from '@/lib/organic/postPlatforms';
 import { cn } from '@/lib/utils';
+import { formatWallClockLabel } from './calendar-utils';
 import { SocialPostFrame } from './SocialPostFrame';
 import {
   frameDayLabel,
@@ -28,6 +29,7 @@ function PostedActions({
   onDelete?: () => void;
   isDeleting?: boolean;
 }) {
+  const uiText = useTranslations('organic');
   const platformLabel = postPlatformLabel(post.platform);
   return (
     <>
@@ -38,7 +40,7 @@ function PostedActions({
           rel="noreferrer"
           className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'self-start')}
         >
-          Open post
+          {uiText('open_post_92a0ae1')}
           <ExternalLink data-icon="inline-end" />
         </a>
       ) : null}
@@ -50,7 +52,7 @@ function PostedActions({
           className="w-full justify-between"
           onClick={onViewMetrics}
         >
-          View post metrics <ExternalLink data-icon="inline-end" />
+          {uiText('viewPostMetrics')} <ExternalLink data-icon="inline-end" />
         </Button>
       )}
       {onDelete && (
@@ -62,7 +64,9 @@ function PostedActions({
           onClick={onDelete}
           disabled={isDeleting}
         >
-          {isDeleting ? `Deleting from ${platformLabel}…` : `Delete from ${platformLabel}`}
+          {isDeleting
+            ? uiText('deletingFromPlatform', { platform: platformLabel })
+            : uiText('deleteFromPlatform', { platform: platformLabel })}
           <Trash2 data-icon="inline-end" />
         </Button>
       )}
@@ -92,6 +96,8 @@ export const PostedContentPreview = React.memo(function PostedContentPreview({
   brandName?: string;
   className?: string;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const [loaded, setLoaded] = React.useState<LoadedMediaSize | null>(null);
   const mediaUrl = post.thumbnailUrl ?? post.mediaUrl;
   // The generic card only ever shows a still; a video file is never an <img>.
@@ -120,16 +126,16 @@ export const PostedContentPreview = React.memo(function PostedContentPreview({
         ) : null}
         <div className="flex flex-col gap-2 p-[var(--card-pad)]">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="success">Posted</Badge>
+            <Badge variant="success">{uiText('posted_afd80c5')}</Badge>
             <Badge variant="outline">{post.platform}</Badge>
             {isCarousel ? (
               <Badge variant="muted">
                 <GalleryHorizontalEnd />
-                Carousel
+                {uiText('carousel_37219fb')}
               </Badge>
             ) : null}
             <span className="ml-auto font-mono text-2xs text-muted-foreground">
-              {post.timeLabel}
+              {formatWallClockLabel(post.timeLabel, uiLocale)}
             </span>
           </div>
           <p className="text-sm font-semibold leading-tight text-foreground">{post.title}</p>
@@ -193,7 +199,7 @@ export const PostedContentPreview = React.memo(function PostedContentPreview({
       )}
       {preview.format === 'carousel' && (
         <span className="absolute right-2 top-2 rounded-full bg-neutral-950/55 p-1.5 text-neutral-50">
-          <GalleryHorizontalEnd className="size-4" aria-label="Carousel" />
+          <GalleryHorizontalEnd className="size-4" aria-label={uiText('carousel_37219fb')} />
         </span>
       )}
     </div>
@@ -207,9 +213,11 @@ export const PostedContentPreview = React.memo(function PostedContentPreview({
       )}
     >
       <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-        <Badge variant="success">Posted</Badge>
+        <Badge variant="success">{uiText('posted_afd80c5')}</Badge>
         <Badge variant="outline">{postPlatformLabel(post.platform)}</Badge>
-        <span className="ml-auto font-mono text-2xs text-muted-foreground">{post.timeLabel}</span>
+        <span className="ml-auto font-mono text-2xs text-muted-foreground">
+          {formatWallClockLabel(post.timeLabel, uiLocale)}
+        </span>
       </div>
       <div
         data-preview-frame-slot=""
@@ -227,8 +235,8 @@ export const PostedContentPreview = React.memo(function PostedContentPreview({
             preview.platform === 'youtube' && post.source === 'external' ? post.title : undefined
           }
           brandName={brandName}
-          dayLabel={frameDayLabel(post.dayId)}
-          timeLabel={post.timeLabel}
+          dayLabel={frameDayLabel(post.dayId, uiLocale)}
+          timeLabel={formatWallClockLabel(post.timeLabel, uiLocale)}
           mediaNode={mediaNode}
           editable={false}
         />

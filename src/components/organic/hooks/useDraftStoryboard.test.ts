@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // The HTTP client is the seam: the single-draft GET and the sign POST both go through it,

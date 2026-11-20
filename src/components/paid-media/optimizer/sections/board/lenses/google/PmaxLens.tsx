@@ -17,12 +17,12 @@ import {
   pmaxLensTakeaway,
 } from '@continuum/contracts';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../../../format';
 import { useGoogleBreakdown, useGoogleSignals } from '../../../google/googleReads';
 import {
-  CARDS_UNREAD,
   frameStateOf,
   googleLensRead,
   isTile,
@@ -70,6 +70,7 @@ const NO_WINDOW = { since: '', until: '' };
 
 type PmaxRead = Extract<PmaxModel, { kind: 'pmax' }>;
 type Money = (value: number) => string;
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
 
 /** Ad Strength on the diverging pair: Poor at the bad pole, Average the neutral midpoint, Good
  *  and Excellent two steps toward the good pole. */
@@ -196,12 +197,13 @@ function PmaxBody({
   /** The top campaign's spend by channel, drawn under the campaigns. */
   channels: ReactNode;
 }) {
+  const uiText = useTranslations('scale');
   if (model.kind === 'unread')
     return <LensNote testId="pmax-lens-unread">— {model.reason}</LensNote>;
   if (model.kind === 'empty') {
     return (
       <LensNote testId="pmax-lens-empty">
-        No campaign spent in Google's last 30 complete days.
+        {uiText('no_campaign_spent_in_google_s_last_30_complet_1886b4b')}
       </LensNote>
     );
   }
@@ -209,8 +211,9 @@ function PmaxBody({
     if (!model.winner) {
       return (
         <LensNote testId="pmax-lens-no-pair">
-          No Performance Max spend, and no ad pair to compare yet:{' '}
-          {cardsUnread ? CARDS_UNREAD : "the Optimizer's winning-ad card (G10) hasn't fired"}.
+          {cardsUnread
+            ? uiText('no_performance_max_spend_and_no_ad_pair_to_co_1e28bc2')
+            : uiText('no_performance_max_spend_and_no_ad_pair_to_co_9f2b3c4')}
         </LensNote>
       );
     }
@@ -234,13 +237,14 @@ function PmaxBody({
       </div>
       {model.campaigns.length > shown.length ? (
         <LensNote>
-          {model.campaigns.length - shown.length} more Performance Max{' '}
-          {model.campaigns.length - shown.length === 1 ? 'campaign' : 'campaigns'} spent less.
+          {uiText('count_plural_one_more_performance_max_campaig_b947bf5', {
+            count: model.campaigns.length - shown.length,
+          })}
         </LensNote>
       ) : null}
       {model.assetGroupsUnread ? (
         <LensNote testId="pmax-lens-groups-unread">
-          Ad strength — {model.assetGroupsUnread}.
+          {uiText('ad_strength_reason_3c8cc6f', { reason: model.assetGroupsUnread })}
         </LensNote>
       ) : null}
       {channels}
@@ -250,9 +254,10 @@ function PmaxBody({
         </LensTakeaway>
       ) : null}
       <LensNote testId="pmax-lens-scope">
-        {windowRangeLabel(model.window.since, model.window.until)} · Google's last 30 complete days
-        · Performance Max is {pct(model.share)} of the account's spend · conversions as Google
-        reports them
+        {uiText('range_google_s_last_30_complete_days_performa_ff42500', {
+          range: windowRangeLabel(model.window.since, model.window.until),
+          share: pct(model.share),
+        })}
       </LensNote>
     </div>
   );
@@ -279,19 +284,33 @@ function takeawayOf(campaign: PmaxCampaign, model: PmaxRead, money: Money): Pmax
   };
 }
 
-const GOAL_SOURCE: Record<NonNullable<PmaxCampaign['goal']>['source'], string> = {
-  target_cpa: 'target CPA',
-  portfolio: 'goal',
-};
+type GoalSource = NonNullable<PmaxCampaign['goal']>['source'];
+
+/** "target CPA $400 MXN" / "goal $400 MXN": the goal a cost is read against, and where it is from. */
+function goalText(uiText: ScaleCopy, source: GoalSource, goal: string): string {
+  return uiText('source_select_target_cpa_target_cpa_other_goa_24ae336', {
+    source,
+    goal,
+    position: 'none',
+    gap: '',
+  });
+}
 
 function PmaxTile({ model, money }: { model: PmaxRead; money: Money }) {
+  const uiText = useTranslations('scale');
   const lead = model.campaigns[0];
   if (!lead) return null;
   if (!lead.goal) {
     return (
       <div className="space-y-2.5">
         <LensFigure
-          caption={`of Google spend in Performance Max${lead.costPerConversion === null ? '' : ` · ${money(lead.costPerConversion)} per conversion`} · no goal`}
+          caption={
+            lead.costPerConversion === null
+              ? uiText('of_google_spend_in_performance_max_no_goal_3c3e2b9')
+              : uiText('of_google_spend_in_performance_max_cost_per_c_4459ad9', {
+                  cost: money(lead.costPerConversion),
+                })
+          }
           testId="pmax-lens-headline"
           value={pct(model.share)}
         />
@@ -304,8 +323,20 @@ function PmaxTile({ model, money }: { model: PmaxRead; money: Money }) {
       <LensFigure
         caption={
           lead.costPerConversion === null
-            ? `spent without a conversion · ${GOAL_SOURCE[lead.goal.source]} ${money(lead.goal.value)}`
-            : `per conversion · ${GOAL_SOURCE[lead.goal.source]} ${money(lead.goal.value)}${lead.multiple !== null && positionOf(lead.multiple) === 'over' ? ` · ${multipleText(lead.multiple)}` : ''}`
+            ? uiText('spent_without_a_conversion_source_select_targ_55f145c', {
+                source: lead.goal.source,
+                goal: money(lead.goal.value),
+              })
+            : lead.multiple !== null && positionOf(lead.multiple) === 'over'
+              ? uiText('per_conversion_source_select_target_cpa_targe_6288820', {
+                  source: lead.goal.source,
+                  goal: money(lead.goal.value),
+                  multiple: multipleText(lead.multiple),
+                })
+              : uiText('per_conversion_source_select_target_cpa_targe_fc60151', {
+                  source: lead.goal.source,
+                  goal: money(lead.goal.value),
+                })
         }
         testId="pmax-lens-headline"
         value={money(lead.costPerConversion ?? lead.spend)}
@@ -315,12 +346,20 @@ function PmaxTile({ model, money }: { model: PmaxRead; money: Money }) {
   );
 }
 
+/** A conversion count as Google reports it, to one decimal (Google counts fractional ones). */
+function conversionCount(value: number): string {
+  return value.toLocaleString('en-US', { maximumFractionDigits: 1 });
+}
+
 /** Performance Max's share of the account's spend as one thin bar. */
 function ShareBar({ share }: { share: number }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   return (
     <div
-      aria-label={`Performance Max: ${pct(share)} of the account's spend`}
+      aria-label={uiText('performance_max_share_of_the_account_s_spend_4990797', {
+        share: pct(share),
+      })}
       className="relative h-2 w-full rounded-full bg-muted"
       role="img"
     >
@@ -353,6 +392,7 @@ function Bullet({
   money: Money;
   compact?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const cost = campaign.costPerConversion;
   const goal = campaign.goal;
@@ -360,11 +400,27 @@ function Bullet({
   const max = Math.max(cost, goal.value) * 1.12;
   const at = (cost / max) * 100;
   const mark = (goal.value / max) * 100;
-  const readout = `${GOAL_SOURCE[goal.source]} ${money(goal.value)}${campaign.multiple === null ? '' : ` · ${positionOf(campaign.multiple) === 'over' ? `${multipleText(campaign.multiple)} the goal` : positionOf(campaign.multiple) === 'under' ? `${pct(1 - campaign.multiple)} under it` : 'on it'}`}`;
+  const position = campaign.multiple === null ? 'none' : positionOf(campaign.multiple);
+  const readout = uiText('source_select_target_cpa_target_cpa_other_goa_24ae336', {
+    source: goal.source,
+    goal: money(goal.value),
+    // The message words a cost on its goal as `on`.
+    position: position === 'at' ? 'on' : position,
+    gap:
+      campaign.multiple === null
+        ? ''
+        : position === 'over'
+          ? multipleText(campaign.multiple)
+          : pct(1 - campaign.multiple),
+  });
   return (
     <div className="space-y-0.5">
       <figure
-        aria-label={`Cost per conversion ${money(cost)} against a ${GOAL_SOURCE[goal.source]} of ${money(goal.value)}`}
+        aria-label={uiText('cost_per_conversion_cost_against_a_source_sel_61f2540', {
+          cost: money(cost),
+          source: goal.source,
+          goal: money(goal.value),
+        })}
         className="relative m-0 h-6 w-full"
         data-testid="pmax-lens-bullet"
       >
@@ -386,7 +442,10 @@ function Bullet({
           mark={
             <motion.button
               animate={{ left: `${at}%` }}
-              aria-label={`${money(cost)} per conversion: ${readout}`}
+              aria-label={uiText('cost_per_conversion_readout_8efc0e8', {
+                cost: money(cost),
+                readout,
+              })}
               className="-ml-3 group absolute top-0 grid size-6 place-items-center rounded-full focus-visible:outline-none"
               data-testid="pmax-lens-dot"
               initial={reduce ? false : { left: '0%' }}
@@ -400,7 +459,7 @@ function Bullet({
               />
             </motion.button>
           }
-          value={`${money(cost)} per conversion`}
+          value={uiText('cost_per_conversion_6802da1', { cost: money(cost) })}
         />
       </figure>
       {compact ? null : (
@@ -409,7 +468,7 @@ function Bullet({
             className={cn('absolute top-0 whitespace-nowrap', anchorAt(mark))}
             style={{ left: `${mark}%` }}
           >
-            {GOAL_SOURCE[goal.source]} {money(goal.value)}
+            {goalText(uiText, goal.source, money(goal.value))}
           </span>
         </div>
       )}
@@ -418,21 +477,22 @@ function Bullet({
 }
 
 function RankMeter({ share }: { share: number | null }) {
+  const uiText = useTranslations('scale');
   if (share === null) {
     return (
       <p className="text-muted-foreground text-xs" data-testid="pmax-lens-rank">
-        Impressions lost to rank — not reported by Google for this campaign
+        {uiText('impressions_lost_to_rank_not_reported_by_goog_4339b93')}
       </p>
     );
   }
   return (
     <div className="space-y-1" data-testid="pmax-lens-rank">
       <p className="flex items-baseline justify-between gap-2 text-xs">
-        <span className="text-muted-foreground">Impressions lost to rank</span>
+        <span className="text-muted-foreground">{uiText('impressions_lost_to_rank_ed6e67a')}</span>
         <span className="font-medium text-foreground tabular-nums">{pct(share)}</span>
       </p>
       <span
-        aria-label={`${pct(share)} of its impressions lost to rank`}
+        aria-label={uiText('share_of_its_impressions_lost_to_rank_75e1509', { share: pct(share) })}
         className="relative block h-1.5 w-full rounded-full bg-muted"
         role="img"
       >
@@ -446,23 +506,29 @@ function RankMeter({ share }: { share: number | null }) {
 }
 
 function StrengthLadder({ campaign }: { campaign: PmaxCampaign }) {
+  const uiText = useTranslations('scale');
   const rated = AD_STRENGTHS.reduce((sum, strength) => sum + campaign.strengths[strength], 0);
   if (campaign.groups.length === 0) {
     return (
       <p className="text-muted-foreground text-xs" data-testid="pmax-lens-strength">
-        Ad strength — no asset group read for this campaign
+        {uiText('ad_strength_no_asset_group_read_for_this_camp_ae8d2f1')}
       </p>
     );
   }
   return (
     <div className="space-y-1" data-testid="pmax-lens-strength">
       <p className="text-muted-foreground text-xs">
-        Ad strength · {campaign.groups.length} asset{' '}
-        {campaign.groups.length === 1 ? 'group' : 'groups'}
-        {campaign.unrated > 0 ? ` · ${campaign.unrated} not rated yet` : ''}
+        {uiText('ad_strength_count_plural_one_asset_group_othe_087c1ed', {
+          count: campaign.groups.length,
+          unrated: campaign.unrated,
+        })}
       </p>
       <div
-        aria-label={`Asset groups by Ad Strength: ${AD_STRENGTHS.map((strength) => `${AD_STRENGTH_LABEL[strength]} ${campaign.strengths[strength]}`).join(', ')}`}
+        aria-label={uiText('asset_groups_by_ad_strength_list_c810c7e', {
+          list: AD_STRENGTHS.map(
+            (strength) => `${AD_STRENGTH_LABEL[strength]} ${campaign.strengths[strength]}`,
+          ).join(', '),
+        })}
         className="grid grid-cols-4 gap-0.5"
         role="img"
       >
@@ -504,7 +570,7 @@ function StrengthLadder({ campaign }: { campaign: PmaxCampaign }) {
       </div>
       {rated === 0 ? (
         <p className="text-muted-foreground text-xs">
-          Google has not rated these asset groups yet.
+          {uiText('google_has_not_rated_these_asset_groups_yet_07b408c')}
         </p>
       ) : null}
     </div>
@@ -523,12 +589,13 @@ function CampaignBlock({
   /** False when the account's asset groups were not read: the lens says so once, below. */
   groupsRead: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const weakGroup = campaign.groups.find(
     (group) => group.missing.length > 0 && group.strength !== 'EXCELLENT',
   );
   return (
     <section
-      aria-label={`Performance Max: ${campaign.name}`}
+      aria-label={uiText('performance_max_name_b84f4ca', { name: campaign.name })}
       className="min-w-0 space-y-2"
       data-testid="pmax-lens-campaign"
     >
@@ -536,18 +603,22 @@ function CampaignBlock({
         <p className="min-w-0 truncate font-medium text-foreground text-sm" title={campaign.name}>
           {campaign.name}
           {campaign.status === 'PAUSED' ? (
-            <span className="font-normal text-muted-foreground text-xs"> · paused</span>
+            <span className="font-normal text-muted-foreground text-xs">
+              {uiText('paused_7bd97b6')}
+            </span>
           ) : null}
         </p>
         <p className="shrink-0 text-right text-xs">
           {campaign.costPerConversion === null ? (
-            <span className="text-muted-foreground">{money(campaign.spend)} · no conversion</span>
+            <span className="text-muted-foreground">
+              {uiText('spend_no_conversion_926018e', { spend: money(campaign.spend) })}
+            </span>
           ) : (
             <>
               <span className="font-semibold text-foreground text-sm tabular-nums">
                 {money(campaign.costPerConversion)}
               </span>{' '}
-              <span className="text-muted-foreground">per conversion</span>
+              <span className="text-muted-foreground">{uiText('per_conversion_a881637')}</span>
             </>
           )}
         </p>
@@ -557,20 +628,33 @@ function CampaignBlock({
       ) : (
         <LensNote testId="pmax-lens-no-goal">
           {campaign.goal
-            ? `${GOAL_SOURCE[campaign.goal.source]} ${money(campaign.goal.value)}: nothing to place against it without a conversion`
-            : 'No goal to read it against: no target CPA on the campaign and no single portfolio goal'}
+            ? uiText('source_select_target_cpa_target_cpa_other_goa_3420090', {
+                source: campaign.goal.source,
+                goal: money(campaign.goal.value),
+              })
+            : uiText('no_goal_to_read_it_against_no_target_cpa_on_t_6171631')}
         </LensNote>
       )}
       <p className="text-muted-foreground text-xs tabular-nums">
-        {money(campaign.spend)} spent ·{' '}
-        {campaign.conversions.toLocaleString('en-US', { maximumFractionDigits: 1 })} conversions
-        {campaign.budgetPerDay === null ? '' : ` · ${money(campaign.budgetPerDay)}/day budget`}
+        {campaign.budgetPerDay === null
+          ? uiText('spend_spent_conversions_conversions_be232c0', {
+              spend: money(campaign.spend),
+              conversions: conversionCount(campaign.conversions),
+            })
+          : uiText('spend_spent_conversions_conversions_budget_da_0c64fc4', {
+              spend: money(campaign.spend),
+              conversions: conversionCount(campaign.conversions),
+              budget: money(campaign.budgetPerDay),
+            })}
       </p>
       <RankMeter share={campaign.lostToRank} />
       {groupsRead ? <StrengthLadder campaign={campaign} /> : null}
       {detail && weakGroup ? (
         <LensNote testId="pmax-lens-missing">
-          Google asks for {weakGroup.name}: {weakGroup.missing.join(' · ')}
+          {uiText('google_asks_for_name_missing_7e25288', {
+            name: weakGroup.name,
+            missing: weakGroup.missing.join(' · '),
+          })}
         </LensNote>
       ) : null}
       {campaign.finding ? <Finding card={campaign.finding} /> : null}
@@ -580,12 +664,13 @@ function CampaignBlock({
 
 /** The Optimizer's rescue-or-pause card, as its producer worded it. */
 function Finding({ card }: { card: NonNullable<PmaxCampaign['finding']> }) {
+  const uiText = useTranslations('scale');
   return (
     <div
       className="space-y-1 rounded-lg border border-border/70 bg-muted/30 px-2.5 py-2 text-xs"
       data-testid="pmax-lens-finding"
     >
-      <p className="text-muted-foreground">Optimizer card</p>
+      <p className="text-muted-foreground">{uiText('optimizer_card_aa393c6')}</p>
       <p className="font-medium text-foreground">{card.headline}</p>
       <ul className="space-y-0.5 text-muted-foreground">
         {card.checklist.map((item) => (
@@ -607,14 +692,21 @@ export function ChannelSplitView({
   read: LensState<GoogleBreakdownRead>;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   if (read.status === 'loading') {
-    return <LensNote testId="pmax-lens-channels-loading">Reading the spend by channel…</LensNote>;
+    return (
+      <LensNote testId="pmax-lens-channels-loading">
+        {uiText('reading_the_spend_by_channel_4ae0490')}
+      </LensNote>
+    );
   }
   if (read.status !== 'ready') {
     return (
       <LensNote testId="pmax-lens-channels-unread">
-        Spend by channel — {read.status === 'error' ? read.message : read.reason}
+        {uiText('spend_by_channel_reason_2839593', {
+          reason: read.status === 'error' ? read.message : read.reason,
+        })}
       </LensNote>
     );
   }
@@ -622,14 +714,20 @@ export function ChannelSplitView({
   if (slices.length === 0) {
     return (
       <LensNote testId="pmax-lens-channels-unread">
-        Spend by channel — Google reported no channel for this campaign in the window
+        {uiText('spend_by_channel_google_reported_no_channel_f_b47c2d2')}
       </LensNote>
     );
   }
   const money = (value: number) => formatCurrency(value, read.data.currency ?? currency);
   return (
-    <section aria-label="Spend by channel" className="space-y-1" data-testid="pmax-lens-channels">
-      <p className="font-medium text-muted-foreground text-xs">Spend by channel</p>
+    <section
+      aria-label={uiText('spend_by_channel_739301a')}
+      className="space-y-1"
+      data-testid="pmax-lens-channels"
+    >
+      <p className="font-medium text-muted-foreground text-xs">
+        {uiText('spend_by_channel_739301a')}
+      </p>
       <ul className="space-y-1">
         {slices.slice(0, 5).map((slice) => (
           <li
@@ -675,6 +773,7 @@ function AdPair({
   money: Money;
   size: BoardModuleSize;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const cardMoney: Money = card.currency ? (value) => formatCurrency(value, card.currency) : money;
   const ratio = card.comparator.cost_per_result / card.winner.cost_per_result;
@@ -691,7 +790,9 @@ function AdPair({
     return (
       <div className="space-y-2.5">
         <LensFigure
-          caption={`per conversion, the best ad · the dearer one ${cardMoney(card.comparator.cost_per_result)}`}
+          caption={uiText('per_conversion_the_best_ad_the_dearer_one_cos_82d5f29', {
+            cost: cardMoney(card.comparator.cost_per_result),
+          })}
           testId="pmax-lens-headline"
           value={cardMoney(card.winner.cost_per_result)}
         />
@@ -702,8 +803,10 @@ function AdPair({
   return (
     <div className="space-y-3" data-testid="pmax-lens-ad-pair">
       <LensNote>
-        Search only, so the lens reads the best ad of {card.ad_group_name} ({card.campaign_name})
-        against the dearer one.
+        {uiText('search_only_so_the_lens_reads_the_best_ad_of__534cb95', {
+          group: card.ad_group_name,
+          campaign: card.campaign_name,
+        })}
       </LensNote>
       <div className="grid @md/module:grid-cols-2 grid-cols-1 gap-2">
         {ads.map((ad) => (
@@ -714,7 +817,7 @@ function AdPair({
             key={ad.role}
           >
             <p className="text-muted-foreground text-xs">
-              {ad.role === 'winner' ? 'Best ad' : 'The dearer one'}
+              {ad.role === 'winner' ? uiText('best_ad_335dd51') : uiText('the_dearer_one_0537d08')}
             </p>
             <p className="break-words font-medium text-foreground text-sm">{ad.label}</p>
             <p className="text-xs">
@@ -722,10 +825,11 @@ function AdPair({
                 {cardMoney(ad.cost)}
               </span>{' '}
               <span className="text-muted-foreground">
-                per conversion
                 {ad.role === 'winner'
-                  ? ` · ${card.winner.conversions.toLocaleString('en-US', { maximumFractionDigits: 1 })} conversions`
-                  : ''}
+                  ? uiText('per_conversion_conversions_conversions_4341e25', {
+                      conversions: conversionCount(card.winner.conversions),
+                    })
+                  : uiText('per_conversion_a881637')}
               </span>
             </p>
           </div>
@@ -733,7 +837,11 @@ function AdPair({
       </div>
       <PairBars ads={ads} max={max} money={cardMoney} reduce={reduce} />
       {card.best_assets.length > 0 ? (
-        <LensNote>Google rates these texts best in it: {card.best_assets.join(' · ')}</LensNote>
+        <LensNote>
+          {uiText('google_rates_these_texts_best_in_it_assets_1f542f7', {
+            assets: card.best_assets.join(' · '),
+          })}
+        </LensNote>
       ) : null}
       <LensTakeaway testId="pmax-lens-takeaway">
         {pmaxLensTakeaway({
@@ -746,7 +854,9 @@ function AdPair({
         })}
       </LensTakeaway>
       <LensNote testId="pmax-lens-scope">
-        The Optimizer's G10 card · {card.window_days} days · conversions as Google reports them
+        {uiText('the_optimizer_s_g10_card_days_plural_one_day__1b4baba', {
+          days: card.window_days,
+        })}
       </LensNote>
     </div>
   );
@@ -763,6 +873,7 @@ function PairBars({
   money: Money;
   reduce: boolean | null;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="space-y-1">
       <ul className="space-y-0.5" data-testid="pmax-lens-pair-bars">
@@ -772,7 +883,10 @@ function PairBars({
               label={ad.label}
               mark={
                 <button
-                  aria-label={`${money(ad.cost)} per conversion: ${ad.label}`}
+                  aria-label={uiText('cost_per_conversion_readout_8efc0e8', {
+                    cost: money(ad.cost),
+                    readout: ad.label,
+                  })}
                   className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   type="button"
                 >
@@ -792,14 +906,14 @@ function PairBars({
                   <span className="text-muted-foreground tabular-nums">{money(ad.cost)}</span>
                 </button>
               }
-              value={`${money(ad.cost)} per conversion`}
+              value={uiText('cost_per_conversion_6802da1', { cost: money(ad.cost) })}
             />
           </li>
         ))}
       </ul>
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-xs">
-        <LegendKey color={BOARD_COLOR.below}>Best ad</LegendKey>
-        <LegendKey color={BOARD_COLOR.above}>The dearer one</LegendKey>
+        <LegendKey color={BOARD_COLOR.below}>{uiText('best_ad_335dd51')}</LegendKey>
+        <LegendKey color={BOARD_COLOR.above}>{uiText('the_dearer_one_0537d08')}</LegendKey>
       </div>
     </div>
   );

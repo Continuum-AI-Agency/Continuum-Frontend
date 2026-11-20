@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Drop zone that turns the post media slot into a place-target.
 // States: idle | drag-over-valid | drag-over-invalid | placing | success | fallback.
@@ -77,6 +78,7 @@ export function PreviewMediaDropZone({
   children,
   className,
 }: PreviewMediaDropZoneProps) {
+  const uiText = useTranslations('organic');
   const { setNodeRef, isOver } = useDroppable({ id: slotId });
   const motionDuration = useMotionDuration(200);
   const liveRegionRef = React.useRef<HTMLDivElement>(null);
@@ -145,7 +147,7 @@ export function PreviewMediaDropZone({
       ref={setNodeRef}
       role="button"
       tabIndex={0}
-      aria-label={`Media slot — press Enter or Space to place a creative`}
+      aria-label={uiText('mediaSlotKeyboard')}
       aria-busy={isPlacing}
       aria-invalid={!!error}
       onKeyDown={handleKeyDown}
@@ -202,7 +204,7 @@ export function PreviewMediaDropZone({
           )}
         >
           <Upload className="h-5 w-5" />
-          {isInvalidDrag ? 'Wrong type' : 'Drop here'}
+          {isInvalidDrag ? uiText('wrong_type_9f4442e') : uiText('drop_here_dcff950')}
         </div>
       </div>
 
@@ -250,7 +252,7 @@ export function PreviewMediaDropZone({
               <ImageIcon className="h-4 w-4 text-muted-foreground transition-colors group-hover/lib:text-primary" />
             </div>
             <p className="text-sm font-medium text-muted-foreground transition-colors group-hover/lib:text-foreground">
-              Select from library
+              {uiText('select_from_library_6cd3e82')}
             </p>
           </button>
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: the handler merely stops propagation so upload-half clicks don't also open the library picker; the nested file input carries the keyboard interaction. */}
@@ -262,7 +264,7 @@ export function PreviewMediaDropZone({
               <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover/up:text-primary" />
             </div>
             <p className="text-sm font-medium text-muted-foreground transition-colors group-hover/up:text-foreground">
-              Upload from your computer
+              {uiText('upload_from_your_computer_fa31c65')}
             </p>
             <input
               type="file"

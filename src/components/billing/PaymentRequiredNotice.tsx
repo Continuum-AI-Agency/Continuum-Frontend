@@ -1,8 +1,9 @@
 'use client';
 
 import type { BillingPaymentRequired } from '@continuum/contracts';
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Link } from '@/i18n/navigation';
 import { billingHref, creditsHref, PLAN_NAME } from '@/lib/billing/productAccess';
 import { openTopUp } from '@/lib/billing/topUp';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,7 @@ type PaymentRequiredNoticeProps = {
 };
 
 function ActionControl({ body, from }: { body: BillingPaymentRequired; from?: string }) {
+  const uiText = useTranslations('common');
   const { action } = body;
   if (action.kind === 'buy_credits') {
     return (
@@ -32,7 +34,7 @@ function ActionControl({ body, from }: { body: BillingPaymentRequired; from?: st
         size="sm"
         type="button"
       >
-        Buy credits
+        {uiText('buy_credits_fd70f8c')}
       </Button>
     );
   }
@@ -44,7 +46,7 @@ function ActionControl({ body, from }: { body: BillingPaymentRequired; from?: st
         data-testid="payment-required-upgrade-plan"
         href={billingHref(body.product, from)}
       >
-        {planName ? `Add ${planName}` : 'See plans'}
+        {planName ? uiText('m_1b7bee9522', { v0: String(planName) }) : uiText('see_plans_d989893')}
       </Link>
     );
   }
@@ -54,12 +56,30 @@ function ActionControl({ body, from }: { body: BillingPaymentRequired; from?: st
       data-testid="payment-required-contact-us"
       href={SUPPORT_HREF}
     >
-      Contact us
+      {uiText('m_4832e45812')}
     </Link>
   );
 }
 
 export function PaymentRequiredNotice({ body, from, className }: PaymentRequiredNoticeProps) {
+  const tUi = useTranslations('common');
+  const productKeys = {
+    studio: 'm_d9626c6a4e',
+    organic_agent: 'm_689e938780',
+    paid_media: 'm_e31de60a69',
+    trends: 'trends_e856c6c',
+    mcp: 'm_6ff673d07b',
+    listening: 'm_5f56441d1e',
+  } as const;
+  const product = tUi(productKeys[body.product]);
+  const plan = body.planCode ? PLAN_NAME[body.planCode] : null;
+  const message =
+    body.error === 'credits_exhausted'
+      ? tUi('m_6a4fddfa17')
+      : plan
+        ? tUi('m_0df71412e4', { product, plan })
+        : tUi('m_ae9e83fb41', { product });
+
   return (
     <div
       className={cn(
@@ -71,8 +91,11 @@ export function PaymentRequiredNotice({ body, from, className }: PaymentRequired
       role="alert"
     >
       <div className="min-w-0 space-y-0.5">
-        <p className="font-semibold text-foreground">{body.productName} is not on this plan</p>
-        <p className="text-muted-foreground">{body.message}</p>
+        <p className="font-semibold text-foreground">
+          {product}
+          {tUi('m_3e851de5ae')}
+        </p>
+        <p className="text-muted-foreground">{message}</p>
       </div>
       <ActionControl body={body} from={from} />
     </div>

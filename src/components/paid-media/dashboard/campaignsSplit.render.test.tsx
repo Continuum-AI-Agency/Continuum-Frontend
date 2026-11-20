@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { renderToString } from 'react-dom/server';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { renderToString } from '@/i18n/__tests__/render';
 import { campaignsSplit } from './campaignsSplit';
 
 // PP-L1V Dashboard layout shift (div.mt-1.5.flex-1, CLS 0.19–0.53): react-resizable-panels 4

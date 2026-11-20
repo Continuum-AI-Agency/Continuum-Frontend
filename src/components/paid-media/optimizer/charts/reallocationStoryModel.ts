@@ -1,3 +1,8 @@
+import type { useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
+import type { UiLocale } from '@/i18n/config';
 // The story behind a cycle's budget moves: every scored ad set's cost per result over a
 // chosen lookback, against the target, beside the budget it has and the budget it is
 // getting. Read together the picture explains itself — money leaves the rows priced above
@@ -90,16 +95,20 @@ export function blendedCost(rows: Array<{ budget: number; cost: number | null }>
   return results > 0 ? spend / results : null;
 }
 
-export function buildReallocationStory(args: {
-  items: CycleItemRow[];
-  metric: OptimizationMetricDefinition;
-  snapshotById?: Map<string, AdSetSnapshot> | null;
-  nameById?: Map<string, string> | null;
-  lookback: StoryLookback;
-  /** Target in DISPLAY units. */
-  target: number | null | undefined;
-  currency?: string | null;
-}): ReallocationStory {
+export function buildReallocationStory(
+  args: {
+    items: CycleItemRow[];
+    metric: OptimizationMetricDefinition;
+    snapshotById?: Map<string, AdSetSnapshot> | null;
+    nameById?: Map<string, string> | null;
+    lookback: StoryLookback;
+    /** Target in DISPLAY units. */
+    target: number | null | undefined;
+    currency?: string | null;
+  },
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): ReallocationStory {
   const { items, metric, snapshotById, nameById, lookback, currency } = args;
   const target = args.target != null && args.target > 0 ? args.target : null;
   const window = WINDOW_BY_LOOKBACK[lookback];
@@ -196,11 +205,36 @@ export function buildReallocationStory(args: {
         : 'back to the pool';
     const blend =
       blendedBefore != null && blendedAfter != null && Math.abs(blendedBefore - blendedAfter) >= 0.5
-        ? ` Blended ${metric.costLabel} ${blendedAfter < blendedBefore ? 'improves' : 'moves'} from ${formatCurrency(blendedBefore, currency)} to ${formatCurrency(blendedAfter, currency)} if each ad set keeps its ${lookback}-day cost.`
+        ? ` Blended ${metric.costLabel} ${blendedAfter < blendedBefore ? 'improves' : 'moves'} from ${formatCurrency(blendedBefore, currency, uiLocale)} to ${formatCurrency(blendedAfter, currency, uiLocale)} if each ad set keeps its ${lookback}-day cost.`
         : '';
-    summary = `Moving ${formatCurrency(moved, currency)}/day ${fromPart} ${toPart}.${blend}`;
+    summary = `Moving ${formatCurrency(moved, currency, uiLocale)}/day ${fromPart} ${toPart}.${blend}`;
   }
 
+  if (uiTranslate)
+    summary = uiTranslate('chartReallocationSummary', {
+      changed: gainers.length === 0 && losers.length === 0 ? 'no' : 'yes',
+      moved: formatCurrency(moved, currency, uiLocale),
+      losers: losers.length,
+      gainers: gainers.length,
+      showAbove: target != null && losersAboveTarget > 0 ? 'yes' : 'no',
+      above: losersAboveTarget,
+      showBelow: target != null && gainersBelowTarget > 0 ? 'yes' : 'no',
+      below: gainersBelowTarget,
+      showBlend:
+        blendedBefore != null &&
+        blendedAfter != null &&
+        Math.abs(blendedBefore - blendedAfter) >= 0.5
+          ? 'yes'
+          : 'no',
+      metric: metric.costLabel,
+      improves:
+        blendedBefore != null && blendedAfter != null && blendedAfter < blendedBefore
+          ? 'yes'
+          : 'no',
+      before: formatCurrency(blendedBefore, currency, uiLocale),
+      after: formatCurrency(blendedAfter, currency, uiLocale),
+      days: lookback,
+    });
   return {
     lookback,
     rows,

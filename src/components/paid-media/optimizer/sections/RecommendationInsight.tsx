@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // The recommendation label rendered as a link-styled, dotted-underline anchor that
 // reveals a plain-language insight on hover/focus. The insight is generated lazily
@@ -35,9 +38,12 @@ export function RecommendationInsight({
   severity,
   reason,
 }: RecommendationInsightProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const [open, setOpen] = useState(false);
   const descriptionId = useId();
-  const { label } = recommendationLabel(kind);
+  const { label } = recommendationLabel(kind, optimizerText);
   const insight = useOptimizerInsight(
     { brandId, id, adsetId, kind, trigger, severity, reason },
     open,

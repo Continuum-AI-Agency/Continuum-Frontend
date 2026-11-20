@@ -1,7 +1,9 @@
 'use client';
 
 import { Check, FolderPlus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 
 import { useSaveCompetitorPostToLibrary, useSavedCompetitorPostIds } from '@/lib/api/competitorSpy';
 import { cn } from '@/lib/utils';
@@ -21,6 +23,7 @@ export function SaveToLibraryButton({
   view: CompetitorPostView;
   className?: string;
 }) {
+  const uiText = useTranslations('competitor');
   const [transient, setTransient] = useState<'idle' | 'saving' | 'error'>('idle');
   const { data: savedPostIds } = useSavedCompetitorPostIds(brandId);
   const save = useSaveCompetitorPostToLibrary(brandId);
@@ -58,7 +61,7 @@ export function SaveToLibraryButton({
       type="button"
       onClick={() => void onSave()}
       disabled={transient === 'saving' || saved}
-      aria-label="Save to Library"
+      aria-label={uiText('save_to_library_d8e0a9c')}
       className={cn(
         'inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground disabled:opacity-100',
         saved && 'border-emerald-500/40 text-emerald-600',
@@ -66,7 +69,7 @@ export function SaveToLibraryButton({
       )}
     >
       {saved ? <Check className="h-3 w-3" /> : <FolderPlus className="h-3 w-3" />}
-      {label}
+      {localizeCompetitorCopy(label, uiText)}
     </button>
   );
 }

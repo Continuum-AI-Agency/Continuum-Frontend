@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getTranslations } from 'next-intl/server';
+import { getCookieLocale, restoreAccountLocale } from '@/i18n/server';
+import { escapePopupHtml, popupScriptJson } from '@/lib/auth/popup-html';
 import { OAUTH_BROADCAST_CHANNEL_NAME } from '@/lib/popup';
 import { resolveRequestOrigin } from '@/lib/server/origin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -17,22 +20,24 @@ type PopupPayload =
       message: string;
     };
 
-function renderPopupResult(
+async function renderPopupResult(
   payload: PopupPayload,
   fallbackRedirect: string,
   status = 200,
   postMessageOrigin?: string,
   isPopup?: boolean,
-): NextResponse {
-  const safePayload = JSON.stringify(payload);
+): Promise<NextResponse> {
+  const locale = await getCookieLocale();
+  const t = await getTranslations({ locale, namespace: 'auth' });
+  const safePayload = popupScriptJson(payload);
   const targetOrigin = postMessageOrigin ?? new URL(fallbackRedirect).origin;
   const html = `<!DOCTYPE html>
-<html lang="en">
-  <head><meta charset="utf-8" /><title>OAuth</title></head>
+<html lang="${locale}">
+  <head><meta charset="utf-8" /><title>${escapePopupHtml(t('authentication'))}</title></head>
   <body style="font-family: sans-serif; display: grid; min-height: 100vh; place-items: center;">
     <div>
-      <p>${payload.type === 'oauth:success' ? 'Authentication complete.' : 'Authentication failed.'}</p>
-      ${isPopup ? '<p>You can close this window.</p>' : '<p>Redirecting...</p>'}
+      <p>${escapePopupHtml(t(payload.type === 'oauth:success' ? 'authenticationComplete' : 'authenticationFailed'))}</p>
+      <p>${escapePopupHtml(t(isPopup ? 'closeWindow' : 'redirecting'))}</p>
     </div>
     <script>
       (function () {
@@ -48,7 +53,7 @@ function renderPopupResult(
           // postMessage for providers that don't sever the opener.
           try {
             if (typeof BroadcastChannel !== "undefined") {
-              const channel = new BroadcastChannel(${JSON.stringify(OAUTH_BROADCAST_CHANNEL_NAME)});
+              const channel = new BroadcastChannel(${popupScriptJson(OAUTH_BROADCAST_CHANNEL_NAME)});
               channel.postMessage(payload);
               channel.close();
             }
@@ -57,7 +62,7 @@ function renderPopupResult(
           }
           if (window.opener) {
             try {
-              window.opener.postMessage(payload, ${JSON.stringify(targetOrigin)});
+              window.opener.postMessage(payload, ${popupScriptJson(targetOrigin)});
               window.close();
               return;
             } catch (error) {
@@ -67,7 +72,7 @@ function renderPopupResult(
         }
         // Fallback when opened in the main window, or when the opener
         // postMessage above failed/was unavailable.
-        window.location.replace(${JSON.stringify(fallbackRedirect)});
+        window.location.replace(${popupScriptJson(fallbackRedirect)});
       })();
     </script>
   </body>
@@ -122,7 +127,7 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
     return renderPopupResult(
@@ -138,6 +143,8 @@ export async function GET(request: Request) {
       isPopup,
     );
   }
+
+  if (data?.user) await restoreAccountLocale(data.user.user_metadata);
 
   return renderPopupResult(
     {

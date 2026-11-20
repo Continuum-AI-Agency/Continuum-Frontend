@@ -2,8 +2,8 @@
 
 import { formatPlannerTimeOfDay, parsePlannerTimeOfDay } from '@continuum/contracts';
 import { Check } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
-
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,8 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { ORGANIC_POST_PLATFORM_KEYS, postFormatOptions } from '@/lib/organic/postPlatforms';
+import { organicPublishFormatLabel } from '@/lib/organic/publishPresentation';
 import { normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { cn } from '@/lib/utils';
+import { formatWallClockLabel } from './calendar-utils';
 
 const QUICK_TIME_OPTIONS = ['9:00 AM', '1:00 PM', '5:00 PM'] as const;
 
@@ -53,6 +55,8 @@ function normalizeSelection(platforms: readonly OrganicPlatformKey[]): OrganicPl
 }
 
 function TimeChip({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const [open, setOpen] = React.useState(false);
   const [pending, setPending] = React.useState(value);
   const [error, setError] = React.useState<string | null>(null);
@@ -67,7 +71,7 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
   const commit = (raw: string) => {
     const normalized = normalizeTimeLabel(raw.trim());
     if (!normalized) {
-      setError('Use 9:00 AM or 14:00');
+      setError(uiText('use_9_00_am_or_14_00_94ea423'));
       return;
     }
     onChange(normalized);
@@ -78,21 +82,25 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
-          <button type="button" className={chipClass} aria-label="Edit posting time">
-            {value}
+          <button
+            type="button"
+            className={chipClass}
+            aria-label={uiText('edit_posting_time_5a515b8')}
+          >
+            {formatWallClockLabel(value, uiLocale)}
           </button>
         }
       />
       <PopoverContent side="bottom" align="start" className="w-56 p-3">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Posting time
+          {uiText('posting_time_69bb418')}
         </p>
         <div className="mb-2 flex flex-wrap gap-1">
           {QUICK_TIME_OPTIONS.map((time) => {
             const isActive = isSameClockTime(time, value);
             return (
               <button
-                key={time}
+                key={formatWallClockLabel(time, uiLocale)}
                 type="button"
                 aria-pressed={isActive}
                 onClick={() => commit(time)}
@@ -103,7 +111,7 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
                     : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground',
                 )}
               >
-                {time}
+                {formatWallClockLabel(time, uiLocale)}
               </button>
             );
           })}
@@ -118,7 +126,7 @@ function TimeChip({ value, onChange }: { value: string; onChange: (next: string)
             }
             if (event.key === 'Escape') setOpen(false);
           }}
-          placeholder="Custom — 9:00 AM"
+          placeholder={uiText('custom_9_00_am_6a188e9')}
           className="h-8 text-xs"
           autoFocus
         />
@@ -156,6 +164,7 @@ export function PostMetaChips({
   actions?: React.ReactNode;
   className?: string;
 }) {
+  const uiText = useTranslations('organic');
   const selected = normalizeSelection(platforms);
 
   return (
@@ -175,7 +184,11 @@ export function PostMetaChips({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <button type="button" className={chipClass} aria-label="Change format">
+            <button
+              type="button"
+              className={chipClass}
+              aria-label={uiText('change_format_833d35a')}
+            >
               {formatLabel ?? format}
             </button>
           }
@@ -187,13 +200,16 @@ export function PostMetaChips({
               post goes out on every selected platform, so only formats they all take. */}
           {postFormatOptions(selected).map((option) => (
             <DropdownMenuItem
-              key={option}
+              key={organicPublishFormatLabel(option, uiText)}
               onSelect={() => onFormatChange(option)}
               className="justify-between"
             >
-              {option}
+              {organicPublishFormatLabel(option, uiText)}
               {isSameFormat(option, format) ? (
-                <Check className="size-3.5 text-primary" aria-label="Current format" />
+                <Check
+                  className="size-3.5 text-primary"
+                  aria-label={uiText('current_format_ab431fd')}
+                />
               ) : null}
             </DropdownMenuItem>
           ))}

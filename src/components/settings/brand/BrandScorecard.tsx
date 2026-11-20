@@ -2,6 +2,7 @@
 
 import type { BrandReportResult } from '@continuum/contracts';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
 
 import { Pill } from '@/components/kibo-ui/pill';
@@ -29,6 +30,8 @@ type Props = {
 // the strategy audit score and Recalculate in its header. Derived entirely from
 // the composite; no fetching.
 export function BrandScorecard({ result, brandId }: Props) {
+  const tUi = useTranslations('settings');
+
   const router = useRouter();
   const { show } = useToast();
   const [isRecalculating, startRecalculate] = useTransition();
@@ -38,10 +41,10 @@ export function BrandScorecard({ result, brandId }: Props) {
     startRecalculate(async () => {
       try {
         await recomputeReadiness(brandId);
-        show({ title: 'Readiness recalculated', variant: 'success' });
+        show({ title: tUi('m_d3157b08c4'), variant: 'success' });
         router.refresh();
       } catch {
-        show({ title: 'Could not recalculate readiness', variant: 'error' });
+        show({ title: tUi('m_f3f6c5d2bd'), variant: 'error' });
       }
     });
   };
@@ -60,7 +63,8 @@ export function BrandScorecard({ result, brandId }: Props) {
         <>
           {strategyAudit ? (
             <Pill variant={scorePillVariant(strategyAudit.score)}>
-              Strategy {strategyAudit.score}
+              {tUi('m_57201e6ec2')}
+              {strategyAudit.score}
             </Pill>
           ) : null}
           {brandId ? (
@@ -71,7 +75,7 @@ export function BrandScorecard({ result, brandId }: Props) {
               onClick={onRecalculate}
               disabled={isRecalculating}
             >
-              {isRecalculating ? 'Recalculating…' : 'Recalculate'}
+              {isRecalculating ? tUi('m_fb72d121e2') : tUi('m_3298e1d394')}
             </Button>
           ) : null}
         </>

@@ -6,7 +6,8 @@ import type {
   EfficiencySeriesPoint,
   PortfolioListItem,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, within } from '@testing-library/react';
+import { cleanup, fireEvent, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { PlatformCardsState } from '../useOptimizerData';
 import type { PortfolioMetricsState } from './detail/usePortfolioMetrics';
 import recordedGoogle from './platforms/__fixtures__/google-vivo47-paid-media-metrics.json';

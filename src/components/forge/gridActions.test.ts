@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 import type { ApiRenderTemplateContract, ApiRenderVariable } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
 import {
   cellActions,
   type GridAction,
@@ -9,6 +10,8 @@ import {
 } from '@/components/forge/gridActions';
 import { MAX_BATCH_ROWS, type RequestRow } from '@/components/forge/renderRequestRows';
 import type { RequestRowActions } from '@/components/forge/requestCells';
+import es from '../../../messages/forge/es.json';
+import pt from '../../../messages/forge/pt-BR.json';
 
 // The menu's arithmetic, without a browser: how many rows a preset would add, whether they fit,
 // and whether the brief stays reachable when the presets cannot run. Driving 50 rows through a
@@ -160,4 +163,27 @@ describe('the Generate with AI menu', () => {
     generateIn(selectionActions(ctx, ['a'])).run();
     expect(spy.mock.calls[0]![0]!.count).toBe(3);
   });
+});
+
+describe('localized grid action labels', () => {
+  for (const [locale, messages, apply, variations] of [
+    ['pt-BR', pt, 'Aplicar a 1 linha selecionada', '3 variações'],
+    ['es', es, 'Aplicar a 1 fila seleccionada', '3 variaciones'],
+  ] as const) {
+    it(`${locale}: pluralizes visible copy and retains action IDs and arguments`, () => {
+      const translate = createTranslator({
+        locale,
+        messages: { forge: messages },
+        namespace: 'forge',
+      });
+      const applyValue = mock(() => {});
+      const ctx = context({ rows: [row('a'), row('b')], selectedIds: ['b'], translate });
+      ctx.actions.applyValue = applyValue;
+      const action = cellActions(ctx, 'a', 'headline', null).find((item) => item.id === 'apply');
+      expect(action?.label).toBe(apply);
+      action?.run();
+      expect(applyValue).toHaveBeenCalledWith('headline', 'a', ['b']);
+      expect(presetIn(generateIn(rowActions(ctx, 'a')), 3).label).toBe(variations);
+    });
+  }
 });

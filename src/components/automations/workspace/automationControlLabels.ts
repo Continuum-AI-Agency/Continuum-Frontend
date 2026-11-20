@@ -1,0 +1,66 @@
+import type { useTranslations } from 'next-intl';
+
+const keys = {
+  account: 'm_85dfa32c97',
+  campaign: 'm_69390e1665',
+  adset: 'm_ed78bb1810',
+  ad: 'm_94b6931d19',
+  text: 'm_c3328c39b0',
+  records: 'm_e51c55255b',
+  report: 'report_b6ce788',
+  daily: 'daily_b36c261',
+  weekly: 'weekly_2975132',
+  monthly: 'monthly_9b11f6b',
+  cron: 'custom_cron_6dc53fd',
+  gt: 'm_599294f23e',
+  gte: 'm_a291954059',
+  lt: 'm_1d3d412a08',
+  lte: 'm_33331a5bba',
+  eq: 'm_09b6a6dcd3',
+  neq: 'm_86e30fcd03',
+  exists: 'm_c7f23e3ed0',
+  contains: 'm_33e15d008d',
+  changed_by: 'm_ed8e9c116b',
+  image: 'm_50e19fda0d',
+  video: 'm_bc17c1f017',
+  'brand.read': 'm_61682277fe',
+  'library.read': 'm_c1f06698c5',
+  'paid.performance_overview': 'm_3aebab06ed',
+  'paid.top_creatives': 'm_99bbed3b59',
+  'paid.competitive_analysis': 'm_65cd2d2b66',
+  'organic.performance_overview': 'm_f2e642b416',
+  'organic.content_planning': 'm_4629a03f03',
+  'organic.draft_creation': 'm_2c7b08461d',
+  'planner.read': 'm_d43fe92a3d',
+  'trends.read': 'm_256af127a2',
+  'report.synthesis': 'm_941efa1092',
+  run_cycle: 'run_an_optimization_cycle_68908fa',
+  apply_approved: 'apply_human_approved_recommendations_32968a3',
+  any: 'm_f269270c60',
+  artifact: 'm_aa778b50a1',
+  boolean: 'm_b76ff4906f',
+  control: 'm_ea1d3df298',
+  media: 'm_0c77aeece8',
+  structured: 'm_3ac3d79b11',
+  owner: 'm_89ff31225c',
+  admin: 'm_4e7afebcfb',
+  operator: 'operator_291101a',
+  editor: 'm_c7e9fb2ea6',
+  viewer: 'm_dbad9f126b',
+  member: 'm_6853c98a6f',
+} as const;
+const brands = {
+  meta: 'Meta',
+  google: 'Google',
+  linkedin: 'LinkedIn',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+} as const;
+/** Display stable capability/option codes; unknown codes remain available as diagnostics. */
+export function automationControlLabel(
+  code: string,
+  t: ReturnType<typeof useTranslations<'automations'>>,
+): string {
+  if (Object.hasOwn(keys, code)) return t(keys[code as keyof typeof keys]);
+  return Object.hasOwn(brands, code) ? brands[code as keyof typeof brands] : code;
+}

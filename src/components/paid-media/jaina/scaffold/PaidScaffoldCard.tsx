@@ -8,6 +8,7 @@ import type {
   JainaToolApprovalResolvedPayload,
   JainaToolOutputDeniedPayload,
 } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { LecturaView } from '@/CampaignCanvas/lectura/LecturaView';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
@@ -72,32 +73,24 @@ import { usePaidScaffoldTree } from './usePaidScaffoldTree';
 
 export type ScaffoldDecision = 'approve' | 'deny';
 
-const GATE_BY_TOOL_NAME: Record<
-  string,
-  { gate: 'build' | 'populate' | 'activate' | 'deploy' | 'publish'; label: string }
-> = {
-  paid_scaffold_deploy: { gate: 'deploy', label: 'Deploy paused' },
-  paid_scaffold_publish: { gate: 'publish', label: 'Publish & auto-enroll' },
-  paid_scaffold_build: { gate: 'build', label: 'Approve & create (paused)' },
-  paid_scaffold_populate: { gate: 'populate', label: 'Approve & add creatives' },
-  paid_scaffold_activate: { gate: 'activate', label: 'Publish only' },
-};
-
 /**
  * Counts from the ROWS once they load. The frame's summary only covers the moment before,
  * and a card seeded from an approval or a reload never had one.
  */
-const summaryLine = (scaffold: JainaScaffoldState, tree: ScaffoldTree | null): string => {
-  if (!tree && !scaffold.summary) return 'Loading the scaffold…';
-  const campaigns = tree ? (tree.campaign ? 1 : 0) : (scaffold.summary?.campaigns ?? 0);
-  const adSets = tree ? tree.counts.adSets : (scaffold.summary?.adSets ?? 0);
-  const ads = tree ? tree.counts.ads : (scaffold.summary?.ads ?? 0);
-  const parts = [
-    `${campaigns} campaign${campaigns === 1 ? '' : 's'}`,
-    `${adSets} ad set${adSets === 1 ? '' : 's'}`,
-    `${ads} ad${ads === 1 ? '' : 's'}`,
-  ];
-  return `${parts.join(' · ')} — ${scaffold.receipt?.publicationMode && scaffold.receipt.status === 'completed' ? 'live on Meta' : 'everything is created paused'}.`;
+const summaryLine = (
+  scaffold: JainaScaffoldState,
+  tree: ScaffoldTree | null,
+  uiText: ReturnType<typeof useTranslations<'scale'>>,
+): string => {
+  if (!tree && !scaffold.summary) return uiText('loading_the_scaffold_69393ab');
+  return uiText('campaigns_plural_one_campaign_other_campaigns_e81859f', {
+    campaigns: tree ? (tree.campaign ? 1 : 0) : (scaffold.summary?.campaigns ?? 0),
+    adSets: tree ? tree.counts.adSets : (scaffold.summary?.adSets ?? 0),
+    ads: tree ? tree.counts.ads : (scaffold.summary?.ads ?? 0),
+    live: String(
+      Boolean(scaffold.receipt?.publicationMode && scaffold.receipt.status === 'completed'),
+    ),
+  });
 };
 
 /**
@@ -105,7 +98,11 @@ const summaryLine = (scaffold: JainaScaffoldState, tree: ScaffoldTree | null): s
  * changes first — a campaign copy's new test ad sets, from the Backend's diff — then the daily
  * budget and "Open in canvas". Ids are path keys, the anchor the diff and the rows share.
  */
-const treeSourceOf = (tree: ScaffoldTree): ScaffoldTreeSource => ({
+const treeSourceOf = (
+  tree: ScaffoldTree,
+  uiText: ReturnType<typeof useTranslations<'scale'>>,
+  uiLocale: ReturnType<typeof useLocale>,
+): ScaffoldTreeSource => ({
   campaign: tree.campaign
     ? {
         id: tree.campaign.id,
@@ -119,20 +116,21 @@ const treeSourceOf = (tree: ScaffoldTree): ScaffoldTreeSource => ({
     pathKey: adSet.pathKey,
     name: adSet.name,
     budgetMinor: adSet.budgetHeldByCampaign ? null : adSet.dailyBudgetMinorUnits,
-    audience: targetingSummary(adSet.derived.targeting),
+    audience: targetingSummary(adSet.derived.targeting, uiText, uiLocale),
     ads: adSet.ads.map((ad) => ({ id: ad.id, pathKey: ad.pathKey, name: ad.name })),
   })),
 });
 
 /** What keeps "Deploy paused" disabled, each named in words a person can act on. */
 function DeployBlockers({ blockers }: { blockers: DeployBlocker[] }) {
+  const uiText = useTranslations('scale');
   if (blockers.length === 0) return null;
   return (
     <div
       className="rounded-lg bg-warning/10 px-3 py-2.5 text-sm"
       data-testid="scaffold-deploy-blockers"
     >
-      <p className="font-medium">Before this can deploy</p>
+      <p className="font-medium">{uiText('before_this_can_deploy_67e989e')}</p>
       <ul className="mt-1 flex list-disc flex-col gap-1 pl-4 text-muted-foreground">
         {blockers.map((blocker) => (
           <li
@@ -186,6 +184,21 @@ export function PaidScaffoldCard({
     onSettled?: (outcome: OperatorActionOutcome) => void,
   ) => void;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const GATE_BY_TOOL_NAME: Record<
+    string,
+    { gate: 'build' | 'populate' | 'activate' | 'deploy' | 'publish'; label: string }
+  > = React.useMemo(
+    () => ({
+      paid_scaffold_deploy: { gate: 'deploy', label: uiText('deploy_paused_69832af') },
+      paid_scaffold_publish: { gate: 'publish', label: uiText('publish_auto_enroll_3f60ffc') },
+      paid_scaffold_build: { gate: 'build', label: uiText('approve_create_paused_0a8b9f8') },
+      paid_scaffold_populate: { gate: 'populate', label: uiText('approve_add_creatives_2190137') },
+      paid_scaffold_activate: { gate: 'activate', label: uiText('publish_only_1b2fd6a') },
+    }),
+    [uiText],
+  );
   const [selectedPathKey, setSelectedPathKey] = React.useState<string | null>(null);
   // Set on click and cleared when a gate arrives: the gate lands on a NEW card, so this one
   // says so instead of looking like the click did nothing.
@@ -222,7 +235,7 @@ export function PaidScaffoldCard({
     header?.name ??
     tree?.campaign?.name ??
     firstCampaignNameOf(scaffold.plan) ??
-    'Scaffold';
+    uiText('scaffoldFallbackTitle');
   const version = scaffold.version ?? header?.version ?? null;
   const parentScaffoldId = scaffold.parentScaffoldId ?? header?.scaffoldId ?? null;
   const { sessionId, onScaffoldFocus } = useScaffoldThread();
@@ -236,27 +249,30 @@ export function PaidScaffoldCard({
   const readModel = React.useMemo(
     () =>
       tree && treeHasNodes
-        ? campaignViewFromScaffoldRows(treeSourceOf(tree), {
+        ? campaignViewFromScaffoldRows(treeSourceOf(tree, uiText, uiLocale), {
             currency,
             diff: structure?.diff ?? null,
           })
         : structure
           ? campaignViewFromStructure(structure)
           : null,
-    [tree, treeHasNodes, currency, structure],
+    [tree, treeHasNodes, currency, structure, uiText, uiLocale],
   );
 
   const summary = React.useMemo(
-    () => scaffoldSummaryOf(plan, tree, currency),
-    [plan, tree, currency],
+    () => scaffoldSummaryOf(plan, tree, currency, uiText, uiLocale),
+    [plan, tree, currency, uiText, uiLocale],
   );
-  const audiences = React.useMemo(() => (plan ? audienceLinesOf(plan) : []), [plan]);
+  const audiences = React.useMemo(
+    () => (plan ? audienceLinesOf(plan, uiText, uiLocale) : []),
+    [plan, uiText, uiLocale],
+  );
   const creatives = React.useMemo(() => creativeTilesOf(tree, plan), [tree, plan]);
   // The saved rows, not the live canvas draft: the field list is what the version on screen —
   // the one "Deploy paused" approves — will build, and who supplied each value of it.
   const fieldGroups = React.useMemo(
-    () => scaffoldFieldGroupsOf({ plan, rows, currency }),
-    [plan, rows, currency],
+    () => scaffoldFieldGroupsOf({ plan, rows, currency, translate: uiText, locale: uiLocale }),
+    [plan, rows, currency, uiText, uiLocale],
   );
   const blockers = React.useMemo(
     () =>
@@ -265,8 +281,9 @@ export function PaidScaffoldCard({
         planLoaded: Boolean(scaffold.scaffoldPlan) || header !== null,
         tree,
         contentHash,
+        translate: uiText,
       }),
-    [plan, scaffold.scaffoldPlan, header, tree, contentHash],
+    [plan, scaffold.scaffoldPlan, header, tree, contentHash, uiText],
   );
 
   const ads = tree?.adSets.flatMap((adSet) => adSet.ads) ?? [];
@@ -371,7 +388,7 @@ export function PaidScaffoldCard({
     >
       <div className="px-4 pt-3">
         <AgentCardEyebrow
-          label="Paid campaign scaffold"
+          label={uiText('paid_campaign_scaffold_f0cf0f7')}
           right={
             <ScaffoldStatus
               superseded={superseded ? (supersededByVersion ?? null) : undefined}
@@ -397,12 +414,12 @@ export function PaidScaffoldCard({
                   className="ml-1.5 font-normal text-primary-ink text-xs"
                   data-testid="scaffold-live-canvas"
                 >
-                  Live on canvas
+                  {uiText('live_on_canvas_242bea9')}
                 </span>
               ) : null}
             </AgentCardTitle>
           ) : null}
-          <AgentCardSummary>{summaryLine(scaffold, tree)}</AgentCardSummary>
+          <AgentCardSummary>{summaryLine(scaffold, tree, uiText)}</AgentCardSummary>
         </div>
 
         <ScaffoldSummaryStrip summary={summary} />
@@ -411,7 +428,7 @@ export function PaidScaffoldCard({
           <div className="flex flex-col gap-1">
             <Progress value={(progressDone / progressTotal) * 100} className="h-1.5" />
             <span className="text-muted-foreground text-xs tabular-nums">
-              {progressDone} of {progressTotal} created
+              {uiText('sentence_1df524ac11d6', { v0: progressDone, v1: progressTotal })}
             </span>
           </div>
         ) : null}
@@ -424,14 +441,18 @@ export function PaidScaffoldCard({
             data-testid="scaffold-superseded"
           >
             {supersededByVersion !== undefined
-              ? `v${supersededByVersion} replaced this version, so it can no longer be deployed. Review and approve v${supersededByVersion} instead.`
-              : 'A newer version replaced this one, so it can no longer be deployed. Review and approve the newer version instead.'}
+              ? uiText('v_version_replaced_this_version_so_it_can_no__088e9f4', {
+                  version: supersededByVersion,
+                })
+              : uiText('a_newer_version_replaced_this_one_so_it_can_n_20a153f')}
           </p>
         ) : null}
 
         {preview && !decided && !superseded ? (
           <section className="flex flex-col gap-1.5" data-testid="scaffold-gate-preview">
-            <h4 className="font-medium text-foreground text-sm">What deploying creates</h4>
+            <h4 className="font-medium text-foreground text-sm">
+              {uiText('what_deploying_creates_5616a89')}
+            </h4>
             <div className="rounded-lg bg-background/80 px-1 py-1.5">
               <ApprovalChangeTable preview={preview} />
             </div>
@@ -445,7 +466,7 @@ export function PaidScaffoldCard({
 
         {isError ? (
           <p className="text-destructive text-sm">
-            {error?.message ?? 'Could not load the scaffold.'}
+            {error?.message ?? uiText('could_not_load_the_scaffold_54f4621')}
           </p>
         ) : readModel ? (
           <LecturaView
@@ -456,16 +477,18 @@ export function PaidScaffoldCard({
           />
         ) : (
           <p className="text-muted-foreground text-sm">
-            {isLoading ? 'Loading the scaffold…' : 'This scaffold has no nodes.'}
+            {isLoading
+              ? uiText('loading_the_scaffold_69393ab')
+              : uiText('this_scaffold_has_no_nodes_3c8d08e')}
           </p>
         )}
 
         {selectedAd && header ? (
           <>
             <label className="mt-2 flex items-center gap-2 text-xs">
-              Creative slot
+              {uiText('creative_slot_e6c243c')}
               <select
-                aria-label="Creative slot"
+                aria-label={uiText('creative_slot_e6c243c')}
                 className="min-w-0 rounded bg-background p-1"
                 value={selectedAd.pathKey}
                 onChange={(event) => setSelectedPathKey(event.target.value)}
@@ -493,12 +516,14 @@ export function PaidScaffoldCard({
         ) : null}
 
         {denial?.reason ? (
-          <p className="text-muted-foreground text-sm">Reason: {denial.reason}</p>
+          <p className="text-muted-foreground text-sm">
+            {uiText('sentence_aa11b9297c50', { v0: denial.reason })}
+          </p>
         ) : null}
 
         {expired && !decided ? (
           <p className="text-muted-foreground text-sm">
-            That approval expired, so nothing was created. Deploy again to open a fresh one.
+            {uiText('that_approval_expired_so_nothing_was_created__b873ec9')}
           </p>
         ) : null}
 
@@ -522,31 +547,31 @@ export function PaidScaffoldCard({
             disabled={isStreaming}
             onClick={() => onDecide?.(approval, 'deny')}
           >
-            Deny
+            {uiText('deny_05a2d73')}
           </AgentButton>
           <AgentButton
             variant="ghost"
             disabled={isStreaming}
             onClick={() => onDecide?.(approval, 'approve', 'publish_only')}
           >
-            Publish only
+            {uiText('publish_only_1b2fd6a')}
           </AgentButton>
           <AgentButton
             variant="primary"
             disabled={isStreaming}
             onClick={() => onDecide?.(approval, 'approve', 'publish_and_enroll')}
           >
-            Publish &amp; auto-enroll
+            {uiText('publish_auto_enroll_3f60ffc')}
           </AgentButton>
         </AgentActions>
       ) : deployMode !== 'none' ? (
         <AgentActions className="mt-0 flex-wrap justify-between gap-2 px-4 py-3">
           <p className="min-w-0 max-w-[40ch] text-muted-foreground text-xs leading-snug">
             {deployRequested
-              ? 'Opening the approval below…'
+              ? uiText('opening_the_approval_below_055e92d')
               : deployOpenedBelow
-                ? 'The approval opened below — answer it there.'
-                : 'Everything lands paused. Going live is a separate unpause you approve.'}
+                ? uiText('the_approval_opened_below_answer_it_there_0d73446')
+                : uiText('everything_lands_paused_going_live_is_a_separ_2402fe6')}
           </p>
           <div className="flex items-center gap-1">
             {deployMode === 'approve' && approval ? (
@@ -555,7 +580,7 @@ export function PaidScaffoldCard({
                 disabled={isStreaming}
                 onClick={() => onDecide?.(approval, 'deny')}
               >
-                Dismiss
+                {uiText('dismiss_48845bf')}
               </AgentButton>
             ) : null}
             <AgentButton
@@ -571,7 +596,7 @@ export function PaidScaffoldCard({
               data-action={deployMode}
               title={blockers[0]?.message}
             >
-              {deployMode === 'approve' && gate ? gate.label : 'Deploy paused'}
+              {deployMode === 'approve' && gate ? gate.label : uiText('deploy_paused_69832af')}
             </AgentButton>
           </div>
         </AgentActions>
@@ -604,14 +629,17 @@ function ScaffoldStatus({
   expired: boolean;
   tree: ScaffoldTree | null;
 }) {
+  const uiText = useTranslations('scale');
   if (receipt) {
     if (receipt.publicationMode) {
       return receipt.status === 'completed' ? (
         <StatusLabel tone="done">
-          {receipt.publicationMode === 'publish_and_enroll' ? 'Published & enrolled' : 'Published'}
+          {receipt.publicationMode === 'publish_and_enroll'
+            ? uiText('published_enrolled_0a74b98')
+            : uiText('published_2ef42ec')}
         </StatusLabel>
       ) : (
-        <StatusLabel tone="failed">Publication stopped</StatusLabel>
+        <StatusLabel tone="failed">{uiText('publication_stopped_1a96852')}</StatusLabel>
       );
     }
     const tone =
@@ -621,24 +649,29 @@ function ScaffoldStatus({
   if (superseded !== undefined) {
     return (
       <StatusLabel tone="neutral">
-        {superseded === null ? 'Superseded by a newer version' : `Superseded by v${superseded}`}
+        {superseded === null
+          ? uiText('superseded_by_a_newer_version_fc5922d')
+          : uiText('superseded_by_v_version_e17949e', { version: superseded })}
       </StatusLabel>
     );
   }
   if (decided === 'deny' || decided === 'denied') {
-    return <StatusLabel tone="neutral">Declined — nothing created</StatusLabel>;
+    return <StatusLabel tone="neutral">{uiText('declined_nothing_created_6f7b586')}</StatusLabel>;
   }
   if (decided === 'approve' || decided === 'approved') {
-    return <StatusLabel tone="running">Approved</StatusLabel>;
+    return <StatusLabel tone="running">{uiText('approved_87b42e4')}</StatusLabel>;
   }
-  if (expired) return <StatusLabel tone="neutral">Expired</StatusLabel>;
-  if (awaiting) return <StatusLabel tone="waiting">Awaiting your approval</StatusLabel>;
+  if (expired) return <StatusLabel tone="neutral">{uiText('expired_424a255')}</StatusLabel>;
+  if (awaiting)
+    return <StatusLabel tone="waiting">{uiText('awaiting_your_approval_9f09488')}</StatusLabel>;
   // A reloaded proposal can be older than a build that has since run in a later turn.
   const onMeta = tree?.counts.created ?? 0;
   if (onMeta > 0) {
-    return <StatusLabel tone="done">{onMeta} on Meta</StatusLabel>;
+    return (
+      <StatusLabel tone="done">{uiText.rich('sentence_981d7b8d8aec', { v0: onMeta })}</StatusLabel>
+    );
   }
-  return <StatusLabel tone="neutral">Proposed — nothing on Meta yet</StatusLabel>;
+  return <StatusLabel tone="neutral">{uiText('proposed_nothing_on_meta_yet_03c468d')}</StatusLabel>;
 }
 
 /**
@@ -647,6 +680,7 @@ function ScaffoldStatus({
  * everything else rather than buried in an error list.
  */
 function ScaffoldReceiptNotice({ scaffold }: { scaffold: JainaScaffoldState }) {
+  const uiText = useTranslations('scale');
   const receipt = scaffold.receipt as
     | (Record<string, unknown> & { errors?: { message: string }[] })
     | null;
@@ -659,11 +693,10 @@ function ScaffoldReceiptNotice({ scaffold }: { scaffold: JainaScaffoldState }) {
     return (
       <div className="rounded-md bg-warning/10 p-2.5 text-sm">
         <p className="font-medium">
-          {unrecorded.length} object{unrecorded.length === 1 ? '' : 's'} may exist on Meta without a
-          record.
+          {uiText.rich('sentence_87b4f695af83', { count: unrecorded.length })}
         </p>
         <p className="text-muted-foreground">
-          Do not retry this gate — read the ad account first, or the retry will create duplicates.
+          {uiText('do_not_retry_this_gate_read_the_ad_account_fi_424bd0e')}
         </p>
       </div>
     );

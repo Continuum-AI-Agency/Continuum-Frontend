@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { HomeCreativeSpotlightData, OrganicWinners } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { PaidCreativeReadState } from '@/hooks/usePaidCreativeReport';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeReadLoad } from '../../homeRead';
 import { TWO_WINNERS } from '../flywheel/__fixtures__/organicWinners';
 import {

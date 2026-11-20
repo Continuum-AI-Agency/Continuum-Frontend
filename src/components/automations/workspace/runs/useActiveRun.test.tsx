@@ -1,8 +1,9 @@
+import { renderHook } from '@/i18n/__tests__/render';
 // The location seam is injected rather than mocked, so nothing about
 // `next/navigation` leaks into sibling spec files in the shared bun process.
 
 import { describe, expect, test } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import { type RunLocation, useActiveRun } from './useActiveRun';
 
 const stubLocation = (runId: string | null) => {

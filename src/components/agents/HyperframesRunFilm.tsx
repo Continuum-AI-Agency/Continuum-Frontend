@@ -6,6 +6,7 @@ import {
   hyperframesAgentEventSchema,
 } from '@continuum/contracts';
 import { Loader2Icon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useAgentRunStream } from '@/hooks/useAgentRunStream';
@@ -50,6 +51,8 @@ export function useHyperframesFilm(runId: string | null): HyperframesFilm | null
 }
 
 export function HyperframesFilmView({ film }: { film: HyperframesFilm }) {
+  const tUi = useTranslations('common');
+
   if (film.state === 'failed') {
     return <p className="text-xs text-destructive">{film.error}</p>;
   }
@@ -57,7 +60,7 @@ export function HyperframesFilmView({ film }: { film: HyperframesFilm }) {
     return (
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Loader2Icon className="size-3 animate-spin" aria-hidden="true" />
-        {film.step ?? 'Making the film…'}
+        {film.step ?? tUi('m_3d795f26ad')}
       </p>
     );
   }
@@ -65,6 +68,8 @@ export function HyperframesFilmView({ film }: { film: HyperframesFilm }) {
 }
 
 function SignedFilm({ storage }: { storage: HyperframesStoragePointer }) {
+  const tUi = useTranslations('common');
+
   const { activeBrandId } = useActiveBrandContext();
   const [url, setUrl] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -87,7 +92,7 @@ function SignedFilm({ storage }: { storage: HyperframesStoragePointer }) {
   }, [activeBrandId, storage.bucket, storage.path]);
 
   if (unavailable) {
-    return <p className="text-xs text-destructive">The film is ready but could not be loaded.</p>;
+    return <p className="text-xs text-destructive">{tUi('m_4cc4b1ca46')}</p>;
   }
   return (
     <div className="aspect-video w-full overflow-hidden rounded-md border border-border/60 bg-black">

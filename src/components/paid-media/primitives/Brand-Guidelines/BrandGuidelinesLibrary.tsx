@@ -1,5 +1,7 @@
 'use client';
+
 import { Plus } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Pill, type PillProps } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -27,24 +29,31 @@ export function BrandGuidelinesLibrary({
   onCreateNew,
   isLoading = false,
 }: BrandGuidelinesLibraryProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <div className="glass-panel h-full rounded-lg p-4">
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
-          <h4 className="text-lg font-semibold text-white">Guidelines library</h4>
+          <h4 className="text-lg font-semibold text-white">
+            {uiText('guidelines_library_2351587')}
+          </h4>
           <Button size="sm" onClick={onCreateNew}>
-            <Plus /> New
+            <Plus />
+            {uiText('new_18fdd54')}
           </Button>
         </div>
         <span className="text-sm text-muted-foreground">
-          Purpose-driven brand guideline sets. Create one for each seasonal or campaign need.
+          {uiText('purpose_driven_brand_guideline_sets_create_on_aadb78c')}
         </span>
         {isLoading ? (
-          <span className="text-sm text-muted-foreground">Loading guidelines...</span>
+          <span className="text-sm text-muted-foreground">
+            {uiText('loading_guidelines_239ef13')}
+          </span>
         ) : guidelines.length === 0 ? (
           <div className="rounded-md border border-dashed border-[var(--glass-border)] p-4">
             <span className="text-sm text-muted-foreground">
-              No guidelines yet. Create a new guideline to get started.
+              {uiText('no_guidelines_yet_create_a_new_guideline_to_g_d33e62d')}
             </span>
           </div>
         ) : (
@@ -68,10 +77,12 @@ export function BrandGuidelinesLibrary({
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">
-                      Version {guideline.version}
+                      {uiText.rich('sentence_6f34daf78edd', { v0: guideline.version })}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Updated {new Date(guideline.updatedAt).toLocaleDateString()}
+                      {uiText.rich('sentence_5f1f7fcaedd2', {
+                        v0: () => new Date(guideline.updatedAt).toLocaleDateString(uiLocale),
+                      })}
                     </span>
                   </div>
                 </button>

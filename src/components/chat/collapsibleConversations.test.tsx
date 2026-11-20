@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react';
+import { act, cleanup, fireEvent } from '@testing-library/react';
+import { render, renderHook } from '@/i18n/__tests__/render';
 
 import {
   CollapsedConversationsRail,

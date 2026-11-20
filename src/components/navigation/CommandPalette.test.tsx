@@ -3,7 +3,8 @@
 // (mirrors AdminUserList.test.tsx / OrganicWorkspaceTabs.test.tsx; the focused
 // agent-validate runner does not apply this preload, so run it in the batch).
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // Mutable route + navigation spy, controlled per test.
 let pathnameState = '/scale';

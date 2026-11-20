@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { PUBLISH_IMAGE_INPUT_HANDLE } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';

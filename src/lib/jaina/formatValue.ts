@@ -1,4 +1,5 @@
-import { formatMoney } from '@continuum/contracts';
+import { matchBrowserLocale } from '@/i18n/browserLocale';
+import { formatCurrency as formatUiCurrency } from '@/lib/money/display';
 
 export type ValueFormat =
   | 'currency'
@@ -79,7 +80,7 @@ export function formatValue(
     // answer never shows the same figure two ways. Never the locale's "MX$", never a guessed
     // "$", never "(currency unknown)".
     case 'currency':
-      return formatMoney(num, options?.currency);
+      return formatUiCurrency(num, options?.currency, matchBrowserLocale(locale));
 
     case 'percent': {
       const basis = options?.percentBasis ?? null;

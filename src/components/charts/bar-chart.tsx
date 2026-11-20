@@ -29,7 +29,6 @@ import {
 } from './chart-child-passthrough';
 import { ChartProvider, type LineConfig, type Margin, type TooltipData } from './chart-context';
 import { isGradientDefComponent, isPatternDefComponent } from './chart-defs';
-import { shortDateFmt } from './chart-formatters';
 import {
   type ChartPhase,
   type ChartStatus,
@@ -38,6 +37,7 @@ import {
 } from './chart-phase';
 import { BarLoadingSkeleton } from './loading-sweep';
 import { extractReferenceAreaConfigs } from './reference-area-config';
+import { useChartFormatters } from './use-chart-formatters';
 import { useScheduledTooltip } from './use-scheduled-tooltip';
 import {
   buildYScalesForLines,
@@ -186,6 +186,8 @@ const ChartCore = memo(function ChartCore({
   onPhaseChange,
   status,
 }: ChartInnerProps) {
+  const { shortDateFmt } = useChartFormatters();
+
   const { tooltipData, setTooltipData, scheduleTooltip, clearTooltip } =
     useScheduledTooltip<TooltipData>();
   const [isLoaded, setIsLoaded] = useState(false);

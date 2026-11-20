@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaAsset } from '@continuum/contracts';
-
 // happy-dom does not expose SyntaxError on its window object, which causes
 // @testing-library/dom's querySelectorAll internals to crash. Polyfill it so
 // all DOM queries work correctly in this environment.
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useState } from 'react';
 import {
   Reel,
@@ -53,6 +55,7 @@ const reelItems: ReelItem[] = [
 ];
 
 export function ReelControlledExample() {
+  const uiText = useTranslations('common');
   // Controlled state for all reel properties
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -93,7 +96,7 @@ export function ReelControlledExample() {
     <div className="flex flex-col gap-6">
       {/* External Controls */}
       <div className="flex flex-col gap-4 rounded-lg border p-4">
-        <h3 className="font-semibold text-lg">External Controls</h3>
+        <h3 className="font-semibold text-lg">{uiText('m_df181736b8')}</h3>
 
         <div className="flex gap-2">
           <button
@@ -101,28 +104,28 @@ export function ReelControlledExample() {
             onClick={handlePrevious}
             type="button"
           >
-            Previous
+            {uiText('previous_a57b08a')}
           </button>
           <button
             className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
             onClick={handlePlayPause}
             type="button"
           >
-            {isPlaying ? 'Pause' : 'Play'}
+            {isPlaying ? uiText('pause_858e4ba') : uiText('play_436e610')}
           </button>
           <button
             className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
             onClick={handleNext}
             type="button"
           >
-            Next
+            {uiText('next_1ff57a2')}
           </button>
           <button
             className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
             onClick={handleToggleMute}
             type="button"
           >
-            {isMuted ? 'Unmute' : 'Mute'}
+            {isMuted ? uiText('unmute_ce4ee4e') : uiText('mute_8dd6857')}
           </button>
         </div>
 
@@ -142,10 +145,22 @@ export function ReelControlledExample() {
         </div>
 
         <div className="text-gray-600 text-sm">
-          <p>Current Index: {currentIndex}</p>
-          <p>Playing: {isPlaying ? 'Yes' : 'No'}</p>
-          <p>Muted: {isMuted ? 'Yes' : 'No'}</p>
-          <p>Current Item: {currentItem.title}</p>
+          <p>
+            {uiText('m_d9a9dca249')}
+            {currentIndex}
+          </p>
+          <p>
+            {uiText('m_4cbc47c870')}
+            {isPlaying ? uiText('yes_85a39ab') : uiText('no_1ea442a')}
+          </p>
+          <p>
+            {uiText('m_5fdd91c502')}
+            {isMuted ? uiText('yes_85a39ab') : uiText('no_1ea442a')}
+          </p>
+          <p>
+            {uiText('m_c50dd61fce')}
+            {currentItem.title}
+          </p>
         </div>
       </div>
 
@@ -164,9 +179,12 @@ export function ReelControlledExample() {
 
           <ReelHeader>
             <div className="text-white">
-              <h2 className="font-bold text-xl">Controlled Reel</h2>
+              <h2 className="font-bold text-xl">{uiText('m_f3d3786774')}</h2>
               <p className="text-sm opacity-80">
-                Item {currentIndex + 1} of {reelItems.length}
+                {uiText('m_284e12472d')}
+                {currentIndex + 1}
+                {uiText('of_a4282e4')}
+                {reelItems.length}
               </p>
             </div>
           </ReelHeader>
@@ -200,11 +218,8 @@ export function ReelControlledExample() {
 
       {/* Advanced Controlled Example with Custom UI */}
       <div className="flex flex-col gap-4 rounded-lg border p-4">
-        <h3 className="font-semibold text-lg">Advanced Controlled Example</h3>
-        <p className="text-gray-600 text-sm">
-          This example shows how you can build a completely custom UI while controlling the Reel
-          state from outside.
-        </p>
+        <h3 className="font-semibold text-lg">{uiText('m_62ee24f330')}</h3>
+        <p className="text-gray-600 text-sm">{uiText('m_22a95869ea')}</p>
 
         <div className="flex gap-4">
           <div className="flex-1">
@@ -241,7 +256,7 @@ export function ReelControlledExample() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <label className="font-medium text-sm" htmlFor="timeline">
-                  Timeline:
+                  {uiText('m_dba8382d55')}
                 </label>
                 <input
                   className="flex-1"
@@ -262,7 +277,7 @@ export function ReelControlledExample() {
                   type="checkbox"
                 />
                 <label className="text-sm" htmlFor="autoplay">
-                  Auto-play
+                  {uiText('m_eea7e1107f')}
                 </label>
               </div>
 
@@ -274,7 +289,7 @@ export function ReelControlledExample() {
                   type="checkbox"
                 />
                 <label className="text-sm" htmlFor="muted">
-                  Muted
+                  {uiText('m_b9e78ced88')}
                 </label>
               </div>
             </div>
@@ -304,9 +319,11 @@ export function ReelControlledExample() {
 
 // Example of using the controlled Reel in a parent component
 export default function ControlledReelPage() {
+  const tUi = useTranslations('common');
+
   return (
     <div className="container mx-auto py-8">
-      <h1 className="mb-8 text-center font-bold text-3xl">Controlled Reel Examples</h1>
+      <h1 className="mb-8 text-center font-bold text-3xl">{tUi('m_dd70485c74')}</h1>
       <ReelControlledExample />
     </div>
   );

@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // Two seams of the workspace shell: the escape-hatch patch the publish dialog
 // hands back, and the inspector's evidence block — which used to render the
 // server test's evidence only, leaving a LIVE run showing a status badge and
@@ -11,7 +12,7 @@ import type {
   AutomationWorkflowNode,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { applyDefinitionToCanvasNodes, WorkflowInspector } from './AutomationWorkspacePanels';
@@ -166,8 +167,8 @@ describe('WorkflowInspector run evidence', () => {
       ],
     });
 
-    expect(screen.getByText('Live run · attempt 1 · failed')).toBeTruthy();
-    expect(screen.getByText('Live run · attempt 2 · completed')).toBeTruthy();
+    expect(screen.getByText('Live run · attempt 1 · Failed')).toBeTruthy();
+    expect(screen.getByText('Live run · attempt 2 · Completed')).toBeTruthy();
   });
 
   test('says the step reported nothing rather than showing a bare status badge', () => {

@@ -6,8 +6,10 @@ import type {
   PresentationEnvelope,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LayerDraftChange } from '@/components/forge/layerDraft';
+import { useUiErrorSentence } from '@/i18n/errors';
 import { type PresentationScope, presentationsApi } from '@/lib/api/presentations.client';
 import { PresentationEngine } from './presentationEngine';
 
@@ -15,6 +17,9 @@ export function usePresentationDocument(
   scope: PresentationScope,
   onDraftChange?: LayerDraftChange,
 ) {
+  const uiErrorText = useUiErrorSentence();
+  const translateUi = useUiTranslations('forge');
+
   const key = useMemo(
     () => ['forge', scope.brandId, 'presentation', scope.assetId, scope.baseVersionId],
     [scope.brandId, scope.assetId, scope.baseVersionId],
@@ -84,14 +89,14 @@ export function usePresentationDocument(
         setHistoryVersion((value) => value + 1);
         return true;
       } catch (reason) {
-        setError(reason instanceof Error ? reason.message : 'The edit could not be applied.');
+        setError(uiErrorText(reason, translateUi('the_edit_could_not_be_applied_53973ec')));
         return false;
       } finally {
         lock.current = false;
         setBusy(false);
       }
     },
-    [document, engine, local],
+    [document, engine, local, uiErrorText, translateUi],
   );
 
   const save = useCallback(async () => {
@@ -115,16 +120,14 @@ export function usePresentationDocument(
       return true;
     } catch (reason) {
       setError(
-        reason instanceof Error
-          ? reason.message
-          : 'The changes could not be saved. They remain in this workspace.',
+        uiErrorText(reason, translateUi('the_changes_could_not_be_saved_they_remain_in_410a32f')),
       );
       return false;
     } finally {
       lock.current = false;
       setBusy(false);
     }
-  }, [dirty, local, query.data, scope, adopt]);
+  }, [dirty, local, query.data, scope, adopt, uiErrorText, translateUi]);
 
   const discard = useCallback(() => {
     setLocal(null);
@@ -161,13 +164,13 @@ export function usePresentationDocument(
           ),
         );
       } catch (reason) {
-        setError(reason instanceof Error ? reason.message : 'History could not be restored.');
+        setError(uiErrorText(reason, translateUi('history_could_not_be_restored_dcc791e')));
       } finally {
         lock.current = false;
         setBusy(false);
       }
     },
-    [document, local, dirty, query.data, scope, adopt],
+    [document, local, dirty, query.data, scope, adopt, uiErrorText, translateUi],
   );
 
   useEffect(() => {

@@ -6,6 +6,7 @@
 // Continuum Report email (SendContinuumReportDialog, used as is).
 
 import { DownloadIcon, SendIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
 import { parseReport } from '@/components/paid-media/optimizer/reportModel';
@@ -20,7 +21,6 @@ import {
   checklistCsv,
   checklistFileName,
   checklistItemsOf,
-  EMAIL_NOTE,
 } from './checklistModel';
 
 type Answer = ChecklistItem[] | 'error';
@@ -59,6 +59,7 @@ function PortfolioItems({
   accountCurrency: string | null;
   onAnswer: (portfolioId: string, answer: Answer) => void;
 }) {
+  const uiText = useTranslations('dashboard');
   const performance = useOptimizerPerformance(entry.id);
   const answered = performance.isSuccess;
   const failed = performance.isError && !answered;
@@ -84,12 +85,14 @@ function PortfolioItems({
       <h4 className="font-medium text-sm">{entry.name}</h4>
       {failed ? (
         <p className="text-muted-foreground text-xs" role="alert">
-          This portfolio's recommendations could not be read.
+          {uiText('this_portfolio_s_recommendations_could_not_be_4a2a840')}
         </p>
       ) : items == null ? (
         <Skeleton className="h-16 w-full" />
       ) : items.length === 0 ? (
-        <p className="text-muted-foreground text-xs">Nothing is open for the client right now.</p>
+        <p className="text-muted-foreground text-xs">
+          {uiText('nothing_is_open_for_the_client_right_now_1924fc9')}
+        </p>
       ) : (
         <ul className="flex flex-col gap-3">
           {items.map((item) => (
@@ -122,6 +125,7 @@ export default function ChecklistModule({
   portfolios: ChecklistPortfolio[];
   adAccounts: HomeAdAccount[];
 }) {
+  const uiText = useTranslations('dashboard');
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [emailOpen, setEmailOpen] = useState(false);
   const onAnswer = useCallback((portfolioId: string, answer: Answer) => {
@@ -153,14 +157,16 @@ export default function ChecklistModule({
           variant="outline"
         >
           <DownloadIcon aria-hidden="true" />
-          Export checklist
+          {uiText('export_checklist_09e21c4')}
         </Button>
         <Button onClick={() => setEmailOpen(true)} size="sm" type="button" variant="ghost">
           <SendIcon aria-hidden="true" />
-          Send by email
+          {uiText('send_by_email_436a04a')}
         </Button>
       </div>
-      <p className="text-muted-foreground text-xs leading-snug">{EMAIL_NOTE}</p>
+      <p className="text-muted-foreground text-xs leading-snug">
+        {uiText('send_by_email_sends_the_brand_s_continuum_rep_9dc4861')}
+      </p>
       {portfolios.map((entry) => (
         <PortfolioItems
           accountCurrency={accountCurrencyOf(entry.portfolio, adAccounts)}

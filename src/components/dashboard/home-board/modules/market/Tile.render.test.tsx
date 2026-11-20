@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock, setSystemTime } from 'bun:test';
 import type { Competitor, HomeBoardTile } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeBoardContext } from '../../types';
 import { AWARENESS, NOW, SMART_FIT, SPORT_CITY, TRENDS_READ } from './__fixtures__/marketRadar';
 import { competitorMovesOf, trendItemsOf, trendsFromReadResponse } from './marketRadarModel';
@@ -38,7 +39,7 @@ mock.module('@/lib/api/competitorSpy', () => ({
 }));
 
 const { default: MarketTile } = await import('./Tile');
-const { default: MarketRadarModule, RADAR_ORDER_NOTE } = await import('./Module');
+const { default: MarketRadarModule } = await import('./Module');
 
 setSystemTime(NOW);
 afterEach(() => {
@@ -129,6 +130,10 @@ describe('Market radar module (expanded)', () => {
       'Retos de entrenamiento en pareja',
     ]);
     expect(trends[0]?.textContent).toContain('85% confidence');
-    expect(getByText(RADAR_ORDER_NOTE)).toBeTruthy();
+    expect(
+      getByText(
+        'Newest first. Trends carry no relevance score, so same-day trends are ordered by confidence.',
+      ),
+    ).toBeTruthy();
   });
 });

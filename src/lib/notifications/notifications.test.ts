@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'bun:test';
 import type { AppNotification } from '@continuum/contracts';
-import { describeNotification, mapNotificationRow, type NotificationRow } from './notifications';
+import { createTranslator } from 'next-intl';
+import en from '../../../messages/common/en.json';
+import es from '../../../messages/common/es.json';
+import {
+  describeNotification as describeNotificationLocalized,
+  mapNotificationRow,
+  type NotificationRow,
+} from './notifications';
 import { type ReviewPingTarget, selectablePingTargets } from './reviewPing';
+
+const translate = createTranslator({ locale: 'en', messages: en });
+const describeNotification = (item: AppNotification) =>
+  describeNotificationLocalized(item, translate);
 
 const baseRow: NotificationRow = {
   id: 'n-1',
@@ -118,6 +129,21 @@ describe('describeNotification', () => {
     expect(mention.title).toBe('Ana mentioned you on “Reel”');
     expect(mention.detail).toBeNull();
     expect(mention.href).toBe(mention.href);
+  });
+});
+
+describe('localized notification presentation', () => {
+  it('localizes system copy while preserving authored names and comments', () => {
+    const t = createTranslator({ locale: 'es', messages: es });
+    const display = describeNotificationLocalized(
+      notification({
+        kind: 'comment_mention',
+        payload: { actorName: 'Ana', assetName: 'Summer Reel', excerpt: 'Please keep this text' },
+      }),
+      t,
+    );
+    expect(display.title).toBe('Ana te mencionó en “Summer Reel”');
+    expect(display.detail).toBe('Please keep this text');
   });
 });
 

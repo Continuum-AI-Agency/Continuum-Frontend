@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Jaina's bar under the portfolio read (P1, "Lectura continua"): a field to ask her about
 // this portfolio and the five prepared questions, in one light primary band with no border.
 // The page has ONE place that talks to Jaina.
@@ -41,6 +43,7 @@ export function JainaPortfolioPanel({
   onAsk = navigate,
   className,
 }: JainaPortfolioPanelProps) {
+  const uiText = useTranslations('scale');
   const [question, setQuestion] = React.useState('');
   const trimmed = question.trim();
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -60,22 +63,22 @@ export function JainaPortfolioPanel({
           onSubmit={submit}
         >
           <Input
-            aria-label={`Ask Jaina about ${portfolio.name}`}
+            aria-label={uiText('template_a061f0e72a2a', { v0: portfolio.name })}
             className="h-8 min-w-0 bg-background text-sm"
             name="question"
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Ask anything about this portfolio…"
+            placeholder={uiText('ask_anything_about_this_portfolio_1ebbf4c')}
             value={question}
           />
           <Button
-            aria-label="Send the question to Jaina"
+            aria-label={uiText('send_the_question_to_jaina_d15d1f7')}
             disabled={trimmed.length === 0}
             size="sm"
             type="submit"
             variant="outline"
           >
             <SendHorizontalIcon aria-hidden className="size-3.5" />
-            Ask
+            {uiText('ask_b8c209c')}
           </Button>
         </form>
       </JainaEntryChips>

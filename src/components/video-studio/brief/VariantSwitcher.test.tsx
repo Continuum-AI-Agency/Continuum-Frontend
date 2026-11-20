@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { createEditorProjectV2 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { VideoStudioContext } from '../types';
 
 // list_variants is held open, so the test sees the switcher before and after it answers.
@@ -16,7 +22,11 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
     });
   },
 }));
-mock.module('next/navigation', () => ({ useRouter: () => ({ push: () => undefined }) }));
+const navigation = await import('next/navigation');
+mock.module('next/navigation', () => ({
+  ...navigation,
+  useRouter: () => ({ push: () => undefined }),
+}));
 
 const { VariantSwitcher } = await import('./VariantSwitcher');
 

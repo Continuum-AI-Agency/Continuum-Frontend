@@ -1,8 +1,7 @@
 import { expect, test } from 'bun:test';
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-
 import { BrandTrendsGrid } from '@/components/brand-insights/BrandTrendsGrid';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
 
 test('BrandTrendsGrid shows generated date in the date column', () => {
   const html = renderToStaticMarkup(

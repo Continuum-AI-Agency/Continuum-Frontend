@@ -8,6 +8,7 @@
 import { transcriptSegmentSchema } from '@continuum/contracts';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { type TranscriptView, transcriptView } from './transcriptSegments';
 
 const responseSchema = z.object({
@@ -33,6 +34,8 @@ export function useAssetTranscript(
   assetId: string,
   enabled: boolean,
 ): UseAssetTranscriptResult {
+  const uiErrorText = useUiErrorMessage();
+
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<TranscriptView>(UNTRANSCRIBED);
@@ -67,7 +70,7 @@ export function useAssetTranscript(
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Could not load the transcript');
+        setError(uiErrorText(err));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -76,7 +79,7 @@ export function useAssetTranscript(
     return () => {
       cancelled = true;
     };
-  }, [brandId, assetId, enabled]);
+  }, [brandId, assetId, enabled, uiErrorText]);
 
   return { loading, error, view, source, language };
 }

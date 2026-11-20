@@ -1,5 +1,7 @@
 'use client';
+
 import { Send } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 // Opens the Continuum Report recipient picker. On-demand emails are "Continuum
 // Report" (not the scheduled Continuum Pulse digest). Same edge builder, product
@@ -14,13 +16,15 @@ type SendPulseButtonProps = {
 };
 
 export function SendPulseButton({ brandId }: SendPulseButtonProps) {
+  const tUi = useTranslations('dashboard');
+
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         <Send aria-hidden />
-        Email Continuum Report
+        {tUi('email_continuum_report_fed107b')}
       </Button>
       <SendContinuumReportDialog brandId={brandId} open={open} onOpenChange={setOpen} />
     </>

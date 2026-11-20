@@ -1,3 +1,6 @@
+import type { useTranslations } from 'next-intl';
+import { automationCapabilityDescription } from '@/i18n/automationCapability';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
 // Which data sources the builder offers, and what they are called.
 //
 // The list comes from the SERVER (`/capabilities`) rather than from the bundled
@@ -39,9 +42,19 @@ export const AUTOMATION_SOURCE_LABELS: Readonly<Record<string, string>> = {
 };
 
 /** Falls back to a humanized form so a kind shipped after this build still reads. */
-export const automationSourceLabel = (source: string): string =>
-  AUTOMATION_SOURCE_LABELS[source] ??
-  source.replaceAll('_', ' ').replace(/^./, (char) => char.toUpperCase());
+export const automationSourceLabel = (
+  source: string,
+  translate?: ReturnType<typeof useTranslations<'automations'>>,
+): string => {
+  const known = AUTOMATION_SOURCE_LABELS[source];
+  return known
+    ? translate
+      ? localizeAutomationsCopy(known, translate)
+      : known
+    : translate
+      ? source
+      : source.replaceAll('_', ' ').replace(/^./, (char) => char.toUpperCase());
+};
 
 export type AutomationSourceOption = {
   value: string;
@@ -62,16 +75,18 @@ const bundledOption = (source: AutomationSourceKind): AutomationSourceOption => 
 export const buildAutomationSourceOptions = ({
   capabilities,
   selected,
+  translate,
 }: {
   capabilities?: AutomationCapabilitiesResponse | null;
   /** The kind this node already stores. Always offered, see below. */
   selected?: string;
+  translate?: ReturnType<typeof useTranslations<'automations'>>;
 }): AutomationSourceOption[] => {
   const options: AutomationSourceOption[] =
     capabilities && capabilities.sources.length > 0
       ? capabilities.sources.map((capability) => ({
           value: capability.source,
-          label: automationSourceLabel(capability.source),
+          label: automationSourceLabel(capability.source, translate),
           // Deliberately selectable even when unavailable. A preview source is a
           // legitimate disabled placeholder — server templates ship them, and the
           // palette already lets you drop one. Publish readiness is the real gate,
@@ -79,9 +94,16 @@ export const buildAutomationSourceOptions = ({
           // only make the graph harder to author without making it safer.
           disabled: false,
           preview: capability.lifecycle === 'preview',
-          reason: capability.reason,
+          reason: translate
+            ? automationCapabilityDescription(capability, translate)
+            : capability.reason,
         }))
-      : automationSourceKindSchema.options.map(bundledOption);
+      : automationSourceKindSchema.options.map((source) => {
+          const option = bundledOption(source);
+          return translate
+            ? { ...option, label: automationSourceLabel(source, translate) }
+            : option;
+        });
 
   // Never drop the stored value. If the server stops advertising a kind — rolled
   // back, or renamed — a node configured with it must stay editable rather than
@@ -89,10 +111,14 @@ export const buildAutomationSourceOptions = ({
   if (selected && !options.some((option) => option.value === selected)) {
     options.push({
       value: selected,
-      label: `${automationSourceLabel(selected)} (unavailable)`,
+      label: translate
+        ? translate('sourceUnavailable', { source: automationSourceLabel(selected, translate) })
+        : `${automationSourceLabel(selected)} (unavailable)`,
       disabled: false,
       preview: false,
-      reason: 'This source is not offered by the server right now.',
+      reason: translate
+        ? localizeAutomationsCopy('This source is not offered by the server right now.', translate)
+        : 'This source is not offered by the server right now.',
     });
   }
 

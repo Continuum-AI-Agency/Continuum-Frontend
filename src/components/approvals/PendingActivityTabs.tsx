@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import type * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -30,6 +32,7 @@ export function PendingActivityTabs({
   activityContent,
   className,
 }: Props) {
+  const uiText = useTranslations('common');
   const list = usePendingActions(brandId, 'PENDING');
   const pendingCount = list.data?.total ?? 0;
   // Clicking the already-active tab fires no change event, so the triggers record the choice
@@ -56,7 +59,7 @@ export function PendingActivityTabs({
             onClick={() => setSelectedTab('pending')}
             className="h-6 gap-1.5 px-2 text-xs"
           >
-            Pending
+            {uiText('pending_331551b')}
             {pendingCount > 0 ? (
               <Badge
                 variant="secondary"
@@ -71,7 +74,7 @@ export function PendingActivityTabs({
             onClick={() => setSelectedTab('activity')}
             className="h-6 px-2 text-xs"
           >
-            Activity
+            {uiText('activity_38da150')}
           </TabsTrigger>
         </TabsList>
       </div>

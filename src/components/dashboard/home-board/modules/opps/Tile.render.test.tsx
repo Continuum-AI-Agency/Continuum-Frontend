@@ -4,7 +4,8 @@ import type {
   HomeOpportunityCard,
   PortfolioListItem,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeReadLoad } from '../../homeRead';
 import { homeContext, tileOf } from './__fixtures__/homeContext';
 import {

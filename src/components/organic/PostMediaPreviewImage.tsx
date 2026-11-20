@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -18,8 +20,11 @@ export function PostMediaPreviewImage({
   alt,
   className,
   onRecover,
-  fallbackLabel = 'Media preview unavailable',
+  fallbackLabel: providedFallbackLabel,
 }: PostMediaPreviewImageProps) {
+  const uiText = useTranslations('organic');
+  const fallbackLabel = providedFallbackLabel ?? uiText('media_preview_unavailable_045101c');
+
   const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
 
   if (failedSrc === src) {

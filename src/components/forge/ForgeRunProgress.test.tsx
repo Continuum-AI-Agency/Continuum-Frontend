@@ -4,7 +4,7 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { TemplateRunRow } from '@/lib/library/templateSources';
 import { ForgeRunProgress } from './ForgeRunProgress';
 

@@ -99,7 +99,13 @@ mock.module('@/components/forge/RenderJobsGrid', () => ({
   RenderJobsGrid: () => <p>Render ledger</p>,
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ForgeTabs } from './ForgeTabs';
 
 afterEach(() => {

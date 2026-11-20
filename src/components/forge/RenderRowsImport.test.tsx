@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import type { ApiRenderVariable, ForgeImportMapping } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import type { RequestRow } from './renderRequestRows';
 
@@ -355,9 +361,18 @@ describe('RenderRowsImport', () => {
     const zone = screen.getByText(/Drop a file here or choose one/).parentElement!;
     const file = csv('Headline\nBusy\n');
     let finish!: (bytes: ArrayBuffer) => void;
-    spyOn(file, 'arrayBuffer').mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    spyOn(file, 'arrayBuffer').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
     chooseFile(file);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Choose XLSX or CSV' }).hasAttribute('disabled')).toBe(true));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Choose XLSX or CSV' }).hasAttribute('disabled'),
+      ).toBe(true),
+    );
     for (const type of ['dragover', 'drop']) {
       const event = new Event(type, { bubbles: true, cancelable: true });
       fireEvent(zone, event);
@@ -528,7 +543,7 @@ describe('RenderRowsImport: the Caliente workbook', () => {
     expect((onImport.mock.calls[0]?.[0] as RequestRow[])[4]?.values.template_field_2).toBe('2.15');
   });
 
-  test('a sheet chosen before last week\'s mapping arrives still imports with it', async () => {
+  test("a sheet chosen before last week's mapping arrives still imports with it", async () => {
     let answer!: (mapping: ForgeImportMapping) => void;
     getImportMapping.mockImplementationOnce(
       () =>

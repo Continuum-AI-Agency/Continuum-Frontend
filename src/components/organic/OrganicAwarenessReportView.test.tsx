@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { OrganicAwarenessReportPayload } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { OrganicAwarenessReportView } from './OrganicAwarenessReportView';
 
 // happy-dom does not expose these constructors on `window`; testing-library's

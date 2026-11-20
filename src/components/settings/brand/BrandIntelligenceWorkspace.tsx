@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -95,14 +96,14 @@ function Lifecycle({ overview }: { overview: BrandIntelligenceOverview }) {
 }
 
 function EvidenceOverview({ overview }: { overview: BrandIntelligenceOverview }) {
+  const tUi = useTranslations('settings');
+
   return (
     <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
       <Card>
         <CardHeader>
-          <CardTitle>What Continuum understands</CardTitle>
-          <CardDescription>
-            Derived findings remain traceable to their source and evidence mode.
-          </CardDescription>
+          <CardTitle>{tUi('m_35761c06ae')}</CardTitle>
+          <CardDescription>{tUi('m_0c4c195826')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {overview.coverage.map((item) => (
@@ -121,8 +122,8 @@ function EvidenceOverview({ overview }: { overview: BrandIntelligenceOverview })
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Recommended next moves</CardTitle>
-          <CardDescription>Prioritized from visibility and competitive evidence.</CardDescription>
+          <CardTitle>{tUi('m_02af6c305d')}</CardTitle>
+          <CardDescription>{tUi('m_8df385c8b3')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {overview.opportunities.slice(0, 4).map((opportunity) => (
@@ -137,9 +138,7 @@ function EvidenceOverview({ overview }: { overview: BrandIntelligenceOverview })
             </div>
           ))}
           {overview.opportunities.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Opportunities appear as evidence sources finish enriching.
-            </p>
+            <p className="text-sm text-muted-foreground">{tUi('m_7dcd6fccd2')}</p>
           ) : null}
         </CardContent>
       </Card>
@@ -158,6 +157,10 @@ export function BrandIntelligenceWorkspace({
   brandBook: BrandBookResponse | null;
   initialOverview: BrandIntelligenceOverview | null;
 }) {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('settings');
+
   const queryClient = useQueryClient();
   const overviewQuery = useQuery({
     queryKey: queryKey(brandId),
@@ -180,16 +183,13 @@ export function BrandIntelligenceWorkspace({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Brand Intelligence is preparing</CardTitle>
-          <CardDescription>
-            The first profile is assembled in the background after onboarding. You can leave this
-            page.
-          </CardDescription>
+          <CardTitle>{tUi('m_6201085235')}</CardTitle>
+          <CardDescription>{tUi('m_1de91e5757')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
             <RefreshCw className={cn('size-4', refresh.isPending && 'animate-spin')} />
-            Start enrichment
+            {tUi('m_49f32ce031')}
           </Button>
         </CardContent>
       </Card>
@@ -206,18 +206,15 @@ export function BrandIntelligenceWorkspace({
             <div className="flex items-center gap-2">
               <Radar className="size-4 text-indigo-300" />
               <span className="font-mono text-xs uppercase tracking-[0.18em] text-indigo-200">
-                Brand Kit intelligence
+                {tUi('m_3c41409a2e')}
               </span>
             </div>
             <h2 className="text-2xl font-semibold tracking-tight">{brandName}</h2>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Your Brand DNA and approved design system are the source; competitor context and
-              visibility evidence add guidance without rewriting them.
-            </p>
+            <p className="text-sm leading-relaxed text-muted-foreground">{tUi('m_13f5dc3104')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={active ? 'secondary' : 'outline'}>
-              {active ? 'Refreshing in background' : overview.enrichment.status}
+              {active ? tUi('m_4d07a54743') : overview.enrichment.status}
             </Badge>
             <Button
               variant="outline"
@@ -227,7 +224,7 @@ export function BrandIntelligenceWorkspace({
               <RefreshCw
                 className={cn('size-4', (refresh.isPending || active) && 'animate-spin')}
               />
-              Refresh
+              {tUi('m_56e3badc4e')}
             </Button>
           </div>
         </div>
@@ -236,9 +233,11 @@ export function BrandIntelligenceWorkspace({
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           {overview.refreshedAt
-            ? `Last good profile ${new Date(overview.refreshedAt).toLocaleString()}`
-            : 'First profile is still assembling.'}
-          {refresh.isError ? ' Refresh requires brand owner or admin access.' : ''}
+            ? tUi('m_a310ea2408', {
+                v0: String(new Date(overview.refreshedAt).toLocaleString(uiLocale)),
+              })
+            : tUi('m_cd55accb58')}
+          {refresh.isError ? tUi('m_445b7ede38') : ''}
         </p>
       </div>
 
@@ -251,12 +250,12 @@ export function BrandIntelligenceWorkspace({
 
       <Tabs defaultValue="overview" className="gap-4">
         <TabsList className="h-auto flex-wrap justify-start">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="dna">Brand DNA</TabsTrigger>
-          <TabsTrigger value="competition">Competition</TabsTrigger>
-          <TabsTrigger value="visibility">Visibility</TabsTrigger>
-          <TabsTrigger value="readiness">Readiness</TabsTrigger>
-          <TabsTrigger value="sources">Sources</TabsTrigger>
+          <TabsTrigger value="overview">{tUi('m_0efc2e6be4')}</TabsTrigger>
+          <TabsTrigger value="dna">{tUi('m_087bbcc244')}</TabsTrigger>
+          <TabsTrigger value="competition">{tUi('m_1917f4f0a4')}</TabsTrigger>
+          <TabsTrigger value="visibility">{tUi('m_7d9ff4f0de')}</TabsTrigger>
+          <TabsTrigger value="readiness">{tUi('m_6dc1222c37')}</TabsTrigger>
+          <TabsTrigger value="sources">{tUi('m_2eb56be3c2')}</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
           <EvidenceOverview overview={overview} />
@@ -265,9 +264,7 @@ export function BrandIntelligenceWorkspace({
           {brandBook?.present ? (
             <BrandDnaPanel brandBook={brandBook} />
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Brand DNA is still assembling from onboarding and uploaded sources.
-            </p>
+            <p className="text-sm text-muted-foreground">{tUi('m_1b40487401')}</p>
           )}
         </TabsContent>
         <TabsContent value="competition">
@@ -286,9 +283,9 @@ export function BrandIntelligenceWorkspace({
                   <CardDescription>
                     {competitor.status === 'tracked'
                       ? competitor.identityResolved
-                        ? 'Active tracking identity resolved'
-                        : 'Active, identity resolution pending'
-                      : 'Candidate — approval required before active tracking'}
+                        ? tUi('m_e804de0d79')
+                        : tUi('m_ac0d67cffd')
+                      : tUi('m_9f13e3537e')}
                   </CardDescription>
                 </CardHeader>
                 {competitor.strategicSummary || competitor.insight ? (
@@ -304,12 +301,10 @@ export function BrandIntelligenceWorkspace({
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <CardTitle>Answer visibility estimate</CardTitle>
-                <Badge variant="outline">simulated</Badge>
+                <CardTitle>{tUi('m_624f51ba12')}</CardTitle>
+                <Badge variant="outline">{tUi('m_c5a9119cd9')}</Badge>
               </div>
-              <CardDescription>
-                This is not observed ChatGPT, Perplexity, or Google AI evidence.
-              </CardDescription>
+              <CardDescription>{tUi('m_cb7dde5378')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               {overview.answerVisibility.methodology.limitations.map((limitation) => (
@@ -322,7 +317,7 @@ export function BrandIntelligenceWorkspace({
           {brandBook?.present ? (
             <BrandReadinessPanel brandBook={brandBook} />
           ) : (
-            <p className="text-sm text-muted-foreground">Readiness is not measured yet.</p>
+            <p className="text-sm text-muted-foreground">{tUi('m_e0e82604e0')}</p>
           )}
         </TabsContent>
         <TabsContent value="sources">
@@ -331,18 +326,16 @@ export function BrandIntelligenceWorkspace({
             <CardHeader>
               <div className="flex items-center gap-2">
                 <BookOpen className="size-4" />
-                <CardTitle>Intelligence provenance</CardTitle>
+                <CardTitle>{tUi('m_2d0c948f99')}</CardTitle>
               </div>
-              <CardDescription>
-                Source versions are retained with every materialized profile.
-              </CardDescription>
+              <CardDescription>{tUi('m_cd455b890c')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {Object.entries(overview.sourceVersions).map(([source, version]) => (
                 <div key={source} className="flex justify-between gap-4 text-xs">
                   <span className="capitalize">{source.replaceAll('_', ' ')}</span>
                   <span className="font-mono text-muted-foreground">
-                    {version ?? 'not available'}
+                    {version ?? tUi('m_5f23912208')}
                   </span>
                 </div>
               ))}

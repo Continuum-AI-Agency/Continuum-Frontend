@@ -14,6 +14,10 @@ import {
   X,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+import { uploadRefusalPresentation } from '@/lib/library/uploadRefusalPresentation';
 import { cn } from '@/lib/utils';
 import type { UploadItem, UploadMoveDirection } from './useMediaUpload';
 
@@ -27,12 +31,24 @@ type Props = {
   onMove?: (id: string, direction: UploadMoveDirection) => void;
 };
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 100 * 1024 * 1024 ? 0 : 1)} MB`;
+function formatSize(bytes: number, locale: UiLocale): string {
+  if (bytes < 1024 * 1024)
+    return `${formatDecimal(Math.max(1, Math.round(bytes / 1024)), 0, locale)} KB`;
+  return `${formatDecimal(bytes / (1024 * 1024), bytes >= 100 * 1024 * 1024 ? 0 : 1, locale)} MB`;
 }
 
 export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onMove }: Props) {
+  const translateUi = useUiTranslations('library');
+  const locale = useUiLocale();
+
+  const errorFor = (u: UploadItem) =>
+    u.pausedBy === 'network'
+      ? translateUi('uploadWaitingNetwork')
+      : u.refusalFile
+        ? uploadRefusalPresentation(u.refusalFile, translateUi, locale)
+        : u.errorKind === 'sidecar'
+          ? translateUi('uploadSidecarFailed')
+          : u.error;
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }}
@@ -59,7 +75,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
             u.status === 'error' &&
               'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400',
           )}
-          title={u.status === 'error' ? u.error : u.name}
+          title={u.status === 'error' ? (errorFor(u) ?? undefined) : u.name}
         >
           <div className="flex min-w-0 items-center gap-2">
             {u.status === 'queued' && <Clock className="size-3.5 shrink-0" />}
@@ -73,7 +89,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
               <>
                 <UploadAction
                   testId="upload-move-top"
-                  label={`Upload ${u.name} next`}
+                  label={translateUi('upload_value0_next_257fae34', { value0: String(u.name) })}
                   disabled={index === 0}
                   onClick={() => onMove(u.id, 'top')}
                 >
@@ -81,7 +97,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
                 </UploadAction>
                 <UploadAction
                   testId="upload-move-up"
-                  label={`Move ${u.name} up`}
+                  label={translateUi('move_value0_up_4f93d150', { value0: String(u.name) })}
                   disabled={index === 0}
                   onClick={() => onMove(u.id, 'up')}
                 >
@@ -89,7 +105,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
                 </UploadAction>
                 <UploadAction
                   testId="upload-move-down"
-                  label={`Move ${u.name} down`}
+                  label={translateUi('move_value0_down_7c18b9ea', { value0: String(u.name) })}
                   disabled={index === uploads.length - 1}
                   onClick={() => onMove(u.id, 'down')}
                 >
@@ -100,7 +116,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
             {u.status === 'uploading' ? (
               <UploadAction
                 testId="upload-pause"
-                label={`Pause ${u.name}`}
+                label={translateUi('pause_value0_f823303e', { value0: String(u.name) })}
                 onClick={() => onPause(u.id)}
               >
                 <Pause className="size-3.5" />
@@ -109,7 +125,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
             {u.status === 'paused' ? (
               <UploadAction
                 testId="upload-resume"
-                label={`Resume ${u.name}`}
+                label={translateUi('resume_value0_d3fa1d53', { value0: String(u.name) })}
                 onClick={() => onResume(u.id)}
               >
                 <Play className="size-3.5" />
@@ -118,7 +134,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
             {u.status === 'error' && !u.refused ? (
               <UploadAction
                 testId="upload-retry"
-                label={`Retry ${u.name}`}
+                label={translateUi('retry_value0_7a6a27ff', { value0: String(u.name) })}
                 onClick={() => onRetry(u.id)}
               >
                 <RotateCcw className="size-3.5" />
@@ -127,7 +143,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
             {u.status !== 'done' ? (
               <UploadAction
                 testId="upload-cancel"
-                label={`Cancel ${u.name}`}
+                label={translateUi('cancel_value0_e3e84f0d', { value0: String(u.name) })}
                 onClick={() => onCancel(u.id)}
               >
                 <X className="size-3.5" />
@@ -144,12 +160,12 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
             />
           </div>
           <div className="mt-1 flex items-center justify-between text-2xs text-muted-foreground">
-            <span>{formatSize(u.sizeBytes)}</span>
-            <span className="capitalize">{u.status}</span>
+            <span>{formatSize(u.sizeBytes, locale)}</span>
+            <span>{translateUi('uploadStateLabel', { state: u.status })}</span>
           </div>
           {u.error ? (
             <p data-testid="upload-error" className="mt-1 text-2xs leading-tight">
-              {u.error}
+              {errorFor(u)}
             </p>
           ) : null}
         </div>

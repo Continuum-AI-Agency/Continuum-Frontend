@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
+
 import { BrandIdentityHeader } from './BrandIdentityHeader';
 
 describe('BrandIdentityHeader', () => {

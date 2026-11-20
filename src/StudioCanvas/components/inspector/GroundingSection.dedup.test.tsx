@@ -7,8 +7,8 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, waitFor } from '@testing-library/react';
 import type React from 'react';
+import { cleanup, render, waitFor } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 global.getComputedStyle = global.window.getComputedStyle.bind(global.window);
 (global as { MutationObserver?: unknown }).MutationObserver = window.MutationObserver;

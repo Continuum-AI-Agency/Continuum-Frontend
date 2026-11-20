@@ -7,6 +7,7 @@
 // header: an older version, or a version compared with the one before, is drawn in its place.
 
 import type { JainaApprovalVariant, LiveChangePreviewPayload } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { lecturaFromLiveChange } from '@/lib/campaign-canvas/lectura';
 import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
@@ -43,6 +44,7 @@ export function LiveChangeCompanion({
   /** A run holds the conversation, or the implement turn is still waiting to be sent. */
   implementBlocked?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const { view, setView, isPhone, hint, dismissHint } = useCanvasView('proposed');
   const model = React.useMemo(() => lecturaFromLiveChange(preview), [preview]);
   const versionLine = useVersionLine(versions, preview.partId);
@@ -53,7 +55,10 @@ export function LiveChangeCompanion({
         <span className="flex min-w-[12rem] flex-1 items-baseline gap-2 text-[13px] text-muted-foreground">
           <PlatformChip platform={model.platform} />
           <span className="min-w-0">
-            {preview.subject ?? (decision === 'proposal' ? 'Proposed change' : 'Pending change')}
+            {preview.subject ??
+              (decision === 'proposal'
+                ? uiText('proposed_change_28b00af')
+                : uiText('pending_change_64b979c'))}
           </span>
         </span>
         <div className="flex shrink-0 items-center gap-2">

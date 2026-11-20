@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { ApiRenderJob, ApiRenderOutput } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { CardPicture } from './TemplateCard';
 
 afterEach(cleanup);

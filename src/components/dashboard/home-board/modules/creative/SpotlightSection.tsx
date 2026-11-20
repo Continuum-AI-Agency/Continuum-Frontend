@@ -5,6 +5,7 @@
 // labeled placeholder. The Home never re-resolves one from the Graph.
 
 import type { HomeCreativeSpotlightData, HomeCreativeVerdict } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { CreativeThumb } from './CreativeThumb';
 import {
@@ -33,14 +34,15 @@ export function SpotlightSection({
   /** The creative report's stored thumbnail per ad, tried when the read's own has expired. */
   reportThumbs: ReadonlyMap<string, string | null>;
 }) {
+  const uiText = useTranslations('dashboard');
   return (
     <section className="flex min-w-0 flex-col gap-2" data-testid="creative-spotlight">
       <h4 className="font-semibold text-xs">
-        Top ads by spend, last {data.window === '7d' ? '7' : '14'} days
+        {uiText('top_ads_by_spend_last_days_days_4002502', { days: data.window === '7d' ? 7 : 14 })}
       </h4>
       <p className="text-2xs text-muted-foreground" data-testid="creative-spotlight-age">
         {spotlightAgeLine(data)}
-        {data.currency ? ` · in ${data.currency}` : ''}
+        {data.currency ? ` · ${uiText('in_currency_e15ed2f', { currency: data.currency })}` : ''}
       </p>
       <ul className="flex min-w-0 snap-x gap-2.5 overflow-x-auto pb-2">
         {data.ads.map((ad) => {
@@ -88,7 +90,7 @@ export function SpotlightSection({
                   rel="noreferrer"
                   target="_blank"
                 >
-                  View post
+                  {uiText('view_post_fe9715b')}
                 </a>
               ) : null}
             </li>
@@ -97,13 +99,20 @@ export function SpotlightSection({
       </ul>
       {data.otherCurrencies.length > 0 ? (
         <p className="text-2xs text-muted-foreground">
-          Not ranked with these:{' '}
-          {data.otherCurrencies
-            .map(
-              (other) => `${other.adsWithSpend} in ${other.currency ?? 'an unreported currency'}`,
-            )
-            .join(', ')}
-          .
+          {uiText('not_ranked_with_these_list_589cc33', {
+            list: data.otherCurrencies
+              .map((other) =>
+                other.currency
+                  ? uiText('count_in_currency_78312ce', {
+                      count: other.adsWithSpend,
+                      currency: other.currency,
+                    })
+                  : uiText('count_in_an_unreported_currency_6192037', {
+                      count: other.adsWithSpend,
+                    }),
+              )
+              .join(', '),
+          })}
         </p>
       ) : null}
     </section>

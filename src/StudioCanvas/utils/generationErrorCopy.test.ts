@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import { createTranslator } from 'next-intl';
+import es from '../../../messages/studio/es.json';
 import { generationErrorCopy } from './generationErrorCopy';
 
 describe('generationErrorCopy', () => {
@@ -61,6 +63,17 @@ describe('generationErrorCopy', () => {
   it('never leaves the panel blank when there is no message at all', () => {
     expect(generationErrorCopy(undefined, undefined).guidance).toBe(
       'Something went wrong while generating. Try again.',
+    );
+  });
+
+  it('keeps the Backend sentence when translating, as the English copy does', () => {
+    const t = createTranslator({ locale: 'es', messages: { studio: es }, namespace: 'studio' });
+
+    expect(generationErrorCopy('some_new_backend_code', 'Vertex is unreachable', t).guidance).toBe(
+      'Vertex is unreachable',
+    );
+    expect(generationErrorCopy('model_unavailable', 'Veo 3 is not enabled.', t).guidance).toBe(
+      'Veo 3 is not enabled. Nano Banana 2 es la opción más parecida.',
     );
   });
 });

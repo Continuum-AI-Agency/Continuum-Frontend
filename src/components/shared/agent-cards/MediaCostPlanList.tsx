@@ -1,12 +1,8 @@
 import { type MediaCostPlan, unitPriceText } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 const usd = (value: number) => `$${value.toFixed(2)}`;
-const UNIT: Record<MediaCostPlan['lines'][number]['unit'], string> = {
-  second: 's',
-  image: 'image',
-  call: 'call',
-};
 
 /**
  * The priced pre-plan a media tool's approval card shows: every Omni clip, still and song bed the
@@ -20,18 +16,26 @@ export function MediaCostPlanList({
   plan: MediaCostPlan;
   className?: string;
 }) {
+  const uiText = useTranslations('common');
   return (
     <details data-slot="media-cost-plan" className={cn('group text-xs tabular-nums', className)}>
       <summary className="cursor-pointer list-none text-foreground">
         <span className="font-medium">
-          Up to <span data-field="billed-cap-usd">{usd(plan.billedCapUsd)}</span>
+          {uiText.rich('up_to_cap_amount_cap_de94338', {
+            amount: usd(plan.billedCapUsd),
+            cap: (chunks) => <span data-field="billed-cap-usd">{chunks}</span>,
+          })}
         </span>
         <span className="text-muted-foreground">
-          {' · typically '}
-          <span data-field="billed-expected-usd">{usd(plan.billedExpectedUsd)}</span>
+          {uiText.rich('typically_expected_amount_expected_5e0189a', {
+            amount: usd(plan.billedExpectedUsd),
+            expected: (chunks) => <span data-field="billed-expected-usd">{chunks}</span>,
+          })}
         </span>
         <span className="block text-2xs text-muted-foreground group-open:hidden">
-          {plan.lines.length > 0 ? 'Show the cost plan' : (plan.note ?? 'No generations itemized')}
+          {plan.lines.length > 0
+            ? uiText('show_the_cost_plan_163c535')
+            : (plan.note ?? uiText('no_generations_itemized_34a957a'))}
         </span>
       </summary>
       {plan.lines.length > 0 ? (
@@ -47,14 +51,22 @@ export function MediaCostPlanList({
               <span className="text-foreground/90">{line.what}</span>
               <span className="text-right text-foreground">{usd(line.usd)}</span>
               <span className="col-span-2 text-2xs text-muted-foreground">
-                {`${line.quantity} ${UNIT[line.unit]}${line.quantity === 1 || line.unit === 'second' ? '' : 's'} × ${unitPriceText(line.unitUsd)} · ${line.model}`}
+                {uiText('unit_select_second_quantity_s_image_quantity__1835a91', {
+                  unit: line.unit,
+                  quantity: line.quantity,
+                  price: unitPriceText(line.unitUsd),
+                  model: line.model,
+                })}
               </span>
             </li>
           ))}
         </ul>
       ) : null}
       <p className="mt-1.5 text-2xs leading-relaxed text-muted-foreground">
-        {`List price ${usd(plan.expectedUsd)} for one pass, cap ${usd(plan.capUsd)}.`}
+        {uiText('list_price_expected_for_one_pass_cap_cap_7529472', {
+          expected: usd(plan.expectedUsd),
+          cap: usd(plan.capUsd),
+        })}
         {plan.lines.length > 0 && plan.note ? ` ${plan.note}` : null}
       </p>
     </details>

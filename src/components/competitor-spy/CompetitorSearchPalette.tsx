@@ -1,5 +1,6 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import {
   Command,
@@ -18,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { competitorStateLabel } from '@/i18n/competitorCopy';
 import { useCompetitorSmartSearch } from '@/lib/api/competitorSpy';
 import { compactCount, initials, tileStyle } from './brandVisuals';
 
@@ -41,6 +43,8 @@ export function CompetitorSearchPalette({
   onSelectCompetitor: (competitorId: string) => void;
   onTrackNew: (query: string) => void;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('competitor');
   const [raw, setRaw] = useState('');
   const [term, setTerm] = useState('');
 
@@ -70,26 +74,30 @@ export function CompetitorSearchPalette({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="overflow-hidden p-0" showCloseButton={false}>
         <DialogHeader className="sr-only">
-          <DialogTitle>Search competitors</DialogTitle>
-          <DialogDescription>Search tracked competitors and their cached ads.</DialogDescription>
+          <DialogTitle>{uiText('search_competitors_102302e')}</DialogTitle>
+          <DialogDescription>
+            {uiText('search_tracked_competitors_and_their_cached_a_7210d2d')}
+          </DialogDescription>
         </DialogHeader>
         <Command shouldFilter={false} className={COMMAND_DIALOG_CLASS}>
           <CommandInput
             value={raw}
             onValueChange={setRaw}
-            placeholder="Search competitors, ad copy, or a new brand…"
+            placeholder={uiText('search_competitors_ad_copy_or_a_new_brand_161f04e')}
           />
           <CommandList>
             {!ready ? (
               <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-                Search across your tracked competitors and their cached ads.
+                {uiText('search_across_your_tracked_competitors_and_th_ba28d62')}
               </div>
             ) : (
               <>
-                <CommandEmpty>{isFetching ? 'Searching…' : 'No matches.'}</CommandEmpty>
+                <CommandEmpty>
+                  {isFetching ? uiText('searching_c31723a') : uiText('no_matches_d6572bd')}
+                </CommandEmpty>
 
                 {brands.length > 0 ? (
-                  <CommandGroup heading="Brands">
+                  <CommandGroup heading={uiText('m_ecd05348c2')}>
                     {brands.map((brand) => (
                       <CommandItem
                         key={brand.competitorId}
@@ -114,7 +122,10 @@ export function CompetitorSearchPalette({
                           ) : null}
                         </span>
                         <CommandShortcut className="font-mono tabular-nums">
-                          {compactCount(brand.adCount) ?? '0'} ads
+                          {uiText('m_472885fe16', {
+                            count: brand.adCount ?? 0,
+                            amount: compactCount(brand.adCount, uiLocale) ?? '0',
+                          })}
                         </CommandShortcut>
                       </CommandItem>
                     ))}
@@ -124,7 +135,7 @@ export function CompetitorSearchPalette({
                 {ads.length > 0 ? (
                   <>
                     {brands.length > 0 ? <CommandSeparator /> : null}
-                    <CommandGroup heading="Ads">
+                    <CommandGroup heading={uiText('m_13bad3d96f')}>
                       {ads.map((ad) => (
                         <CommandItem
                           key={ad.snapshotId}
@@ -133,10 +144,10 @@ export function CompetitorSearchPalette({
                         >
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm text-foreground">
-                              {ad.body ?? '(no copy)'}
+                              {ad.body ?? uiText('no_copy_abbb184')}
                             </span>
                             <span className="block truncate font-mono text-xs text-muted-foreground">
-                              {ad.competitorName} · {ad.status}
+                              {ad.competitorName} · {competitorStateLabel(ad.status, uiText)}
                             </span>
                           </span>
                         </CommandItem>
@@ -146,7 +157,7 @@ export function CompetitorSearchPalette({
                 ) : null}
 
                 <CommandSeparator />
-                <CommandGroup heading="Actions">
+                <CommandGroup heading={uiText('m_c3cd636a58')}>
                   <CommandItem
                     value={`track-${term}`}
                     onSelect={() => {
@@ -157,7 +168,9 @@ export function CompetitorSearchPalette({
                     <span className="flex size-7 shrink-0 items-center justify-center text-base leading-none">
                       +
                     </span>
-                    <span className="truncate">Search Meta &amp; track “{term}”</span>
+                    <span className="truncate">
+                      {uiText.rich('sentence_63818b393717', { v0: () => term })}
+                    </span>
                   </CommandItem>
                 </CommandGroup>
               </>

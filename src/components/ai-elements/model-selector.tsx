@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import type { ComponentProps, ReactNode } from 'react';
 
 import {
@@ -31,18 +32,22 @@ export type ModelSelectorContentProps = ComponentProps<typeof DialogContent> & {
 export const ModelSelectorContent = ({
   className,
   children,
-  title = 'Model Selector',
+  title: uiProvidedTitle,
   ...props
-}: ModelSelectorContentProps) => (
-  <DialogContent
-    aria-describedby={undefined}
-    className={cn('outline! border-none! p-0 outline-border! outline-solid!', className)}
-    {...props}
-  >
-    <DialogTitle className="sr-only">{title}</DialogTitle>
-    <Command className="**:data-[slot=command-input-wrapper]:h-auto">{children}</Command>
-  </DialogContent>
-);
+}: ModelSelectorContentProps) => {
+  const t = useTranslations('common');
+  const title = uiProvidedTitle ?? t('m_82a0378351');
+  return (
+    <DialogContent
+      aria-describedby={undefined}
+      className={cn('outline! border-none! p-0 outline-border! outline-solid!', className)}
+      {...props}
+    >
+      <DialogTitle className="sr-only">{title}</DialogTitle>
+      <Command className="**:data-[slot=command-input-wrapper]:h-auto">{children}</Command>
+    </DialogContent>
+  );
+};
 
 export type ModelSelectorDialogProps = ComponentProps<typeof CommandDialog>;
 
@@ -146,16 +151,19 @@ export type ModelSelectorLogoProps = Omit<ComponentProps<'img'>, 'src' | 'alt'> 
     | (string & {});
 };
 
-export const ModelSelectorLogo = ({ provider, className, ...props }: ModelSelectorLogoProps) => (
-  <img
-    {...props}
-    alt={`${provider} logo`}
-    className={cn('size-3 dark:invert', className)}
-    height={12}
-    src={`https://models.dev/logos/${provider}.svg`}
-    width={12}
-  />
-);
+export const ModelSelectorLogo = ({ provider, className, ...props }: ModelSelectorLogoProps) => {
+  const tUi = useTranslations('common');
+  return (
+    <img
+      {...props}
+      alt={tUi('m_1daa445f91', { v0: String(provider) })}
+      className={cn('size-3 dark:invert', className)}
+      height={12}
+      src={`https://models.dev/logos/${provider}.svg`}
+      width={12}
+    />
+  );
+};
 
 export type ModelSelectorLogoGroupProps = ComponentProps<'div'>;
 

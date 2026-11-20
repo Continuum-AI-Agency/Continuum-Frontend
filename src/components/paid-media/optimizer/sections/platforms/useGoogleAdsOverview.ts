@@ -1,4 +1,6 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // The Google tab's one read: the brand's granted Google Ads customer through the same edge the
 // dashboard already uses for google-ads (paid-media-metrics), scopes `account_overview` and
@@ -120,6 +122,8 @@ export function useGoogleAdsOverview(
   brandId: string,
   window: GoogleReadWindow | null | 'pending' = null,
 ): GoogleAdsOverviewState {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const accounts = useOptimizerAdAccounts(brandId);
   const granted = accountsOn(accounts.data, 'google_ads')[0] ?? null;
   const customerId = granted?.account_id ?? null;
@@ -152,12 +156,16 @@ export function useGoogleAdsOverview(
     return {
       status: 'error',
       account: null,
-      message: 'Could not read which ad accounts this brand is granted.',
+      message: uiText('could_not_read_which_ad_accounts_this_brand_i_d05f8c7'),
     };
   }
   if (!granted) {
     if (login.isError) {
-      return { status: 'error', account: null, message: 'Could not check your Google login.' };
+      return {
+        status: 'error',
+        account: null,
+        message: uiText('could_not_check_your_google_login_838a5c8'),
+      };
     }
     if (login.isLoading) return { status: 'loading' };
     return login.data ? { status: 'no-grant' } : { status: 'no-connection' };
@@ -168,7 +176,7 @@ export function useGoogleAdsOverview(
     ...granted,
     currency: granted.currency ?? overview.data?.currency ?? null,
   };
-  if (overview.isError) return googleReadFailure(overview.error, account, role);
+  if (overview.isError) return googleReadFailure(overview.error, account, role, formatUiError);
   if (!overview.data) return { status: 'loading' };
   return { status: 'ready', account, overview: overview.data, resultBucket };
 }
@@ -208,8 +216,14 @@ export function googleReadFailure(
   error: unknown,
   account: AdAccount,
   role: BrandRole | null | undefined,
+  /** Words an error in the UI language; absent, the error's own message stands. */
+  formatError?: (error: unknown) => string,
 ): GoogleReadFailureState {
-  const message = error instanceof Error ? error.message : 'Unknown error';
+  const message = formatError
+    ? formatError(error)
+    : error instanceof Error
+      ? error.message
+      : 'Unknown error';
   const { code } = (error ?? {}) as { code?: unknown };
   if (code === 'TOKEN_EXPIRED') return { status: 'error', account, message, reconnect: true };
   if (isGoogleNoAccess(error)) {

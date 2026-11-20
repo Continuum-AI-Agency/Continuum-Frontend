@@ -1,7 +1,8 @@
+import { useTranslations } from 'next-intl';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import type { ReadinessAnalysis, ReadinessDimension } from '@/lib/onboarding/agentClient';
 import { ScoreBadge } from './ScoreBadge';
-import { DIMENSION_LABELS, scoreFor } from './utils';
+import { getDimensionLabels, scoreFor } from './utils';
 
 type Props = {
   dim: ReadinessDimension;
@@ -10,11 +11,13 @@ type Props = {
 };
 
 export function DimensionChip({ dim, readiness, loading }: Props) {
+  const tUi = useTranslations('onboarding');
+
   const score = scoreFor(readiness, dim);
   if (!loading && score === null) return null;
 
   const rationale = readiness?.dimensions?.[dim]?.rationale;
-  const badge = <ScoreBadge label={DIMENSION_LABELS[dim]} score={score} loading={loading} />;
+  const badge = <ScoreBadge label={getDimensionLabels(tUi)[dim]} score={score} loading={loading} />;
 
   if (!rationale) return badge;
 
@@ -23,12 +26,13 @@ export function DimensionChip({ dim, readiness, loading }: Props) {
       <HoverCardTrigger>{badge}</HoverCardTrigger>
       <HoverCardContent className="w-64 p-3" side="top">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {DIMENSION_LABELS[dim]}
+          {getDimensionLabels(tUi)[dim]}
         </p>
         <p className="mt-1 text-sm leading-snug text-foreground">{rationale}</p>
         {score !== null ? (
           <p className="mt-1.5 text-xs tabular-nums text-muted-foreground">
-            Score: {Math.round(score)}
+            {tUi('m_f2b514b256')}
+            {Math.round(score)}
           </p>
         ) : null}
       </HoverCardContent>

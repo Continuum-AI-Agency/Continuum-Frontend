@@ -3,6 +3,7 @@
 import type { Skill } from '@continuum/contracts';
 import { Sparkles, Wand2 } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { SkillConfigPreview } from '@/components/brand/GenerationConfigPreview';
 import {
@@ -37,6 +38,7 @@ export function SkillPickerButton({
   onPickAction,
   isError = false,
 }: Props) {
+  const uiText = useTranslations('organic');
   const [open, setOpen] = useState(false);
 
   // The organic composer steers copy, so only copy/both skills belong here —
@@ -51,24 +53,24 @@ export function SkillPickerButton({
         render={
           <button
             type="button"
-            aria-label="Apply a brand skill"
+            aria-label={uiText('apply_a_brand_skill_fa6183a')}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
           >
             <Sparkles className="h-3.5 w-3.5" />
-            Skills
+            {uiText('skills_66d0f52')}
           </button>
         }
       />
       <PopoverContent align="start" className="w-72 p-0">
         <Command>
-          <CommandInput placeholder="Apply a brand skill…" />
+          <CommandInput placeholder={uiText('apply_a_brand_skill_e45a84a')} />
           <CommandList>
             <CommandEmpty>
               {isError
-                ? "Couldn't load brand skills. Check your connection and try again."
-                : 'No skills yet — ask the agent to save one (e.g. “save this as a skill”), or create one in Settings.'}
+                ? uiText('couldn_t_load_brand_skills_check_your_connect_0aabf21')
+                : uiText('no_skills_yet_ask_the_agent_to_save_one_e_g_s_5a34c70')}
             </CommandEmpty>
-            <CommandGroup heading="Brand skills">
+            <CommandGroup heading={uiText('brand_skills_06012ba')}>
               {copySkills.map((skill) => (
                 <CommandItem
                   key={skill.id}
@@ -89,7 +91,7 @@ export function SkillPickerButton({
               ))}
             </CommandGroup>
             {copyTemplates.length > 0 && (
-              <CommandGroup heading="Library">
+              <CommandGroup heading={uiText('library_dc20b3d')}>
                 {copyTemplates.map((skill) => (
                   <CommandItem
                     key={skill.id}
@@ -119,7 +121,7 @@ export function SkillPickerButton({
             className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <Wand2 className="h-3 w-3" />
-            Manage skills
+            {uiText('manage_skills_f360071')}
           </Link>
         </div>
       </PopoverContent>

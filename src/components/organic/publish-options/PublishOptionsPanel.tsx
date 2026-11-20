@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // The planner's Publish tab: what one destination platform does with this post beyond the
 // caption — the account's first comment, the video cover, an Instagram trial reel, and TikTok's
 // AI-generated label.
@@ -78,6 +80,7 @@ export function PublishOptionsPanel({
   disabled,
   onChange,
 }: Props) {
+  const uiText = useTranslations('organic');
   const can = PLATFORM_CAPABILITIES[platform].publishOptions;
   const label = POST_PLATFORMS[platform].label;
   const saved = publishOptions?.[platform] ?? {};
@@ -99,7 +102,7 @@ export function PublishOptionsPanel({
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border/70 bg-background/90 p-3">
       <Section
-        title="First comment"
+        title={uiText('first_comment_f80a181')}
         aside={
           canComment ? (
             <span className="text-2xs tabular-nums text-muted-foreground">
@@ -111,12 +114,12 @@ export function PublishOptionsPanel({
         {canComment ? (
           <>
             <textarea
-              aria-label="First comment"
+              aria-label={uiText('first_comment_f80a181')}
               value={comment}
               maxLength={FIRST_COMMENT_MAX}
               disabled={disabled}
               rows={3}
-              placeholder="Hashtags, a link, a call to action…"
+              placeholder={uiText('hashtags_a_link_a_call_to_action_cdc10e2')}
               onChange={(event) => {
                 setComment(event.target.value);
                 save({ ...saved, firstComment: event.target.value.trim() || undefined }, 'typing');
@@ -124,21 +127,21 @@ export function PublishOptionsPanel({
               className="w-full resize-y rounded-md border border-input bg-background px-2.5 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
             />
             <p className="text-2xs text-muted-foreground">
-              Posted from your account right after the post goes live.
+              {uiText('posted_from_your_account_right_after_the_post_b5edeb9')}
             </p>
           </>
         ) : (
           <Unsupported>
             {isStory
-              ? 'A story has no comments, so none is posted.'
-              : `${label} does not accept a first comment through its API, so none is posted.`}
+              ? uiText('a_story_has_no_comments_so_none_is_posted_1f88d6c')
+              : uiText('firstCommentUnsupported', { platform: label })}
           </Unsupported>
         )}
       </Section>
 
-      <Section title="Cover">
+      <Section title={uiText('cover_fa8d845')}>
         {!isVideo ? (
-          <Unsupported>A cover applies to video posts only.</Unsupported>
+          <Unsupported>{uiText('a_cover_applies_to_video_posts_only_9906730')}</Unsupported>
         ) : can.thumbnailOffset || can.thumbnailUrl ? (
           <CoverPicker
             key={platform}
@@ -151,9 +154,7 @@ export function PublishOptionsPanel({
             onPick={(thumbnail) => save({ ...saved, thumbnail }, 'discrete')}
           />
         ) : (
-          <Unsupported>
-            {label} picks the cover itself. Its API has no cover control, so none is sent.
-          </Unsupported>
+          <Unsupported>{uiText.rich('sentence_b4b6c1bbd88f', { v0: () => label })}</Unsupported>
         )}
       </Section>
 
@@ -194,17 +195,16 @@ function TrialReelToggle({
   disabled?: boolean;
   onChange: (trial: PublishOptions['trial']) => void;
 }) {
+  const uiText = useTranslations('organic');
   const descriptionId = React.useId();
   return (
-    <Section title="Trial reel">
+    <Section title={uiText('trial_reel_1cfed77')}>
       <div className="flex items-start justify-between gap-3">
         <p id={descriptionId} className="text-xs text-muted-foreground">
-          Shown to non-followers first, so you learn whether the hook works before your followers
-          see it. Continuum scores it against your other reels three days after it posts. This
-          cannot be changed once it is published.
+          {uiText('shown_to_non_followers_first_so_you_learn_whe_4733d05')}
         </p>
         <Switch
-          aria-label="Trial reel"
+          aria-label={uiText('trial_reel_1cfed77')}
           aria-describedby={descriptionId}
           checked={trial !== undefined}
           disabled={disabled}
@@ -215,7 +215,7 @@ function TrialReelToggle({
       </div>
       {trial ? (
         <select
-          aria-label="When it reaches followers"
+          aria-label={uiText('when_it_reaches_followers_c26110d')}
           value={trial.graduationStrategy}
           disabled={disabled}
           onChange={(event) =>
@@ -247,19 +247,20 @@ function AiLabelToggle({
   disabled?: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {
+  const uiText = useTranslations('organic');
   // The switch is NAMED by its section title and DESCRIBED by the sentence. A <label> on
   // the sentence would make the whole sentence its accessible name.
   const descriptionId = React.useId();
   return (
-    <Section title="AI-generated content">
+    <Section title={uiText('ai_generated_content_871cd7d')}>
       <div className="flex items-start justify-between gap-3">
         <p id={descriptionId} className="text-xs text-muted-foreground">
           {generated
-            ? 'This video came out of a generation pipeline, so it is always labelled.'
-            : 'Turn on if this video was made with AI. Continuum also labels it automatically when its library record says it was generated.'}
+            ? uiText('this_video_came_out_of_a_generation_pipeline__b801b07')
+            : uiText('turn_on_if_this_video_was_made_with_ai_contin_32b4cbd')}
         </p>
         <Switch
-          aria-label="AI-generated content"
+          aria-label={uiText('ai_generated_content_871cd7d')}
           aria-describedby={descriptionId}
           checked={generated || checked}
           disabled={disabled || generated}
@@ -287,6 +288,8 @@ function CoverPicker({
   disabled?: boolean;
   onPick: (thumbnail: PublishOptions['thumbnail']) => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const media = resolveDraftMedia(draft);
   const videoUrl = media?.kind === 'video' ? media.url : null;
   // A re-signed URL is the same video with a new token. Keying on the object (URL minus its
@@ -344,17 +347,17 @@ function CoverPicker({
     const asset = await uploadDraftCreative({ file, brandId });
     setUploading(false);
     if (!asset?.signedUrl) {
-      setUploadError('The image did not upload. Try again.');
+      setUploadError(uiText('coverUploadFailed'));
       return;
     }
     onPick({ url: asset.signedUrl });
   };
 
   const status = !chosen
-    ? "Using the platform's default cover"
+    ? uiText('defaultPlatformCover')
     : 'offsetMs' in chosen
-      ? `Frame at ${formatOffset(chosen.offsetMs)}`
-      : 'Uploaded image';
+      ? uiText('frameAtOffset', { offset: formatOffset(chosen.offsetMs, uiLocale) })
+      : uiText('uploadedCoverImage');
 
   return (
     <div className="flex flex-col gap-2">
@@ -385,7 +388,7 @@ function CoverPicker({
                 <div className="flex items-center gap-2">
                   <input
                     type="range"
-                    aria-label="Cover frame"
+                    aria-label={uiText('cover_frame_eb329a6')}
                     min={0}
                     max={durationMs}
                     step={100}
@@ -395,7 +398,7 @@ function CoverPicker({
                     className="min-w-0 flex-1 accent-[var(--primary)]"
                   />
                   <span className="w-12 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground">
-                    {formatOffset(offsetMs)}
+                    {formatOffset(offsetMs, uiLocale)}
                   </span>
                 </div>
                 <button
@@ -404,20 +407,20 @@ function CoverPicker({
                   onClick={() => onPick({ offsetMs: Math.min(offsetMs, durationMs) })}
                   className="self-start rounded-md border border-border/60 bg-background px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Use this frame
+                  {uiText('use_this_frame_d38f959')}
                 </button>
               </>
             ) : (
               <p className="text-xs text-muted-foreground" role="status">
                 {current.state === 'error'
-                  ? 'The video could not be loaded, so no frame can be picked. Upload an image instead.'
-                  : 'Loading the video to pick a frame…'}
+                  ? uiText('the_video_could_not_be_loaded_so_no_frame_can_a172262')
+                  : uiText('loading_the_video_to_pick_a_frame_2e30627')}
               </p>
             )}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Attach or render the video to pick a frame from it.
+            {uiText('attach_or_render_the_video_to_pick_a_frame_fr_112488e')}
           </p>
         )
       ) : null}
@@ -435,11 +438,11 @@ function CoverPicker({
             ) : (
               <ImageUp className="size-3.5" aria-hidden />
             )}
-            {uploading ? 'Uploading…' : 'Upload an image'}
+            {uploading ? uiText('uploading_5ce44dd') : uiText('upload_an_image_25d0eba')}
             <input
               type="file"
               accept="image/*"
-              aria-label="Upload cover image"
+              aria-label={uiText('upload_cover_image_acb7969')}
               className="sr-only"
               disabled={disabled || uploading || !brandId}
               onChange={(event) => {
@@ -456,7 +459,7 @@ function CoverPicker({
             onClick={() => onPick(undefined)}
             className="rounded-md px-2 py-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
-            Use the default cover
+            {uiText('use_the_default_cover_8131ed4')}
           </button>
         ) : null}
       </div>
@@ -465,7 +468,7 @@ function CoverPicker({
         // biome-ignore lint/performance/noImgElement: a signed storage URL, not an optimisable static asset
         <img
           src={chosen.url}
-          alt="Chosen cover"
+          alt={uiText('chosen_cover_a1440b0')}
           className="h-24 w-auto self-start rounded-md border border-border object-cover"
           onError={(event) => {
             // The saved link is a 1h upload URL; publish re-signs it, the preview cannot.

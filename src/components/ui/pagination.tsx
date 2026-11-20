@@ -1,15 +1,18 @@
 import { mergeProps } from '@base-ui/react/merge-props';
 import { useRender } from '@base-ui/react/use-render';
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { isValidElement } from 'react';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 function Pagination({ className, ...props }: React.ComponentProps<'nav'>) {
+  const tUi = useTranslations('common');
+
   return (
     <nav
-      aria-label="pagination"
+      aria-label={tUi('m_31fbb9d2e0')}
       className={cn('mx-auto flex w-full justify-center', className)}
       {...props}
     />
@@ -69,34 +72,38 @@ function PaginationLink({
 }
 
 function PaginationPrevious({ className, ...props }: React.ComponentProps<typeof PaginationLink>) {
+  const uiText = useTranslations('common');
   return (
     <PaginationLink
-      aria-label="Go to previous page"
+      aria-label={uiText('m_8d993b6d88')}
       size="default"
       className={cn('gap-1 pl-2.5', className)}
       {...props}
     >
       <ChevronLeft className="size-4" />
-      <span>Previous</span>
+      <span>{uiText('previous_a57b08a')}</span>
     </PaginationLink>
   );
 }
 
 function PaginationNext({ className, ...props }: React.ComponentProps<typeof PaginationLink>) {
+  const uiText = useTranslations('common');
   return (
     <PaginationLink
-      aria-label="Go to next page"
+      aria-label={uiText('m_fd7164f9dd')}
       size="default"
       className={cn('gap-1 pr-2.5', className)}
       {...props}
     >
-      <span>Next</span>
+      <span>{uiText('next_1ff57a2')}</span>
       <ChevronRight className="size-4" />
     </PaginationLink>
   );
 }
 
 function PaginationEllipsis({ className, ...props }: React.ComponentProps<'span'>) {
+  const tUi = useTranslations('common');
+
   return (
     <span
       aria-hidden
@@ -104,7 +111,7 @@ function PaginationEllipsis({ className, ...props }: React.ComponentProps<'span'
       {...props}
     >
       <MoreHorizontal className="size-4" />
-      <span className="sr-only">More pages</span>
+      <span className="sr-only">{tUi('m_1fd2b5b554')}</span>
     </span>
   );
 }

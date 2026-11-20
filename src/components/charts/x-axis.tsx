@@ -4,9 +4,10 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { useChart, useChartStable } from './chart-context';
-import { shortDateFmt } from './chart-formatters';
+import { shortDateFmt as defaultShortDateFmt } from './chart-formatters';
 import { DEFAULT_Y_DOMAIN_TWEEN_MS } from './chart-phase';
 import { LINE_LOADING_PULSE_EASE } from './line-loading-timing';
+import { useChartFormatters } from './use-chart-formatters';
 
 const X_AXIS_POSITION_TWEEN_MS = DEFAULT_Y_DOMAIN_TWEEN_MS;
 
@@ -181,7 +182,7 @@ function dedupeIndicesByLabel(
     if (!point) {
       continue;
     }
-    const label = dateLabels[index] ?? shortDateFmt.format(xAccessor(point));
+    const label = dateLabels[index] ?? defaultShortDateFmt.format(xAccessor(point));
     if (seenLabels.has(label)) {
       continue;
     }
@@ -360,6 +361,8 @@ export function selectEvenlySpacedIndices(
 }
 
 function buildDataAlignedTicks({
+  shortDateFmt = defaultShortDateFmt,
+
   data,
   dateLabels,
   marginLeft,
@@ -373,6 +376,8 @@ function buildDataAlignedTicks({
   targetTickCount: number;
   xAccessor: (d: Record<string, unknown>) => Date;
   xScale: (date: Date) => number | undefined;
+
+  shortDateFmt?: Intl.DateTimeFormat;
 }): AxisTick[] {
   const seenLabels = new Set<string>();
   const ticks: AxisTick[] = [];
@@ -412,6 +417,8 @@ function buildDataAlignedTicks({
 }
 
 function buildDomainTicks({
+  shortDateFmt = defaultShortDateFmt,
+
   marginLeft,
   numTicks,
   xScale,
@@ -422,6 +429,8 @@ function buildDomainTicks({
     domain: () => Date[];
     (date: Date): number | undefined;
   };
+
+  shortDateFmt?: Intl.DateTimeFormat;
 }): AxisTick[] {
   const domain = xScale.domain();
   const startDate = domain[0];
@@ -483,6 +492,7 @@ function appendProjectionTailTicks(
   },
   marginLeft: number,
   maxExtraTicks: number,
+  shortDateFmt: Intl.DateTimeFormat = defaultShortDateFmt,
 ): AxisTick[] {
   if (data.length === 0 || maxExtraTicks <= 0) {
     return ticks;
@@ -557,6 +567,8 @@ const XAxisInner = memo(function XAxisInner({
   tickMode = 'data',
   container,
 }: XAxisProps & { container: HTMLDivElement }) {
+  const { shortDateFmt } = useChartFormatters();
+
   const { xScale, margin, tooltipData, data, xAccessor, dateLabels, xDomain } = useChart();
 
   const labelsToShow = useMemo(() => {
@@ -564,23 +576,16 @@ const XAxisInner = memo(function XAxisInner({
       tickMode === 'data' && domainExtendsPastData(data, xAccessor, xScale);
 
     if (tickMode === 'domain') {
-      return buildDomainTicks({
-        marginLeft: margin.left,
-        numTicks,
-        xScale,
-      });
+      return buildDomainTicks({ shortDateFmt, marginLeft: margin.left, numTicks, xScale });
     }
 
     // No brush: evenly spaced ticks across the full domain (data + projection).
     if (projectionExtendsScale && xDomain == null) {
-      return buildDomainTicks({
-        marginLeft: margin.left,
-        numTicks,
-        xScale,
-      });
+      return buildDomainTicks({ shortDateFmt, marginLeft: margin.left, numTicks, xScale });
     }
 
     const dataTicks = buildDataAlignedTicks({
+      shortDateFmt,
       data,
       dateLabels,
       marginLeft: margin.left,
@@ -598,11 +603,12 @@ const XAxisInner = memo(function XAxisInner({
         xScale,
         margin.left,
         Math.max(1, numTicks - dataTicks.length + 1),
+        shortDateFmt,
       );
     }
 
     return dataTicks;
-  }, [tickMode, xDomain, data, dateLabels, xAccessor, xScale, margin.left, numTicks]);
+  }, [tickMode, xDomain, data, dateLabels, xAccessor, xScale, margin.left, numTicks, shortDateFmt]);
 
   const isHovering = tooltipData !== null;
   const crosshairX = tooltipData ? tooltipData.x + margin.left : null;

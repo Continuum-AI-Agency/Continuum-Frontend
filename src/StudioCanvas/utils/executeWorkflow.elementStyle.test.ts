@@ -1,3 +1,5 @@
+import { createTranslator } from 'next-intl';
+import studioMessages from '../../../messages/studio/en.json';
 // An Element's `/slug` style defaults ride into every generator it is wired into, ahead of
 // the generator's own prompt so a slug the user typed there still wins.
 
@@ -147,6 +149,11 @@ describe('executeWorkflow — Element style tokens', () => {
 
     await executeWorkflow(
       {
+        translateUi: createTranslator({
+          locale: 'en',
+          messages: { studio: studioMessages },
+          namespace: 'studio',
+        }),
         executeGeneration,
         executeVideoExtension: mock(async () => ({ success: true })),
         executeEnrichment: mock(async () => ({ success: true })),
@@ -190,6 +197,11 @@ describe('executeWorkflow — Element style tokens', () => {
 
     await executeWorkflow(
       {
+        translateUi: createTranslator({
+          locale: 'en',
+          messages: { studio: studioMessages },
+          namespace: 'studio',
+        }),
         executeGeneration: mock(async () => ({ success: true })),
         executeVideoExtension: mock(async () => ({ success: true })),
         executeEnrichment: mock(async () => ({ success: true })),

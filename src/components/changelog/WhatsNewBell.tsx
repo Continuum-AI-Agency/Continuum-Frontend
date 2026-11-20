@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Header "What's New" bell: a Sparkles trigger with an unread badge over the
 // static product changelog. Kept deliberately separate from the notifications
@@ -16,6 +17,8 @@ import { useChangelog } from './useChangelog';
 import { WhatsNewPanel } from './WhatsNewPanel';
 
 export function WhatsNewBell({ entries: sourceEntries }: { entries: ChangelogEntry[] }) {
+  const tUi = useTranslations('common');
+
   const [open, setOpen] = useState(false);
   const [snapshotLastSeenId, setSnapshotLastSeenId] = useState<string | null>(null);
   const { entries, unreadCount, lastSeenId, markAllSeen } = useChangelog(sourceEntries);
@@ -36,7 +39,11 @@ export function WhatsNewBell({ entries: sourceEntries }: { entries: ChangelogEnt
             variant="ghost"
             size="icon"
             className="relative size-9 active:scale-[0.96] transition-[transform]"
-            aria-label={unreadCount > 0 ? `${unreadCount} new updates` : "What's New"}
+            aria-label={
+              unreadCount > 0
+                ? tUi('m_c0f1ec3ac3', { v0: String(unreadCount) })
+                : tUi('m_a2efe20277')
+            }
           >
             <SparklesIcon className="size-4" />
             {unreadCount > 0 && (

@@ -6,7 +6,13 @@
 
 import { afterEach, expect, mock, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const BRAND = '33333333-3333-4333-8333-333333333333';
 const ASSET = '11111111-1111-4111-8111-111111111111';

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { createTranslator } from 'next-intl';
+import authMessages from '../../../messages/auth/en.json';
 
 // Ramiro's decision 1 (PP-DT-C-signout-ends-every-device): Sign out ends THIS browser's session
 // only; ending every session of the account is a separate, named action; and a session opened from
@@ -26,6 +28,15 @@ const state: FakeState = {
   revalidateCalls: [],
   redirects: [],
 };
+
+mock.module('next-intl/server', () => ({
+  getTranslations: async () =>
+    createTranslator({ locale: 'en', messages: { auth: authMessages }, namespace: 'auth' }),
+}));
+mock.module('@/i18n/server', () => ({
+  getCookieLocale: async () => 'en',
+  restoreAccountLocale: async () => {},
+}));
 
 mock.module('next/cache', () => ({
   revalidatePath: (path: string, type?: string) => {

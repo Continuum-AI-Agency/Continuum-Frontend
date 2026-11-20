@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render as rtlRender, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { render as rtlRender } from '@/i18n/__tests__/render';
 import type { GoalWorkspaceView } from '@/lib/goals/models';
 import {
   buildStructuredGoalFormResponse,
   buildStructuredGoalResponse,
   GoalEvidenceRail,
+  parseGoalNumericInput,
 } from './GoalEvidenceRail';
 
 afterEach(cleanup);
@@ -140,4 +142,29 @@ describe('GoalEvidenceRail', () => {
     expect(getByText('In-app fallback')).toBeTruthy();
     expect(getByText(/No routable Slack or Teams identity/)).toBeTruthy();
   });
+});
+
+describe('localized structured goal amounts', () => {
+  for (const [locale, money, number, foreign] of [
+    ['en', '1,250.75', '-1,250.75', '1250,75'],
+    ['pt-BR', '1.250,75', '-1.250,75', '1250.75'],
+    ['es', '1.250,75', '-1.250,75', '1250.75'],
+  ] as const) {
+    it(`preserves currency and stored values for ${locale}`, () => {
+      expect(
+        buildStructuredGoalResponse({ kind: 'money', currency: 'USD' }, money, locale)
+          ?.structuredValue,
+      ).toEqual({ kind: 'money', amountMinor: 125075, currency: 'USD' });
+      expect(
+        buildStructuredGoalResponse({ kind: 'money', currency: 'BRL' }, money, locale)
+          ?.structuredValue,
+      ).toEqual({ kind: 'money', amountMinor: 125075, currency: 'BRL' });
+      expect(
+        buildStructuredGoalResponse({ kind: 'money', currency: 'USD' }, foreign, locale),
+      ).toBeNull();
+      expect(parseGoalNumericInput(number, locale)).toBe(-1250.75);
+      expect(parseGoalNumericInput(foreign, locale)).toBeNull();
+      expect(parseGoalNumericInput('1,23,456', locale)).toBeNull();
+    });
+  }
 });

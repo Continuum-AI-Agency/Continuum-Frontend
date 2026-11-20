@@ -11,6 +11,7 @@ import {
   VenusAndMarsIcon,
   VenusIcon,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -102,14 +103,18 @@ export type VoiceSelectorContentProps = ComponentProps<typeof DialogContent> & {
 export const VoiceSelectorContent = ({
   className,
   children,
-  title = 'Voice Selector',
+  title: uiProvidedTitle,
   ...props
-}: VoiceSelectorContentProps) => (
-  <DialogContent aria-describedby={undefined} className={cn('p-0', className)} {...props}>
-    <DialogTitle className="sr-only">{title}</DialogTitle>
-    <Command className="**:data-[slot=command-input-wrapper]:h-auto">{children}</Command>
-  </DialogContent>
-);
+}: VoiceSelectorContentProps) => {
+  const t = useTranslations('common');
+  const title = uiProvidedTitle ?? t('m_b94b366da6');
+  return (
+    <DialogContent aria-describedby={undefined} className={cn('p-0', className)} {...props}>
+      <DialogTitle className="sr-only">{title}</DialogTitle>
+      <Command className="**:data-[slot=command-input-wrapper]:h-auto">{children}</Command>
+    </DialogContent>
+  );
+};
 
 export type VoiceSelectorDialogProps = ComponentProps<typeof CommandDialog>;
 
@@ -433,6 +438,8 @@ export const VoiceSelectorPreview = ({
   onClick,
   ...props
 }: VoiceSelectorPreviewProps) => {
+  const tUi = useTranslations('common');
+
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation();
@@ -452,7 +459,7 @@ export const VoiceSelectorPreview = ({
 
   return (
     <Button
-      aria-label={playing ? 'Pause preview' : 'Play preview'}
+      aria-label={playing ? tUi('m_805180fb93') : tUi('m_47bb4429e8')}
       className={cn('size-6', className)}
       disabled={loading}
       onClick={handleClick}

@@ -13,6 +13,7 @@
 // brand with no stored daily read can still have one. Without it the tile is as above.
 
 import { type HomeBriefData, homeBriefReadSchema } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,7 +23,7 @@ import { readyDataOf } from '../../homeRead';
 import type { HomeTileProps } from '../../types';
 import { useHomeGoalRead } from '../../useHomeGoalRead';
 import { BriefSentence } from './BriefSentences';
-import { BRIEF_MISSING, briefView, readOnLabel, staleLabel } from './briefModel';
+import { briefView, readOnLabel, staleLabel } from './briefModel';
 import { useBriefReads } from './useBriefReads';
 
 const Module = lazy(() => import('./Module'));
@@ -33,11 +34,8 @@ const CLAMP: Record<HomeTileProps['tile']['size'], string> = {
   l: 'line-clamp-6',
 };
 
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
 export default function BriefTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
   const { reads, retry } = useBriefReads(ctx.brandId, ctx.adAccounts);
   const today = new Date();
   const view = briefView(reads, today);
@@ -63,7 +61,7 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
     const figures = brief.sentences.reduce((sum, sentence) => sum + sentence.figures.length, 0);
     return (
       <HomeTileFrame
-        badge={plural(figures, 'figure', 'figures')}
+        badge={uiText('count_plural_one_figure_other_figures_44e3da3', { count: figures })}
         expanded={
           <Module
             brief={brief}
@@ -71,7 +69,7 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
             failed={view.state === 'ready' ? view.failed : 0}
           />
         }
-        expandedDescription="The brief with the source of each figure, and every account’s stored daily read."
+        expandedDescription={uiText('the_brief_with_the_source_of_each_figure_and__0a64925')}
         state="ready"
         tile={tile}
       >
@@ -101,7 +99,7 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
   if (view.state === 'missing') {
     return (
       <HomeTileFrame state="missing" tile={tile}>
-        <TileMissing>{BRIEF_MISSING}</TileMissing>
+        <TileMissing>{uiText('no_daily_read_stored_for_these_accounts_yet_j_4d1dbc1')}</TileMissing>
       </HomeTileFrame>
     );
   }
@@ -109,9 +107,11 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
     return (
       <HomeTileFrame state="error" tile={tile}>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-muted-foreground text-xs">Jaina’s daily read could not be loaded.</p>
+          <p className="text-muted-foreground text-xs">
+            {uiText('jaina_s_daily_read_could_not_be_loaded_b9bc8a1')}
+          </p>
           <Button onClick={retry} size="sm" type="button" variant="outline">
-            Retry
+            {uiText('retry_942087c')}
           </Button>
         </div>
       </HomeTileFrame>
@@ -125,9 +125,11 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
 
   return (
     <HomeTileFrame
-      badge={plural(view.entries.length, 'stored read', 'stored reads')}
+      badge={uiText('count_plural_one_stored_read_other_stored_rea_d22c0df', {
+        count: view.entries.length,
+      })}
       expanded={<Module brief={null} entries={view.entries} failed={view.failed} />}
-      expandedDescription="The daily read Jaina stored for each ad account, as written."
+      expandedDescription={uiText('the_daily_read_jaina_stored_for_each_ad_accou_a1cde20')}
       state="ready"
       tile={tile}
     >
@@ -146,12 +148,14 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
         <p className={cn('break-words text-sm leading-snug', CLAMP[tile.size])}>{lead.narrative}</p>
         {others > 0 ? (
           <p className="text-muted-foreground text-xs">
-            +{plural(others, 'more account', 'more accounts')} in the brief
+            {uiText('count_plural_one_more_account_in_the_brief_ot_87f2801', { count: others })}
           </p>
         ) : null}
         {view.failed > 0 ? (
           <p className="text-muted-foreground text-xs">
-            {plural(view.failed, 'account’s read', 'accounts’ reads')} could not be loaded.
+            {uiText('count_plural_one_account_s_read_could_not_be__99eb409', {
+              count: view.failed,
+            })}
           </p>
         ) : null}
       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -14,7 +15,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { SIGN_OUT_EVERYWHERE_REFUSED_WHILE_IMPERSONATING } from '@/lib/auth/impersonation';
 
 type SignOutEverywhereSectionProps = {
   /** This browser's session came from an impersonation link, so it never ends the customer's
@@ -25,13 +25,15 @@ type SignOutEverywhereSectionProps = {
 // Sign out in the sidebar ends only this browser; this ends every session of the account. It
 // signs out people on other devices, so it asks first (PP-DT-C-signout-ends-every-device).
 export function SignOutEverywhereSection({ impersonating }: SignOutEverywhereSectionProps) {
+  const uiText = useTranslations('settings');
+  const authText = useTranslations('auth');
   const { logoutEverywhere, isPending, error } = useAuth();
   const [confirming, setConfirming] = useState(false);
 
   if (impersonating) {
     return (
       <p className="max-w-[60ch] text-sm text-muted-foreground">
-        {SIGN_OUT_EVERYWHERE_REFUSED_WHILE_IMPERSONATING}
+        {authText('signOutEverywhereRefused')}
       </p>
     );
   }
@@ -47,34 +49,32 @@ export function SignOutEverywhereSection({ impersonating }: SignOutEverywhereSec
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-[60ch] text-sm text-muted-foreground">
-          Sign out, in the sidebar, ends only this browser. Sign out of all devices ends every
-          session of your account, this one included.
+          {uiText('sign_out_in_the_sidebar_ends_only_this_browse_544d763')}
         </p>
         <AlertDialog open={confirming} onOpenChange={setConfirming}>
           <AlertDialogTrigger
             render={
               <Button type="button" variant="outline" disabled={isPending}>
-                Sign out of all devices
+                {uiText('sign_out_of_all_devices_8d7292e')}
               </Button>
             }
           />
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Sign out of all devices?</AlertDialogTitle>
+              <AlertDialogTitle>{uiText('sign_out_of_all_devices_1583fe5')}</AlertDialogTitle>
               <AlertDialogDescription>
-                Every browser and device signed in to your account is signed out, this one included.
-                A page already open on another device can keep working for up to an hour.
+                {uiText('every_browser_and_device_signed_in_to_your_ac_cfbf52d')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel disabled={isPending}>{uiText('m_77dfd2135f')}</AlertDialogCancel>
               <AlertDialogAction
                 variant="destructive"
                 disabled={isPending}
                 aria-busy={isPending}
                 onClick={() => void signOutEverywhere()}
               >
-                {isPending ? 'Signing out…' : 'Sign out everywhere'}
+                {isPending ? uiText('signing_out_08c6bd3') : uiText('sign_out_everywhere_af180fc')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

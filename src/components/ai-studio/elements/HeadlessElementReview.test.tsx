@@ -10,7 +10,14 @@ mock.module('@/lib/api/http', () => ({
 
 import type { ElementRecord } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApiError } from '@/lib/api/errors';
 import { HeadlessElementReview } from './HeadlessElementReview';
 

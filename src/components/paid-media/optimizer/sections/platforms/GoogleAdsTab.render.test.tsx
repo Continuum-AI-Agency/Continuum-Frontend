@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdAccount } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import recorded from './__fixtures__/google-vivo47-paid-media-metrics.json';
 import {
   ambiguousAccountOverview,

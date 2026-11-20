@@ -8,6 +8,7 @@
 import type { BoardModuleSize } from '@continuum/contracts';
 import { PlusIcon } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -70,6 +71,7 @@ function CardSlot({ card, props }: { card: DecisionCard; props: DecisionsViewPro
 
 /** Size s: the count, the split by tier as one thin bar, and the card that leads. */
 function DecisionsSummary(props: DecisionsViewProps) {
+  const uiText = useTranslations('scale');
   const { cards } = props;
   const tiers = tierCounts(cards);
   const split = TIERS.filter((tier) => tiers[tier] > 0)
@@ -87,8 +89,14 @@ function DecisionsSummary(props: DecisionsViewProps) {
             {cards.length}
           </span>
           <span className="text-muted-foreground text-xs">
-            {cards.length === 1 ? 'decision waits' : 'decisions wait'}
-            {split ? ` · ${split}` : ''}
+            {split
+              ? uiText('count_plural_one_decision_waits_other_decisio_a91cc74', {
+                  count: cards.length,
+                  split,
+                })
+              : uiText('count_plural_one_decision_waits_other_decisio_4f8ae53', {
+                  count: cards.length,
+                })}
           </span>
         </p>
         <div aria-hidden="true" className="flex h-1.5 gap-0.5 overflow-hidden rounded-full">
@@ -108,6 +116,7 @@ function DecisionsSummary(props: DecisionsViewProps) {
 
 /** Sizes m, l and w: the filters and the stack. */
 function DecisionsStackList(props: DecisionsViewProps) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const [filter, setFilter] = useState<DecisionFilter>('all');
   const [expanded, setExpanded] = useState(false);
@@ -121,7 +130,7 @@ function DecisionsStackList(props: DecisionsViewProps) {
   return (
     <div className="space-y-3">
       <ToggleGroup
-        aria-label="Filter decisions"
+        aria-label={uiText('filter_decisions_6095f16')}
         className="flex-wrap"
         onValueChange={(value) => {
           if (!isFilter(value)) return;
@@ -181,7 +190,7 @@ function DecisionsStackList(props: DecisionsViewProps) {
           type="button"
           variant="ghost"
         >
-          Show {hidden} more
+          {uiText('show_count_more_e372f20', { count: hidden })}
         </Button>
       ) : null}
     </div>
@@ -195,22 +204,23 @@ function NoDecisions({
   mode: ControlContext['mode'];
   onCreatePortfolio: () => void;
 }) {
+  const uiText = useTranslations('scale');
   if (mode === 'setup') {
     return (
       <div className="space-y-2" data-testid="decisions-empty">
         <p className="text-muted-foreground text-sm">
-          No portfolio yet, so the Optimizer has no decisions for this account.
+          {uiText('no_portfolio_yet_so_the_optimizer_has_no_deci_b10191d')}
         </p>
         <Button data-testid="decision-create" onClick={onCreatePortfolio} size="sm" type="button">
           <PlusIcon aria-hidden="true" />
-          Create portfolio
+          {uiText('create_portfolio_a53487c')}
         </Button>
       </div>
     );
   }
   return (
     <p className="text-muted-foreground text-sm" data-testid="decisions-empty">
-      Nothing waits for a decision.
+      {uiText('nothing_waits_for_a_decision_231603a')}
     </p>
   );
 }

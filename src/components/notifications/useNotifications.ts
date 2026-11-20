@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Recipient-scoped notification feed for the header bell. Initial read goes
 // through the browser Supabase client (RLS limits rows to the signed-in
@@ -23,6 +24,8 @@ export type UseNotificationsResult = {
 };
 
 export function useNotifications(): UseNotificationsResult {
+  const tUi = useTranslations('common');
+
   const { user } = useSession();
   const userId = user?.id ?? null;
   const [notifications, setNotifications] = useState<AppNotification[]>([]);

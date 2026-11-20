@@ -1,6 +1,7 @@
 import { ArrowLeftRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { CopyBrandIdButton } from './CopyBrandIdButton';
 
 type BrandIdentityHeaderProps = {
@@ -10,6 +11,8 @@ type BrandIdentityHeaderProps = {
 };
 
 export function BrandIdentityHeader({ brandId, name, logoUrl }: BrandIdentityHeaderProps) {
+  const tUi = useTranslations('settings');
+
   const initial = name.trim().charAt(0).toUpperCase() || '?';
 
   return (
@@ -42,7 +45,7 @@ export function BrandIdentityHeader({ brandId, name, logoUrl }: BrandIdentityHea
         className="hit-area inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
       >
         <ArrowLeftRight className="h-3 w-3" aria-hidden />
-        Switch brand
+        {tUi('m_26a9920e43')}
       </Link>
     </div>
   );

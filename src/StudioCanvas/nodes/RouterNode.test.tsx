@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { ROUTER_INPUT_HANDLE, ROUTER_OUTPUT_HANDLE } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import { cleanup, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import type { RouterNodeData } from '../types';

@@ -19,6 +19,7 @@ export * from './documents/index';
 export * from './easyfit/index';
 export * from './easyfit-http/index';
 export * from './embedding/index';
+export * from './errors/api-error';
 export * from './errors/integration-error';
 export * from './goals/index';
 export * from './headless-content/concepts';

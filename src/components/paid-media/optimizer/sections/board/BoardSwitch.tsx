@@ -7,6 +7,7 @@
 // the board comes in with its stagger; under reduced motion both simply appear.
 
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import type { JainaEntry } from '../jainaEntryModel';
@@ -98,10 +99,11 @@ const SPINE = [
 ] as const;
 
 function BoardPlaceholder({ toggle }: { toggle: ReactNode }) {
+  const uiText = useTranslations('scale');
   return (
     <section
       aria-busy="true"
-      aria-label="Adaptive overview"
+      aria-label={uiText('adaptive_overview_c709c9d')}
       className={cn('space-y-3', boardPaletteClass)}
       data-testid="adaptive-board-root"
     >

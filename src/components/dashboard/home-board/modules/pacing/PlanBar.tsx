@@ -1,6 +1,7 @@
 'use client';
 
 // Spent against the plan as one bar, with a tick where the plan expected spend to be by now.
+import { useTranslations } from 'next-intl';
 import type { PacingCurrencyGroup } from './pacingModel';
 
 export function PlanBar({
@@ -8,10 +9,13 @@ export function PlanBar({
 }: {
   group: Pick<PacingCurrencyGroup, 'spent' | 'plan' | 'expected'>;
 }) {
+  const uiText = useTranslations('dashboard');
   const share = (value: number) => Math.max(0, Math.min(100, (value / group.plan) * 100));
   return (
     <div
-      aria-label={`Spent ${Math.round(share(group.spent))}% of the plan`}
+      aria-label={uiText('spent_percent_of_the_plan_b7ac001', {
+        percent: Math.round(share(group.spent)),
+      })}
       className="relative h-2 w-full overflow-hidden rounded-full bg-muted"
       role="img"
     >

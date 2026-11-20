@@ -2,6 +2,7 @@
 
 import { Check, ChevronDown, ChevronsUpDown, PlugZapIcon, RefreshCwIcon } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { BrandAvatar } from '@/components/brand/BrandAvatar';
 import { PlatformIcon } from '@/components/paid-media/optimizer/sections/platforms/PlatformChip';
@@ -171,6 +172,7 @@ export function AdAccountSelector({
   onAutoSelect,
   chip,
 }: AdAccountSelectorProps) {
+  const uiText = useTranslations('scale');
   const isGoogleAds = platform === 'google-ads';
   const isAll = platform === 'all';
   const isLinkedIn = platform === 'linkedin';
@@ -387,13 +389,15 @@ export function AdAccountSelector({
             'h-8 gap-1.5 px-2 text-xs',
             chip && 'w-8 shrink-0 px-0 @[30rem]/scale-bar:w-auto @[30rem]/scale-bar:px-2',
           )}
-          title={chip ? 'Connect ad account' : undefined}
+          title={chip ? uiText('connect_ad_account_05e148f') : undefined}
         >
           <PlugZapIcon aria-hidden="true" className="h-3.5 w-3.5" />
           {chip ? (
-            <span className="sr-only @[30rem]/scale-bar:not-sr-only">Connect ad account</span>
+            <span className="sr-only @[30rem]/scale-bar:not-sr-only">
+              {uiText('connect_ad_account_05e148f')}
+            </span>
           ) : (
-            'Connect ad account'
+            uiText('connect_ad_account_05e148f')
           )}
         </Link>
         {canRetry ? (
@@ -402,7 +406,7 @@ export function AdAccountSelector({
             variant="ghost"
             size="sm"
             className="h-8 w-8 shrink-0 p-0"
-            aria-label="Retry loading ad accounts"
+            aria-label={uiText('retry_loading_ad_accounts_2bdc642')}
             onClick={handleRetry}
           >
             <RefreshCwIcon aria-hidden="true" className="h-3.5 w-3.5" />
@@ -417,14 +421,14 @@ export function AdAccountSelector({
     : undefined;
   const triggerLabel =
     visibleAccounts.length === 0
-      ? 'Loading accounts...'
+      ? uiText('adAccountLoading')
       : selectedAccount
         ? selectedAccount.name
-        : 'Select ad account';
+        : uiText('adAccountSelect');
   // The chip names the account in use; with none picked yet it says how many it can offer.
   const chipAccountLabel =
     !selectedAccount && visibleAccounts.length > 1
-      ? `${visibleAccounts.length} accounts`
+      ? uiText('adAccountCount', { count: visibleAccounts.length })
       : triggerLabel;
 
   return (
@@ -457,10 +461,13 @@ export function AdAccountSelector({
 
       <PopoverContent className="w-[320px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search ad accounts..." className="h-9 text-xs" />
+          <CommandInput
+            placeholder={uiText('search_ad_accounts_56b2cdf')}
+            className="h-9 text-xs"
+          />
           <CommandList>
-            <CommandEmpty>No ad accounts found.</CommandEmpty>
-            <CommandGroup heading="Ad accounts">
+            <CommandEmpty>{uiText('no_ad_accounts_found_bf03edd')}</CommandEmpty>
+            <CommandGroup heading={uiText('ad_accounts_f3e56c3')}>
               {visibleAccounts.map((account) => (
                 <CommandItem
                   key={account.id}

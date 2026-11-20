@@ -1,3 +1,5 @@
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 export const MEBIBYTE_BYTES = 1024 * 1024;
 
 export const IMAGE_REFERENCE_MAX_BYTES = 100 * MEBIBYTE_BYTES;
@@ -108,8 +110,8 @@ export function estimateBase64DecodedBytes(base64: string): number {
   return Math.floor((trimmed.length * 3) / 4) - padding;
 }
 
-export function formatMiB(bytes: number): string {
-  return `${(bytes / MEBIBYTE_BYTES).toFixed(1)} MiB`;
+export function formatMiB(bytes: number, locale: UiLocale = 'en'): string {
+  return `${formatDecimal(bytes / MEBIBYTE_BYTES, 1, locale)} MiB`;
 }
 
 function positiveFiniteOrUndefined(value: unknown): number | undefined {

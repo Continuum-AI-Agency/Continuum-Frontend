@@ -4,7 +4,13 @@ import {
   type VideoEditorOpName,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApiError } from '@/lib/api/errors';
 import type { VideoStudioContext } from '../types';
 
@@ -29,7 +35,7 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
     return answer();
   },
 }));
-mock.module('next/navigation', () => ({ useRouter: () => ({ push: () => undefined }) }));
+mock.module('@/i18n/navigation', () => ({ useRouter: () => ({ push: () => undefined }) }));
 mock.module('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: (toast: (typeof toasts)[number]) => toasts.push(toast) }),
 }));
@@ -197,7 +203,9 @@ describe('BriefDialog', () => {
     async () => {
       renderDialog(() => ({ jobId: 'job_2', state: 'running' }));
       pollAnswers.push(() => {
-        throw new ApiError('No draft job_2 on this project.', 404);
+        throw new ApiError('No draft job_2 on this project.', 404, undefined, {
+          message: 'No draft job_2 on this project.',
+        });
       });
       submit();
       await waitFor(

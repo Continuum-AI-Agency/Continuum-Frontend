@@ -139,6 +139,7 @@ mock.module('@/lib/supabase/realtime', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import {
   act,
   cleanup,
@@ -146,8 +147,7 @@ import {
   render as renderInDom,
   screen,
   waitFor,
-} from '@testing-library/react';
-import type { ReactElement } from 'react';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { RenderPreviewPanel } from './RenderPreviewPanel';
 import type { RequestRow } from './renderRequestRows';
 
@@ -428,9 +428,7 @@ describe('RenderPreviewPanel', () => {
       outputs: [],
     } as ApiRenderTemplateContract;
     const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: SET, rows: rowWith('Hola') };
-    const { rerender } = render(
-      <RenderPreviewPanel {...props} refusal="Use a brand colour." />,
-    );
+    const { rerender } = render(<RenderPreviewPanel {...props} refusal="Use a brand colour." />);
     // Past the proof's own debounce: a row that will not render is never proofed.
     await act(async () => await new Promise((resolve) => setTimeout(resolve, 1800)));
     expect(startMotionProofMock).not.toHaveBeenCalled();
@@ -534,7 +532,9 @@ describe('RenderPreviewPanel', () => {
 
     expect(slot(container, 'headline')?.textContent).toContain('Una oferta');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBe('true');
-    expect(screen.getByText(/Will render · Headline may shrink or clip \(fits only at/)).toBeTruthy();
+    expect(
+      screen.getByText(/Will render · Headline may shrink or clip \(fits only at/),
+    ).toBeTruthy();
 
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Hola')} />);
 

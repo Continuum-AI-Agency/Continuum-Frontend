@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Video } from '@/components/ui/video';
 import { cn } from '@/lib/utils';
 
@@ -42,12 +43,17 @@ export function NodeVideoPreview({
   children?: React.ReactNode;
   'data-testid'?: string;
 }) {
+  const translateUi = useUiTranslations('studio');
   return (
     <div
       className="relative flex h-full w-full"
       data-testid={testId ?? 'studio-node-video-preview'}
     >
-      <Video src={src} ariaLabel="Generated clip" className={cn(CANVAS_PLAYER, className)} />
+      <Video
+        src={src}
+        ariaLabel={translateUi('generatedClipLabel')}
+        className={cn(CANVAS_PLAYER, className)}
+      />
       {children}
     </div>
   );

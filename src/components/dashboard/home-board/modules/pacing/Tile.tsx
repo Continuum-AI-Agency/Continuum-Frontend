@@ -9,6 +9,7 @@
 // figure, cents); the direct read is in pacingModel.ts's header (the bench anchor).
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,9 +24,6 @@ import { usePacingReads } from './usePacingReads';
 
 const Module = lazy(() => import('./Module'));
 
-const EXPANDED_DESCRIPTION =
-  'Spend to date against each portfolio’s budget plan, from the Optimizer’s latest daily cycle.';
-
 function ReadyBody({
   headline,
   others,
@@ -35,6 +33,7 @@ function ReadyBody({
   others: PacingCurrencyGroup[];
   size: HomeTileProps['tile']['size'];
 }) {
+  const uiText = useTranslations('dashboard');
   const { currency } = headline;
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -45,14 +44,17 @@ function ReadyBody({
         data-value={String(headline.spent)}
       >
         {formatMoney(headline.spent, currency)}{' '}
-        <span className="font-normal text-muted-foreground text-xs">spent</span>
+        <span className="font-normal text-muted-foreground text-xs">{uiText('spent_2705d83')}</span>
       </p>
       <PlanBar group={headline} />
       <p className="text-muted-foreground text-xs leading-snug">
-        of {formatMoney(headline.plan, currency)} plan
         {headline.through
-          ? ` · ${formatMoney(headline.expected, currency)} expected by ${dayLabel(headline.through)}`
-          : ''}
+          ? uiText('of_plan_plan_expected_expected_by_day_97ad0d7', {
+              plan: formatMoney(headline.plan, currency),
+              expected: formatMoney(headline.expected, currency),
+              day: dayLabel(headline.through),
+            })
+          : uiText('of_plan_plan_7c0b019', { plan: formatMoney(headline.plan, currency) })}
       </p>
       <p className={cn('font-medium text-xs', PACE_TONE[headline.pace])}>
         {gapLabel(headline.gap, headline.gapPct, currency)}
@@ -64,9 +66,11 @@ function ReadyBody({
               data-testid="home-pacing-other-currency"
               key={group.currency ?? 'none'}
             >
-              Also {formatMoney(group.spent, group.currency)} of{' '}
-              {formatMoney(group.plan, group.currency)} plan ·{' '}
-              {gapLabel(group.gap, group.gapPct, group.currency)}
+              {uiText('also_spent_of_plan_plan_gap_a76de72', {
+                spent: formatMoney(group.spent, group.currency),
+                plan: formatMoney(group.plan, group.currency),
+                gap: gapLabel(group.gap, group.gapPct, group.currency),
+              })}
             </p>
           ))
         : null}
@@ -75,6 +79,7 @@ function ReadyBody({
 }
 
 export default function PacingTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
   const reads = usePacingReads(ctx.brandId);
   const view = pacingView({
     portfolios: reads.portfolios,
@@ -99,10 +104,10 @@ export default function PacingTile({ ctx, tile }: HomeTileProps) {
       <HomeTileFrame state="error" tile={tile}>
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-muted-foreground text-xs">
-            The Optimizer’s budget plans could not be read.
+            {uiText('the_optimizer_s_budget_plans_could_not_be_rea_3c6ab20')}
           </p>
           <Button onClick={reads.retry} size="sm" type="button" variant="outline">
-            Retry
+            {uiText('retry_942087c')}
           </Button>
         </div>
       </HomeTileFrame>
@@ -114,7 +119,7 @@ export default function PacingTile({ ctx, tile }: HomeTileProps) {
         <TileMissing>
           {view.reason}{' '}
           <Link className="hit-area underline underline-offset-2" href={optimizerHref(null)}>
-            Open the Optimizer
+            {uiText('open_the_optimizer_9ec303b')}
           </Link>
         </TileMissing>
       </HomeTileFrame>
@@ -124,9 +129,11 @@ export default function PacingTile({ ctx, tile }: HomeTileProps) {
   const [, ...others] = view.groups;
   return (
     <HomeTileFrame
-      badge={`${view.headline.portfolios} ${view.headline.portfolios === 1 ? 'plan' : 'plans'} running`}
+      badge={uiText('count_plural_one_plan_running_other_plans_run_d8e3be6', {
+        count: view.headline.portfolios,
+      })}
       expanded={<Module view={view} />}
-      expandedDescription={EXPANDED_DESCRIPTION}
+      expandedDescription={uiText('spend_to_date_against_each_portfolio_s_budget_3530762')}
       state="ready"
       tile={tile}
     >

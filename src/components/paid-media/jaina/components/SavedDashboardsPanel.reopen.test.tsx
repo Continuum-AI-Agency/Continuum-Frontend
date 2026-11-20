@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * A reopened dashboard reads like the live report: the scope frame first, then the figures.
  *
@@ -8,7 +9,7 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
 mock.module('@/lib/jaina/brandScope', () => ({
   useJainaBrandScope: () => ({ brandId: 'b1', adAccountId: 'act_1' }),

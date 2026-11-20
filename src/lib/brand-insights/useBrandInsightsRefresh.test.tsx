@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 
 type StatusListener = { onStatus: (status: { status: string; message?: string }) => void };
@@ -14,7 +15,20 @@ const subscribeToBrandInsightsJob = mock((listener: StatusListener) => {
   return () => undefined;
 });
 
-mock.module('next/navigation', () => ({ useRouter: () => ({ refresh: routerRefresh }) }));
+// mock.module is process-wide: the router is whole, so files run after this one still navigate.
+const noop = () => undefined;
+mock.module('next/navigation', () => ({
+  useRouter: () => ({
+    refresh: routerRefresh,
+    push: noop,
+    replace: noop,
+    prefetch: noop,
+    back: noop,
+    forward: noop,
+  }),
+  usePathname: () => '/organic',
+  useSearchParams: () => new URLSearchParams(),
+}));
 mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
 mock.module('@/lib/actions/brandInsights', () => ({ revalidateBrandInsights }));
 mock.module('@/lib/api/brandInsights.client', () => ({

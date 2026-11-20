@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { FigmaIcon, GitHubIcon } from '@/components/shared/icons';
 
@@ -195,12 +196,13 @@ function IntegrationTabBar({
   onSelectIntegration: (integrationId: string) => void;
   trailing?: React.ReactNode;
 }) {
+  const uiText = useTranslations('common');
   const reduceMotion = useReducedMotion();
 
   return (
     <div
       role="tablist"
-      aria-label="Integrations"
+      aria-label={uiText('integrations_090512d')}
       className="flex w-full flex-wrap items-center gap-1 rounded-full border border-border/70 bg-muted/60 p-1"
     >
       {integrations.map((integration) => {
@@ -242,11 +244,13 @@ function IntegrationTabBar({
 }
 
 function ActionIcon({ status }: { status: IntegrationSwitcherItemStatus }) {
+  const tUi = useTranslations('common');
+
   if (status === 'checked') {
     return (
       <span
         role="img"
-        aria-label="Already synced"
+        aria-label={tUi('m_483ff5e64f')}
         className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
       >
         <Check className="h-4 w-4" />
@@ -257,7 +261,7 @@ function ActionIcon({ status }: { status: IntegrationSwitcherItemStatus }) {
   return (
     <button
       type="button"
-      aria-label="Copy item"
+      aria-label={tUi('m_abc8f3b83c')}
       className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Copy className="h-4 w-4" />
@@ -276,12 +280,18 @@ function ToggleAction({
   itemTitle: string;
   onToggle: (next: boolean) => void;
 }) {
+  const tUi = useTranslations('common');
+
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      aria-label={checked ? `Unassign ${itemTitle}` : `Assign ${itemTitle}`}
+      aria-label={
+        checked
+          ? tUi('m_f3ea1b10e8', { v0: String(itemTitle) })
+          : tUi('m_ecf0a49a19', { v0: String(itemTitle) })
+      }
       disabled={pending}
       onClick={() => onToggle(!checked)}
       className={cn(
@@ -398,12 +408,14 @@ function SyncBar({
   syncing: boolean;
   syncLabel?: (integrationId: string, hasItems: boolean) => string;
 }) {
+  const tUi = useTranslations('common');
+
   const label =
     syncLabel?.(activeIntegration, hasItems) ??
-    (hasItems ? 'Sync more accounts' : 'Connect this provider');
+    (hasItems ? tUi('m_ce19a7debe') : tUi('m_4cc5238906'));
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-muted/30 px-3 py-2">
-      <span className="text-xs text-muted-foreground">Add accounts available to your user.</span>
+      <span className="text-xs text-muted-foreground">{tUi('m_9e00f37180')}</span>
       <button
         type="button"
         onClick={() => onSyncClick(activeIntegration)}

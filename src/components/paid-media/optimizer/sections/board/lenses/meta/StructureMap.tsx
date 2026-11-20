@@ -10,6 +10,7 @@
 import type { BoardModuleSize } from '@continuum/contracts';
 import { AlertTriangleIcon, ChevronRightIcon } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import {
   type CSSProperties,
   type FocusEvent,
@@ -71,8 +72,10 @@ const ROW_GAP = 4;
 const LABEL_MIN_PX = 44;
 
 type StructureColor = 'goal' | 'portfolio';
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
 
 export default function StructureMap({ ctx, slot }: BoardModuleProps) {
+  const uiText = useTranslations('scale');
   const campaigns = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_campaigns');
   const adsets = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_adsets');
   const { rosters } = usePortfolioRosters(ctx.portfolios);
@@ -82,8 +85,8 @@ export default function StructureMap({ ctx, slot }: BoardModuleProps) {
   const rootName = useMemo(() => {
     const wanted = ctx.adAccountId ? bareAccountId(ctx.adAccountId) : null;
     const account = accounts.data.find((row) => bareAccountId(row.account_id) === wanted);
-    return account?.name ?? 'Meta account';
-  }, [accounts.data, ctx.adAccountId]);
+    return account?.name ?? uiText('meta_account_4fe188e');
+  }, [accounts.data, ctx.adAccountId, uiText]);
   const model = useMemo(() => {
     if (campaigns.status !== 'ready' || adsets.status === 'loading') return null;
     return buildStructure({
@@ -107,9 +110,14 @@ export default function StructureMap({ ctx, slot }: BoardModuleProps) {
           model != null,
         );
   return (
-    <MetaFrame slot={slot} state={state} testId={TEST_ID} title="Account structure">
+    <MetaFrame
+      slot={slot}
+      state={state}
+      testId={TEST_ID}
+      title={uiText('account_structure_c55a032')}
+    >
       {waiting ? (
-        <ReadNote size={slot.size} state={waiting} testId={TEST_ID} what="campaigns" />
+        <ReadNote size={slot.size} state={waiting} testId={TEST_ID} />
       ) : model ? (
         <StructureView
           ads={ads}
@@ -120,7 +128,9 @@ export default function StructureMap({ ctx, slot }: BoardModuleProps) {
           zoomedId={zoomedId}
         />
       ) : (
-        <LensNote testId={`${TEST_ID}-empty`}>No campaign spent in the last 30 days.</LensNote>
+        <LensNote testId={`${TEST_ID}-empty`}>
+          {uiText('no_campaign_spent_in_the_last_30_days_57b869c')}
+        </LensNote>
       )}
     </MetaFrame>
   );
@@ -147,40 +157,70 @@ function fillOf(node: StructureNode, color: StructureColor, model: StructureMode
   };
 }
 
-function figureLine(node: StructureNode, model: StructureModel, currency: string | null): string {
+function figureLine(
+  node: StructureNode,
+  model: StructureModel,
+  currency: string | null,
+  uiText: ScaleCopy,
+): string {
   const spend = formatCurrencyInColumn(node.spend, currency);
-  const words = model.result?.en;
-  if (!words || node.level === 'rest') return spend;
+  const result = model.result?.kind;
+  if (!result || node.level === 'rest') return spend;
   if (node.costPerResult != null) {
-    return `${spend} · ${formatCurrencyInColumn(node.costPerResult, currency)} per ${words.one}`;
+    return uiText('spend_cost_per_result_select_purchases_purcha_c285306', {
+      spend,
+      cost: formatCurrencyInColumn(node.costPerResult, currency),
+      result,
+    });
   }
-  return node.results === 0 ? `${spend} · no ${words.many}` : spend;
+  return node.results === 0
+    ? uiText('spend_no_result_select_purchases_purchases_le_7e02fb3', { spend, result })
+    : spend;
 }
 
-function nodeTip(node: StructureNode, model: StructureModel, currency: string | null) {
+function nodeTip(
+  node: StructureNode,
+  model: StructureModel,
+  currency: string | null,
+  uiText: ScaleCopy,
+) {
   const portfolio = node.portfolioId
     ? model.portfolios.find((candidate) => candidate.id === node.portfolioId)
     : undefined;
-  const words = model.result?.en;
+  const result = model.result?.kind;
   return (
     <span className="flex flex-col gap-0.5">
       <span className="font-medium">{node.name}</span>
       <span>
-        {formatCurrency(node.spend, currency)} ·{' '}
-        {formatShare(model.totalSpend > 0 ? node.spend / model.totalSpend : null)} of spend
+        {uiText('spend_share_of_spend_815eff8', {
+          spend: formatCurrency(node.spend, currency),
+          share: formatShare(model.totalSpend > 0 ? node.spend / model.totalSpend : null),
+        })}
       </span>
-      {words && node.results != null ? (
+      {result && node.results != null ? (
         <span>
-          {node.results.toLocaleString('en-US')} {node.results === 1 ? words.one : words.many}
           {node.costPerResult != null
-            ? ` · ${formatCurrency(node.costPerResult, currency)} each`
-            : ''}
+            ? uiText('count_plural_one_result_select_purchases_purc_8d5e96e', {
+                count: node.results,
+                result,
+                cost: formatCurrency(node.costPerResult, currency),
+              })
+            : uiText('count_plural_one_result_select_purchases_purc_eb47074', {
+                count: node.results,
+                result,
+              })}
         </span>
       ) : null}
-      {portfolio ? <span>In {portfolio.name}</span> : null}
+      {portfolio ? (
+        <span>{uiText('in_portfolio_1f874b7', { portfolio: portfolio.name })}</span>
+      ) : null}
       {node.lost ? (
         <span>
-          Lost{node.lostSince ? ` on ${monthDayEn(node.lostSince)}` : ''}: Meta no longer serves it
+          {node.lostSince
+            ? uiText('lost_on_date_meta_no_longer_serves_it_1e73344', {
+                date: monthDayEn(node.lostSince),
+              })
+            : uiText('lost_meta_no_longer_serves_it_8fa5deb')}
         </span>
       ) : null}
     </span>
@@ -216,29 +256,36 @@ export function StructureView({
   );
 }
 
-function lostText(group: LostGroup): string {
-  return `${group.count} ${group.count === 1 ? 'ad set' : 'ad sets'} of ${group.portfolioName} lost${group.since ? ` on ${monthDayEn(group.since)}` : ''}`;
-}
-
-function lostLine(model: StructureModel): string | null {
-  const lost = model.lost[0];
-  return lost ? lostText(lost) : null;
+function lostText(group: LostGroup, uiText: ScaleCopy): string {
+  return group.since
+    ? uiText('count_plural_one_ad_set_other_ad_sets_of_port_a6e3ba5', {
+        count: group.count,
+        portfolio: group.portfolioName,
+        date: monthDayEn(group.since),
+      })
+    : uiText('count_plural_one_ad_set_other_ad_sets_of_port_f9b16cd', {
+        count: group.count,
+        portfolio: group.portfolioName,
+      });
 }
 
 function StructureSmall({ model }: { model: StructureModel }) {
+  const uiText = useTranslations('scale');
   const cells = layoutIcicle(model, null, null).filter((cell) => cell.row > 0);
-  const lost = lostLine(model);
+  const lost = model.lost[0] ? lostText(model.lost[0], uiText) : null;
   return (
     <div className="flex flex-col gap-3">
       {model.managedShare != null ? (
         <Headline
-          caption="of the spend is in ad sets a portfolio optimizes"
+          caption={uiText('of_the_spend_is_in_ad_sets_a_portfolio_optimi_62c4712')}
           figure={formatShare(model.managedShare)}
           testId={`${TEST_ID}-headline`}
         />
       ) : (
         <Headline
-          caption={`campaigns · ${model.adsetCount} ad sets with spend`}
+          caption={uiText('campaigns_count_plural_one_ad_set_other_ad_se_153940a', {
+            count: model.adsetCount,
+          })}
           figure={String(model.campaigns.length)}
           testId={`${TEST_ID}-headline`}
         />
@@ -289,6 +336,7 @@ function StructureFull({
   onZoom: (campaignId: string | null) => void;
   ads: MetaReadState<MetaRankRow[]>;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const [color, setColor] = useState<StructureColor>('goal');
   const host = useRef<HTMLDivElement>(null);
@@ -301,7 +349,7 @@ function StructureFull({
     () => layoutIcicle(model, focused?.id ?? null, ads.status === 'ready' ? ads.data : null),
     [model, focused, ads],
   );
-  const words = model.result?.en;
+  const result = model.result?.kind ?? 'none';
   const spring = reduce
     ? { duration: 0 }
     : { type: 'spring' as const, visualDuration: 0.5, bounce: 0.12 };
@@ -319,11 +367,11 @@ function StructureFull({
       <>
         <span className="block truncate font-medium text-foreground text-xs">{entity.name}</span>
         <span className="block truncate text-foreground/75 text-xs tabular-nums">
-          {figureLine(entity, model, currency)}
+          {figureLine(entity, model, currency, uiText)}
         </span>
       </>
     ) : null;
-    const tipOf = () => nodeTip(entity, model, currency);
+    const tipOf = () => nodeTip(entity, model, currency, uiText);
     const common = {
       animate: {
         left: `${cell.x}%`,
@@ -356,7 +404,9 @@ function StructureFull({
           key={entity.id}
           {...common}
           aria-label={
-            zoomIn ? `Zoom into ${entity.name}` : `Back to every campaign from ${entity.name}`
+            zoomIn
+              ? uiText('zoom_into_name_ffd87af', { name: entity.name })
+              : uiText('back_to_every_campaign_from_name_2a41595', { name: entity.name })
           }
           disabled={!enabled}
           onBlur={hide}
@@ -388,7 +438,10 @@ function StructureFull({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {focused ? (
-          <nav aria-label="Structure path" className="flex min-w-0 items-center gap-1 text-xs">
+          <nav
+            aria-label={uiText('structure_path_658e90e')}
+            className="flex min-w-0 items-center gap-1 text-xs"
+          >
             <button
               className="shrink-0 rounded px-1 text-primary-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => onZoom(null)}
@@ -406,13 +459,15 @@ function StructureFull({
           </nav>
         ) : (
           <WindowLine
-            detail={`width: spend${currencyColumnSuffix(currency)} · tap a campaign to zoom`}
+            detail={uiText('width_spend_unit_tap_a_campaign_to_zoom_8a2355f', {
+              unit: currencyColumnSuffix(currency),
+            })}
             testId={TEST_ID}
           />
         )}
         {model.portfolios.some((portfolio) => portfolio.slot != null) ? (
           <ToggleGroup
-            aria-label="Color the structure by"
+            aria-label={uiText('color_the_structure_by_428fd39')}
             onValueChange={(value) => {
               const next: string = value;
               if (next === 'goal' || next === 'portfolio') setColor(next);
@@ -423,10 +478,10 @@ function StructureFull({
             variant="outline"
           >
             <ToggleGroupItem className="h-7 px-2 text-xs" value="goal">
-              vs goal
+              {uiText('vs_goal_597a6ce')}
             </ToggleGroupItem>
             <ToggleGroupItem className="h-7 px-2 text-xs" value="portfolio">
-              By portfolio
+              {uiText('by_portfolio_2422156')}
             </ToggleGroupItem>
           </ToggleGroup>
         ) : null}
@@ -450,29 +505,34 @@ function StructureFull({
       </div>
       {focused && ads.status === 'error' ? (
         <LensNote testId={`${TEST_ID}-ads-error`}>
-          The ads of this campaign could not be read.{' '}
+          {uiText('the_ads_of_this_campaign_could_not_be_read_81388c1')}{' '}
           <button className="text-primary-ink underline" onClick={ads.retry} type="button">
-            Retry
+            {uiText('retry_942087c')}
           </button>
         </LensNote>
       ) : null}
       {focused && ads.status === 'ready' && ads.data.length === 0 ? (
-        <LensNote>No ad of this campaign spent in the last 30 days.</LensNote>
+        <LensNote>{uiText('no_ad_of_this_campaign_spent_in_the_last_30_d_7442a7b')}</LensNote>
       ) : null}
       <LegendRow>
         {color === 'goal' ? (
           <>
             <LegendItem
               label={
-                model.reference
-                  ? `Cheaper → dearer than the ${model.reference.kind === 'goal' ? `goal (${formatCurrency(model.reference.value, currency)} per ${words?.one ?? 'result'})` : 'account average'}`
-                  : 'No cost to compare'
+                !model.reference
+                  ? uiText('no_cost_to_compare_40dd1aa')
+                  : model.reference.kind === 'goal'
+                    ? uiText('cheaper_dearer_than_the_goal_goal_per_result__e372932', {
+                        goal: formatCurrency(model.reference.value, currency),
+                        result,
+                      })
+                    : uiText('cheaper_dearer_than_the_account_average_319a7db')
               }
               variant="ramp"
             />
             <LegendItem
               color={BOARD_COLOR.mid}
-              label={`On it, or no ${words?.many ?? 'results'}`}
+              label={uiText('on_it_or_no_result_select_purchases_purchases_5cc553b', { result })}
             />
           </>
         ) : (
@@ -484,10 +544,10 @@ function StructureFull({
                 label={portfolio.name}
               />
             ))}
-            <LegendItem color={BOARD_COLOR.mid} label="In no portfolio" />
+            <LegendItem color={BOARD_COLOR.mid} label={uiText('in_no_portfolio_9210f29')} />
           </>
         )}
-        <LegendItem label="Lost: Meta no longer serves it" variant="hatch" />
+        <LegendItem label={uiText('lost_meta_no_longer_serves_it_8fa5deb')} variant="hatch" />
       </LegendRow>
       {model.lost.map((group) => (
         <p
@@ -500,8 +560,12 @@ function StructureFull({
             className="mt-0.5 size-3 shrink-0 text-destructive-ink"
           />
           <span>
-            {lostText(group)}
-            {group.unseen.length > 0 ? ` · ${group.unseen.join(', ')} had no spend in 30 days` : ''}
+            {group.unseen.length > 0
+              ? uiText('lost_names_had_no_spend_in_30_days_8b95708', {
+                  lost: lostText(group, uiText),
+                  names: group.unseen.join(', '),
+                })
+              : lostText(group, uiText)}
           </span>
         </p>
       ))}

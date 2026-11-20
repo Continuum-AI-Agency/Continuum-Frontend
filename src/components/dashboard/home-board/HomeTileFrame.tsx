@@ -8,8 +8,9 @@
 // `reason` is the board's sentence for the tile (generated, in the account's language) or, when
 // the board had no figure to cite, the tile's own figure line from its read.
 
-import { HOME_TILE_LABELS, type HomeBoardTile } from '@continuum/contracts';
+import type { HomeBoardTile, HomeTileId } from '@continuum/contracts';
 import { ArrowUpRightIcon, PinIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, Suspense, useState } from 'react';
 import {
   ModuleFrame,
@@ -46,6 +47,26 @@ export type HomeTileFrameProps = {
   children: ReactNode;
 };
 
+/** Each tile's title in the UI language (the contracts' HOME_TILE_LABELS, said per locale). */
+const HOME_TILE_TITLE_KEYS = {
+  goals: 'goal_cdbf697',
+  setup: 'setup_7013af4',
+  health: 'account_health_3a060d2',
+  checklist: 'client_checklist_965ff10',
+  brief: 'jaina_brief_0e9d3a0',
+  opps: 'opportunities_1e6e878',
+  pacing: 'pacing_afb633d',
+  autopilot: 'overnight_a6b86e2',
+  creative: 'creative_2c7e633',
+  organic: 'organic_week_46f9ebc',
+  market: 'market_5238d9b',
+} as const satisfies Record<HomeTileId, string>;
+
+export function useHomeTileTitle(id: HomeTileId): string {
+  const uiText = useTranslations('dashboard');
+  return uiText(HOME_TILE_TITLE_KEYS[id]);
+}
+
 export function homeTileTestId(tile: HomeBoardTile): string {
   return `home-tile-${tile.id}`;
 }
@@ -62,6 +83,7 @@ export function HomeTileFrame({
   onOpenChange,
   children,
 }: HomeTileFrameProps) {
+  const uiText = useTranslations('dashboard');
   const { isPinned, togglePin } = useHomeBoardChrome();
   const [ownOpen, setOwnOpen] = useState(false);
   const open = controlledOpen ?? ownOpen;
@@ -69,7 +91,7 @@ export function HomeTileFrame({
     setOwnOpen(next);
     onOpenChange?.(next);
   };
-  const title = HOME_TILE_LABELS[tile.id];
+  const title = useHomeTileTitle(tile.id);
   const pinned = isPinned(tile.id);
   const reason = tile.why ?? badge ?? undefined;
 
@@ -80,7 +102,11 @@ export function HomeTileFrame({
           <div className="flex items-center gap-0.5">
             {action}
             <Button
-              aria-label={pinned ? `Unpin ${title}` : `Pin ${title}`}
+              aria-label={
+                pinned
+                  ? uiText('unpin_title_666d816', { title })
+                  : uiText('pin_title_5b47053', { title })
+              }
               aria-pressed={pinned}
               className={cn('size-7', pinned ? 'text-foreground' : 'text-muted-foreground')}
               data-testid={`${homeTileTestId(tile)}-pin`}
@@ -100,7 +126,7 @@ export function HomeTileFrame({
                 type="button"
                 variant="ghost"
               >
-                Open <ArrowUpRightIcon className="size-3" />
+                {uiText('open_ed077f3')} <ArrowUpRightIcon className="size-3" />
               </Button>
             ) : null}
           </div>

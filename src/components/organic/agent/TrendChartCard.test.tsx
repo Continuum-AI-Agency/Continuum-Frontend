@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { getTrendScanSummary, TrendChartCard } from './TrendChartCard';
 import type { UiTrendChart } from './types';
@@ -66,9 +67,9 @@ describe('TrendChartCard', () => {
     expect(screen.getByText('Brand Trend Signals')).toBeDefined();
     expect(screen.getByText('· 7d / 30d')).toBeDefined();
     expect(screen.getByText('· 2 signals')).toBeDefined();
-    expect(screen.getByText('Trends 3')).toBeDefined();
-    expect(screen.getByText('Events 1')).toBeDefined();
-    expect(screen.getByText('Questions 4')).toBeDefined();
+    expect(screen.getByText('3 trends')).toBeDefined();
+    expect(screen.getByText('1 event')).toBeDefined();
+    expect(screen.getByText('4 questions')).toBeDefined();
     expect(screen.queryByText('Spring launch')).toBeNull();
   });
 

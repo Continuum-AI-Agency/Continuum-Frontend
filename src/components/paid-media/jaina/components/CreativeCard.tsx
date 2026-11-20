@@ -2,6 +2,7 @@
 
 import { ImageIcon, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
@@ -11,6 +12,7 @@ import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   buildCampaignCreativeRequest,
   scaffoldCreativeQuery,
@@ -25,6 +27,8 @@ interface CreativeCardProps {
 }
 
 export function CreativeCard({ creative, index, onRequestCreative, disabled }: CreativeCardProps) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
   const { activeBrandId } = useActiveBrandContext();
   // A video ad used to render its video URL into an <img>. The shared primitive reads
   // `format: 'video'` and renders a real poster frame with a play glyph.
@@ -112,7 +116,7 @@ export function CreativeCard({ creative, index, onRequestCreative, disabled }: C
         query = `Generate / Enrich a new ${creative.format === 'video' ? 'video' : 'image'} variation of Library creative ${creative.asset_id ?? creative.id}. Ground it in this brand's campaign data, audience and measured winning angles; retain its offer and use the source as an approved reference where available. Use paid_creative_generate, show its generation permission gate, save and preview the result in chat. Do not publish or enroll.`;
       onRequestCreative?.(query);
     } catch (cause) {
-      setRequestError(cause instanceof Error ? cause.message : 'Creative request failed');
+      setRequestError(formatUiError(cause));
     } finally {
       setRequesting(false);
     }
@@ -169,7 +173,7 @@ export function CreativeCard({ creative, index, onRequestCreative, disabled }: C
         <div className="flex flex-col gap-2 p-3">
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-medium leading-snug text-foreground">
-              {creative.headline || 'Creative'}
+              {creative.headline || uiText('creative_2c7e633')}
             </p>
             <div className="flex shrink-0 flex-wrap justify-end gap-1">
               {creative.platform && (
@@ -203,7 +207,7 @@ export function CreativeCard({ creative, index, onRequestCreative, disabled }: C
               onClick={() => void generate()}
             >
               <Sparkles className="size-3.5" />
-              Generate / Enrich
+              {uiText('generate_enrich_45de453')}
             </Button>
           ) : null}
           {requestError ? (
@@ -213,7 +217,9 @@ export function CreativeCard({ creative, index, onRequestCreative, disabled }: C
           ) : null}
           {creative.scaffold_target && creative.attachment_status !== 'attached' ? (
             <p className="text-xs text-muted-foreground">
-              Saved in Library; attachment needs review ({creative.attachment_status ?? 'unknown'}).
+              {uiText.rich('sentence_3c70cb492c8e', {
+                v0: creative.attachment_status ?? uiText('unknown_b23a6a8'),
+              })}
             </p>
           ) : null}
           {creative.call_to_action && (

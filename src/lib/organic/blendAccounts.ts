@@ -1,3 +1,5 @@
+import type { useTranslations } from 'next-intl';
+
 // Within-platform (and selection-wide) blend of organic account snapshots.
 // Same ingestion data as Account view — pure math over SnapshotAccountResult[].
 // Summable metrics: sum totals and align daily trends. Rates/stock: unsupported.
@@ -235,8 +237,9 @@ export function buildSeriesSet(input: {
   mode: SeriesMode;
   /** Stable color index by account key */
   colorByKey?: Map<string, string>;
+  translate?: ReturnType<typeof useTranslations<'organic'>>;
 }): { series: ChartSeriesDef[]; chartRows: Array<Record<string, number | string>> } {
-  const { accounts, metricId, mode, colorByKey } = input;
+  const { accounts, metricId, mode, colorByKey, translate } = input;
   const series: ChartSeriesDef[] = [];
 
   const colorFor = (key: string, index: number) =>
@@ -279,7 +282,9 @@ export function buildSeriesSet(input: {
         series.push({
           key,
           kind: 'platform_blend',
-          label: `${PLATFORM_LABELS[platform]} (all)`,
+          label:
+            translate?.('blendPlatformAll', { platform: PLATFORM_LABELS[platform] }) ??
+            `${PLATFORM_LABELS[platform]} (all)`,
           platform,
           color: colorFor(key, accounts.length + blendIndex),
           dashed: true,
@@ -295,7 +300,11 @@ export function buildSeriesSet(input: {
       series.push({
         key,
         kind: 'platform_blend',
-        label: `${PLATFORM_LABELS[platform]} (all · ${platformAccounts.length})`,
+        label:
+          translate?.('blendPlatformCount', {
+            platform: PLATFORM_LABELS[platform],
+            count: platformAccounts.length,
+          }) ?? `${PLATFORM_LABELS[platform]} (all · ${platformAccounts.length})`,
         platform,
         color: colorFor(key, accounts.length + blendIndex),
         dashed: true,
@@ -313,7 +322,7 @@ export function buildSeriesSet(input: {
         series.push({
           key: SELECTION_BLEND_KEY,
           kind: 'selection_blend',
-          label: 'All selected (Σ)',
+          label: translate?.('blendSelectionAll') ?? 'All selected (Σ)',
           color: BLEND_COLOR,
           dashed: true,
           points: blended.trends,
@@ -327,7 +336,7 @@ export function buildSeriesSet(input: {
           series.push({
             key: SELECTION_BLEND_KEY,
             kind: 'selection_blend',
-            label: 'All selected (Σ)',
+            label: translate?.('blendSelectionAll') ?? 'All selected (Σ)',
             color: BLEND_COLOR,
             dashed: true,
             points,

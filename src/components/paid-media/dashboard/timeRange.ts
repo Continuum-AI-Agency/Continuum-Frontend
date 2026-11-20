@@ -24,6 +24,16 @@ export const TIME_RANGE_OPTIONS: ReadonlyArray<{ value: TimePreset; label: strin
   { value: 'custom', label: 'Custom range' },
 ] as const;
 
+/** Localized labels are immutable display clones; preset IDs and date arithmetic stay canonical. */
+export function getTimeRangeOptions(
+  translate?: (value: TimePreset) => string,
+): ReadonlyArray<Readonly<{ value: TimePreset; label: string }>> {
+  return TIME_RANGE_OPTIONS.map((option) => ({
+    ...option,
+    label: translate ? translate(option.value) : option.label,
+  }));
+}
+
 function toIsoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }

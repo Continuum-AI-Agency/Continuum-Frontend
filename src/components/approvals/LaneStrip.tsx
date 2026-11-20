@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { useApprovalsStore } from '@/lib/approvals/store';
 import type { RuleAction } from '@/lib/approvals/types';
 import { cn } from '@/lib/utils';
 import { getActionIcon } from './actionIcons';
-import { actionTypeLabel, formatRelativeTime, scopeLabel } from './formatters';
+import { useApprovalFormatters } from './formatters';
 
 type Props = {
   actions: RuleAction[];
@@ -21,6 +22,8 @@ type Props = {
 const SPRING = { type: 'spring' as const, stiffness: 300, damping: 30 };
 
 export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }: Props) {
+  const { actionTypeLabel, formatRelativeTime, scopeLabel } = useApprovalFormatters();
+  const uiText = useTranslations('common');
   const pendingDecisions = useApprovalsStore((s) => s.pendingDecisions);
   const reduceMotion = useReducedMotion();
 
@@ -89,7 +92,7 @@ export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }
         )}
         onClick={() => advance(-1)}
         disabled={focusedIndex <= 0}
-        aria-label="Previous action"
+        aria-label={uiText('previous_action_730c9f9')}
         tabIndex={-1}
       >
         <ChevronLeft className="h-4 w-4" strokeWidth={1.5} />
@@ -164,7 +167,7 @@ export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }
         )}
         onClick={() => advance(1)}
         disabled={focusedIndex >= actions.length - 1}
-        aria-label="Next action"
+        aria-label={uiText('next_action_365987d')}
         tabIndex={-1}
       >
         <ChevronRight className="h-4 w-4" strokeWidth={1.5} />

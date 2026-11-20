@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
-
+import { cleanup, screen } from '@testing-library/react';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { render } from '@/i18n/__tests__/render';
 
 global.MutationObserver = window.MutationObserver;
 

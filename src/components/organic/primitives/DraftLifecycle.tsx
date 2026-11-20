@@ -14,6 +14,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import Image from 'next/image';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import type {
   DraftLadder,
@@ -65,8 +66,11 @@ const MISSING_REEL_VIDEO_META: StageMeta = {
   tone: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
 };
 
-export function deriveMediaStageLabel(mediaStage: OrganicMediaStage): string {
-  return STAGE_META[mediaStage].label;
+export function deriveMediaStageLabel(
+  mediaStage: OrganicMediaStage,
+  translate?: (key: 'mediaStage', values: { stage: string }) => string,
+): string {
+  return translate?.('mediaStage', { stage: mediaStage }) ?? STAGE_META[mediaStage].label;
 }
 
 // Prefer the authoritative backend column (draft.mediaStage); fall back to the
@@ -108,6 +112,7 @@ export function MediaStagePill({
   missingReelVideo?: boolean;
   className?: string;
 }) {
+  const uiText = useTranslations('organic');
   const meta = missingReelVideo ? MISSING_REEL_VIDEO_META : STAGE_META[mediaStage];
   return (
     <span
@@ -120,7 +125,7 @@ export function MediaStagePill({
       {mediaStage === 'realizing' && (
         <span className="h-1 w-1 animate-pulse rounded-full bg-current" aria-hidden />
       )}
-      {meta.label}
+      {uiText('mediaStage', { stage: missingReelVideo ? 'missing_video' : mediaStage })}
     </span>
   );
 }
@@ -169,6 +174,7 @@ export function EnrichmentLadder({
   compact?: boolean;
   className?: string;
 }) {
+  const uiText = useTranslations('organic');
   return (
     <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
       {ladder.steps.map((step, index) => (
@@ -200,10 +206,10 @@ export function EnrichmentLadder({
           className="h-6 px-2 text-2xs text-muted-foreground"
           disabled={ladder.isBusy}
           onClick={ladder.rewriteCopy}
-          title="Replace the current copy with a fresh generation"
+          title={uiText('replace_the_current_copy_with_a_fresh_generat_7e13437')}
         >
           <RotateCcw className="size-3" aria-hidden />
-          Rewrite
+          {uiText('rewrite_272f25f')}
         </Button>
       )}
     </div>
@@ -211,6 +217,7 @@ export function EnrichmentLadder({
 }
 
 function ReusableThumb({ item }: { item: ReusableMediaItem }) {
+  const uiText = useTranslations('organic');
   return (
     <div className="relative aspect-square overflow-hidden rounded-md border border-border/50 bg-muted/40">
       {item.kind === 'video' ? (
@@ -226,7 +233,7 @@ function ReusableThumb({ item }: { item: ReusableMediaItem }) {
       )}
       {item.source === 'blueprint' && (
         <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-center text-3xs font-semibold uppercase tracking-wide text-white">
-          Blueprint
+          {uiText('blueprint_696f52e')}
         </span>
       )}
     </div>
@@ -248,8 +255,9 @@ export function MediaEnrichmentSummary({
   onRealize?: () => void;
   canRealize?: boolean;
 }) {
+  const uiText = useTranslations('organic');
   const mediaStage = resolveDraftMediaStage(draft);
-  const summary = React.useMemo(() => summarizeDraftMedia(draft), [draft]);
+  const summary = React.useMemo(() => summarizeDraftMedia(draft, uiText), [draft, uiText]);
   // "Realize from blueprint" is a prior-stage reuse action — only meaningful when
   // a persisted blueprint exists to realize from.
   const showRealize =
@@ -258,7 +266,7 @@ export function MediaEnrichmentSummary({
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground/50">
-        Media
+        {uiText('media_d357175')}
       </span>
       <MediaStagePill mediaStage={mediaStage} />
       <HoverCard openDelay={120} closeDelay={120}>
@@ -266,7 +274,7 @@ export function MediaEnrichmentSummary({
           render={
             <button
               type="button"
-              aria-label="Media enrichment details"
+              aria-label={uiText('media_enrichment_details_0f8ce0e')}
               className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/30 px-1.5 py-0.5 text-3xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <span>{summary.label}</span>
@@ -276,7 +284,7 @@ export function MediaEnrichmentSummary({
         />
         <HoverCardContent align="start" className="w-72 space-y-2.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Media enrichment
+            {uiText('media_enrichment_1896f06')}
           </p>
 
           {summary.reusable.length > 0 ? (
@@ -287,7 +295,7 @@ export function MediaEnrichmentSummary({
             </div>
           ) : (
             <p className="rounded-md border border-dashed border-border/60 bg-muted/30 px-2 py-3 text-center text-2xs text-muted-foreground/70">
-              No media attached yet.
+              {uiText('no_media_attached_yet_317dbfb')}
             </p>
           )}
 
@@ -299,7 +307,7 @@ export function MediaEnrichmentSummary({
                 className="flex w-full items-center justify-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
               >
                 <Wand2 className="h-3.5 w-3.5" />
-                Realize from blueprint
+                {uiText('realize_from_blueprint_2a006d4')}
               </button>
             )}
             <button
@@ -308,7 +316,7 @@ export function MediaEnrichmentSummary({
               className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60"
             >
               <Library className="h-3.5 w-3.5" />
-              Reuse from library / search
+              {uiText('reuse_from_library_search_9214714')}
             </button>
           </div>
         </HoverCardContent>

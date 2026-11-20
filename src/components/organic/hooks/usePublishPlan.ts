@@ -16,10 +16,12 @@ import {
   publishPlanDryRunResponseSchema,
   resolvePublishPlan,
 } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { http } from '@/lib/api/http';
 import { publishPlanDraftFromCalendarDraft } from '@/lib/organic/publishPlan';
+import { localizePublishIssue } from '@/lib/organic/publishPresentation';
 
 type AccountFacts = {
   accounts: PublishAccountCandidate[];
@@ -52,6 +54,8 @@ export function usePublishPlan(
   draft: OrganicCalendarDraft,
   platform: PublishPlatform | null,
 ): PublishPlanState {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const backendId = draft.backendDraftId ?? null;
   const rowKey = backendId && platform ? `${backendId}:${platform}:` : null;
   const key = rowKey ? `${rowKey}${draft.targetAccountId ?? ''}` : null;
@@ -116,7 +120,18 @@ export function usePublishPlan(
       publishOptions: null,
       mediaGenerated: null,
     });
-    const verdict = checkPublishability(plan);
+    const originalVerdict = checkPublishability(plan);
+    const verdict = {
+      ...originalVerdict,
+      blockers: originalVerdict.blockers.map((issue) => ({
+        ...issue,
+        message: localizePublishIssue(issue, plan, uiText, uiLocale),
+      })),
+      warnings: originalVerdict.warnings.map((issue) => ({
+        ...issue,
+        message: localizePublishIssue(issue, plan, uiText, uiLocale),
+      })),
+    };
     if (facts) return { plan, verdict, accountsLoaded: true, accounts: facts.accounts };
     const blockers = verdict.blockers.filter((issue) => issue.reason !== 'account_missing');
     return {
@@ -125,5 +140,5 @@ export function usePublishPlan(
       accountsLoaded: false,
       accounts: null,
     };
-  }, [draft, platform, facts]);
+  }, [draft, platform, facts, uiText, uiLocale]);
 }

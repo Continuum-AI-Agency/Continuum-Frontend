@@ -3,6 +3,7 @@
 // Onboarding's screen position and how a move between screens is saved. The next screen shows
 // at once and its step saves behind the transition; a save that fails twice returns the user to
 // the last saved step.
+import { useTranslations } from 'next-intl';
 import { useCallback, useRef, useState } from 'react';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -16,6 +17,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function useStepNavigation(initialScreen: ScreenIndex) {
   const { updateState } = useOnboarding();
   const { show } = useToast();
+  const tUi = useTranslations('onboarding');
   const [screen, setScreen] = useState<ScreenIndex>(initialScreen);
   const persistedStepRef = useRef<ScreenIndex>(initialScreen);
   const directionRef = useRef<1 | -1>(1);
@@ -43,9 +45,8 @@ export function useStepNavigation(initialScreen: ScreenIndex) {
             return persistedStepRef.current;
           });
           show({
-            title: 'Couldn’t save your progress',
-            description:
-              'Saving this step failed twice, so you’re back on your last saved step. Wait a moment, then continue again.',
+            title: tUi('couldn_t_save_your_progress_4d3fb08'),
+            description: tUi('saving_this_step_failed_twice_so_you_re_back__c9ad9e3'),
             variant: 'error',
           });
           return false;
@@ -54,7 +55,7 @@ export function useStepNavigation(initialScreen: ScreenIndex) {
       persistedStepRef.current = Math.max(persistedStepRef.current, next) as ScreenIndex;
       return true;
     },
-    [screen, show, updateState],
+    [screen, show, tUi, updateState],
   );
 
   const startOver = useCallback(() => {

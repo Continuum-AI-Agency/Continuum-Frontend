@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // The chips a stale portfolio wears wherever it is listed: "last cycle 49 days ago" and
 // "roster gone since Aug 6 · 12 of 12 ad sets". One component, so the Overview card, the
@@ -27,19 +28,21 @@ const STALE_HINT =
 const ROSTER_HINT = 'These enrolled ad sets are no longer on Meta, so no cycle can score them.';
 
 export function StalenessChips({ portfolio }: StalenessChipsProps) {
-  const stale = staleLine(portfolio);
-  const roster = rosterLine(portfolio);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const stale = staleLine(portfolio, uiText);
+  const roster = rosterLine(portfolio, uiText, uiLocale);
   const tone = rosterTone(portfolio);
   if (!stale && !roster) return null;
   return (
     <>
       {stale ? (
-        <StatusChip hint={STALE_HINT} testId="stale-chip" tone="warning">
+        <StatusChip hint={uiText('portfolioStaleHint')} testId="stale-chip" tone="warning">
           {stale}
         </StatusChip>
       ) : null}
       {roster && tone ? (
-        <StatusChip hint={ROSTER_HINT} testId="roster-chip" tone={tone}>
+        <StatusChip hint={uiText('portfolioRosterHint')} testId="roster-chip" tone={tone}>
           {roster}
         </StatusChip>
       ) : null}

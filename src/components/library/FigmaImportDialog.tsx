@@ -9,7 +9,8 @@ import {
   parseFigmaLink,
 } from '@continuum/contracts';
 import { Check, Loader2, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useCallback, useState } from 'react';
 import { FigmaIcon } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,10 +42,71 @@ import {
 
 type BusyState = 'folders' | 'files' | 'frames' | 'import' | 'connect' | null;
 
+/** `figmaErrorMessage`'s refusals in the UI language; `reconnect` stays its decision. */
+export function useFigmaErrorText() {
+  const translateUi = useUiTranslations('library');
+  return useCallback(
+    (error: unknown): { message: string; reconnect: boolean } => {
+      const { reconnect } = figmaErrorMessage(error);
+      const code =
+        error instanceof FigmaApiError
+          ? error.code
+          : error instanceof Error
+            ? error.message
+            : 'operation_failed';
+      const message = (() => {
+        switch (code) {
+          case 'invalid_link':
+            return translateUi('paste_a_link_to_a_figma_design_file_or_frame_e0cb89f');
+          case 'invalid_configuration':
+            return translateUi('figma_is_not_configured_for_this_en_10c07e99');
+          case 'figma_not_connected':
+            return translateUi('connect_figma_then_try_again_f8c5792');
+          case 'provider_unavailable':
+            return translateUi('figma_didn_t_answer_try_again_in_a_moment_8fd149d');
+          case 'figma_file_forbidden':
+            return translateUi('the_connected_figma_account_can_t_open_this_f_19e99be');
+          case 'figma_not_found':
+            return translateUi('figma_couldn_t_find_that_file_or_frame_check__3f87949');
+          case 'figma_node_not_a_frame':
+            return translateUi('that_link_points_at_a_page_or_a_layer_not_a_f_03c6260');
+          case 'figma_paste_missing':
+          case 'figma_paste_unreadable':
+          case 'figma_paste_unsupported':
+            return translateUi('figma_s_copy_could_not_be_read_copy_the_frame_466191a');
+          case 'figma_paste_empty':
+            return translateUi('that_figma_copy_holds_no_layers_copy_a_frame__8fce72a');
+          case 'figma_paste_too_large':
+            return translateUi('that_figma_selection_is_too_big_to_paste_copy_31a4e9f');
+          case 'figma_fonts_missing': {
+            const fonts = error instanceof FigmaApiError ? error.missingFonts.join(', ') : '';
+            return fonts
+              ? translateUi('add_fonts_to_the_brand_first_drop_the_ttf_or__f8b9550', { fonts })
+              : translateUi('add_the_missing_fonts_to_the_brand_first_drop_cb551ff');
+          }
+          case 'rate_limited':
+            return error instanceof FigmaApiError && error.retryAfterSec
+              ? translateUi('figma_s_api_limit_for_this_account_is_used_up_d15e26e', {
+                  minutes: Math.ceil(error.retryAfterSec / 60),
+                })
+              : translateUi('figma_s_api_limit_for_this_account_is_used_up_d4b4bea');
+          case 'http_502':
+          case 'http_504':
+            return translateUi('the_import_is_still_running_import_again_in_a_11aa35d');
+          default:
+            return translateUi('the_import_failed_code_fd31eb7', { code });
+        }
+      })();
+      return { message, reconnect };
+    },
+    [translateUi],
+  );
+}
+
 export function FigmaImportDialog({
   brandId,
   onImported,
-  label = 'Figma',
+  label,
   size = 'sm',
 }: {
   brandId: string;
@@ -52,6 +114,8 @@ export function FigmaImportDialog({
   label?: string;
   size?: 'sm' | 'default';
 }) {
+  const translateUi = useUiTranslations('library');
+  const figmaErrorText = useFigmaErrorText();
   const [open, setOpen] = useState(false);
   const [link, setLink] = useState('');
   const [teamId, setTeamId] = useState('');
@@ -64,7 +128,7 @@ export function FigmaImportDialog({
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState<BusyState>(null);
   const [error, setError] = useState<unknown>(null);
-  const failure = error ? figmaErrorMessage(error) : null;
+  const failure = error ? figmaErrorText(error) : null;
 
   const folderLabel = (folder: FigmaFolder): string => {
     const parent = folders.find((candidate) => candidate.id === folder.parentFolderId);
@@ -155,7 +219,7 @@ export function FigmaImportDialog({
       const url = await beginFigmaConnection({ brandId, callbackUrl });
       window.open(url, 'continuum-figma-oauth', 'popup,width=720,height=760');
     } catch (cause) {
-      toast.error(figmaErrorMessage(cause).message);
+      toast.error(figmaErrorText(cause).message);
     } finally {
       setBusy(null);
     }
@@ -170,7 +234,12 @@ export function FigmaImportDialog({
       const created = assets.filter((asset) => asset.status !== 'exists').length;
       const unchanged = assets.length - created;
       toast.success(
-        `${created} Figma frame${created === 1 ? '' : 's'} imported${unchanged ? ` · ${unchanged} already current` : ''}. The Forge is building ${created === 1 ? 'it' : 'them'}.`,
+        unchanged
+          ? translateUi('created_plural_one_figma_frame_imported_uncha_a283339', {
+              created,
+              unchanged,
+            })
+          : translateUi('created_plural_one_figma_frame_imported_the_f_a6a8160', { created }),
       );
       onImported(assets);
       setOpen(false);
@@ -199,16 +268,15 @@ export function FigmaImportDialog({
         render={
           <Button type="button" variant="outline" size={size}>
             <FigmaIcon className="size-4" />
-            <span className="hidden sm:inline">{label}</span>
+            <span className="hidden sm:inline">{label ?? translateUi('figma_ce460410')}</span>
           </Button>
         }
       />
       <DialogContent className="flex max-h-[82dvh] flex-col overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b border-border px-5 py-4">
-          <DialogTitle>Import from Figma</DialogTitle>
+          <DialogTitle>{translateUi('import_from_figma_2e559556')}</DialogTitle>
           <DialogDescription>
-            Each frame becomes a design template. Its text becomes fields, and it is ready to
-            render as soon as it is imported.
+            {translateUi('each_frame_becomes_a_design_template_its_text_bc14614')}
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
@@ -216,8 +284,8 @@ export function FigmaImportDialog({
             <Input
               value={link}
               onChange={(event) => setLink(event.target.value)}
-              placeholder="Paste a Figma link (Share → Copy link)"
-              aria-label="Figma link"
+              placeholder={translateUi('paste_a_figma_link_share_copy_link_105a652')}
+              aria-label={translateUi('figma_link_566f802')}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void openLink();
               }}
@@ -228,21 +296,21 @@ export function FigmaImportDialog({
               disabled={!link.trim() || busy !== null}
               onClick={() => void openLink()}
             >
-              Open
+              {translateUi('open_ed077f3')}
             </Button>
           </div>
 
           <details className="text-sm">
             <summary className="cursor-pointer text-xs text-muted-foreground">
-              Browse a team instead
+              {translateUi('browse_a_team_instead_e7fd9d1')}
             </summary>
             <div className="mt-2 flex flex-col gap-2">
               <div className="flex gap-2">
                 <Input
                   value={teamId}
                   onChange={(event) => setTeamId(event.target.value)}
-                  placeholder="Figma team ID (the number after /team/ in a team link)"
-                  aria-label="Figma team ID"
+                  placeholder={translateUi('figma_team_id_the_number_after_team_in_a_team_edef905')}
+                  aria-label={translateUi('figma_team_id_2932da7a')}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') void loadFolders();
                   }}
@@ -258,7 +326,7 @@ export function FigmaImportDialog({
                   ) : (
                     <RefreshCw className="size-4" />
                   )}
-                  Browse
+                  {translateUi('browse_3227aa96')}
                 </Button>
               </div>
               {folders.length ? (
@@ -267,8 +335,8 @@ export function FigmaImportDialog({
                   disabled={busy !== null}
                   onValueChange={(value) => void chooseFolder(value)}
                 >
-                  <SelectTrigger aria-label="Figma folder">
-                    <SelectValue placeholder="Choose a folder" />
+                  <SelectTrigger aria-label={translateUi('figma_folder_2d32f51c')}>
+                    <SelectValue placeholder={translateUi('choose_a_folder_5c71b8cd')} />
                   </SelectTrigger>
                   <SelectContent>
                     {folders
@@ -288,8 +356,8 @@ export function FigmaImportDialog({
                   disabled={busy !== null}
                   onValueChange={(value) => void chooseFile(value)}
                 >
-                  <SelectTrigger aria-label="Figma file">
-                    <SelectValue placeholder="Choose a file" />
+                  <SelectTrigger aria-label={translateUi('figma_file_cbda49d3')}>
+                    <SelectValue placeholder={translateUi('choose_a_file_3e10c3cd')} />
                   </SelectTrigger>
                   <SelectContent>
                     {files.map((file) => (
@@ -322,7 +390,7 @@ export function FigmaImportDialog({
                   ) : (
                     <FigmaIcon className="size-4" />
                   )}
-                  Connect
+                  {translateUi('connect_1a2303ed')}
                 </Button>
               ) : null}
             </div>
@@ -330,23 +398,26 @@ export function FigmaImportDialog({
 
           {busy === 'files' || busy === 'frames' ? (
             <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
-              <Loader2 className="mr-2 size-4 animate-spin" /> Loading from Figma…
+              <Loader2 className="mr-2 size-4 animate-spin" />{' '}
+              {translateUi('loading_from_figma_f34d9916')}
             </div>
           ) : linkedOnly ? (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-primary bg-primary/5 px-3 py-2 text-sm">
-              <span>The linked frame is ready to import.</span>
+              <span>{translateUi('the_linked_frame_is_ready_to_import_9ac90aa')}</span>
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
                 onClick={() => void chooseFile(fileKey, selected)}
               >
-                Show all frames in this file
+                {translateUi('show_all_frames_in_this_file_22dce7e')}
               </Button>
             </div>
           ) : frames.length ? (
             <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <legend className="mb-2 text-xs font-medium text-muted-foreground">Frames</legend>
+              <legend className="mb-2 text-xs font-medium text-muted-foreground">
+                {translateUi('frames_2c447e8d')}
+              </legend>
               {frames.map((frame) => {
                 const checked = selected.includes(frame.id);
                 return (
@@ -389,19 +460,19 @@ export function FigmaImportDialog({
             </fieldset>
           ) : fileKey && busy === null && !failure ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
-              No frames found in this file.
+              {translateUi('no_frames_found_in_this_file_82a02d4')}
             </p>
           ) : null}
         </div>
         <div className="flex items-center justify-between border-t border-border px-5 py-3">
           <p className="text-xs text-muted-foreground">
             {selected.length
-              ? `${selected.length} selected`
-              : `Select up to ${FIGMA_IMPORT_MAX_FRAMES} frames`}
+              ? translateUi('value0_selected_975acbfe', { count: selected.length })
+              : translateUi('select_up_to_max_frames_284c387', { max: FIGMA_IMPORT_MAX_FRAMES })}
           </p>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {translateUi('cancel_19766ed6')}
             </Button>
             <Button
               type="button"
@@ -413,7 +484,9 @@ export function FigmaImportDialog({
               ) : (
                 <FigmaIcon className="size-4" />
               )}
-              {busy === 'import' ? 'Importing…' : 'Import'}
+              {busy === 'import'
+                ? translateUi('importing_c01c432')
+                : translateUi('import_2cff9baa')}
             </Button>
           </div>
         </div>

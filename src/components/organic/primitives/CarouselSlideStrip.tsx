@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Per-slide editing strip for carousel format.
 // Supports: @dnd-kit/sortable reorder with motion layout thumbnails,
@@ -81,6 +82,7 @@ function SortableThumb({
   onReplace?: () => void;
   onEnlarge?: () => void;
 }) {
+  const uiText = useTranslations('organic');
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: slideSortableId(position),
   });
@@ -100,7 +102,7 @@ function SortableThumb({
       {/* Drag handle + thumbnail — the whole tile is the drag surface */}
       <button
         type="button"
-        aria-label={`Slide ${label}${isActive ? ' (active)' : ''}`}
+        aria-label={uiText('carouselSlideAria', { number: label, active: isActive ? 'yes' : 'no' })}
         aria-pressed={isActive}
         onClick={onSelect}
         className={cn(
@@ -116,7 +118,7 @@ function SortableThumb({
             key={slide.storageUrl}
             src={`${slide.storageUrl}#t=0.01`}
             poster={slide.poster}
-            alt={`Video slide ${label}`}
+            alt={uiText('carouselVideoSlide', { number: label })}
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
@@ -125,7 +127,7 @@ function SortableThumb({
             // inside must be keyed by URL or the browser keeps painting the old decode.
             key={slide.storageUrl}
             src={slide.storageUrl}
-            alt={`Slide ${label}`}
+            alt={uiText('carouselSlideImage', { number: label })}
             fill
             unoptimized
             sizes="56px"
@@ -141,7 +143,7 @@ function SortableThumb({
       {onReplace && (
         <button
           type="button"
-          aria-label={`Replace slide ${label}`}
+          aria-label={uiText('carouselReplaceSlide', { number: label })}
           onClick={(e) => {
             e.stopPropagation();
             onReplace();
@@ -156,7 +158,7 @@ function SortableThumb({
       {canRemove && (
         <button
           type="button"
-          aria-label={`Remove slide ${label}`}
+          aria-label={uiText('carouselRemoveSlide', { number: label })}
           onClick={(e) => {
             e.stopPropagation();
             onRemove();
@@ -171,7 +173,7 @@ function SortableThumb({
       {onEnlarge && (
         <button
           type="button"
-          aria-label={`Enlarge slide ${label}`}
+          aria-label={uiText('carouselEnlargeSlide', { number: label })}
           onClick={(e) => {
             e.stopPropagation();
             onEnlarge();
@@ -195,6 +197,7 @@ export function CarouselSlideStrip({
   onEnlarge,
   className,
 }: CarouselSlideStripProps) {
+  const uiText = useTranslations('organic');
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, {
@@ -231,7 +234,7 @@ export function CarouselSlideStrip({
         {/* biome-ignore lint/a11y/useSemanticElements: drag-reorder group, not a form fieldset */}
         <div
           role="group"
-          aria-label="Carousel slides"
+          aria-label={uiText('carousel_slides_8bc66d0')}
           className={cn(
             'flex items-center gap-2 overflow-x-auto py-2 px-1 scroll-smooth',
             '[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]',
@@ -255,7 +258,7 @@ export function CarouselSlideStrip({
           {/* Add slot — dashed border + + icon */}
           <button
             type="button"
-            aria-label="Add a slide"
+            aria-label={uiText('add_a_slide_0d9e8df')}
             onClick={onAddRequest}
             className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-border/60 bg-muted/30 text-muted-foreground transition-colors hover:border-border hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >

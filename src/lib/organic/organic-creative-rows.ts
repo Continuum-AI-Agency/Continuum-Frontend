@@ -3,7 +3,9 @@ import type {
   OrganicCreativeMetric,
   OrganicCreativeRow,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import { calculateHookRate, sortPosts } from '@/components/organic/organic-metrics-utils';
+import type { UiLocale } from '@/i18n/config';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 
 const AWARENESS_TOP_POSTS_CATEGORY = 'top_posts';
@@ -51,11 +53,37 @@ function meanHookRate(posts: OrganicPost[]): number | undefined {
   return rates.reduce((sum, rate) => sum + rate, 0) / rates.length;
 }
 
+const percentFormats = new Map<string, Intl.NumberFormat>();
+function insightPercent(value: number, locale: UiLocale, signed = false): string {
+  const key = `${locale}:${signed}`;
+  let formatter = percentFormats.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'percent',
+      maximumFractionDigits: 0,
+      useGrouping: false,
+      signDisplay: signed ? 'exceptZero' : 'auto',
+    });
+    percentFormats.set(key, formatter);
+  }
+  return formatter.format(Math.round(value) / 100);
+}
+
 function buildInsightLine(
   hookRate: number | undefined,
   vsAveragePct: number | undefined,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+  locale: UiLocale = 'en',
 ): string | undefined {
   if (typeof hookRate !== 'number') return undefined;
+  if (translate) {
+    const hasComparison = typeof vsAveragePct === 'number' && Math.abs(vsAveragePct) >= 10;
+    return translate('creativeHookInsight', {
+      hook: insightPercent(hookRate, locale),
+      comparison: hasComparison ? insightPercent(vsAveragePct, locale, true) : '',
+      hasComparison: hasComparison ? 'yes' : 'no',
+    });
+  }
   const base = `${Math.round(hookRate)}% hook rate`;
   if (typeof vsAveragePct === 'number' && Math.abs(vsAveragePct) >= 10) {
     const sign = vsAveragePct >= 0 ? '+' : '';
@@ -77,8 +105,10 @@ export function buildOrganicCreativeRows(params: {
   metric: OrganicCreativeMetric;
   awarenessHookRateById?: Map<string, number>;
   limit?: number;
+  translate?: ReturnType<typeof useTranslations<'organic'>>;
+  locale?: UiLocale;
 }): OrganicCreativeRow[] {
-  const { posts, metric, awarenessHookRateById, limit = 5 } = params;
+  const { posts, metric, awarenessHookRateById, limit = 5, translate, locale = 'en' } = params;
   const accountAvgHookRate = meanHookRate(posts);
   const ranked = sortPosts(posts, metric)
     .filter((post) => resolveMetricValue(post, metric) !== undefined)
@@ -96,7 +126,10 @@ export function buildOrganicCreativeRows(params: {
 
     return {
       id: post.id,
-      name: post.caption?.trim() || post.title?.trim() || 'Untitled post',
+      name:
+        post.caption?.trim() ||
+        post.title?.trim() ||
+        (translate?.('creativeUntitledPost') ?? 'Untitled post'),
       permalink: post.permalink ?? undefined,
       mediaType: post.mediaProductType ?? post.mediaType ?? undefined,
       thumbnailUrl: resolveThumbnail(post),
@@ -107,7 +140,7 @@ export function buildOrganicCreativeRows(params: {
       comments: post.metrics?.comments,
       hookRate: typeof hookRate === 'number' ? hookRate : undefined,
       vsAveragePct,
-      insightLine: buildInsightLine(hookRate, vsAveragePct),
+      insightLine: buildInsightLine(hookRate, vsAveragePct, translate, locale),
     };
   });
 }

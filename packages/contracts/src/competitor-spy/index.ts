@@ -315,8 +315,9 @@ export * from './savedBoards';
 export * from './saveToLibrary';
 // Discovery smart search + swipe-file saved boards (foreplay-style surfaces).
 export * from './smartSearch';
-// Durable top-posts-of-top-competitors digest (Pulse email + organic agent grounding).
-export * from './topPostsDigest';
-export * from './whatsWorking';
 // TikTok trends in the brand's markets (official Discovery API; no per-account feed).
 export * from './tiktokTrends';
+// Durable top-posts-of-top-competitors digest (Pulse email + organic agent grounding).
+export * from './topPostsDigest';
+export * from './ui-errors';
+export * from './whatsWorking';

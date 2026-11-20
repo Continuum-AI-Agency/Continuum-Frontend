@@ -1,8 +1,7 @@
 import { expect, test } from 'bun:test';
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-
 import { BrandInsightsDataTable } from '@/components/brand-insights/BrandInsightsDataTable';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
 
 test('BrandInsightsDataTable renders semantic table structure', () => {
   const html = renderToStaticMarkup(

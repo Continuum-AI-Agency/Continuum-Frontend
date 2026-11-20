@@ -18,6 +18,7 @@ import type {
 import { viewerFamily } from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { persistAssetRendition } from '@/lib/library/assetPreview';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -129,6 +130,7 @@ function Stage({
 }
 
 function ViewerHost(props: FamilyViewerProps) {
+  const translateUi = useTranslations('library');
   const { asset, version, surface, review, onAnchor, fallback } = props;
   const state = useViewerManifest({ asset, version, surface });
   const label = asset.title ?? version?.fileName ?? asset.fileName;
@@ -141,7 +143,7 @@ function ViewerHost(props: FamilyViewerProps) {
     );
   }
   if (state.status === 'unavailable') {
-    return <Unavailable message="This file's viewer could not be opened." fallback={fallback} />;
+    return <Unavailable message={translateUi('fileViewerUnavailable')} fallback={fallback} />;
   }
   const { manifest } = state;
   switch (manifest.family) {
@@ -151,8 +153,8 @@ function ViewerHost(props: FamilyViewerProps) {
           <Unavailable
             message={
               manifest.modelError === 'model_too_large'
-                ? 'This CAD file is too large to convert for the 3D viewer. Download it to open.'
-                : 'This model could not be converted for the 3D viewer. Download it to open.'
+                ? translateUi('cadModelTooLarge')
+                : translateUi('modelConversionUnavailable')
             }
           />
         );
@@ -188,7 +190,7 @@ function ViewerHost(props: FamilyViewerProps) {
         </Stage>
       );
     case 'none':
-      return <Unavailable message="No preview for this file." fallback={fallback} />;
+      return <Unavailable message={translateUi('fileNoPreview')} fallback={fallback} />;
   }
 }
 

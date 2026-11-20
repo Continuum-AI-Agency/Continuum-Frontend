@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // Two coordinated Radix primitives drive the preview:
 // - HoverCard renders a lightweight peek on mouseover/focus.
 // - Popover renders the pinned, scrollable card on click; while pinned the
@@ -89,24 +91,33 @@ export function DocumentPreviewCard({
   );
 }
 
-function metaLine(doc: DocumentView): string {
+function metaLine(
+  doc: DocumentView,
+  t: ReturnType<typeof useTranslations<'common'>>,
+  locale: string,
+): string {
   const parts: string[] = [];
-  if (typeof doc.size === 'number') parts.push(formatBytes(doc.size));
-  if (doc.pageCount) parts.push(`${doc.pageCount} pp`);
-  parts.push(sourceLabel(doc.source));
+  if (typeof doc.size === 'number') parts.push(formatBytes(doc.size, locale));
+  if (doc.pageCount) parts.push(t('m_5c0451aaed', { count: doc.pageCount }));
+  parts.push(sourceLabel(doc.source, t));
   return parts.join(' · ');
 }
 
-function sourceLabel(source: DocumentView['source']): string {
-  if (source === 'upload') return 'Uploaded';
+function sourceLabel(
+  source: DocumentView['source'],
+  t: ReturnType<typeof useTranslations<'common'>>,
+): string {
+  if (source === 'upload') return t('uploaded_3cc3767');
   if (source === 'google-drive') return 'Google Drive';
   return source.charAt(0).toUpperCase() + source.slice(1);
 }
 
 function KindBadge({ doc }: { doc: DocumentView }) {
+  const docT = useTranslations('common');
+
   return (
     <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-      {kindLabel(doc)}
+      {kindLabel(doc, docT)}
     </span>
   );
 }
@@ -130,14 +141,17 @@ function StatusChip({ label }: { label: ProgressLabel }) {
 }
 
 function PeekBody({ doc }: { doc: DocumentView }) {
-  const label = describeStep(doc);
+  const tUi = useTranslations('common');
+  const uiLocale = useLocale();
+
+  const label = describeStep(doc, tUi, uiLocale);
   return (
     <>
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{doc.name}</p>
         <KindBadge doc={doc} />
       </div>
-      <p className="font-mono text-xs text-muted-foreground">{metaLine(doc)}</p>
+      <p className="font-mono text-xs text-muted-foreground">{metaLine(doc, tUi, uiLocale)}</p>
       <StatusChip label={label} />
       {doc.textExcerpt ? (
         <p className="line-clamp-4 border-t border-border/60 pt-2 text-xs leading-relaxed text-muted-foreground">
@@ -145,7 +159,7 @@ function PeekBody({ doc }: { doc: DocumentView }) {
         </p>
       ) : (
         <p className="border-t border-border/60 pt-2 text-xs italic text-muted-foreground/70">
-          No text preview extracted yet — click to open.
+          {tUi('m_9eff7e80fa')}
         </p>
       )}
     </>
@@ -165,7 +179,9 @@ function PinnedBody({
   onDownload: (storagePath: string) => void;
   onRemove: (documentId: string) => void;
 }) {
-  const label = describeStep(doc);
+  const uiText = useTranslations('common');
+  const uiLocale = useLocale();
+  const label = describeStep(doc, uiText, uiLocale);
   const storagePath = doc.storagePath;
   return (
     <>
@@ -179,7 +195,7 @@ function PinnedBody({
         </div>
         <button
           type="button"
-          aria-label="Close preview"
+          aria-label={uiText('close_preview_7d8ab36')}
           onClick={onClose}
           className="-mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -198,7 +214,7 @@ function PinnedBody({
         {storagePath ? (
           <ActionButton
             icon={ExternalLink}
-            label="Open"
+            label={uiText('open_ed077f3')}
             tone="primary"
             onClick={() => onOpenInline(storagePath)}
           />
@@ -206,14 +222,14 @@ function PinnedBody({
         {storagePath ? (
           <ActionButton
             icon={Download}
-            label="Download"
+            label={uiText('download_d6eafe8')}
             tone="ghost"
             onClick={() => onDownload(storagePath)}
           />
         ) : null}
         <ActionButton
           icon={Trash2}
-          label="Remove"
+          label={uiText('remove_c3812fc')}
           tone="danger"
           className="ml-auto"
           onClick={() => onRemove(doc.id)}
@@ -224,12 +240,19 @@ function PinnedBody({
 }
 
 function MetaGrid({ doc }: { doc: DocumentView }) {
+  const docT = useTranslations('common');
+
+  const uiLocale = useLocale();
+
   const rows: Array<[string, string]> = [
-    ['Type', kindLabel(doc)],
-    ['Size', typeof doc.size === 'number' ? formatBytes(doc.size) : '—'],
-    ['Pages', doc.pageCount ? String(doc.pageCount) : '—'],
-    ['Source', sourceLabel(doc.source)],
-    ['Added', formatDate(doc.createdAt)],
+    [docT('m_3deb745651'), kindLabel(doc, docT)],
+    [docT('m_b7152342a2'), typeof doc.size === 'number' ? formatBytes(doc.size, uiLocale) : '—'],
+    [
+      docT('m_600584c2d5'),
+      doc.pageCount ? new Intl.NumberFormat(uiLocale).format(doc.pageCount) : '—',
+    ],
+    [docT('m_6da13addb0'), sourceLabel(doc.source, docT)],
+    [docT('m_b68734c259'), formatDate(doc.createdAt, uiLocale)],
   ];
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
@@ -244,11 +267,13 @@ function MetaGrid({ doc }: { doc: DocumentView }) {
 }
 
 function ExcerptBlock({ doc }: { doc: DocumentView }) {
+  const tUi = useTranslations('common');
+
   if (doc.textExcerpt) {
     return (
       <div className="space-y-1.5 border-t border-border/60 pt-3">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Text preview
+          {tUi('m_960373f325')}
         </p>
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
           {doc.textExcerpt}
@@ -258,9 +283,9 @@ function ExcerptBlock({ doc }: { doc: DocumentView }) {
   }
   return (
     <div className="border-t border-border/60 pt-3 text-sm text-muted-foreground">
-      <p>No text preview has been extracted for this document yet.</p>
+      <p>{tUi('m_d082accf39')}</p>
       {doc.storagePath ? (
-        <p className="mt-1 text-xs text-muted-foreground/70">Use Open to view the original file.</p>
+        <p className="mt-1 text-xs text-muted-foreground/70">{tUi('m_ebb43dfa69')}</p>
       ) : null}
     </div>
   );
@@ -297,8 +322,8 @@ function ActionButton({
   );
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
 }

@@ -1,3 +1,12 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type AssetDropUi = {
+  t: ReturnType<typeof useTranslations<'studio'>>;
+  locale: UiLocale;
+  errorText?: (error: unknown) => string;
+};
+
 import { canvasLibrarySource, classifyLibraryFileOrGeneric } from '@continuum/contracts';
 import {
   AUDIO_REFERENCE_MAX_BYTES,
@@ -121,21 +130,33 @@ function drawsOriginal(parsed: RemotePayload, mimeType: string): boolean {
   );
 }
 
-function tooLarge(nodeType: DropNodeType, bytes: number): CreativeAssetDropError {
+function tooLarge(nodeType: DropNodeType, bytes: number, ui?: AssetDropUi): CreativeAssetDropError {
   const label = LABEL[nodeType];
   return {
     status: 'error',
-    title: `${label} too large`,
-    description: `${label} is ${formatMiB(bytes)} (max ${formatMiB(MAX_BYTES[nodeType])}).`,
+    title:
+      ui?.t('assetDropTooLarge', { kind: ui.t('assetDropKind', { kind: nodeType }) }) ??
+      `${label} too large`,
+    description:
+      ui?.t('assetDropSize', {
+        kind: ui.t('assetDropKind', { kind: nodeType }),
+        size: formatMiB(bytes, ui.locale),
+        max: formatMiB(MAX_BYTES[nodeType], ui.locale),
+      }) ?? `${label} is ${formatMiB(bytes)} (max ${formatMiB(MAX_BYTES[nodeType])}).`,
     variant: 'error',
   };
 }
 
-function dropFailed(error: unknown): CreativeAssetDropError {
+function dropFailed(error: unknown, ui?: AssetDropUi): CreativeAssetDropError {
+  console.warn('[Studio asset drop] failed', error);
   return {
     status: 'error',
-    title: 'Drop failed',
-    description: error instanceof Error ? error.message : 'Failed to resolve asset',
+    title: ui?.t('assetDropFailed') ?? 'Drop failed',
+    description: ui
+      ? (ui.errorText?.(error) ?? ui.t('assetDropResolveFailed'))
+      : error instanceof Error
+        ? error.message
+        : 'Failed to resolve asset',
     variant: 'error',
   };
 }
@@ -144,12 +165,13 @@ export async function resolveCreativeAssetDrop(
   rawPayload: string,
   resolveBase64: Base64Resolver,
   readLibrarySource: LibrarySourceReader = readLibraryDropSource,
+  ui?: AssetDropUi,
 ): Promise<CreativeAssetDropResult> {
   if (!rawPayload) {
     return {
       status: 'error',
-      title: 'Drop ignored',
-      description: 'No asset data detected in drop.',
+      title: ui?.t('assetDropIgnored') ?? 'Drop ignored',
+      description: ui?.t('assetDropEmpty') ?? 'No asset data detected in drop.',
       variant: 'warning',
     };
   }
@@ -158,8 +180,8 @@ export async function resolveCreativeAssetDrop(
   if (!parsed) {
     return {
       status: 'error',
-      title: 'Drop failed',
-      description: 'Unrecognized asset payload.',
+      title: ui?.t('assetDropFailed') ?? 'Drop failed',
+      description: ui?.t('assetDropUnrecognized') ?? 'Unrecognized asset payload.',
       variant: 'error',
     };
   }
@@ -179,6 +201,7 @@ export async function resolveCreativeAssetDrop(
       { brandId: parsed.brandId, assetId: parsed.assetId },
       resolveBase64,
       readLibrarySource,
+      ui,
     );
   }
 
@@ -186,12 +209,14 @@ export async function resolveCreativeAssetDrop(
   if (!nodeType) {
     return {
       status: 'error',
-      title: 'Unsupported asset',
-      description: 'Only image, video, audio, or text/PDF assets are supported.',
+      title: ui?.t('assetDropUnsupported') ?? 'Unsupported asset',
+      description:
+        ui?.t('assetDropSupportedKinds') ??
+        'Only image, video, audio, or text/PDF assets are supported.',
       variant: 'warning',
     };
   }
-  return resolveDropBytes(parsed, mimeType, nodeType, resolveBase64);
+  return resolveDropBytes(parsed, mimeType, nodeType, resolveBase64, ui);
 }
 
 async function resolveLibraryRenditionDrop(
@@ -199,18 +224,19 @@ async function resolveLibraryRenditionDrop(
   ref: { brandId: string; assetId: string },
   resolveBase64: Base64Resolver,
   readLibrarySource: LibrarySourceReader,
+  ui?: AssetDropUi,
 ): Promise<CreativeAssetDropResult> {
   let pick: LibraryCanvasPick | null;
   try {
     pick = await readLibrarySource({ ...ref, assetVersionId: parsed.assetVersionId });
   } catch (error) {
-    return dropFailed(error);
+    return dropFailed(error, ui);
   }
   if (!pick) {
     return {
       status: 'error',
-      title: 'Drop failed',
-      description: 'That Library asset is no longer available.',
+      title: ui?.t('assetDropFailed') ?? 'Drop failed',
+      description: ui?.t('assetDropUnavailable') ?? 'That Library asset is no longer available.',
       variant: 'error',
     };
   }
@@ -224,7 +250,11 @@ async function resolveLibraryRenditionDrop(
         .previewStrategy === 'none';
     return {
       status: 'error',
-      title: never ? NO_CANVAS_PREVIEW : NO_CANVAS_PREVIEW_YET,
+      title: ui
+        ? ui.t(never ? 'assetDropNoPreview' : 'assetDropPreviewPending')
+        : never
+          ? NO_CANVAS_PREVIEW
+          : NO_CANVAS_PREVIEW_YET,
       description: version.fileName,
       variant: 'warning',
     };
@@ -241,6 +271,7 @@ async function resolveLibraryRenditionDrop(
     source.mimeType,
     source.nodeType,
     resolveBase64,
+    ui,
   );
   if (result.status === 'error') return result;
   return {
@@ -259,12 +290,13 @@ async function resolveDropBytes(
   mimeType: string,
   nodeType: DropNodeType,
   resolveBase64: Base64Resolver,
+  ui?: AssetDropUi,
 ): Promise<CreativeAssetDropResult> {
   const maxBytes = MAX_BYTES[nodeType];
 
   if (parsed.kind === 'data-url') {
     const estimatedBytes = estimateBase64DecodedBytes(parsed.base64);
-    if (estimatedBytes > maxBytes) return tooLarge(nodeType, estimatedBytes);
+    if (estimatedBytes > maxBytes) return tooLarge(nodeType, estimatedBytes, ui);
     return {
       status: 'success',
       nodeType,
@@ -274,13 +306,13 @@ async function resolveDropBytes(
   }
 
   if (typeof parsed.sizeBytes === 'number' && parsed.sizeBytes > maxBytes) {
-    return tooLarge(nodeType, parsed.sizeBytes);
+    return tooLarge(nodeType, parsed.sizeBytes, ui);
   }
 
   try {
     const { base64, sourceName, byteLength, sourceUrl } = await resolveBase64(parsed, maxBytes);
     if (typeof byteLength === 'number' && byteLength > maxBytes) {
-      return tooLarge(nodeType, byteLength);
+      return tooLarge(nodeType, byteLength, ui);
     }
 
     return {

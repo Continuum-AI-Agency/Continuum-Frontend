@@ -16,29 +16,27 @@
 // store to check yet (`dna/IdentityPanel`). What they may not do is give two different
 // answers to THIS question, so the sentence and the badge live here rather than twice.
 
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 
 /**
  * Why no `Aa` is drawn. Rendered verbatim on both surfaces — a reader who sees a family
  * name and no specimen otherwise concludes the page is broken.
  */
-export const NO_SPECIMEN_NOTE =
-  'No specimen is rendered here. Brand faces are licensed to the brand, so the file is ' +
-  'never served to a browser — and for a face we do not hold, the only specimen we could ' +
-  'draw would be a substitute, which would show you a typeface that is not yours.';
-
-/** What the font store holds, said the same way everywhere. */
-export const TYPEFACE_HELD_LABEL = 'in the engine';
-export const TYPEFACE_MISSING_LABEL = 'missing';
+export function NoSpecimenText() {
+  const translate = useTranslations('common');
+  return translate('typefaceNoSpecimen');
+}
 
 /**
  * A fact about the font STORE, never about the document. A family a design system names
  * is a family a piece will not ship in unless the file is there.
  */
 export function TypefaceHoldBadge({ held }: { held: boolean }) {
+  const translate = useTranslations('common');
   return (
     <Badge variant={held ? 'success' : 'warning'} data-testid="type-badge">
-      {held ? TYPEFACE_HELD_LABEL : TYPEFACE_MISSING_LABEL}
+      {translate(held ? 'typefaceHeld' : 'typefaceMissing')}
     </Badge>
   );
 }

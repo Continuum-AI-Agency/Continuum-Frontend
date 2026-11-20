@@ -28,7 +28,14 @@ const listJobs = spyOn(apiRendersApi, 'listJobs').mockImplementation(async () =>
 afterAll(() => listJobs.mockRestore());
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { type SharedTemplate, sharedTemplateId, TemplateHoverPreview } from './TemplateCard';
 import { TemplateGallery } from './TemplateGallery';
 

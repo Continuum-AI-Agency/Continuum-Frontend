@@ -8,7 +8,7 @@ import {
   type SessionFilterState,
   toSessionListFilters,
 } from '@/lib/agents/session-filters';
-import { loadFailureWhy } from '@/lib/api/loadFailure';
+import { type LoadFailureCause, loadFailureCause } from '@/lib/api/loadFailure';
 
 // Server-side chat-history search for a conversation sidebar.
 //
@@ -18,11 +18,11 @@ import { loadFailureWhy } from '@/lib/api/loadFailure';
 // (trgm over title+preview, `tags @>` containment), never over the truncated
 // page the sidebar happens to hold.
 
-/** Why the last search failed, as the sidebar says it. */
+/** Why the last search failed; the notice words it in the UI language. */
 export type SessionSearchFailure = {
   /** The bearer was refused (401): the session ended, and only signing in again helps. */
   sessionEnded: boolean;
-  message: string;
+  cause: LoadFailureCause;
 };
 
 export type UseSessionSearchResult<TSession> = {
@@ -40,20 +40,12 @@ export type UseSessionSearchResult<TSession> = {
   retry: () => void;
 };
 
-/** A failed search in words. A 401 is an ended session, not an empty result. */
+/** A failed search, classified. A 401 is an ended session, not an empty result. */
 export function sessionSearchFailure(cause: unknown): SessionSearchFailure {
   const status =
     typeof cause === 'object' && cause !== null ? Reflect.get(cause, 'status') : undefined;
-  if (status === 401) {
-    return {
-      sessionEnded: true,
-      message: 'Your session ended — sign in again to see your conversations.',
-    };
-  }
-  return {
-    sessionEnded: false,
-    message: `Couldn't search conversations — ${loadFailureWhy(cause) ?? 'it did not go through.'}`,
-  };
+  if (status === 401) return { sessionEnded: true, cause: 'refused' };
+  return { sessionEnded: false, cause: loadFailureCause(cause) };
 }
 
 export function useSessionSearch<TSession>(params: {

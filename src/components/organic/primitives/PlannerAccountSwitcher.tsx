@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // The brand's DEFAULT posting account per platform: the one NEW drafts are stamped with. It never
 // changes an existing draft — that is the review panel's identity row, per draft.
 //
@@ -23,6 +25,7 @@ import { AccountPicker } from './DraftReviewChrome';
 import { PlatformIcon } from './PlatformSelector';
 
 export function PlannerAccountSwitcher() {
+  const uiText = useTranslations('organic');
   const accounts = usePublishAccounts();
   const storeDefaults = useCalendarStore((state) => state.accountContext.accountIds);
   const saveDefault = useSaveDefaultAccount();
@@ -53,10 +56,15 @@ export function PlannerAccountSwitcher() {
                 variant="outline"
                 size="sm"
                 className="h-8 gap-1.5 text-xs"
-                aria-label={`Default ${label} account: ${name ?? 'Choose account'}`}
+                aria-label={uiText('defaultPlatformAccount', {
+                  platform: label,
+                  account: name ?? uiText('choose_account_3be3203'),
+                })}
               >
                 <PlatformIcon platform={platform} className="size-3.5" />
-                <span className="max-w-32 truncate font-medium">{name ?? 'Choose account'}</span>
+                <span className="max-w-32 truncate font-medium">
+                  {name ?? uiText('choose_account_3be3203')}
+                </span>
                 <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
               </Button>
             }

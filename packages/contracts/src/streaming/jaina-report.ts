@@ -1632,6 +1632,32 @@ const recordsOf = (value: unknown): Record<string, unknown>[] =>
 // ---------------------------------------------------------------------------
 
 const NUMBER_TOKEN = /(?<![\w.,])(\d[\d.,]*\d|\d)\s?(k|K|M|mil|million|millones)?(?![\w])/gu;
+const ISO_DATE_TOKEN =
+  /\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?\b/g;
+
+function serializedArrayNumberTokens(text: string): NumberReading[][] | null {
+  if (!text.trimStart().startsWith('[')) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  } // Array-like prose keeps the normal text tokenizer.
+  if (!Array.isArray(value)) return null;
+  const pending: unknown[] = [value];
+  while (pending.length) {
+    const item = pending.pop();
+    if (Array.isArray(item)) {
+      for (const child of item) pending.push(child);
+    } else if (typeof item !== 'number' || !Number.isFinite(item)) return null;
+  }
+  // JSON commas separate values; they are never a decimal or thousands separator.
+  return [...text.matchAll(/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g)].map(([token]) => {
+    const [mantissa, exponent] = token.split(/[eE]/);
+    const decimals = (mantissa.split('.')[1]?.length ?? 0) - Number(exponent ?? 0);
+    return [{ value: Number(token), decimals }];
+  });
+}
 
 /** One reading of a printed number and the precision it was printed at: "24.9k" is 24,900 to the hundred (decimals −2). */
 export type NumberReading = { value: number; decimals: number };
@@ -1681,8 +1707,10 @@ export const readingsOfNumberToken = (digits: string, suffix?: string): number[]
 
 /** Each printed number in `text` with its readings — one entry per token, several readings when the token is ambiguous. */
 export const numberTokensInText = (text: string): NumberReading[][] => {
+  const serialized = serializedArrayNumberTokens(text);
+  if (serialized) return serialized;
   const out: NumberReading[][] = [];
-  for (const match of text.matchAll(NUMBER_TOKEN)) {
+  for (const match of text.replace(ISO_DATE_TOKEN, '').matchAll(NUMBER_TOKEN)) {
     out.push(numberReadingsOfToken(match[1], match[2]));
   }
   return out;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { libraryBrowseQuerySchema, type MediaAsset } from '@continuum/contracts';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The live grid's row topic needs a configured Supabase client; this suite is about the list read.
 mock.module('@/lib/supabase/realtime', () => ({ subscribeToRowBroadcasts: () => () => {} }));

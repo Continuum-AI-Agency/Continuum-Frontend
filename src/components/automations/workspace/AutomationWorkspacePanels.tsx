@@ -25,6 +25,7 @@ import {
   Webhook,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
 import { TestResults } from '@/components/ai-elements/test-results';
 import {
@@ -64,6 +65,11 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { automationCapabilityDescription } from '@/i18n/automationCapability';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
+import { automationValidationMessage } from '@/i18n/automationValidation';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
+import { ApiError } from '@/lib/api/errors';
 import {
   createAutomationWebhookDestination,
   createAutomationWebhookEndpoint,
@@ -105,8 +111,12 @@ export const applyDefinitionToCanvasNodes = ({
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 export type VersionState = 'draft' | 'published' | 'archived';
 
-export const errorMessage = (error: unknown, fallback: string) =>
-  error instanceof Error ? error.message : fallback;
+type AutomationTranslate = ReturnType<typeof useTranslations<'automations'>>;
+type ErrorFormatter = (error: unknown) => string;
+export const errorMessage = (error: unknown, fallback: string, format?: ErrorFormatter): string =>
+  error instanceof LocalizedUiError ? error.message : format ? format(error) : fallback;
+const present = (source: string, t?: AutomationTranslate): string =>
+  t ? localizeAutomationsCopy(source, t) : source;
 
 export const issueCount = (
   validation: AutomationWorkflowValidation | null,
@@ -133,25 +143,28 @@ export function IconButton({
 }
 
 function PortsSummary({ node }: { node: AutomationWorkflowNode }) {
+  const uiText = useTranslations('automations');
   const ports = getAutomationNodePortSpec(node);
   const inputs = Object.keys(ports.inputs);
   const outputs = Object.keys(ports.outputs);
 
   return (
     <div className="flex flex-col gap-2">
-      <Label>Typed ports</Label>
+      <Label>{uiText('typed_ports_053bf7b')}</Label>
       <div className="flex flex-wrap gap-1.5">
         {inputs.map((port) => (
           <Badge key={`in-${port}`} variant="outline">
-            in · {port}
+            {uiText.rich('sentence_af9e6ff67d36', { v0: () => port })}
           </Badge>
         ))}
         {outputs.map((port) => (
           <Badge key={`out-${port}`} variant="violet">
-            out · {port}
+            {uiText.rich('sentence_334223833e16', { v0: () => port })}
           </Badge>
         ))}
-        {inputs.length + outputs.length === 0 ? <Badge variant="muted">No ports</Badge> : null}
+        {inputs.length + outputs.length === 0 ? (
+          <Badge variant="muted">{uiText('no_ports_27719e3')}</Badge>
+        ) : null}
       </div>
     </div>
   );
@@ -164,6 +177,7 @@ function ValidationIssueButton({
   issue: AutomationValidationIssue;
   onSelect: (nodeId: string) => void;
 }) {
+  const uiText = useTranslations('automations');
   return (
     <button
       type="button"
@@ -174,9 +188,13 @@ function ValidationIssueButton({
       <Alert variant={issue.severity === 'error' ? 'destructive' : 'default'} className="py-2.5">
         <AlertCircle aria-hidden="true" />
         <AlertTitle className="text-xs">
-          {issue.severity === 'error' ? 'Blocks publishing' : 'Review'}
+          {issue.severity === 'error'
+            ? uiText('blocks_publishing_dfaf2ee')
+            : uiText('review_aff0766')}
         </AlertTitle>
-        <AlertDescription className="text-xs">{issue.message}</AlertDescription>
+        <AlertDescription className="text-xs">
+          {automationValidationMessage(issue, uiText)}
+        </AlertDescription>
       </Alert>
     </button>
   );
@@ -187,34 +205,54 @@ export type WebhookResources = {
   destinations: AutomationWebhookDestination[];
 };
 
-export const automationEndpointCreationBlockReason = ({
-  versionState,
-  saveState,
-}: {
-  versionState: VersionState;
-  saveState: SaveState;
-}): string | null => {
+export const automationEndpointCreationBlockReason = (
+  {
+    versionState,
+    saveState,
+  }: {
+    versionState: VersionState;
+    saveState: SaveState;
+  },
+  t?: AutomationTranslate,
+): string | null => {
   if (versionState !== 'draft') {
-    return 'Endpoints attach to the editable draft. Unpublish this automation first.';
+    return present('Endpoints attach to the editable draft. Unpublish this automation first.', t);
   }
   if (saveState === 'saving') {
-    return 'Waiting for the draft to save — the endpoint attaches to the saved draft.';
+    return present('Waiting for the draft to save — the endpoint attaches to the saved draft.', t);
   }
   if (saveState === 'error') {
-    return 'The draft could not be saved, so this node is not in the saved draft yet.';
+    return present('The draft could not be saved, so this node is not in the saved draft yet.', t);
   }
   return null;
 };
 
-export const automationEndpointCreationError = (error: unknown): string => {
-  const message = errorMessage(error, 'Could not create this endpoint.');
-  if (message.includes('draft_not_found')) {
-    return 'The draft moved on before this request landed. Wait for “Draft saved”, then create the endpoint again.';
-  }
-  if (message.includes('webhook_trigger_not_found')) {
-    return 'This webhook node is not in the saved draft yet. Wait for “Draft saved”, then create the endpoint again.';
-  }
-  return message;
+export const automationEndpointCreationError = (
+  error: unknown,
+  t?: AutomationTranslate,
+  format?: ErrorFormatter,
+): string => {
+  const structured =
+    error instanceof ApiError
+      ? [error.code, error.payload?.code, error.payload?.errorCode, error.payload?.error].filter(
+          (value): value is string => typeof value === 'string',
+        )
+      : [];
+  // Older responses embedded these two stable codes in a diagnostic message.
+  const legacy = error instanceof Error ? error.message : '';
+  const hasCode = (code: string) =>
+    structured.includes(code) || new RegExp('(?:^|[^a-z_])' + code + '(?:$|[^a-z_])').test(legacy);
+  if (hasCode('draft_not_found'))
+    return present(
+      'The draft moved on before this request landed. Wait for “Draft saved”, then create the endpoint again.',
+      t,
+    );
+  if (hasCode('webhook_trigger_not_found'))
+    return present(
+      'This webhook node is not in the saved draft yet. Wait for “Draft saved”, then create the endpoint again.',
+      t,
+    );
+  return errorMessage(error, present('Could not create this endpoint.', t), format);
 };
 
 const destinationUrlSchema = createAutomationWebhookDestinationRequestSchema.shape.url;
@@ -222,10 +260,13 @@ const destinationUrlSchema = createAutomationWebhookDestinationRequestSchema.sha
 // The contract already encodes the rule (URL-shaped and HTTPS), so the form
 // validates with it instead of a hand-rolled prefix check that would let a
 // malformed https:// string round-trip to the server just to fail there.
-export const automationDestinationUrlError = (url: string): string | null =>
+export const automationDestinationUrlError = (
+  url: string,
+  t?: AutomationTranslate,
+): string | null =>
   destinationUrlSchema.safeParse(url).success
     ? null
-    : 'Enter a public HTTPS URL, for example https://hooks.example.com/continuum.';
+    : present('Enter a public HTTPS URL, for example https://hooks.example.com/continuum.', t);
 
 // A revealed signing secret exists exactly once. Closing the dialog or minting
 // another one destroys it, so both are blocked until the user says they copied it.
@@ -272,6 +313,8 @@ export function WebhookManager({
   onEndpointCreated: (endpointId: string) => void;
   client?: WebhookManagerClient;
 }) {
+  const uiText = useTranslations('automations');
+  const formatUiError = useUiErrorMessage();
   const acknowledgeId = useId();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -282,8 +325,8 @@ export function WebhookManager({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const selectedWebhook = selected?.type === 'trigger.webhook' ? selected : null;
-  const blockedReason = automationEndpointCreationBlockReason({ versionState, saveState });
-  const urlError = url ? automationDestinationUrlError(url) : null;
+  const blockedReason = automationEndpointCreationBlockReason({ versionState, saveState }, uiText);
+  const urlError = url ? automationDestinationUrlError(url, uiText) : null;
   const secretHeld = !canDismissRevealedSecret({ secret, acknowledged });
 
   const revealSecret = (value: string, subject: string) => {
@@ -311,12 +354,15 @@ export function WebhookManager({
           url,
           method: 'POST',
         });
-        revealSecret(result.signingSecret, `destination “${result.destination.name}”`);
+        revealSecret(
+          result.signingSecret,
+          uiText('m_29ab4d9909', { name: result.destination.name }),
+        );
         setName('');
         setUrl('');
         await onRefresh();
       } catch (creationError) {
-        setError(errorMessage(creationError, 'Could not create this destination.'));
+        setError(errorMessage(creationError, uiText('m_872538a9f9'), formatUiError));
       }
     });
 
@@ -331,11 +377,11 @@ export function WebhookManager({
           name: selectedWebhook.label,
           payloadSchema: selectedWebhook.config.payloadSchema,
         });
-        revealSecret(result.signingSecret, `endpoint “${result.endpoint.name}”`);
+        revealSecret(result.signingSecret, uiText('m_d41dab22df', { name: result.endpoint.name }));
         onEndpointCreated(result.endpoint.id);
         await onRefresh();
       } catch (creationError) {
-        setError(automationEndpointCreationError(creationError));
+        setError(automationEndpointCreationError(creationError, uiText, formatUiError));
       }
     });
   };
@@ -347,10 +393,10 @@ export function WebhookManager({
           automationId: automation.id,
           endpointId: endpoint.id,
         });
-        revealSecret(result.signingSecret, `endpoint “${endpoint.name}”`);
+        revealSecret(result.signingSecret, uiText('m_d41dab22df', { name: endpoint.name }));
         await onRefresh();
       } catch (rotationError) {
-        setError(errorMessage(rotationError, 'Could not rotate this signing secret.'));
+        setError(errorMessage(rotationError, uiText('m_4e0fd5618a'), formatUiError));
       }
     });
 
@@ -366,7 +412,7 @@ export function WebhookManager({
         render={
           <Button size="sm" variant="outline">
             <Webhook data-icon="inline-start" />
-            <span className="hidden xl:inline">Webhooks</span>
+            <span className="hidden xl:inline">{uiText('webhooks_45808d7')}</span>
           </Button>
         }
       />
@@ -375,28 +421,28 @@ export function WebhookManager({
         showCloseButton={!secretHeld}
       >
         <DialogHeader>
-          <DialogTitle>Managed webhooks</DialogTitle>
+          <DialogTitle>{uiText('managed_webhooks_879b1ed')}</DialogTitle>
           <DialogDescription>
-            Signed inbound triggers and deterministic outbound destinations for this brand.
+            {uiText('signed_inbound_triggers_and_deterministic_out_9ed69b1')}
           </DialogDescription>
         </DialogHeader>
 
         {secret ? (
           <Alert>
             <ShieldCheck aria-hidden="true" />
-            <AlertTitle>Copy this signing secret now</AlertTitle>
+            <AlertTitle>{uiText('copy_this_signing_secret_now_62dfe07')}</AlertTitle>
             <AlertDescription className="space-y-2">
               <p className="text-xs">
-                Shown once for {secretSubject}. Continuum cannot show it again.
+                {uiText.rich('sentence_2d2e8c304d64', { v0: () => secretSubject })}
               </p>
               <code className="block break-all rounded bg-muted p-2 text-xs">{secret}</code>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => void copyAutomationValue(secret, 'Signing secret')}
+                onClick={() => void copyAutomationValue(secret, uiText('signingSecret'), uiText)}
               >
                 <Copy data-icon="inline-start" />
-                Copy secret
+                {uiText('copy_secret_9b80d4b')}
               </Button>
               <label className="flex items-center gap-2 text-xs" htmlFor={acknowledgeId}>
                 <Checkbox
@@ -404,7 +450,7 @@ export function WebhookManager({
                   checked={acknowledged}
                   onCheckedChange={(checked) => setAcknowledged(checked === true)}
                 />
-                I&rsquo;ve copied it
+                {uiText('i_ve_copied_it_a93698e')}
               </label>
             </AlertDescription>
           </Alert>
@@ -413,28 +459,28 @@ export function WebhookManager({
         {error ? (
           <Alert variant="destructive">
             <AlertCircle aria-hidden="true" />
-            <AlertTitle>Webhook setup failed</AlertTitle>
+            <AlertTitle>{uiText('webhook_setup_failed_dc76cfa')}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
 
         <section className="space-y-3 rounded-lg border p-4">
           <div>
-            <h3 className="text-sm font-medium">Inbound endpoint</h3>
+            <h3 className="text-sm font-medium">{uiText('inbound_endpoint_b70d0ed')}</h3>
             <p className="text-xs text-muted-foreground">
-              Select an inbound webhook node, then create its reveal-once secret.
+              {uiText('select_an_inbound_webhook_node_then_create_it_be61c9c')}
             </p>
           </div>
           {selectedWebhook ? (
             selectedWebhook.config.endpointId ? (
-              <Badge variant="success">Endpoint attached</Badge>
+              <Badge variant="success">{uiText('endpoint_attached_cbea980')}</Badge>
             ) : (
               <div className="space-y-2">
                 <Button
                   disabled={locked || busy || secretHeld || blockedReason !== null}
                   onClick={() => void createEndpoint()}
                 >
-                  Create endpoint for {selectedWebhook.label}
+                  {uiText.rich('sentence_7658e8e4722c', { v0: () => selectedWebhook.label })}
                 </Button>
                 {blockedReason ? (
                   <p className="text-xs leading-4 text-muted-foreground">{blockedReason}</p>
@@ -443,7 +489,7 @@ export function WebhookManager({
             )
           ) : (
             <p className="text-xs text-muted-foreground">
-              Select an Inbound webhook node on the canvas.
+              {uiText('select_an_inbound_webhook_node_on_the_canvas_00ac31e')}
             </p>
           )}
           <div className="space-y-2">
@@ -455,7 +501,7 @@ export function WebhookManager({
                     <span className="truncate text-xs font-medium">{endpoint.name}</span>
                     <div className="flex shrink-0 items-center gap-1.5">
                       <Badge variant={endpoint.enabled ? 'success' : 'muted'}>
-                        {endpoint.enabled ? 'Active' : 'Draft'}
+                        {endpoint.enabled ? uiText('active_9234069') : uiText('draft_ebf12ef')}
                       </Badge>
                       <AlertDialog>
                         <AlertDialogTrigger
@@ -465,7 +511,7 @@ export function WebhookManager({
                               variant="ghost"
                               className="size-7"
                               disabled={busy || secretHeld}
-                              aria-label={`Rotate ${endpoint.name} signing secret`}
+                              aria-label={uiText('m_aafc3b34a4', { name: endpoint.name })}
                             >
                               <RefreshCw aria-hidden="true" />
                             </Button>
@@ -473,17 +519,19 @@ export function WebhookManager({
                         />
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Rotate this signing secret?</AlertDialogTitle>
+                            <AlertDialogTitle>
+                              {uiText('rotate_this_signing_secret_fefcc59')}
+                            </AlertDialogTitle>
                             <AlertDialogDescription>
-                              The current secret for “{endpoint.name}” stops working immediately.
-                              Every caller still signing with it will be rejected until you give
-                              them the replacement, which is shown only once.
+                              {uiText.rich('sentence_6a6307fa5947', { v0: () => endpoint.name })}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Keep current secret</AlertDialogCancel>
+                            <AlertDialogCancel>
+                              {uiText('keep_current_secret_021a78e')}
+                            </AlertDialogCancel>
                             <AlertDialogAction onClick={() => void rotateSecret(endpoint)}>
-                              Rotate secret
+                              {uiText('rotate_secret_4405518')}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -495,9 +543,11 @@ export function WebhookManager({
                       {deliveryUrl}
                     </code>
                     <IconButton
-                      label={`Copy ${endpoint.name} URL`}
+                      label={uiText('m_6578fd98f3', { name: endpoint.name })}
                       className="size-7"
-                      onClick={() => void copyAutomationValue(deliveryUrl, 'Delivery URL')}
+                      onClick={() =>
+                        void copyAutomationValue(deliveryUrl, uiText('deliveryUrl'), uiText)
+                      }
                     >
                       <Copy aria-hidden="true" />
                     </IconButton>
@@ -506,23 +556,25 @@ export function WebhookManager({
               );
             })}
             {resources.endpoints.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No inbound endpoints yet.</p>
+              <p className="text-xs text-muted-foreground">
+                {uiText('no_inbound_endpoints_yet_1eb865b')}
+              </p>
             ) : null}
           </div>
         </section>
 
         <section className="space-y-3 rounded-lg border p-4">
           <div>
-            <h3 className="text-sm font-medium">Outbound destination</h3>
+            <h3 className="text-sm font-medium">{uiText('outbound_destination_7241b2c')}</h3>
             <p className="text-xs text-muted-foreground">
-              Requests use Webhook-Id, Webhook-Timestamp, Webhook-Signature, and Idempotency-Key.
+              {uiText('requests_use_webhook_id_webhook_timestamp_web_bd37b2e')}
             </p>
           </div>
           <Input
             value={name}
             disabled={busy}
-            placeholder="Destination name"
-            aria-label="Destination name"
+            placeholder={uiText('destination_name_50687c1')}
+            aria-label={uiText('destination_name_50687c1')}
             onChange={(event) => setName(event.target.value)}
           />
           <Input
@@ -530,7 +582,7 @@ export function WebhookManager({
             value={url}
             disabled={busy}
             placeholder="https://hooks.example.com/continuum"
-            aria-label="Destination URL"
+            aria-label={uiText('destination_url_007f7ef')}
             aria-invalid={urlError !== null}
             onChange={(event) => setUrl(event.target.value)}
           />
@@ -539,7 +591,7 @@ export function WebhookManager({
             disabled={busy || secretHeld || url.length === 0 || urlError !== null}
             onClick={() => void createDestination()}
           >
-            Create signed destination
+            {uiText('create_signed_destination_88b6496')}
           </Button>
           <div className="flex flex-wrap gap-2">
             {resources.destinations.map((destination) => (
@@ -593,8 +645,10 @@ export function WorkflowInspector({
   onSelectIssue: (nodeId: string) => void;
   onMessage: (message: string | null) => void;
 }) {
+  const uiText = useTranslations('automations');
+  const formatUiError = useUiErrorMessage();
   const selectedIssues = validation?.issues.filter((issue) => issue.nodeId === selected?.id) ?? [];
-  const catalogItem = selected ? getAutomationNodeCatalogItem(selected.type) : null;
+  const catalogItem = selected ? getAutomationNodeCatalogItem(selected.type, uiText) : null;
   const capability = selected
     ? resolveNodeLifecycle({ node: selected, capabilities: sourceCapabilities })
     : null;
@@ -608,9 +662,9 @@ export function WorkflowInspector({
           <Save className="size-3.5 text-muted-foreground" aria-hidden="true" />
         )}
         <div className="min-w-0">
-          <h2 className="text-xs font-medium">Inspector</h2>
+          <h2 className="text-xs font-medium">{uiText('inspector_da188e3')}</h2>
           <p className="truncate text-xs text-muted-foreground">
-            {selected ? selected.label : 'Select a node'}
+            {selected ? selected.label : uiText('select_a_node_9205fdf')}
           </p>
         </div>
       </div>
@@ -629,19 +683,19 @@ export function WorkflowInspector({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge variant="outline">{catalogItem.category}</Badge>
                   {capability?.availability === 'unavailable' ? (
-                    <Badge variant="destructive">Unavailable</Badge>
+                    <Badge variant="destructive">{uiText('unavailable_ca18449')}</Badge>
                   ) : capability?.availability === 'needs_connection' ? (
-                    <Badge variant="warning">Needs connection</Badge>
+                    <Badge variant="warning">{uiText('needs_connection_d919fde')}</Badge>
                   ) : capability?.lifecycle === 'preview' ? (
-                    <Badge variant="muted">Preview</Badge>
+                    <Badge variant="muted">{uiText('preview_324b134')}</Badge>
                   ) : null}
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
                   {catalogItem.description}
                 </p>
-                {capability?.reason ? (
+                {capability && automationCapabilityDescription(capability, uiText) ? (
                   <p className="mt-1 text-xs leading-4 text-muted-foreground">
-                    {capability.reason}
+                    {automationCapabilityDescription(capability, uiText)}
                   </p>
                 ) : null}
               </div>
@@ -663,7 +717,7 @@ export function WorkflowInspector({
             <Separator />
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`node-label-${selected.id}`}>Label</Label>
+              <Label htmlFor={`node-label-${selected.id}`}>{uiText('label_0e66373')}</Label>
               <Input
                 id={`node-label-${selected.id}`}
                 value={selected.label}
@@ -673,19 +727,21 @@ export function WorkflowInspector({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`node-description-${selected.id}`}>Description</Label>
+              <Label htmlFor={`node-description-${selected.id}`}>
+                {uiText('description_526e008')}
+              </Label>
               <Textarea
                 id={`node-description-${selected.id}`}
                 value={selected.description ?? ''}
                 disabled={locked}
                 onChange={(event) => onPatch({ description: event.target.value })}
                 rows={3}
-                placeholder="Explain this step for collaborators."
+                placeholder={uiText('explain_this_step_for_collaborators_8280c84')}
               />
             </div>
 
             <div className="flex flex-col gap-3">
-              <Label>Configuration</Label>
+              <Label>{uiText('configuration_b332c34')}</Label>
               <NodeConfigurationEditor
                 node={selected}
                 brandId={brandId}
@@ -714,15 +770,17 @@ export function WorkflowInspector({
                 }}
               />
               <p className="text-xs leading-4 text-muted-foreground">
-                Typed validation runs locally, again on the server, and once more before publishing.
+                {uiText('typed_validation_runs_locally_again_on_the_se_4abeab3')}
               </p>
             </div>
 
             <div className="flex items-center justify-between gap-4 rounded-md border p-3">
               <div>
-                <Label htmlFor={`node-disabled-${selected.id}`}>Disable node</Label>
+                <Label htmlFor={`node-disabled-${selected.id}`}>
+                  {uiText('disable_node_91a6e06')}
+                </Label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Keep the step in the graph without running it.
+                  {uiText('keep_the_step_in_the_graph_without_running_it_d4b1727')}
                 </p>
               </div>
               <Switch
@@ -740,8 +798,10 @@ export function WorkflowInspector({
                 <Separator />
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <Label>Run evidence</Label>
-                    <Badge variant="outline">{execution.durationMs} ms</Badge>
+                    <Label>{uiText('run_evidence_96767cb')}</Label>
+                    <Badge variant="outline">
+                      {uiText('m_8636c22fb9', { duration: execution.durationMs })}
+                    </Badge>
                   </div>
                   {evidence.map((event) => (
                     <Tool
@@ -775,23 +835,39 @@ export function WorkflowInspector({
                       }
                     >
                       <ToolHeader
-                        title={`Live run · attempt ${nodeRun.attempt} · ${nodeRun.status}`}
+                        title={uiText('m_71d8203345', {
+                          count: nodeRun.attempt,
+                          status: localizeAutomationsCopy(
+                            nodeRun.status === 'pending'
+                              ? 'Pending'
+                              : nodeRun.status === 'running'
+                                ? 'Running'
+                                : nodeRun.status === 'completed'
+                                  ? 'Completed'
+                                  : nodeRun.status === 'failed'
+                                    ? 'Failed'
+                                    : 'Skipped',
+                            uiText,
+                          ),
+                        })}
                       />
                       <ToolContent>
                         {nodeRun.input !== null ? <ToolInput value={nodeRun.input} /> : null}
                         {nodeRun.output !== null ? <ToolOutput value={nodeRun.output} /> : null}
-                        {nodeRun.errorMessage ? <ToolOutput value={nodeRun.errorMessage} /> : null}
+                        {nodeRun.errorMessage ? (
+                          <ToolOutput value={formatUiError({ code: nodeRun.errorMessage })} />
+                        ) : null}
                       </ToolContent>
                     </Tool>
                   ))}
                   {evidence.length === 0 && nodeRuns.length === 0 ? (
                     <p className="text-xs leading-4 text-muted-foreground">
-                      This step reported no evidence.
+                      {uiText('this_step_reported_no_evidence_e753672')}
                     </p>
                   ) : null}
                   {checks.length > 0 ? (
                     <TestResults
-                      title="Deterministic checks"
+                      title={uiText('deterministic_checks_e85b50e')}
                       results={checks.map((check) => ({
                         id: check.id,
                         name: check.name,
@@ -807,7 +883,7 @@ export function WorkflowInspector({
                       state={receipt.status === 'completed' ? 'output-available' : 'error'}
                     >
                       <ToolHeader
-                        title={`${receipt.effect === 'simulated' ? 'Simulated' : 'Live'} · ${receipt.actionKind}`}
+                        title={`${receipt.effect === 'simulated' ? uiText('simulated_31fe293') : uiText('live_b64ac05')} · ${receipt.actionKind}`}
                       />
                       <ToolContent>
                         <ToolOutput value={receipt} />
@@ -822,7 +898,7 @@ export function WorkflowInspector({
               <>
                 <Separator />
                 <div className="flex flex-col gap-2">
-                  <Label>Node validation</Label>
+                  <Label>{uiText('node_validation_4b1d146')}</Label>
                   {selectedIssues.map((issue, index) => (
                     <ValidationIssueButton
                       key={`${issue.code}-${issue.nodeId ?? index}`}
@@ -839,9 +915,11 @@ export function WorkflowInspector({
             <span className="flex size-10 items-center justify-center rounded-md border bg-muted">
               <Focus className="size-4 text-muted-foreground" aria-hidden="true" />
             </span>
-            <h3 className="mt-3 text-sm font-medium">Inspect a workflow step</h3>
+            <h3 className="mt-3 text-sm font-medium">
+              {uiText('inspect_a_workflow_step_18c8a6f')}
+            </h3>
             <p className="mt-1 max-w-56 text-xs leading-5 text-muted-foreground">
-              Select a node to edit its instructions, data bindings, conditions, and outcomes.
+              {uiText('select_a_node_to_edit_its_instructions_data_b_1836539')}
             </p>
           </div>
         )}
@@ -850,11 +928,11 @@ export function WorkflowInspector({
 
         <div className="flex flex-col gap-3 p-4">
           <div className="flex items-center justify-between gap-3">
-            <Label>Graph validation</Label>
+            <Label>{uiText('graph_validation_bfc469b')}</Label>
             <Badge variant={validation?.ok ? 'success' : 'destructive'}>
               {validation?.ok
-                ? 'Ready'
-                : `${issueCount(validation, 'error')} error${issueCount(validation, 'error') === 1 ? '' : 's'}`}
+                ? uiText('ready_5fa7aac')
+                : uiText('m_377dd3a8aa', { count: issueCount(validation, 'error') })}
             </Badge>
           </div>
           {validation?.issues.length ? (
@@ -868,9 +946,9 @@ export function WorkflowInspector({
           ) : (
             <Alert>
               <ShieldCheck aria-hidden="true" />
-              <AlertTitle>Structural checks pass</AlertTitle>
+              <AlertTitle>{uiText('structural_checks_pass_df11fd0')}</AlertTitle>
               <AlertDescription>
-                Run a server-side test before publishing this version.
+                {uiText('run_a_server_side_test_before_publishing_this_cd9fb48')}
               </AlertDescription>
             </Alert>
           )}

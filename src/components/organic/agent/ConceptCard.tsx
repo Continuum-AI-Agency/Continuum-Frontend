@@ -11,6 +11,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChatMediaCarousel, ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import type { ChatMedia } from '@/components/chat/media/media';
@@ -18,8 +19,11 @@ import { type LightboxItem, MediaLightbox } from '@/components/organic/primitive
 import { MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Progress } from '@/components/ui/progress';
+import type { UiLocale } from '@/i18n/config';
+import { translateOrganicControlLabel } from '@/lib/ui/organicLifecycleLabels';
 import { cn } from '@/lib/utils';
 import { rankCardMedia, useDraftChatMedia } from '../hooks/useDraftStoryboard';
+import { conceptFormatLabel } from './conceptLabels';
 import { resolveConceptPreviewUrls } from './conceptPreview';
 import { type ConceptStatus, isFailureKind, resolvePlanItemStatus } from './conceptStatus';
 import {
@@ -52,13 +56,6 @@ const FUNNEL_LABELS: Record<string, string> = {
   retention: 'Retention',
 };
 
-export const FORMAT_LABELS: Record<string, string> = {
-  reel: 'Reel',
-  post: 'Post',
-  carousel: 'Carousel',
-  story: 'Story',
-};
-
 const FORMAT_ICONS: Record<string, LucideIcon> = {
   reel: Clapperboard,
   carousel: GalleryHorizontalEnd,
@@ -82,17 +79,17 @@ const wellShape = (format: string | null): string =>
 const IMAGE_OUTLINE = 'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10';
 
 /** "Mon 25" — the weekly plan's real ordering key, so a plan reads as a schedule. */
-export function formatDayLabel(iso: string): string {
+export function formatDayLabel(iso: string, locale: UiLocale = 'en'): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+  return d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
 }
 
 /** The exact schedule, kept for inspection depth rather than the scannable strip. */
-function formatExactSchedule(iso: string): string {
+function formatExactSchedule(iso: string, locale: UiLocale = 'en'): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(locale, {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
@@ -129,6 +126,8 @@ function MediaWell({
   onOpen: (index: number) => void;
   onRecover: (media: ChatMedia) => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const shape = wellShape(format);
   const cover = media[0];
 
@@ -150,7 +149,7 @@ function MediaWell({
     );
   }
 
-  const formatLabel = format ? (FORMAT_LABELS[format] ?? format) : null;
+  const formatLabel = format ? conceptFormatLabel(format, uiText) : null;
 
   return (
     <div className={cn('relative', shape)}>
@@ -162,7 +161,9 @@ function MediaWell({
         <HoverCardTrigger
           render={
             <button
-              aria-label={`Open ${formatLabel ?? 'preview'}`}
+              aria-label={uiText('openPreviewLabel', {
+                label: formatLabel ?? uiText('preview_5975cf1'),
+              })}
               className={cn(
                 'block size-full cursor-zoom-in overflow-hidden rounded-md',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -196,7 +197,7 @@ function MediaWell({
             />
           </div>
           <p className="mt-2 text-3xs text-muted-foreground">
-            {[formatLabel, media.length > 1 ? `${media.length} slides` : null]
+            {[formatLabel, media.length > 1 ? uiText('slidesCount', { count: media.length }) : null]
               .filter(Boolean)
               .join(' · ')}
           </p>
@@ -268,6 +269,9 @@ export function ConceptCard({
   onGenerateMedia,
   onRetryJob,
 }: Props) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
+  const commonText = useTranslations('common');
   const [dispatched, setDispatched] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -295,6 +299,7 @@ export function ConceptCard({
   const { media: previewMedia } = useMemo(
     () =>
       rankCardMedia({
+        translate: uiText,
         idPrefix: `concept:${concept.itemId}`,
         realized: draftMedia.realized,
         preview: previewUrls,
@@ -305,6 +310,7 @@ export function ConceptCard({
         format: concept.format,
       }),
     [
+      uiText,
       concept.itemId,
       concept.format,
       draftMedia.realized,
@@ -325,11 +331,14 @@ export function ConceptCard({
     [previewMedia, caption],
   );
 
-  const state: ConceptStatus = resolvePlanItemStatus({
-    itemStatus: status,
-    pipeline: pipeline ?? null,
-    dispatched,
-  });
+  const state: ConceptStatus = resolvePlanItemStatus(
+    {
+      itemStatus: status,
+      pipeline: pipeline ?? null,
+      dispatched,
+    },
+    (label) => translateOrganicControlLabel(label, commonText),
+  );
   const isFailed = state.kind === 'failed' || state.kind === 'media_failed';
 
   // Clear the latch when a job fails so the retry action can dispatch again; a
@@ -363,10 +372,14 @@ export function ConceptCard({
   const showAngleBeneath = Boolean(spokenLine) && Boolean(concept.angle);
 
   const metaItems = [
-    formatDayLabel(concept.scheduledAt),
-    concept.format ? (FORMAT_LABELS[concept.format] ?? concept.format) : undefined,
-    OBJECTIVE_LABELS[concept.objective],
-    brief?.funnelStage ? FUNNEL_LABELS[brief.funnelStage] : undefined,
+    formatDayLabel(concept.scheduledAt, uiLocale),
+    concept.format ? conceptFormatLabel(concept.format, uiText) : undefined,
+    uiText('conceptObjective', { objective: concept.objective }),
+    brief?.funnelStage
+      ? Object.hasOwn(FUNNEL_LABELS, brief.funnelStage)
+        ? uiText('conceptFunnel', { stage: brief.funnelStage })
+        : brief.funnelStage
+      : undefined,
   ];
 
   return (
@@ -409,7 +422,11 @@ export function ConceptCard({
               type="button"
               aria-expanded={expanded}
               aria-controls={detailId}
-              aria-label={expanded ? 'Hide creative brief' : 'Show creative brief'}
+              aria-label={
+                expanded
+                  ? uiText('hide_creative_brief_8ff9f8f')
+                  : uiText('show_creative_brief_873b3f2')
+              }
               onClick={() => setExpanded((v) => !v)}
               className="rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -451,14 +468,16 @@ export function ConceptCard({
                 most rationales whole; the disclosure covers the rest. */}
             {concept.rationale && (
               <p className={cn('text-pretty', !expanded && 'line-clamp-3')}>
-                <span className="mr-1.5 font-medium text-foreground/70">Why</span>
+                <span className="mr-1.5 font-medium text-foreground/70">
+                  {uiText('why_d3ae14a')}
+                </span>
                 {concept.rationale}
               </p>
             )}
             {concept.trendTitle && (
               <p className="mt-1 truncate text-2xs text-muted-foreground">
                 <span aria-hidden="true">↑ </span>
-                Trending: {concept.trendTitle}
+                {uiText('trendingTitle', { title: concept.trendTitle })}
               </p>
             )}
           </div>
@@ -476,15 +495,24 @@ export function ConceptCard({
             id={detailId}
             className="mt-1 max-w-[68ch] divide-y divide-border/40 rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5"
           >
-            <BriefRow label="Scheduled" value={formatExactSchedule(concept.scheduledAt)} />
-            <BriefRow label="Audience" value={brief?.targetAudience ?? concept.audienceSegment} />
-            <BriefRow label="Segment" value={brief ? concept.audienceSegment : null} />
-            <BriefRow label="Tone & voice" value={brief?.toneAndVoice} />
-            <BriefRow label="Objective" value={brief?.contentObjective} />
-            <BriefRow label="Trend use" value={brief?.trendIntegration} />
-            <BriefRow label="Your direction" value={concept.guidancePrompt} />
             <BriefRow
-              label="Production notes"
+              label={uiText('scheduled_4724f34')}
+              value={formatExactSchedule(concept.scheduledAt, uiLocale)}
+            />
+            <BriefRow
+              label={uiText('audience_545c023')}
+              value={brief?.targetAudience ?? concept.audienceSegment}
+            />
+            <BriefRow
+              label={uiText('segment_29ee089')}
+              value={brief ? concept.audienceSegment : null}
+            />
+            <BriefRow label={uiText('tone_voice_3c31340')} value={brief?.toneAndVoice} />
+            <BriefRow label={uiText('objective_3b20adc')} value={brief?.contentObjective} />
+            <BriefRow label={uiText('trend_use_82f5fc2')} value={brief?.trendIntegration} />
+            <BriefRow label={uiText('your_direction_6c885af')} value={concept.guidancePrompt} />
+            <BriefRow
+              label={uiText('production_notes_3146f2a')}
               value={brief?.productionNotes?.length ? brief.productionNotes.join(' · ') : null}
             />
           </dl>
@@ -508,7 +536,9 @@ export function ConceptCard({
         {/* ── Actions ────────────────────────────────────────────────────── */}
         <div className="mt-0.5 flex flex-wrap items-center gap-2">
           {dependsOnLabel && (
-            <p className="text-2xs text-muted-foreground">Follows {dependsOnLabel}</p>
+            <p className="text-2xs text-muted-foreground">
+              {uiText.rich('sentence_48e93d768b45', { v0: () => dependsOnLabel })}
+            </p>
           )}
 
           <DraftIdTag draftId={draftId} />
@@ -541,9 +571,9 @@ export function ConceptCard({
                     emphasis="danger"
                     disabled={locked || !onDismiss}
                     onClick={onDismiss}
-                    aria-label="Dismiss this concept"
+                    aria-label={uiText('dismiss_this_concept_82c564e')}
                   >
-                    Dismiss
+                    {uiText('dismiss_48845bf')}
                   </RowAction>
                   {isFailureKind(state.kind) ? null : (
                     <RowAction
@@ -551,9 +581,9 @@ export function ConceptCard({
                       emphasis="primary"
                       disabled={locked}
                       onClick={handleGenerateClick}
-                      aria-label="Write copy for this concept"
+                      aria-label={uiText('write_copy_for_this_concept_f095171')}
                     >
-                      Write copy
+                      {uiText('write_copy_9eeac81')}
                     </RowAction>
                   )}
                 </>
@@ -572,7 +602,9 @@ export function ConceptCard({
           onIndexChange={setLightboxIndex}
           onOpenChange={(open) => setLightboxIndex(open ? (lightboxIndex ?? 0) : null)}
           open={lightboxIndex !== null}
-          title={concept.format ? (FORMAT_LABELS[concept.format] ?? concept.format) : 'Preview'}
+          title={
+            concept.format ? conceptFormatLabel(concept.format, uiText) : uiText('preview_324b134')
+          }
         />
       )}
     </article>

@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -176,8 +177,8 @@ describe('Jaina thinking UI', () => {
     // sub-agent two surfaces while it runs: a row in the live status rail above the trace,
     // and its own card in the transcript below. The name is on both on purpose, so this
     // counts them instead of demanding a single match.
-    expect(screen.getAllByText('Budget Analyst')).toHaveLength(2);
-    expect(screen.getByText('fetch budget pacing')).toBeTruthy();
+    expect(screen.getAllByText(/Budget Analyst/)).toHaveLength(2);
+    expect(screen.getByText(/fetch budget pacing/)).toBeTruthy();
     expect(screen.queryByText(/hidden/i)).toBeNull();
   });
 });

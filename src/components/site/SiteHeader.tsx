@@ -1,10 +1,12 @@
 'use client';
 
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/button';
+import { Link } from '@/i18n/navigation';
 import ThemeToggle from '../theme-toggle';
 
 export function SiteHeader() {
+  const uiText = useTranslations('public');
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-white/55 dark:bg-black/30 border-b border-white/40 dark:border-white/10">
       <div className="mx-auto w-full max-w-4xl">
@@ -14,42 +16,42 @@ export function SiteHeader() {
               Continuum AI
             </Link>
             <span className="hidden sm:inline text-sm text-muted-foreground">
-              Build, orchestrate, and ship marketing experiences fast
+              {uiText('build_orchestrate_and_ship_marketing_experien_2daca65')}
             </span>
           </div>
 
           <div className="flex items-center gap-4">
             {/* Five static links, no popups: <nav>/<ul> carries the same semantics that
                 Radix's NavigationMenu was providing here. */}
-            <nav className="hidden md:flex" aria-label="Primary navigation">
+            <nav className="hidden md:flex" aria-label={uiText('primary_navigation_e1bfe7e')}>
               <ul className="flex items-center gap-3 text-sm">
                 <li>
-                  <Link href="#product">Product</Link>
+                  <Link href="#product">{uiText('product_fb9ef89')}</Link>
                 </li>
                 <li>
-                  <Link href="#subscribe">Pricing</Link>
+                  <Link href="#subscribe">{uiText('pricing_dfe9578')}</Link>
                 </li>
                 <li>
-                  <Link href="#solutions">Solutions</Link>
+                  <Link href="#solutions">{uiText('solutions_900fe12')}</Link>
                 </li>
                 <li>
-                  <Link href="#resources">Resources</Link>
+                  <Link href="#resources">{uiText('resources_e89b30a')}</Link>
                 </li>
                 <li>
-                  <Link href="/oauth/mock">Sign in</Link>
+                  <Link href="/oauth/mock">{uiText('sign_in_bfd402b')}</Link>
                 </li>
               </ul>
             </nav>
 
             <div className="flex items-center gap-3">
               <Link href="/onboarding" className={buttonVariants()}>
-                Start now
+                {uiText('start_now_9ff3a61')}
               </Link>
               <Link
                 href="mailto:hello@continuum.ai"
                 className={buttonVariants({ variant: 'outline' })}
               >
-                Contact sales
+                {uiText('contact_sales_604abea')}
               </Link>
             </div>
 
