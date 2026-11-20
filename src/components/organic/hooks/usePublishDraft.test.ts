@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -332,7 +333,7 @@ describe('usePublishDraft', () => {
     const toast = showMock.mock.calls.at(-1)?.[0];
     expect(toast.title).toBe('Partly published');
     expect(toast.description).toBe(
-      'Published to Instagram (@acme_a), Facebook (@acme_fb); LinkedIn (@acme_li) failed: The platform is temporarily rate-limiting requests. Wait a few minutes and try again..',
+      'Published to Instagram (@acme_a), Facebook (@acme_fb); LinkedIn (@acme_li) failed: The platform is temporarily rate-limiting requests. Wait a few minutes and try again.',
     );
     expect(result.current.error).toContain('LinkedIn (@acme_li) failed');
   });

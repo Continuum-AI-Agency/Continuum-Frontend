@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 // Explicit loading state (BUG-028/IMP-031). Announces itself as busy via
 // role="status" + aria-busy so a skeleton is never mistaken for absent data.
 // Renders shimmer Skeleton bars by default; pass children to shape the skeleton
@@ -16,11 +17,14 @@ type LoadingStateProps = {
 };
 
 export function LoadingState({
-  label = 'Loading',
+  label: uiProvidedLabel,
   lines = 3,
   children,
   className,
 }: LoadingStateProps) {
+  const defaultUiText = useTranslations('common');
+  const label = uiProvidedLabel ?? defaultUiText('loading_dc38088');
+
   return (
     <div
       role="status"

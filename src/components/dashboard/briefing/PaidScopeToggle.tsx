@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+
 import { cn } from '@/lib/utils';
 import { type PaidEntityScope, useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 
@@ -12,6 +15,7 @@ const OPTIONS: ReadonlyArray<{ value: PaidEntityScope; label: string }> = [
 // persisted in the dashboard store, freeing the other half of the row for the
 // paid insights list.
 export function PaidScopeToggle() {
+  const uiText = useTranslations('dashboard');
   const paidScope = useDashboardPrefsStore((store) => store.paidScope);
   const setPaidScope = useDashboardPrefsStore((store) => store.setPaidScope);
 
@@ -19,7 +23,7 @@ export function PaidScopeToggle() {
     <div
       className="inline-flex shrink-0 rounded-md border border-border/70 bg-background p-0.5"
       role="tablist"
-      aria-label="Paid entity scope"
+      aria-label={uiText('paid_entity_scope_4a780e9')}
     >
       {OPTIONS.map((option) => {
         const active = paidScope === option.value;
@@ -37,7 +41,7 @@ export function PaidScopeToggle() {
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {option.label}
+            {localizeDashboardCopy(option.label, uiText)}
           </button>
         );
       })}

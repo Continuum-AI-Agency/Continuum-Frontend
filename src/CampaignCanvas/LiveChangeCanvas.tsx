@@ -7,21 +7,23 @@
 
 import type { LiveChangePreviewPayload } from '@continuum/contracts';
 import { ReactFlowProvider } from '@xyflow/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { columnMapFromLiveChange } from '@/lib/campaign-canvas/columnMap';
 import { type LiveChangeDecision, liveChangeSummaryOf } from '@/lib/campaign-canvas/liveChange';
 import { cn } from '@/lib/utils';
 import { ColumnMapFlow } from './columnMap/ColumnMapFlow';
 
-const DECISION_LABEL: Record<LiveChangeDecision, string> = {
-  pending: 'Preview · approve in chat',
-  approved: 'Approved in chat',
-  denied: 'Denied · nothing changed',
-  proposal: 'Projection · nothing applied',
-};
+const DECISION_LABEL_KEY = {
+  pending: 'preview_approve_in_chat_1205a28',
+  approved: 'approved_in_chat_110b458',
+  denied: 'denied_nothing_changed_c28a4af',
+  proposal: 'projection_nothing_applied_5dbee29',
+} as const satisfies Record<LiveChangeDecision, string>;
 
 /** Where the approval stands; the companion's header shows it in both views. */
 export function LiveChangeDecisionPill({ decision }: { decision: LiveChangeDecision }) {
+  const uiText = useTranslations('scale');
   return (
     <span
       className={cn(
@@ -32,7 +34,7 @@ export function LiveChangeDecisionPill({ decision }: { decision: LiveChangeDecis
       )}
       data-testid="live-change-decision"
     >
-      {DECISION_LABEL[decision]}
+      {uiText(DECISION_LABEL_KEY[decision])}
     </span>
   );
 }
@@ -47,6 +49,7 @@ export function LiveChangeCanvas({
   /** False when a host draws the subject and the decision above it. */
   showHeader?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const model = React.useMemo(() => columnMapFromLiveChange(preview), [preview]);
   return (
     <div
@@ -56,7 +59,7 @@ export function LiveChangeCanvas({
       {showHeader ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 text-xs">
           <span className="min-w-0 break-words text-muted-foreground">
-            {preview.subject ?? 'Pending change'}
+            {preview.subject ?? uiText('pending_change_64b979c')}
           </span>
           <LiveChangeDecisionPill decision={decision} />
         </div>
@@ -72,7 +75,7 @@ export function LiveChangeCanvas({
                 <span className="font-semibold">{liveChangeSummaryOf(preview)}</span>
                 {preview.truncated ? (
                   <span className="text-muted-foreground">
-                    Large campaign: only the first items are shown
+                    {uiText('large_campaign_only_the_first_items_are_shown_1f1bda5')}
                   </span>
                 ) : null}
               </span>

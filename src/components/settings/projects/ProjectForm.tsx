@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // Create / edit a project. Same shape as PromptForm — plain inputs, one save button, the
 // error surfaced from the route rather than a generic failure — because the two sit two rows
 // apart in the same settings nav and should not feel like different apps.
@@ -47,18 +50,21 @@ function CheckboxList({
   isLoading: boolean;
   isError: boolean;
 }) {
+  const tUi = useTranslations('settings');
+
   return (
     <div className="flex flex-col gap-1.5">
       <p className="px-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
-        {selected.length > 0 ? ` · ${selected.length} selected` : ''}
+        {selected.length > 0 ? tUi('m_b8c3c2c817', { v0: selected.length }) : ''}
       </p>
       <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-background">
         {isLoading ? (
-          <p className="px-2.5 py-2 text-sm text-muted-foreground">Loading…</p>
+          <p className="px-2.5 py-2 text-sm text-muted-foreground">{tUi('m_33ce417454')}</p>
         ) : isError ? (
           <p className="px-2.5 py-2 text-sm text-destructive">
-            Could not load {label.toLowerCase()}.
+            {tUi('m_d4909a51b5')}
+            {label.toLowerCase()}.
           </p>
         ) : options.length === 0 ? (
           <p className="px-2.5 py-2 text-sm text-muted-foreground">{emptyLabel}</p>
@@ -86,6 +92,10 @@ function CheckboxList({
 }
 
 export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }: Props) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const [name, setName] = useState(initial?.name ?? '');
   const [brief, setBrief] = useState(initial?.brief ?? '');
   const [color, setColor] = useState<string>(initial?.color ?? PROJECT_COLOR_PRESETS[0]);
@@ -127,7 +137,7 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
     } catch (err) {
       // The route answers a duplicate name with a real 409 and the client surfaces its
       // message, so say the useful thing rather than a generic failure.
-      setError(err instanceof Error ? err.message : 'Could not save the project.');
+      setError(err instanceof Error ? uiErrorMessage(err) : tUi('m_9dc43e69ad'));
     }
   }
 
@@ -136,9 +146,9 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
       <input
         value={name}
         onChange={(event) => setName(event.target.value)}
-        placeholder="Project name — e.g. UGC focus"
+        placeholder={tUi('m_24dbd7f145')}
         maxLength={120}
-        aria-label="Project name"
+        aria-label={tUi('m_ab9773fcf6')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-medium"
       />
 
@@ -146,21 +156,21 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
         value={brief}
         onChange={(event) => setBrief(event.target.value)}
         rows={4}
-        placeholder="The brief: the direction, tone and guardrails your agents read when this project is selected."
-        aria-label="Project brief"
+        placeholder={tUi('m_91e6fd3ecf')}
+        aria-label={tUi('m_e82cd59b22')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm leading-relaxed"
       />
 
       <div className="flex flex-col gap-1.5">
         <p className="px-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Colour
+          {tUi('m_f28563a477')}
         </p>
         <div className="flex flex-wrap gap-2">
           {PROJECT_COLOR_PRESETS.map((preset) => (
             <button
               key={preset}
               type="button"
-              aria-label={`Use colour ${preset}`}
+              aria-label={tUi('m_654657d667', { v0: String(preset) })}
               aria-pressed={color === preset}
               onClick={() => setColor(preset)}
               style={{ backgroundColor: preset }}
@@ -178,7 +188,7 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
           and localisation, and it emits exactly the YYYY-MM-DD the column stores. */}
       <div className="flex flex-wrap items-end gap-4">
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Starts
+          {tUi('m_fc612a2fcc')}
           <input
             type="date"
             value={startsOn}
@@ -188,7 +198,7 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Ends
+          {tUi('m_91856dcb7d')}
           <input
             type="date"
             value={endsOn}
@@ -197,15 +207,11 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
             className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
           />
         </label>
-        <p className="max-w-sm text-xs text-muted-foreground">
-          Optional. After the end date the project stays selectable and its assets stay scoped, but
-          the agent stops being told the brief — a brief written for a finished campaign is not old
-          advice, it is the wrong advice.
-        </p>
+        <p className="max-w-sm text-xs text-muted-foreground">{tUi('m_5235ba586c')}</p>
       </div>
 
       <CheckboxList
-        label="Ad accounts"
+        label={tUi('m_5b66b8778f')}
         options={accounts.items.map((account) => ({
           id: account.id,
           name: account.name,
@@ -213,21 +219,17 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
         }))}
         selected={adAccountIds}
         onToggleAction={(id) => setAdAccountIds((current) => toggle(current, id))}
-        emptyLabel="No ad accounts assigned to this brand yet."
+        emptyLabel={tUi('m_054d2084a3')}
         isLoading={accounts.isLoading}
         isError={accounts.isError}
       />
 
       <CheckboxList
-        label="Campaigns"
+        label={tUi('m_01a23a288f')}
         options={campaigns.items.map((campaign) => ({ id: campaign.id, name: campaign.name }))}
         selected={campaignIds}
         onToggleAction={(id) => setCampaignIds((current) => toggle(current, id))}
-        emptyLabel={
-          selectedAccounts.length === 0
-            ? 'Select an ad account to list its campaigns.'
-            : 'No campaigns on the selected ad accounts.'
-        }
+        emptyLabel={selectedAccounts.length === 0 ? tUi('m_bfb4ce9677') : tUi('m_dec77be4e2')}
         isLoading={selectedAccounts.length > 0 && campaigns.isLoading}
         isError={campaigns.isError}
       />
@@ -236,7 +238,7 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
 
       <div className="mt-0.5 flex items-center justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onCancelAction}>
-          Cancel
+          {tUi('m_77dfd2135f')}
         </Button>
         <Button
           variant="default"
@@ -246,7 +248,7 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
           onClick={save}
         >
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {initial ? 'Save changes' : 'Create project'}
+          {initial ? tUi('m_179359b39e') : tUi('m_a8d8ff51e4')}
         </Button>
       </div>
     </div>

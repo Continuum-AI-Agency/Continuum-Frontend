@@ -1,8 +1,9 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { PaidMediaTimeRange } from '@/components/paid-media/dashboard/timeRange';
-import { loadFailureMessage } from '@/lib/api/loadFailure';
+import { type LoadFailureCause, loadFailureCause } from '@/lib/api/loadFailure';
 import type {
   AccountInsightsResponse,
   ComputedInsight,
@@ -106,11 +107,12 @@ function deriveBudgetInsights(pacing: BudgetPacingResponse): ComputedInsight[] {
 }
 
 export function useAccountInsights(params: UseAccountInsightsParams): UseAccountInsightsReturn {
+  const uiText = useTranslations('scale');
   const { brandId, adAccountId, timeRange, enabled = true } = params;
 
   const [data, setData] = React.useState<AccountInsightsResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [errorCause, setError] = React.useState<LoadFailureCause | null>(null);
   const [refreshTick, setRefreshTick] = React.useState(0);
 
   const requestIdRef = React.useRef(0);
@@ -179,7 +181,7 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(loadFailureMessage('account insights', err));
+        setError(loadFailureCause(err));
       })
       .finally(() => {
         if (requestId === requestIdRef.current) {
@@ -203,7 +205,9 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
     generatedAt: data?.generated_at ?? null,
     expiresAt: data?.expires_at ?? null,
     isLoading,
-    error,
+    error: errorCause
+      ? uiText('cause_select_timeout_couldn_t_load_account_in_da460a3', { cause: errorCause })
+      : null,
     refresh,
   };
 }

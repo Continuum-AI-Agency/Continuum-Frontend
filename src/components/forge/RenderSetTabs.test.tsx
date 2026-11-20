@@ -33,6 +33,8 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type React from 'react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import {
   cleanup,
   fireEvent,
@@ -40,9 +42,7 @@ import {
   render as testingRender,
   waitFor,
   within,
-} from '@testing-library/react';
-import type React from 'react';
-import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { RenderSetTabs, rendersBySet, rendersLine, templateJobsKey } from './RenderSetTabs';

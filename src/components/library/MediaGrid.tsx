@@ -3,14 +3,15 @@
 import type { CustomField, LibraryPreviewFrame, MediaAsset } from '@continuum/contracts';
 import { ImagePlus, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type DragEvent, useEffect, useRef } from 'react';
 import { stagger } from '@/components/ui/Motion';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { formatCustomFieldValue } from '@/lib/library/customFieldValue';
 import { cn } from '@/lib/utils';
+import { useMentionTargets } from './detail/useMentionTargets';
 import { type CardFieldValue, MediaCard } from './MediaCard';
 import { assetIdsToDrag, writeAssetDrag } from './views/assetDrag';
-import { useMentionTargets } from './detail/useMentionTargets';
 import {
   BUILT_IN_CARD_FIELDS,
   CARD_DRAWN_FIELDS,
@@ -22,6 +23,7 @@ import {
   visibleCardFields,
 } from './views/cardOptions';
 import { type FieldValuesByAsset, useAssetCommentCounts } from './views/useAssetFieldValues';
+import { useCardFieldDisplay, useLibraryFieldOptions } from './views/useLibraryFieldOptions';
 
 type Props = {
   brandId: string;
@@ -44,6 +46,8 @@ type Props = {
   fieldValues?: FieldValuesByAsset;
   /** Cards become draggable and accept other cards, stacking them as new versions. */
   onStackDrop?: (target: MediaAsset, sourceAssetIds: string[]) => void;
+  /** This grid's first card's place on the page, when shelves split one page into grids. */
+  firstIndex?: number;
 };
 
 const cardVariants: Variants = {
@@ -83,7 +87,12 @@ export function MediaGrid({
   cardFields = [],
   fieldValues,
   onStackDrop,
+  firstIndex = 0,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+  const fieldDisplay = useCardFieldDisplay();
+  const { fields: BUILT_IN_CARD_FIELDS } = useLibraryFieldOptions();
+
   const reduceMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -105,14 +114,15 @@ export function MediaGrid({
     ...builtInRows.map((key) => ({
       key,
       label: BUILT_IN_CARD_FIELDS.find((field) => field.key === key)?.label ?? key,
-      value: cardFieldValue(asset, key, { commentCount, memberName }) ?? '',
+      value: cardFieldValue(asset, key, { ...fieldDisplay, commentCount, memberName }) ?? '',
     })),
     ...cardFields.map((field) => {
       const value = fieldValues?.get(asset.id)?.get(field.id);
       return {
         key: field.id,
         label: field.name,
-        value: value === undefined ? '' : formatCustomFieldValue(field, value, memberName),
+        value:
+          value === undefined ? '' : formatCustomFieldValue(field, value, memberName, fieldDisplay),
       };
     }),
   ];
@@ -147,10 +157,10 @@ export function MediaGrid({
       <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/60 text-muted-foreground">
         <ImagePlus className="size-8 text-muted-foreground/30" />
         <div className="flex flex-col items-center gap-1 text-center">
-          <p className="text-sm">{emptyHint ?? 'No media yet.'}</p>
+          <p className="text-sm">{emptyHint ?? translateUi('no_media_yet_78144e53')}</p>
           {!emptyHint && (
             <p className="text-xs text-muted-foreground/60">
-              Upload images or videos, or drop files anywhere on the page.
+              {translateUi('upload_images_or_videos_or_drop_fil_30c6fae8')}
             </p>
           )}
         </div>
@@ -172,7 +182,7 @@ export function MediaGrid({
               key={asset.id}
               brandId={brandId}
               asset={asset}
-              index={i}
+              index={firstIndex + i}
               showBoundingBoxes={showBoundingBoxes}
               captionStyle={captionStyle}
               onOpen={onOpenDetail}
@@ -201,7 +211,7 @@ export function MediaGrid({
                 <MediaCard
                   brandId={brandId}
                   asset={asset}
-                  index={i}
+                  index={firstIndex + i}
                   showBoundingBoxes={showBoundingBoxes}
                   captionStyle={captionStyle}
                   onOpen={onOpenDetail}

@@ -5,6 +5,7 @@
 // The error itself goes to the console with the module's id.
 
 import type { AdAccountBoardSlot } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { ModuleFrame } from './ModuleFrame';
 
@@ -33,8 +34,17 @@ export class ModuleBoundary extends Component<Props, State> {
         testId={`board-module-${slot.module}`}
         title={title}
       >
-        <p className="text-muted-foreground text-xs">This view could not be drawn.</p>
+        <ModuleErrorText />
       </ModuleFrame>
     );
   }
+}
+
+function ModuleErrorText() {
+  const uiText = useTranslations('scale');
+  return (
+    <p className="text-muted-foreground text-xs">
+      {uiText('this_view_could_not_be_drawn_c1f055e')}
+    </p>
+  );
 }

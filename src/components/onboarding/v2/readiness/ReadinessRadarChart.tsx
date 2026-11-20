@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Brand readiness as a bklit radar. Every mark is computed from the scorer's
 // output: the solid polygon is the current score per dimension, the dashed ghost
 // is `reachable` (the shape if the next moves land), the hub ring is mean
@@ -19,6 +21,7 @@ import {
   axisConfidence,
   DIMENSION_DISPLAY_ORDER,
   DIMENSION_LABELS,
+  getDimensionLabels,
   meanCoverage,
 } from './utils';
 
@@ -36,12 +39,15 @@ export type RadarAxis = {
   confidence: AxisConfidence;
 };
 
-export function radarAxes(readiness: ReadinessAnalysis): RadarAxis[] {
+export function radarAxes(
+  readiness: ReadinessAnalysis,
+  labels: Record<ReadinessDimension, string> = DIMENSION_LABELS,
+): RadarAxis[] {
   return DIMENSION_DISPLAY_ORDER.map((key) => {
     const dim = readiness.dimensions[key];
     return {
       key,
-      label: DIMENSION_LABELS[key],
+      label: labels[key],
       score: dim.score,
       reachable: dim.reachable ?? null,
       confidence: axisConfidence(dim),
@@ -72,8 +78,12 @@ export function ReadinessRadarChart({
   onPreview,
   onSelect,
 }: Props) {
+  const tUi = useTranslations('onboarding');
+  const labels = getDimensionLabels(tUi);
+  const METRICS = DIMENSION_DISPLAY_ORDER.map((key) => ({ key, label: labels[key] }));
+
   const reduceMotion = useReducedMotion() ?? false;
-  const axes = readiness ? radarAxes(readiness) : null;
+  const axes = readiness ? radarAxes(readiness, labels) : null;
   const unknownKeys = new Set(axes?.filter((a) => a.confidence === 'unknown').map((a) => a.key));
   const measuredKeys = new Set(axes?.filter((a) => a.confidence === 'measured').map((a) => a.key));
   const hasReachable = axes?.some((a) => a.reachable !== null) ?? false;
@@ -82,7 +92,7 @@ export function ReadinessRadarChart({
 
   const current = axes
     ? {
-        label: 'Current',
+        label: tUi('m_4fc0e2bc80'),
         color: 'var(--primary)',
         values: Object.fromEntries(axes.map((a) => [a.key, a.score])),
       }
@@ -90,7 +100,7 @@ export function ReadinessRadarChart({
   const reachable =
     axes && hasReachable
       ? {
-          label: 'Reachable',
+          label: tUi('m_fa887b56cb'),
           color: 'var(--muted-foreground)',
           values: Object.fromEntries(axes.map((a) => [a.key, a.reachable ?? a.score])),
         }
@@ -147,7 +157,7 @@ export function ReadinessRadarChart({
           >
             {Math.round(readiness.overall_score)}
           </span>
-          <span className="sr-only">out of 100 overall readiness</span>
+          <span className="sr-only">{tUi('m_2cb51d6fa9')}</span>
         </div>
       ) : null}
 
@@ -197,6 +207,8 @@ function AxisLabel({
   onPreview: (dimension: ReadinessDimension | null) => void;
   onSelect: (dimension: ReadinessDimension) => void;
 }) {
+  const tUi = useTranslations('onboarding');
+
   const angle = angleOf(index);
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
@@ -213,7 +225,7 @@ function AxisLabel({
   };
 
   const content = !axis ? null : axis.confidence === 'unknown' ? (
-    <span className="block text-2xs text-muted-foreground">No evidence</span>
+    <span className="block text-2xs text-muted-foreground">{tUi('m_fade4edeec')}</span>
   ) : (
     <span className="block">
       <span
@@ -231,7 +243,7 @@ function AxisLabel({
         </span>
       ) : null}
       {axis.confidence === 'thin' ? (
-        <span className="block text-3xs text-muted-foreground">thin evidence</span>
+        <span className="block text-3xs text-muted-foreground">{tUi('m_be1709b04c')}</span>
       ) : null}
     </span>
   );
@@ -239,8 +251,13 @@ function AxisLabel({
   const description = !axis
     ? label
     : axis.confidence === 'unknown'
-      ? `${label}: no evidence to score`
-      : `${label}: ${Math.round(axis.score)} of 100${axis.confidence === 'thin' ? ', thin evidence' : ''}`;
+      ? tUi('readinessAxisUnknown', { label })
+      : tUi('readinessAxisScore', {
+          label,
+          score: Math.round(axis.score),
+          maximum: 100,
+          confidence: axis.confidence,
+        });
 
   return (
     <button

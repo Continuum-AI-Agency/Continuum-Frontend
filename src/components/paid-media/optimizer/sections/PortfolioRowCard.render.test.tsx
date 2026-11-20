@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The apply-mode pill wants a tooltip provider ancestor and is not what these tests are
 // about. `mock.module` replaces it for the whole process, so this file is run on its own.

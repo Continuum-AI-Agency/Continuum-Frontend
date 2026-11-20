@@ -6,6 +6,7 @@
 // `PortfolioViewModel` (lib/campaign-canvas/portfolio.ts).
 
 import { ChevronRight, PanelRightOpen } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { lecturaMoney } from '@/lib/campaign-canvas/lectura';
 import {
   type PortfolioRow,
@@ -34,6 +35,7 @@ function Money({
   after: number | null;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
   if (before === null && after === null) return null;
   const was = lecturaMoney(before, currency);
   const will = lecturaMoney(after ?? before, currency);
@@ -45,20 +47,23 @@ function Money({
           <span className="px-1 text-muted-foreground">→</span>
         </>
       ) : null}
-      <span className="font-semibold">{will}/day</span>
+      <span className="font-semibold">{uiText('amount_day_b6ffd42', { amount: will ?? '—' })}</span>
     </span>
   );
 }
 
 /** The row's budget: what delivers before → after, or what a new paused campaign would add. */
 function RowBudget({ row }: { row: PortfolioRow }) {
+  const uiText = useTranslations('scale');
   if (row.before !== null || row.after !== null) {
     return (
       <span className="flex flex-wrap items-baseline gap-x-1.5">
         <Money before={row.before} after={row.after} currency={row.currency} />
         {row.onceActivated > 0 ? (
           <span className="text-xs text-muted-foreground">
-            +{lecturaMoney(row.onceActivated, row.currency)} new
+            {uiText('amount_new_5e17ada', {
+              amount: lecturaMoney(row.onceActivated, row.currency) ?? '—',
+            })}
           </span>
         ) : null}
       </span>
@@ -67,9 +72,11 @@ function RowBudget({ row }: { row: PortfolioRow }) {
   if (row.onceActivated > 0) {
     return (
       <span className="tabular-nums">
-        <span className="text-muted-foreground">New, paused · </span>
-        <span className="font-semibold">{lecturaMoney(row.onceActivated, row.currency)}/day</span>
-        <span className="text-muted-foreground"> once activated</span>
+        {uiText.rich('muted_new_paused_muted_strong_amount_day_stro_c2e10ac', {
+          amount: lecturaMoney(row.onceActivated, row.currency) ?? '—',
+          muted: (chunks) => <span className="text-muted-foreground">{chunks}</span>,
+          strong: (chunks) => <span className="font-semibold">{chunks}</span>,
+        })}
       </span>
     );
   }
@@ -77,8 +84,11 @@ function RowBudget({ row }: { row: PortfolioRow }) {
 }
 
 function Counts({ row }: { row: PortfolioRow }) {
+  const uiText = useTranslations('scale');
   const words = portfolioCountWords(row.counts);
-  if (words.length === 0) return <span className="text-xs text-muted-foreground">No change</span>;
+  if (words.length === 0) {
+    return <span className="text-xs text-muted-foreground">{uiText('no_change_41f9d57')}</span>;
+  }
   return (
     <span className="flex flex-wrap gap-1">
       {words.map((word) => (
@@ -110,10 +120,11 @@ function RowBody({ row }: { row: PortfolioRow }) {
 }
 
 function PortfolioTotal({ portfolio }: { portfolio: PortfolioViewModel }) {
+  const uiText = useTranslations('scale');
   if (portfolio.mixedCurrency) {
     return (
       <p className="text-[13px] text-muted-foreground">
-        Campaigns in different currencies: totals per campaign below.
+        {uiText('campaigns_in_different_currencies_totals_per__2785e34')}
       </p>
     );
   }
@@ -121,11 +132,13 @@ function PortfolioTotal({ portfolio }: { portfolio: PortfolioViewModel }) {
   if (before === null && after === null && onceActivated === 0) return null;
   return (
     <p className="flex flex-wrap items-baseline gap-x-2 text-[13px]" data-testid="portfolio-total">
-      <span className="text-muted-foreground">Daily budget, all campaigns</span>
+      <span className="text-muted-foreground">{uiText('daily_budget_all_campaigns_17d815c')}</span>
       <Money before={before} after={after} currency={portfolio.currency} />
       {onceActivated > 0 ? (
         <span className="text-xs text-muted-foreground">
-          +{lecturaMoney(onceActivated, portfolio.currency)} once activated
+          {uiText('amount_once_activated_72a4b86', {
+            amount: lecturaMoney(onceActivated, portfolio.currency) ?? '—',
+          })}
         </span>
       ) : null}
     </p>
@@ -140,16 +153,17 @@ export function PortfolioBand({
   portfolio: PortfolioViewModel;
   onOpenRow: (row: PortfolioRow) => void;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-background">
       <section
         className="mx-auto grid w-full max-w-3xl gap-3 p-3 sm:p-4"
         data-testid="portfolio-band"
-        aria-label="Portfolio"
+        aria-label={uiText('portfolio_1853eb2')}
       >
         <header className="grid gap-1">
           <span className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-            Portfolio
+            {uiText('portfolio_1853eb2')}
           </span>
           <h3 className="text-base font-semibold" data-testid="portfolio-headline">
             {portfolioHeadline(portfolio)}
@@ -196,20 +210,21 @@ export function PortfolioChatCard({
   /** Absent where no canvas sits beside the chat: the card then only reads. */
   onOpen?: () => void;
 }) {
+  const uiText = useTranslations('scale');
   const shown = portfolio.rows.slice(0, PORTFOLIO_CHAT_ROWS);
   const more = portfolio.rows.length - shown.length;
   return (
     <section
       className="grid min-w-0 gap-2.5 rounded-xl border border-border bg-card p-3"
       data-testid="portfolio-chat-card"
-      aria-label="Portfolio"
+      aria-label={uiText('portfolio_1853eb2')}
     >
       <header className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2">
         <h3 className="text-sm font-semibold" data-testid="portfolio-headline">
           {portfolioHeadline(portfolio)}
         </h3>
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-          Portfolio
+          {uiText('portfolio_1853eb2')}
         </span>
       </header>
       <ul className="grid gap-1.5">
@@ -226,7 +241,7 @@ export function PortfolioChatCard({
       </ul>
       {more > 0 ? (
         <p className="text-xs text-muted-foreground">
-          +{more} more {more === 1 ? 'campaign' : 'campaigns'} in the canvas
+          {uiText('count_plural_one_more_campaign_other_more_cam_17edda2', { count: more })}
         </p>
       ) : null}
       <PortfolioTotal portfolio={portfolio} />
@@ -238,7 +253,7 @@ export function PortfolioChatCard({
           data-testid="portfolio-open-in-canvas"
         >
           <PanelRightOpen className="size-3.5" aria-hidden />
-          Open in canvas
+          {uiText('open_in_canvas_02597bb')}
         </button>
       ) : null}
     </section>

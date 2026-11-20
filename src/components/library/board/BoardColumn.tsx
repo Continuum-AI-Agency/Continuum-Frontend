@@ -6,6 +6,7 @@
 
 import type { MediaAsset } from '@continuum/contracts';
 import { useDroppable } from '@dnd-kit/core';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { BoardCard } from './BoardCard';
 import type { BoardLane } from './boardGrouping';
@@ -21,6 +22,8 @@ export function BoardColumn({
   selectedAssetIds?: ReadonlySet<string>;
   onToggleSelected?: (asset: MediaAsset) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const { setNodeRef, isOver } = useDroppable({ id: lane.id, disabled: !lane.droppable });
 
   return (
@@ -57,7 +60,9 @@ export function BoardColumn({
         ))}
         {lane.assets.length === 0 ? (
           <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border/60 p-3">
-            <p className="text-2xs text-muted-foreground">Drop assets here</p>
+            <p className="text-2xs text-muted-foreground">
+              {translateUi('drop_assets_here_c9e5e886')}
+            </p>
           </div>
         ) : null}
       </div>

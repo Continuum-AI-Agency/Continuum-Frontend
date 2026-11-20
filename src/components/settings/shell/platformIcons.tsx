@@ -98,3 +98,12 @@ export const COMING_SOON_PROVIDER_GROUPS: ReadonlySet<ProviderGroup> = new Set<P
 
 export const isProviderComingSoon = (group: string): boolean =>
   COMING_SOON_PROVIDER_GROUPS.has(group as ProviderGroup);
+
+export const providerDescriptionKeys = {
+  facebook: 'providerFacebook',
+  google: 'providerGoogle',
+  tiktok: 'providerTiktok',
+  linkedin: 'providerLinkedin',
+  x: 'providerX',
+  openai: 'providerOpenai',
+} as const;

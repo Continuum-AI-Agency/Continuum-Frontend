@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoGenNodeData } from '../types';
@@ -115,7 +120,7 @@ describe('#293 VideoGenBlock model picker', () => {
 
     // Positive control: the same click on a reachable model DOES write.
     await act(async () => {
-      fireEvent.click(modelItem('Omni 1.1 Flash'));
+      fireEvent.click(modelItem('Omni 1.2 Flash'));
     });
     expect(updateNode).toHaveBeenCalled();
   });
@@ -123,7 +128,7 @@ describe('#293 VideoGenBlock model picker', () => {
   it('leaves every reachable model selectable and unannotated', async () => {
     await openModelPicker(nodeData());
 
-    for (const label of ['Omni 1.1 Flash', 'Veo 3.1', 'Veo 3.1 Fast']) {
+    for (const label of ['Omni 1.2 Flash', 'Veo 3.1', 'Veo 3.1 Fast']) {
       const item = modelItem(label);
       expect(item.getAttribute('aria-disabled')).not.toBe('true');
       expect(item.textContent).not.toContain('Returning soon');

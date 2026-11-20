@@ -1,8 +1,12 @@
-import { jainaCardSizeSchema } from '@continuum/contracts';
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AccountCandidate } from '@continuum/contracts';
-import { accountCandidateSchema, jainaOptimizerCardSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import {
+  accountCandidateSchema,
+  jainaCardSizeSchema,
+  jainaOptimizerCardSchema,
+} from '@continuum/contracts';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { OptimizerCardBlock } from './OptimizerCardBlock';
 
 afterEach(cleanup);
@@ -114,7 +118,10 @@ describe('a citation that no longer resolves still renders', () => {
   it('keeps the other two when one of a strip has cleared', () => {
     const { getAllByTestId, container } = render(
       <OptimizerCardBlock
-        card={part({ size: 'strip', candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3'] })}
+        card={part({
+          size: 'strip',
+          candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3'],
+        })}
         currency="USD"
         readDate="20 Sep"
         resolve={(id) => (id === 'audience_overlap:2' ? null : candidate({ id }))}
@@ -136,7 +143,10 @@ describe('the three sizes', () => {
   it('renders a strip of exactly three', () => {
     const { getByTestId } = render(
       <OptimizerCardBlock
-        card={part({ size: 'strip', candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3'] })}
+        card={part({
+          size: 'strip',
+          candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3'],
+        })}
         currency="USD"
         readDate="20 Sep"
         resolve={(id) => candidate({ id })}

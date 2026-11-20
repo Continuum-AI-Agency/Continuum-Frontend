@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { type CustomField, HDR_DYNAMIC_RANGES } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { StructuredLibraryFilters } from '@/lib/media/filters';
 import { LibraryFilterBar } from './LibraryFilterBar';
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronsDown, ChevronUp } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +29,8 @@ export type ChatMinimapProps = {
 };
 
 export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
+  const tUi = useTranslations('common');
+
   const { scrollToMessage, scrollToStart } = useMessageScroller();
   const { visibleMessageIds } = useMessageScrollerVisibility();
   const scrollable = useMessageScrollerScrollable();
@@ -57,7 +60,7 @@ export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
         type="button"
         variant="ghost"
         size="icon-xs"
-        aria-label="Scroll to start of conversation"
+        aria-label={tUi('m_8a4c0c8497')}
         disabled={!scrollable.start}
         onClick={() => scrollToStart()}
         className="pointer-events-auto text-muted-foreground disabled:opacity-0"
@@ -66,7 +69,7 @@ export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
       </Button>
 
       <nav
-        aria-label="Conversation checkpoints"
+        aria-label={tUi('m_eded926ca7')}
         className="pointer-events-auto flex min-h-0 flex-col items-end overflow-y-auto scrollbar-none"
       >
         {anchors.map((anchor) => {
@@ -78,7 +81,7 @@ export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
               key={anchor.id}
               ref={isCurrent ? activeTickRef : undefined}
               type="button"
-              aria-label={anchorLabel(anchor)}
+              aria-label={anchorLabel(anchor, tUi)}
               aria-current={isCurrent ? 'true' : undefined}
               onClick={() => scrollToMessage(anchor.id)}
               className="group flex h-2.5 w-6 shrink-0 items-center justify-end"
@@ -104,7 +107,7 @@ export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
           type="button"
           variant="ghost"
           size="icon-xs"
-          aria-label="Jump to next response"
+          aria-label={tUi('m_098bba13c3')}
           onClick={() => scrollToMessage(nextResponseId)}
           className="pointer-events-auto text-muted-foreground"
         >

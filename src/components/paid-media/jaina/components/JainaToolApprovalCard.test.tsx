@@ -1,3 +1,5 @@
+import { render } from '@/i18n/__tests__/render';
+
 /**
  * The card is the last thing between a human and a Meta write, so what it must prove is
  * narrow: it shows the EXACT arguments that will run, and the button it offers reports
@@ -6,9 +8,13 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { jainaToolApprovalRequiredPayloadSchema } from '@continuum/contracts';
+import {
+  jainaToolApprovalRequiredPayloadSchema,
+  mediaCostLine,
+  mediaCostPlan,
+} from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { JainaToolApprovalCard } from './JainaToolApprovalCard';
 
@@ -38,6 +44,41 @@ afterEach(() => {
 });
 
 describe('JainaToolApprovalCard', () => {
+  it('a media tool card shows its priced plan, read through the wire schema', () => {
+    const costPlan = mediaCostPlan(
+      [mediaCostLine('video', 'Omni clip · cta (5 s)', 'gemini-omni-flash', 5)],
+      9,
+    );
+    const wire = jainaToolApprovalRequiredPayloadSchema.parse(
+      approval({ toolName: 'headless_reel_create', input: {}, costPlan }),
+    );
+    const { container } = render(
+      <JainaToolApprovalCard
+        approval={wire}
+        optimisticDecision={null}
+        isStreaming={false}
+        onDecide={() => {}}
+      />,
+      { wrapper },
+    );
+    const plan = container.querySelector('[data-slot="media-cost-plan"]');
+    expect(plan?.textContent).toContain('Omni clip · cta (5 s)');
+    expect(plan?.querySelector('[data-field="billed-cap-usd"]')?.textContent).toBe('$10.35');
+  });
+
+  it('a card with no plan renders none', () => {
+    const { container } = render(
+      <JainaToolApprovalCard
+        approval={approval()}
+        optimisticDecision={null}
+        isStreaming={false}
+        onDecide={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(container.querySelector('[data-slot="media-cost-plan"]')).toBeNull();
+  });
+
   it('renders the tool label and every proposed argument', () => {
     render(
       <JainaToolApprovalCard

@@ -6,10 +6,13 @@ import {
   HEADLESS_CONCEPTS,
   HEADLESS_EFFECTS,
 } from '@continuum/contracts';
+
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useBrandStyles } from '@/hooks/useStylesShelf';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { cn } from '@/lib/utils';
 
 // Made from the effects bench's frames of the bench tenant's approved actress, and from the
@@ -111,6 +114,9 @@ function brandStyleThumbnail(style: BrandStyle): string | null {
 }
 
 function BrandStyles({ brandId }: { brandId: string }) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
   const { styles, isLoading, error, decide, pendingStyleId } = useBrandStyles(brandId);
   const [message, setMessage] = useState('');
 
@@ -120,7 +126,11 @@ function BrandStyles({ brandId }: { brandId: string }) {
       setMessage(`${style.spec.label} ${decision === 'approve' ? 'approved' : 'retired'}.`);
     } catch (cause) {
       setMessage(
-        `Couldn't ${decision} ${style.spec.label}: ${cause instanceof Error ? cause.message : 'unknown error'}.`,
+        uiText('m_c170f6075f', {
+          v0: String(decision),
+          v1: String(style.spec.label),
+          v2: String(getUiErrorMessage(cause)),
+        }),
       );
     }
   };
@@ -128,28 +138,23 @@ function BrandStyles({ brandId }: { brandId: string }) {
   return (
     <section className="flex flex-col gap-3">
       <header>
-        <h2 className="text-sm font-semibold">Your styles</h2>
-        <p className="text-xs text-muted-foreground">
-          Effects and concept variants your agents composed. A draft is used only once you approve
-          it.
-        </p>
+        <h2 className="text-sm font-semibold">{uiText('m_8d64936ff8')}</h2>
+        <p className="text-xs text-muted-foreground">{uiText('m_f56137889a')}</p>
       </header>
       <p role="status" className="text-xs text-muted-foreground empty:hidden">
         {message}
       </p>
       {isLoading ? (
-        <p className="text-xs text-muted-foreground">Loading your styles…</p>
+        <p className="text-xs text-muted-foreground">{uiText('m_415e0a80da')}</p>
       ) : error ? (
         <p role="alert" className="text-xs text-destructive">
-          Couldn't load your styles right now.
+          {uiText('m_a0937e83db')}
         </p>
       ) : styles.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          No drafts yet. Ask the Organic agent or Jaina to compose one.
-        </p>
+        <p className="text-xs text-muted-foreground">{uiText('m_8a6ae816d4')}</p>
       ) : (
         <ul
-          aria-label="Your styles"
+          aria-label={uiText('m_8d64936ff8')}
           className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3"
         >
           {styles.map((style) => {
@@ -166,9 +171,13 @@ function BrandStyles({ brandId }: { brandId: string }) {
                 }
                 thumbnail={brandStyleThumbnail(style)}
                 chips={[
-                  { label: style.kind === 'effect' ? 'Effect' : 'Concept variant' },
                   {
-                    label: style.status === 'draft' ? 'Draft' : 'Approved',
+                    label:
+                      style.kind === 'effect' ? uiText('m_720b5dbc53') : uiText('m_5e7653e5d3'),
+                  },
+                  {
+                    label:
+                      style.status === 'draft' ? uiText('m_23d33e22ac') : uiText('m_41b81eb8db'),
                     variant: style.status === 'draft' ? 'warning' : 'success',
                   },
                 ]}
@@ -179,20 +188,20 @@ function BrandStyles({ brandId }: { brandId: string }) {
                         size="xs"
                         variant="success"
                         disabled={busy}
-                        aria-label={`Approve ${style.spec.label}`}
+                        aria-label={uiText('m_60f4f36aa4', { v0: String(style.spec.label) })}
                         onClick={() => act(style, 'approve')}
                       >
-                        Approve
+                        {uiText('approve_6007acb')}
                       </Button>
                     )}
                     <Button
                       size="xs"
                       variant="ghost"
                       disabled={busy}
-                      aria-label={`Retire ${style.spec.label}`}
+                      aria-label={uiText('m_518b3be2f7', { v0: String(style.spec.label) })}
                       onClick={() => act(style, 'retire')}
                     >
-                      Retire
+                      {uiText('retire_da8597f')}
                     </Button>
                   </div>
                 }
@@ -207,13 +216,11 @@ function BrandStyles({ brandId }: { brandId: string }) {
 
 /** The Styles shelf: the 30 catalog effects, the 10 concepts, and the brand's own drafts. */
 export function StylesShelf({ brandId, className }: { brandId: string; className?: string }) {
+  const uiText = useTranslations('common');
   return (
     <div className={cn('flex h-full min-h-0 flex-col gap-6 overflow-y-auto pb-6', className)}>
       <BrandStyles brandId={brandId} />
-      <ShelfSection
-        title="Effects"
-        hint="A look laid over the footage only. Your type and captions are never touched."
-      >
+      <ShelfSection title={uiText('effects_358511c')} hint={uiText('stylesEffectsHint')}>
         {HEADLESS_EFFECTS.map((effect) => (
           <StyleCard
             key={effect.id}
@@ -228,10 +235,7 @@ export function StylesShelf({ brandId, className }: { brandId: string; className
           />
         ))}
       </ShelfSection>
-      <ShelfSection
-        title="Concepts"
-        hint="The story a reel tells, beat by beat. Pick one and the product writes the rest."
-      >
+      <ShelfSection title={uiText('m_6f58d263f3')} hint={uiText('stylesConceptsHint')}>
         {HEADLESS_CONCEPTS.map((concept) => (
           <StyleCard
             key={concept.id}
@@ -240,7 +244,10 @@ export function StylesShelf({ brandId, className }: { brandId: string; className
             detail={`${concept.summary} ${conceptLengthRule(concept)}.`}
             thumbnail={conceptThumbnail(concept.id)}
             chips={[
-              { label: concept.casting.people === 2 ? 'Two people' : 'One person' },
+              {
+                label:
+                  concept.casting.people === 2 ? uiText('m_f27913e061') : uiText('m_4aaa232360'),
+              },
               { label: concept.status, variant: STATUS_VARIANT[concept.status] },
             ]}
           />

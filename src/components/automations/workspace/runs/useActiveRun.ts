@@ -9,8 +9,9 @@
 // The location seam is injected so the hook is testable without a process-wide
 // mock of `next/navigation`.
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useState } from 'react';
+import { useRouter } from '@/i18n/navigation';
 
 export const AUTOMATION_RUN_SEARCH_PARAM = 'run';
 

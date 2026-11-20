@@ -8,8 +8,10 @@ import {
   calendarPlanDecisionResponseSchema,
   calendarPlanProposeResponseSchema,
 } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { http } from '@/lib/api/http';
 
 export type CalendarPlanState =
@@ -23,6 +25,8 @@ export type CalendarPlanState =
  * only an approve mints the run BulkRunPanel then follows.
  */
 export function useCalendarPlan() {
+  const uiText = useTranslations('organic');
+  const formatUiError = useUiErrorMessage();
   const [state, setState] = useState<CalendarPlanState>({ phase: 'idle' });
   const { show } = useToast();
 
@@ -31,11 +35,11 @@ export function useCalendarPlan() {
       setState({ phase: 'idle' });
       show({
         title,
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: formatUiError(error),
         variant: 'error',
       });
     },
-    [show],
+    [show, formatUiError],
   );
 
   const propose = useCallback(
@@ -50,10 +54,10 @@ export function useCalendarPlan() {
         });
         setState({ phase: 'proposed', plan });
       } catch (error) {
-        fail('Could not propose a plan', error);
+        fail(uiText('could_not_propose_a_plan_12dbe53'), error);
       }
     },
-    [fail],
+    [fail, uiText],
   );
 
   const decide = useCallback(

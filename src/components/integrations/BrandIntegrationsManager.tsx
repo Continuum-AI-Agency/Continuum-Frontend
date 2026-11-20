@@ -1,8 +1,9 @@
 'use client';
 
 import { ChevronDown, RefreshCw, TriangleAlert } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import React, { type ComponentProps, type ReactNode, useMemo, useState } from 'react';
-import { applyBrandIntegrationAssignmentsAction } from '@/app/(post-auth)/settings/integrations/actions';
+import { applyBrandIntegrationAssignmentsAction } from '@/app/[locale]/(post-auth)/settings/integrations/actions';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PLATFORMS, type PlatformKey } from '@/components/onboarding/platforms';
 import { isProviderComingSoon } from '@/components/settings/shell/platformIcons';
@@ -100,6 +101,7 @@ export function BrandIntegrationsManager({
   showHeader = true,
   emptyHint,
 }: BrandIntegrationsManagerProps) {
+  const uiText = useTranslations('common');
   const { show } = useToast();
 
   const fetched = useBrandIntegrations(summary ? undefined : brandProfileId, summary);
@@ -177,8 +179,8 @@ export function BrandIntegrationsManager({
                   Array.from(new Set([...assignedIds, ...tiktokIds])),
                 );
                 show({
-                  title: 'TikTok connected',
-                  description: 'Account assigned to this brand.',
+                  title: uiText('m_d2ffbdc972'),
+                  description: uiText('m_8ad4e5e0b6'),
                   variant: 'success',
                 });
               }
@@ -197,8 +199,8 @@ export function BrandIntegrationsManager({
                   Array.from(new Set([...assignedIds, ...xIds])),
                 );
                 show({
-                  title: 'X connected',
-                  description: 'Account assigned to this brand.',
+                  title: uiText('m_26a785cba3'),
+                  description: uiText('m_8ad4e5e0b6'),
                   variant: 'success',
                 });
               }
@@ -219,8 +221,8 @@ export function BrandIntegrationsManager({
                   Array.from(new Set([...assignedIds, ...linkedinIds])),
                 );
                 show({
-                  title: 'LinkedIn connected',
-                  description: 'Accounts assigned to this brand.',
+                  title: uiText('m_0d72bbbf8f'),
+                  description: uiText('m_cf88d201b9'),
                   variant: 'success',
                 });
               }
@@ -234,8 +236,8 @@ export function BrandIntegrationsManager({
     } catch (error) {
       console.error(error);
       show({
-        title: 'Connection failed',
-        description: 'Could not start OAuth flow.',
+        title: uiText('connection_failed_596c52f'),
+        description: uiText('m_5cedbaecf0'),
         variant: 'error',
       });
     } finally {
@@ -311,15 +313,15 @@ export function BrandIntegrationsManager({
       {showHeader && (
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-foreground">Integrations</h2>
-            <p className="text-sm text-muted-foreground">
-              Manage accounts linked to this brand profile.
-            </p>
+            <h2 className="text-2xl font-semibold text-foreground">
+              {uiText('integrations_090512d')}
+            </h2>
+            <p className="text-sm text-muted-foreground">{uiText('m_e30b8b2a0b')}</p>
           </div>
           <div className="flex gap-2">
             {brandProfileId && (
               <Button variant="ghost" onClick={() => setEditOpen(true)} disabled={isLoading}>
-                Edit assignments
+                {uiText('m_2c20bab63c')}
               </Button>
             )}
             {refresh && (
@@ -334,7 +336,7 @@ export function BrandIntegrationsManager({
       {!showHeader && brandProfileId && (
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={() => setEditOpen(true)} disabled={isLoading}>
-            Edit assignments
+            {uiText('m_2c20bab63c')}
           </Button>
           {refresh && (
             <Button variant="ghost" size="icon" onClick={() => refresh()} disabled={isLoading}>
@@ -360,10 +362,14 @@ export function BrandIntegrationsManager({
           <ShadcnTableHeader>
             <ShadcnTableRow className="bg-white/5 hover:bg-white/5 border-white/10">
               <ShadcnTableHead className="w-[40px]"></ShadcnTableHead>
-              <ShadcnTableHead className="font-bold text-foreground">Provider</ShadcnTableHead>
-              <ShadcnTableHead className="font-bold text-foreground">Status</ShadcnTableHead>
+              <ShadcnTableHead className="font-bold text-foreground">
+                {uiText('provider_472590a')}
+              </ShadcnTableHead>
+              <ShadcnTableHead className="font-bold text-foreground">
+                {uiText('status_920e413')}
+              </ShadcnTableHead>
               <ShadcnTableHead className="text-right font-bold text-foreground">
-                Assigned Assets
+                {uiText('m_ec82f6e7a9')}
               </ShadcnTableHead>
               <ShadcnTableHead className="w-[140px]"></ShadcnTableHead>
             </ShadcnTableRow>
@@ -406,16 +412,23 @@ export function BrandIntegrationsManager({
                         variant={STATUS_PILL_VARIANT[statusColor]}
                         className="text-2xs font-bold"
                       >
-                        {comingSoon ? 'COMING SOON' : group.connected ? 'ACTIVE' : 'NONE'}
+                        {comingSoon
+                          ? uiText('m_4e5f0991ea')
+                          : group.connected
+                            ? uiText('m_c72633f673')
+                            : uiText('m_0654a028e5')}
                       </Pill>
                     </ShadcnTableCell>
                     <ShadcnTableCell className="py-4 text-right">
                       {group.count > 0 ? (
                         <Pill variant="violet" className="font-bold tabular-nums">
-                          {group.count} accounts
+                          {group.count}
+                          {uiText('m_586290d5fc')}
                         </Pill>
                       ) : (
-                        <span className="text-xs text-muted-foreground">None</span>
+                        <span className="text-xs text-muted-foreground">
+                          {uiText('none_dc937b5')}
+                        </span>
                       )}
                     </ShadcnTableCell>
                     <ShadcnTableCell
@@ -430,12 +443,12 @@ export function BrandIntegrationsManager({
                         className="h-6 text-2xs font-bold uppercase tracking-wider px-2"
                       >
                         {comingSoon
-                          ? 'Coming soon'
+                          ? uiText('coming_soon_4f7d640')
                           : isSyncing
-                            ? 'Syncing...'
+                            ? uiText('m_e5c7727a10')
                             : group.connected
-                              ? 'Re-sync'
-                              : 'Sync'}
+                              ? uiText('m_8c345bf513')
+                              : uiText('m_905f63092f')}
                       </Button>
                       {/* Business Login for Instagram: an Instagram professional account
                           with no Facebook Page behind it. Sync above is the Facebook login. */}
@@ -443,12 +456,12 @@ export function BrandIntegrationsManager({
                         <Button
                           size="sm"
                           variant="outline"
-                          title="Connect an Instagram account that has no Facebook Page"
+                          title={uiText('connect_an_instagram_account_that_has_no_face_240b55a')}
                           onClick={() => handleConnect(group.key, 'instagram')}
                           disabled={isSyncing || isLoading}
                           className="ml-1 h-6 text-2xs font-bold uppercase tracking-wider px-2"
                         >
-                          Instagram only
+                          {uiText('instagram_only_b525f98')}
                         </Button>
                       ) : null}
                     </ShadcnTableCell>
@@ -487,7 +500,7 @@ export function BrandIntegrationsManager({
                                           className="block font-mono text-muted-foreground opacity-60"
                                           style={{ fontSize: '10px' }}
                                         >
-                                          ID:{' '}
+                                          {uiText('m_d789a1e992')}{' '}
                                           {account.externalAccountId ||
                                             account.integrationAccountId}
                                         </span>
@@ -498,7 +511,7 @@ export function BrandIntegrationsManager({
                                     variant={STATUS_PILL_VARIANT[sColor]}
                                     className="text-3xs uppercase tracking-wider opacity-80"
                                   >
-                                    {account.status || 'Active'}
+                                    {account.status || uiText('active_9234069')}
                                   </Pill>
                                 </div>
                               );
@@ -518,8 +531,7 @@ export function BrandIntegrationsManager({
       <Alert className="border-warning/30 bg-warning/5">
         <TriangleAlert className="text-warning" aria-hidden="true" />
         <AlertDescription className="text-xs">
-          {emptyHint ??
-            'Connect providers in your personal settings, then use “Edit assignments” to share them here.'}
+          {emptyHint ?? uiText('m_d796d85674')}
         </AlertDescription>
       </Alert>
     </div>

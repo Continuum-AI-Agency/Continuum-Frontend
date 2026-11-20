@@ -6,17 +6,19 @@
 
 import type { AccountCandidate } from '@continuum/contracts';
 import { AlertTriangleIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import * as typeScale from '../../typeScale';
 import { googleDeliveryStatusOf } from './googleDeliveryStatusModel';
 
 export function GoogleDeliveryStatus({ cards }: { cards: readonly AccountCandidate[] }) {
+  const uiText = useTranslations('scale');
   const status = googleDeliveryStatusOf(cards);
   if (!status) return null;
   return (
     <section
-      aria-label="Google delivery status"
+      aria-label={uiText('google_delivery_status_2d8453c')}
       className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3"
       data-testid="google-delivery-status"
       data-tone={status.tone}
@@ -33,7 +35,7 @@ export function GoogleDeliveryStatus({ cards }: { cards: readonly AccountCandida
         rel="noreferrer"
         target="_blank"
       >
-        Open in Google Ads
+        {uiText('open_in_google_ads_0131249')}
       </a>
     </section>
   );

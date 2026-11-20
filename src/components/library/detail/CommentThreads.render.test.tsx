@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaComment } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { buildCommentThreads } from '@/lib/library/comments';
 import { CommentThreads } from './CommentThreads';
 import { partitionThreadsByVersion } from './commentVersions';

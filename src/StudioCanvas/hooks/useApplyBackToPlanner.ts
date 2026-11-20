@@ -1,7 +1,9 @@
-import { useRouter } from 'next/navigation';
+import { plannerDraftHasCopy } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
 import { useToast } from '@/components/ui/ToastProvider';
+import { LocalizedUiError, useUiErrorSentence } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { request } from '@/lib/api/http';
 import {
   buildPendingApplyStorageKey,
@@ -11,6 +13,11 @@ import {
   resolveWorkflowConceptSpec,
   type WorkflowConceptSpec,
 } from '@/lib/organic/ai-studio-bridge';
+import {
+  CAPTION_NOT_SAVED_MESSAGE,
+  draftHasSavedCaption,
+  WRONG_DRAFT_SAVED_MESSAGE,
+} from '../nodes/publish/publishingApi';
 import { useStudioStore } from '../stores/useStudioStore';
 import {
   type ApplyAssetCandidate,
@@ -62,6 +69,10 @@ export function useApplyBackToPlanner({
   organicPlannerSeed?: PlannerAiStudioHandoff | null;
   focusNodeId?: string;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const uiErrorText = useUiErrorSentence();
+
   const router = useRouter();
   const { show } = useToast();
   const nodes = useStudioStore((state) => state.nodes);
@@ -117,7 +128,7 @@ export function useApplyBackToPlanner({
         ready,
         completed: ready ? 1 : 0,
         total: 1,
-        label: ready ? 'Caption ready' : 'Edit caption',
+        label: ready ? translateUi('caption_ready_c6b137e8') : translateUi('edit_caption_fcbd55e5'),
         detail: ready
           ? 'Ready to save this caption to Planner.'
           : 'Edit the caption in the text node to apply it.',
@@ -134,7 +145,10 @@ export function useApplyBackToPlanner({
         ready: completed >= total,
         completed,
         total,
-        label: `${completed}/${total} video ready`,
+        label: translateUi('value0_value1_video_ready_faef4869', {
+          value0: String(completed),
+          value1: String(total),
+        }),
         detail:
           completed >= total
             ? 'Ready to apply this reel back to Planner.'
@@ -149,7 +163,10 @@ export function useApplyBackToPlanner({
         ready: completed >= total,
         completed,
         total,
-        label: `${completed}/${total} slides ready`,
+        label: translateUi('value0_value1_slides_ready_796e9b30', {
+          value0: String(completed),
+          value1: String(total),
+        }),
         detail:
           completed >= total
             ? 'Ordered carousel outputs are ready to apply.'
@@ -165,14 +182,24 @@ export function useApplyBackToPlanner({
       ready: completed >= total && !missingSelection,
       completed,
       total,
-      label: `${completed}/${total} image ready`,
+      label: translateUi('value0_value1_image_ready_f5df23ad', {
+        value0: String(completed),
+        value1: String(total),
+      }),
       detail: missingSelection
         ? 'Select one image output before applying.'
         : completed >= total
           ? 'Ready to apply this draft back to Planner.'
           : 'Generate one image output to enable apply-back.',
     };
-  }, [applyCandidates, nodes, organicPlannerSeed, selectedLinkedinNodeId, workflowSpec]);
+  }, [
+    applyCandidates,
+    nodes,
+    organicPlannerSeed,
+    selectedLinkedinNodeId,
+    workflowSpec,
+    translateUi,
+  ]);
   const workflowSummaryLabel = useMemo(() => {
     if (!workflowSpec) return null;
     if (workflowSpec.outputKind === 'text') return 'TikTok caption';
@@ -215,8 +242,8 @@ export function useApplyBackToPlanner({
       organicPlannerSeed.brandProfileId !== brandProfileId
     ) {
       show({
-        title: 'Apply unavailable',
-        description: 'Missing Planner context for this canvas session.',
+        title: translateUi('apply_unavailable_728d7c1b'),
+        description: translateUi('missing_planner_context_for_this_ca_d21fd027'),
         variant: 'warning',
       });
       return;
@@ -243,12 +270,20 @@ export function useApplyBackToPlanner({
         ) {
           throw new Error('Edit this draft caption before applying it to Planner.');
         }
-        await request({
+        const saved = await request<{ id?: unknown; content_json?: unknown } | undefined>({
           path: `/api/organic/calendar/drafts/${encodeURIComponent(draftId)}/fields`,
           method: 'PATCH',
           body: { caption, expected_updated_at: expectedUpdatedAt },
         });
-        show({ title: 'Caption saved to Planner', variant: 'success' });
+        // "Saved" is said only once the caption is on THIS row: the field route answers with
+        // the row it wrote, and when that answer is missing it, the row is read back.
+        if (saved?.id !== undefined && saved.id !== draftId) {
+          throw new Error(WRONG_DRAFT_SAVED_MESSAGE);
+        }
+        const landed =
+          plannerDraftHasCopy(saved?.content_json) || (await draftHasSavedCaption(draftId));
+        if (!landed) throw new Error(CAPTION_NOT_SAVED_MESSAGE);
+        show({ title: translateUi('caption_saved_to_planner_2fa3400a'), variant: 'success' });
         const params = new URLSearchParams({
           tab: 'planner',
           draftId: organicPlannerSeed.draftId,
@@ -346,16 +381,14 @@ export function useApplyBackToPlanner({
 
       const responseJson = await response.json().catch(() => null);
       if (!response.ok) {
-        const message =
-          responseJson && typeof responseJson.error === 'string'
-            ? responseJson.error
-            : 'Failed to apply output to Planner.';
-        throw new Error(message);
+        throw responseJson && typeof responseJson.error === 'string'
+          ? new Error(responseJson.error)
+          : new LocalizedUiError(translateUi('failed_to_apply_output_to_planner_eed52d95'));
       }
 
       const parsed = plannerAiStudioApplyResponseSchema.safeParse(responseJson);
       if (!parsed.success) {
-        throw new Error('Apply response payload is invalid.');
+        throw new LocalizedUiError(translateUi('apply_response_payload_is_invalid_0f89180'));
       }
 
       // The planner mirrors it by its own id, the one the return link carries.
@@ -365,8 +398,8 @@ export function useApplyBackToPlanner({
       );
 
       show({
-        title: 'Applied to Planner',
-        description: 'Returning to Organic Planner.',
+        title: translateUi('applied_to_planner_1e656aee'),
+        description: translateUi('returning_to_organic_planner_c9092bc8'),
         variant: 'success',
       });
 
@@ -379,8 +412,8 @@ export function useApplyBackToPlanner({
       router.push(`/organic?${params.toString()}`);
     } catch (error) {
       show({
-        title: 'Apply failed',
-        description: error instanceof Error ? error.message : 'Unable to apply output to Planner.',
+        title: translateUi('apply_failed_cae4cf5c'),
+        description: uiErrorText(error, translateUi('unable_to_apply_output_to_planner_c6f8a69')),
         variant: 'error',
       });
     } finally {
@@ -397,6 +430,9 @@ export function useApplyBackToPlanner({
     selectedLinkedinNodeId,
     show,
     workflowSpec,
+
+    uiErrorText,
+    translateUi,
   ]);
 
   return {

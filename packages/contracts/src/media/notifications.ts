@@ -14,6 +14,9 @@ export const notificationKindSchema = z.enum([
   'asset_assigned',
   'review_reminder',
   'review_escalation',
+  // A webinar pre-payment (a Payment Link paid before the account existed) was applied to the
+  // brand its payer just created. Not asset-scoped: the payload carries brandName, payerEmail.
+  'prepayment_claimed',
 ]);
 export type NotificationKind = z.infer<typeof notificationKindSchema>;
 

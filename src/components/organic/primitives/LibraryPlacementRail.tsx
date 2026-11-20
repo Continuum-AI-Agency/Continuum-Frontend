@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Docked horizontal scroll-snap source for placing library creatives.
 // Reuses useStudioLibraryBrowser + LibraryFilterBar(variant="compact") + AssetTile visual language.
 // Click a tile → place into active slot. Each tile is also dnd-kit draggable.
@@ -11,8 +13,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { ChevronDownIcon, ChevronUpIcon, ImageOff, Play } from 'lucide-react';
 import * as React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
+import { AssetStill } from '@/components/media/AssetStill';
 import { Skeleton } from '@/components/ui/skeleton';
-import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
 import { cn } from '@/lib/utils';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
@@ -39,12 +41,13 @@ function DraggableAssetTile({
   asset: MediaAsset;
   onPlace: (asset: MediaAsset) => void;
 }) {
+  const uiText = useTranslations('organic');
+
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `asset-tile-${asset.id}`,
     data: { assetId: asset.id, asset },
   });
 
-  const url = sanitizeCreativeAssetUrl(asset.signedUrl);
   const isVideo = asset.kind === 'video';
 
   const style: React.CSSProperties = {
@@ -66,7 +69,7 @@ function DraggableAssetTile({
     <button
       ref={setNodeRef}
       type="button"
-      aria-label={`Place ${asset.title ?? asset.fileName}`}
+      aria-label={uiText('placeMediaLabel', { asset: asset.title ?? asset.fileName })}
       onClick={() => onPlace(asset)}
       onDragStart={handleDragStart}
       draggable
@@ -80,27 +83,16 @@ function DraggableAssetTile({
         'min-h-[44px] min-w-[44px]',
       )}
     >
-      {url && !isVideo ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={url}
-          alt={asset.title ?? asset.fileName}
-          loading="lazy"
-          className="h-full w-full object-cover"
-        />
-      ) : url && isVideo ? (
-        <video
-          src={`${url}#t=0.01`}
-          preload="metadata"
-          muted
-          playsInline
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
-          <ImageOff className="size-4" />
-        </div>
-      )}
+      <AssetStill
+        asset={asset}
+        alt={asset.title ?? asset.fileName}
+        className="h-full w-full object-cover"
+        fallback={
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
+            <ImageOff className="size-4" />
+          </div>
+        }
+      />
 
       {isVideo && (
         <div className="pointer-events-none absolute left-1 top-1 rounded-full bg-black/60 p-0.5">
@@ -131,6 +123,7 @@ export function LibraryPlacementRail({
   onAttach,
   className,
 }: LibraryPlacementRailProps) {
+  const uiText = useTranslations('organic');
   const [collapsed, setCollapsed] = React.useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -181,7 +174,7 @@ export function LibraryPlacementRail({
         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset rounded-xl"
       >
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Your library
+          {uiText('your_library_1ad8428')}
         </span>
         {collapsed ? (
           <ChevronDownIcon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -218,7 +211,7 @@ export function LibraryPlacementRail({
                 <RailSkeleton />
               ) : assets.length === 0 ? (
                 <p className="py-3 text-xs text-muted-foreground/60">
-                  {query.trim() ? 'No matches.' : 'Library is empty.'}
+                  {query.trim() ? uiText('no_matches_d6572bd') : uiText('library_is_empty_1b99cb4')}
                 </p>
               ) : (
                 <>
@@ -255,7 +248,7 @@ export function LibraryPlacementRail({
               onClick={() => setBrowseAllOpen((v) => !v)}
               className="text-xs font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
             >
-              {browseAllOpen ? 'Collapse' : 'Browse all'}
+              {browseAllOpen ? uiText('collapse_be6eb1f') : uiText('browse_all_723735c')}
             </button>
           </div>
         </div>

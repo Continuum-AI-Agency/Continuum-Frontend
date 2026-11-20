@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { useCallback, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -11,6 +12,8 @@ type DraftState = {
 };
 
 export function useBrandDraftStream(brandId: string) {
+  const tUi = useTranslations('onboarding');
+
   const [drafts, setDrafts] = useState<DraftState>({
     voice: '',
     audience: '',
@@ -58,7 +61,7 @@ export function useBrandDraftStream(brandId: string) {
           );
 
           if (!response.ok || !response.body) {
-            throw new Error('Failed to start voice draft');
+            throw new Error(tUi('m_4f373dc7d0'));
           }
 
           const reader = response.body.getReader();
@@ -103,7 +106,7 @@ export function useBrandDraftStream(brandId: string) {
           );
 
           if (!response.ok || !response.body) {
-            throw new Error('Failed to start audience draft');
+            throw new Error(tUi('m_f97b7b9adf'));
           }
 
           const reader = response.body.getReader();

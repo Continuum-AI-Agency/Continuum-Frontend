@@ -1,3 +1,4 @@
+import { useLocale, useTranslations } from 'next-intl';
 // One leg of a cross-platform move, as both the queue row and the Activity decision print it:
 // platform chip, the entity (its name, its id small beside it), before → after to the minor
 // unit, and the side's percentage. Shared so the two surfaces cannot disagree about a leg.
@@ -32,7 +33,10 @@ export function MoveLegLine({
   children?: React.ReactNode;
   testId: string;
 }) {
-  const money = (minor: number | null) => (minor == null ? '—' : formatMinorExact(minor, currency));
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const money = (minor: number | null) =>
+    minor == null ? '—' : formatMinorExact(minor, currency, uiLocale);
   return (
     <li
       className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1 text-sm"
@@ -43,7 +47,7 @@ export function MoveLegLine({
       <PlatformChip platform={platform} />
       {direction ? (
         <span className="text-muted-foreground text-xs">
-          {direction === 'decrease' ? 'Decrease' : 'Increase'}
+          {direction === 'decrease' ? uiText('decrease_991e5ab') : uiText('increase_0c2d3b8')}
         </span>
       ) : null}
       {/* The entity by name, its raw id on hover; an entity nobody named prints its id. */}
@@ -51,13 +55,13 @@ export function MoveLegLine({
         className={cn('min-w-0 truncate font-medium', !entityName && 'font-mono text-xs')}
         title={entityName && entityId ? entityId : undefined}
       >
-        {entityName ?? entityId ?? 'Unnamed'}
+        {entityName ?? entityId ?? uiText('unnamed_e504e61')}
       </span>
       <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums">
         <span className="text-muted-foreground">{money(beforeMinor)}</span>
         <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
         <span className="font-semibold">{money(afterMinor)}</span>
-        <span className="text-muted-foreground">/day</span>
+        <span className="text-muted-foreground">{uiText('day_ea30d1c')}</span>
       </span>
       {pct != null ? (
         <span
@@ -67,7 +71,7 @@ export function MoveLegLine({
           )}
           data-testid="move-leg-pct"
         >
-          {formatSidePct(pct)}
+          {formatSidePct(pct, uiLocale)}
         </span>
       ) : null}
       {children}

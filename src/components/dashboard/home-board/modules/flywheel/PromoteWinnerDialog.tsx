@@ -1,12 +1,13 @@
 'use client';
 
+import type { OrganicWinner, PromoteOrganicWinnerResponse } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 // "Run as ad" from the Home, on the existing promote route (POST /api/organic/winners/promote via
 // usePromoteWinner): the ORIGINAL post goes into the chosen ad set as a PAUSED ad. Nothing goes
 // live. Variations stay with the full winners table on the Organic page; the Home makes only the
 // ad. The Organic page's own dialog (OrganicWinnersSection) is not exported, hence this compact
 // one over the same two hooks.
-import type { OrganicWinner, PromoteOrganicWinnerResponse } from '@continuum/contracts';
-import { Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,12 +20,15 @@ import {
 } from '@/components/ui/dialog';
 import { usePromoteWinner, usePromotionAdsets } from '@/hooks/useOrganicWinners';
 
-function resultLine(ad: PromoteOrganicWinnerResponse['ad']): string {
+function resultLine(
+  ad: PromoteOrganicWinnerResponse['ad'],
+  uiText: ReturnType<typeof useTranslations<'dashboard'>>,
+): string {
   switch (ad.status) {
     case 'created':
-      return `Paused ad created (${ad.adId}). Turn it on in Ads Manager or the Optimizer.`;
+      return uiText('paused_ad_created_adid_turn_it_on_in_ads_mana_154374f', { adId: ad.adId });
     case 'already_promoted':
-      return 'This post already runs as an ad — no second ad was made.';
+      return uiText('this_post_already_runs_as_an_ad_no_second_ad__e79603c');
     case 'ineligible':
     case 'refused':
       return ad.reason;
@@ -40,6 +44,7 @@ export function PromoteWinnerDialog({
   winner: OrganicWinner;
   onClose: () => void;
 }) {
+  const uiText = useTranslations('dashboard');
   const adsets = usePromotionAdsets(brandId, true);
   const promote = usePromoteWinner(brandId);
   const [adsetId, setAdsetId] = useState('');
@@ -50,24 +55,24 @@ export function PromoteWinnerDialog({
     <Dialog onOpenChange={(open) => (open ? null : onClose())} open>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Run this post as a paused ad</DialogTitle>
+          <DialogTitle>{uiText('run_this_post_as_a_paused_ad_25d956a')}</DialogTitle>
           <DialogDescription>
-            The original post runs in the ad set you choose, likes and comments included. Nothing
-            goes live until you turn it on.
+            {uiText('the_original_post_runs_in_the_ad_set_you_choo_3de92fa')}
           </DialogDescription>
         </DialogHeader>
 
         {promote.data ? (
           <p className="text-sm" data-testid="flywheel-promote-result">
-            {resultLine(promote.data.ad)}
+            {resultLine(promote.data.ad, uiText)}
           </p>
         ) : adsets.isLoading ? (
           <p className="flex items-center gap-2 text-muted-foreground text-xs">
-            <Loader2 aria-hidden="true" className="size-3 animate-spin" /> Loading ad sets…
+            <Loader2 aria-hidden="true" className="size-3 animate-spin" />{' '}
+            {uiText('loading_ad_sets_6efe89e')}
           </p>
         ) : refused ? (
           <p className="text-muted-foreground text-sm">
-            This brand is connected with Instagram only. Connect with Facebook to run posts as ads.
+            {uiText('this_brand_is_connected_with_instagram_only_c_b6c2d4c')}
           </p>
         ) : (
           <div className="space-y-1.5">
@@ -75,7 +80,7 @@ export function PromoteWinnerDialog({
               className="font-semibold text-muted-foreground text-xs uppercase tracking-wide"
               htmlFor="flywheel-promote-adset"
             >
-              Ad set
+              {uiText('ad_set_639a64f')}
             </label>
             <select
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -83,7 +88,7 @@ export function PromoteWinnerDialog({
               onChange={(event) => setAdsetId(event.target.value)}
               value={adsetId}
             >
-              <option value="">Choose an ad set…</option>
+              <option value="">{uiText('choose_an_ad_set_337ee51')}</option>
               {(adsets.data?.adsets ?? []).map((adset) => (
                 <option key={adset.id} value={adset.id}>
                   {adset.campaignName ? `${adset.campaignName} · ` : ''}
@@ -93,7 +98,7 @@ export function PromoteWinnerDialog({
             </select>
             {adsets.isError ? (
               <span className="block text-destructive text-xs">
-                Could not load ad sets from Meta. Try again in a moment.
+                {uiText('could_not_load_ad_sets_from_meta_try_again_in_678dae1')}
               </span>
             ) : null}
             {promote.isError ? (
@@ -104,7 +109,7 @@ export function PromoteWinnerDialog({
 
         <DialogFooter>
           {done ? (
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={onClose}>{uiText('done_11a6767')}</Button>
           ) : (
             <Button
               disabled={!adsetId || promote.isPending}
@@ -115,7 +120,7 @@ export function PromoteWinnerDialog({
               {promote.isPending ? (
                 <Loader2 aria-hidden="true" className="size-3 animate-spin" />
               ) : null}
-              Create paused ad
+              {uiText('create_paused_ad_fc58d2d')}
             </Button>
           )}
         </DialogFooter>

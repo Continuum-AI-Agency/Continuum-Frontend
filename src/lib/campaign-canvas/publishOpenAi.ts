@@ -205,12 +205,25 @@ function adCreativeBody(data: OpenAiAdData) {
  * `baseline` is the node data captured at hydration, keyed by node id. A draft canvas has
  * no baseline at all, which is exactly right: every node is then a create.
  */
+export type OpenAiPublishIssueCode =
+  | 'missingCampaign'
+  | 'multipleCampaigns'
+  | 'lifetimeBudget'
+  | 'conversionEvent'
+  | 'campaignParent'
+  | 'maxBid'
+  | 'adGroupParent'
+  | 'image'
+  | 'destinationUrl';
 export function planOpenAiPublish(params: {
   nodes: CampaignCanvasNode[];
   edges: CampaignCanvasEdge[];
   baseline?: Record<string, OpenAiPublishBaseline>;
+  translateIssue?: (code: OpenAiPublishIssueCode, label?: string) => string;
 }): OpenAiPublishPlan {
   const { nodes, edges, baseline } = params;
+  const issue = (code: OpenAiPublishIssueCode, english: string, label?: string) =>
+    params.translateIssue ? params.translateIssue(code, label) : english;
   const issues: string[] = [];
   const steps: OpenAiPublishStep[] = [];
 
@@ -219,21 +232,34 @@ export function planOpenAiPublish(params: {
   const ads = nodes.filter((node) => node.type === 'openai-ad');
 
   if (campaigns.length === 0) {
-    issues.push('Add a campaign node — an ad group cannot exist without one.');
+    issues.push(
+      issue('missingCampaign', 'Add a campaign node — an ad group cannot exist without one.'),
+    );
   }
   if (campaigns.length > 1) {
     // Not an API limit, a canvas one: the record bar shows a single campaign, and a graph
     // with two would publish into a state the bar could not then re-open.
-    issues.push('This canvas publishes one campaign at a time. Remove the extra campaign node.');
+    issues.push(
+      issue(
+        'multipleCampaigns',
+        'This canvas publishes one campaign at a time. Remove the extra campaign node.',
+      ),
+    );
   }
 
   campaigns.forEach((node) => {
     const data = asCampaign(node);
     if (!data.lifetimeSpendLimitMicros) {
-      issues.push(`"${data.label}" needs a lifetime budget.`);
+      issues.push(issue('lifetimeBudget', `"${data.label}" needs a lifetime budget.`, data.label));
     }
     if (data.biddingType === 'conversions' && !data.conversionEventSettingIds?.length) {
-      issues.push(`"${data.label}" optimizes for conversions and needs one conversion event.`);
+      issues.push(
+        issue(
+          'conversionEvent',
+          `"${data.label}" optimizes for conversions and needs one conversion event.`,
+          data.label,
+        ),
+      );
     }
 
     if (data.openAiId) {
@@ -273,11 +299,13 @@ export function planOpenAiPublish(params: {
     const data = asAdGroup(node);
     const parentNodeId = parentOf(node.id, edges);
     if (!parentNodeId) {
-      issues.push(`"${data.label}" is not attached to a campaign.`);
+      issues.push(
+        issue('campaignParent', `"${data.label}" is not attached to a campaign.`, data.label),
+      );
       return;
     }
     if (!data.maxBidMicros) {
-      issues.push(`"${data.label}" needs a max bid.`);
+      issues.push(issue('maxBid', `"${data.label}" needs a max bid.`, data.label));
     }
 
     if (data.openAiId) {
@@ -317,14 +345,18 @@ export function planOpenAiPublish(params: {
     const data = asAd(node);
     const parentNodeId = parentOf(node.id, edges);
     if (!parentNodeId) {
-      issues.push(`"${data.label}" is not attached to an ad group.`);
+      issues.push(
+        issue('adGroupParent', `"${data.label}" is not attached to an ad group.`, data.label),
+      );
       return;
     }
     if (data.creativeType === 'chat_card' && !data.fileId) {
-      issues.push(`"${data.label}" needs an image before it can be created.`);
+      issues.push(
+        issue('image', `"${data.label}" needs an image before it can be created.`, data.label),
+      );
     }
     if (data.creativeType === 'chat_card' && !data.targetUrl) {
-      issues.push(`"${data.label}" needs a destination URL.`);
+      issues.push(issue('destinationUrl', `"${data.label}" needs a destination URL.`, data.label));
     }
 
     if (data.openAiId) {
@@ -405,7 +437,20 @@ function sortSteps(steps: OpenAiPublishStep[]): OpenAiPublishStep[] {
 }
 
 /** A one-line human summary per step, for the confirmation the person actually reads. */
-export function describeOpenAiPublishStep(step: OpenAiPublishStep): string {
+export type OpenAiPublishStepTranslate = (
+  key: OpenAiPublishStep['kind'],
+  values: { label: string; changed: string; entity: string },
+) => string;
+export function describeOpenAiPublishStep(
+  step: OpenAiPublishStep,
+  translate?: OpenAiPublishStepTranslate,
+): string {
+  if (translate)
+    return translate(step.kind, {
+      label: step.label,
+      changed: 'changed' in step ? step.changed.join(', ') : '',
+      entity: step.kind === 'archive' ? step.entity : '',
+    });
   switch (step.kind) {
     case 'create-campaign':
       return `Create campaign "${step.label}" (paused)`;

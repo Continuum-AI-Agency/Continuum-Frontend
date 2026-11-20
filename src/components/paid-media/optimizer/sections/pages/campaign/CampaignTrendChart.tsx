@@ -6,6 +6,7 @@
 // The last figure and the goal are written beside the chart, so it reads without the line.
 
 import { motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import { formatCurrency } from '../../../format';
 import { trendGeometry } from '../../board/marksModel';
 import { BOARD_COLOR } from '../../board/palette';
@@ -33,6 +34,9 @@ export function CampaignTrendChart({
   marks: readonly ChangeMark[];
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const day = (iso: string) => dayLabel(iso, uiLocale);
   const reduce = useReducedMotion();
   const points = trend.days.map((day) => ({ day: day.day, value: day.value }));
   const geometry = trendGeometry(points, trend.goal, W, H);
@@ -42,16 +46,16 @@ export function CampaignTrendChart({
   const slot = count > 1 ? W / (count - 1) : W;
   const first = trend.days[0];
   const lastDay = trend.days[count - 1];
-  const money = (value: number) => formatCurrency(value, currency);
+  const money = (value: number) => formatCurrency(value, currency, uiLocale);
   const actors = [...new Set(marks.map((mark) => mark.actor))] as ChangeActor[];
   const summary = [
     trend.label,
     trend.last
-      ? `last ${money(trend.last.value)} on ${dayLabel(trend.last.day)}`
-      : 'nothing to price',
-    trend.goal != null ? `goal ${money(trend.goal)}` : null,
-    trend.darkDays > 0 ? `${trend.darkDays} days without ads` : null,
-    marks.length > 0 ? `${marks.length} days with changes` : null,
+      ? uiText('campaignTrendLast', { amount: money(trend.last.value), day: day(trend.last.day) })
+      : uiText('nothing_to_price_81ed4b1'),
+    trend.goal != null ? uiText('campaignTrendGoalSummary', { amount: money(trend.goal) }) : null,
+    trend.darkDays > 0 ? uiText('campaignTrendDarkDays', { count: trend.darkDays }) : null,
+    marks.length > 0 ? uiText('campaignTrendChangeDays', { count: marks.length }) : null,
   ]
     .filter(Boolean)
     .join(', ');
@@ -64,10 +68,12 @@ export function CampaignTrendChart({
           {trend.last ? (
             <>
               <span className="font-semibold text-foreground">{money(trend.last.value)}</span>
-              <span className="text-muted-foreground"> · {dayLabel(trend.last.day)}</span>
+              <span className="text-muted-foreground"> · {day(trend.last.day)}</span>
             </>
           ) : (
-            <span className="text-muted-foreground">Nothing to price in the window</span>
+            <span className="text-muted-foreground">
+              {uiText('nothing_to_price_in_the_window_2073b12')}
+            </span>
           )}
         </span>
       </figcaption>
@@ -154,7 +160,7 @@ export function CampaignTrendChart({
               initial={reduce ? false : { scale: 0 }}
               key={`${mark.day}:${mark.actor}`}
               style={{ left: pctX(xOf(index)), background: ACTOR_COLOR[mark.actor] }}
-              title={`${dayLabel(mark.day)} · ${ACTOR_WORDS[mark.actor]}: ${mark.label}`}
+              title={`${day(mark.day)} · ${ACTOR_WORDS[mark.actor]}: ${mark.label}`}
               transition={{
                 type: 'spring',
                 visualDuration: 0.35,
@@ -176,8 +182,8 @@ export function CampaignTrendChart({
         ) : null}
       </div>
       <div className="flex items-center justify-between gap-2 text-muted-foreground text-xs">
-        <span>{first ? dayLabel(first.day) : ''}</span>
-        <span>{lastDay ? dayLabel(lastDay.day) : ''}</span>
+        <span>{first ? day(first.day) : ''}</span>
+        <span>{lastDay ? day(lastDay.day) : ''}</span>
       </div>
       {/* The legend carries the goal and the dark days as text, off the plot, so a line that
           crosses the goal never runs through its label. */}
@@ -192,19 +198,25 @@ export function CampaignTrendChart({
                 aria-hidden="true"
                 className="w-4 border-foreground/55 border-t-[1.5px] border-dashed"
               />
-              goal{' '}
-              <span className="font-medium text-foreground tabular-nums">{money(trend.goal)}</span>
+              {uiText.rich('campaignTrendGoalLegend', {
+                amount: money(trend.goal),
+                figure: (chunks) => (
+                  <span className="font-medium text-foreground tabular-nums">{chunks}</span>
+                ),
+              })}
             </span>
           ) : null}
           {trend.darkDays > 0 ? (
             <span className="inline-flex items-center gap-1.5">
               <span aria-hidden="true" className="size-2.5 rounded-sm bg-destructive/15" />
               <span data-testid="campaign-trend-dark-days">
-                {trend.darkDays} {trend.darkDays === 1 ? 'day' : 'days'} without ads
+                {uiText('campaignTrendDarkDays', { count: trend.darkDays })}
               </span>
             </span>
           ) : null}
-          {marks.length > 0 ? <span>Dots: what changed on it, listed below</span> : null}
+          {marks.length > 0 ? (
+            <span>{uiText('dots_what_changed_on_it_listed_below_24b669f')}</span>
+          ) : null}
           {actors.map((actor) => (
             <span className="inline-flex items-center gap-1.5" key={actor}>
               <span

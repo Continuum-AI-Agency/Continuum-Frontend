@@ -26,10 +26,6 @@ export function markImpersonatedSession(target: { cookie: string } = document): 
   target.cookie = `${IMPERSONATION_COOKIE}=${IMPERSONATION_COOKIE_VALUE}; Path=${path}; Max-Age=${maxAge}; SameSite=${sameSite}`;
 }
 
-/** Returned by the server action and shown in place of the control, so both say the same thing. */
-export const SIGN_OUT_EVERYWHERE_REFUSED_WHILE_IMPERSONATING =
-  "This session came from an impersonation link, so it can't sign the account out of other devices. Sign out ends only this browser.";
-
 type CookieReader = { get(name: string): { value: string } | undefined };
 
 /** Any value counts: a marker with an unexpected value still fails closed. */

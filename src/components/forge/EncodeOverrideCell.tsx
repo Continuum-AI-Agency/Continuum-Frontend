@@ -1,12 +1,8 @@
 'use client';
 
 import type { ApiRenderTemplateContract, EncodeSettingKey } from '@continuum/contracts';
-import {
-  describeEncodeSettings,
-  describeMxfAudio,
-  encodeFilesOf,
-  mergeEncodeSettings,
-} from '@continuum/contracts';
+import { encodeFilesOf, mergeEncodeSettings } from '@continuum/contracts';
+import { useLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
   containersOf,
@@ -29,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { describeEncodeSettingsUi, describeMxfAudioUi } from './encodePresentation';
 
 // One render's output settings, over the template's. "Template default" means this row asks for
 // nothing beyond what the template already says; anything else is pinned into the render when it
@@ -45,6 +42,9 @@ export function EncodeOverrideCell({
   outputs: ApiRenderTemplateContract['outputs'];
   onChange: (patch: Pick<RequestRow, 'encode' | 'clearedEncodeKeys'>) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+  const locale = useLocale();
+
   const [scope, setScope] = useState('all');
   const effective = effectiveEncode(rows, row.id);
   const parent = row.parentId ? effectiveEncode(rows, row.parentId) : undefined;
@@ -92,28 +92,27 @@ export function EncodeOverrideCell({
             effective?.outputs?.[item.id],
           );
           return encodeFilesOf(settings, container).includes('mxf')
-            ? [describeMxfAudio(settings)]
+            ? [describeMxfAudioUi(settings, translateUi)]
             : [];
         }),
       ),
     ),
   ];
   const described =
-    describeEncodeSettings(
+    describeEncodeSettingsUi(
       mergeEncodeSettings(inherited[0]?.settings, effective?.default),
       inherited[0]?.container ?? null,
-    ) ?? (effective?.default ? 'Custom settings' : null);
+      translateUi,
+      locale,
+    ) ?? (effective?.default ? translateUi('encodeCustomSettings') : null);
   const summary =
     audioChoices.length > 1
-      ? 'MXF audio varies by output'
-      : [
-          described,
-          overridden ? `${overridden} output${overridden === 1 ? '' : 's'} adjusted` : null,
-        ]
+      ? translateUi('encodeAudioVaries')
+      : [described, overridden ? translateUi('encodeOutputsAdjusted', { count: overridden }) : null]
           .filter(Boolean)
-          .join(' · ') || 'Template default';
+          .join(' · ') || translateUi('encodeTemplateDefault');
   const scopes: Array<[string, string]> = [
-    ['all', 'All outputs'],
+    ['all', translateUi('all_outputs_61deb5b9')],
     ...inScope.map((item): [string, string] => [
       item.id,
       `${item.label}${item.ratio ? ` · ${item.ratio}` : ''}`,
@@ -132,14 +131,16 @@ export function EncodeOverrideCell({
             type="button"
             size="xs"
             variant="outline"
-            aria-label={`Output settings: ${summary}`}
+            aria-label={translateUi('output_settings_value0_c4d9fa9b', { value0: String(summary) })}
             title={summary}
             className="h-auto max-w-40 flex-col items-start gap-0.5 py-1.5 text-left"
           >
             <span className="w-full truncate">{summary}</span>
             {audioChoices.length ? (
               <span className="whitespace-normal text-xs font-normal text-muted-foreground">
-                {audioChoices.length === 1 ? audioChoices[0] : 'Open to inspect each output'}
+                {audioChoices.length === 1
+                  ? audioChoices[0]
+                  : translateUi('open_to_inspect_each_output_04e6dce1')}
               </span>
             ) : null}
           </Button>
@@ -147,7 +148,10 @@ export function EncodeOverrideCell({
       />
       <PopoverContent className="w-96 space-y-3">
         <Select value={scopeKey} onValueChange={setScope}>
-          <SelectTrigger aria-label="Output settings scope" className="w-full">
+          <SelectTrigger
+            aria-label={translateUi('output_settings_scope_09ae2ec0')}
+            className="w-full"
+          >
             <SelectValue items={Object.fromEntries(scopes)} />
           </SelectTrigger>
           <SelectContent>

@@ -1,5 +1,6 @@
 import { ArrowsCounterClockwise, MinusCircle, WarningCircle } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -67,6 +68,7 @@ export function CardSurface({
   children,
   className,
 }: CardSurfaceProps) {
+  const tUi = useTranslations('onboarding');
   const phase = phaseOf(status, isEmpty, settled);
 
   let body: ReactNode;
@@ -76,7 +78,7 @@ export function CardSurface({
         icon={
           <WarningCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--cs-warning,#cb8e00)]" />
         }
-        message={errorMessage ?? "We couldn't finish this section."}
+        message={errorMessage ?? tUi('sectionFailed')}
         onRetry={onRetry}
       />
     );
@@ -84,7 +86,7 @@ export function CardSurface({
     body = (
       <EndedEmpty
         icon={<MinusCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />}
-        message="Nothing came back for this section."
+        message={tUi('sectionUnavailable')}
         onRetry={onRetry}
       />
     );
@@ -157,6 +159,8 @@ function EndedEmpty({
   message: string;
   onRetry?: () => void;
 }) {
+  const tUi = useTranslations('onboarding');
+
   return (
     <div className="flex flex-col items-start gap-2.5 text-sm text-muted-foreground">
       <div className="flex items-start gap-2">
@@ -166,7 +170,7 @@ function EndedEmpty({
       {onRetry ? (
         <Button type="button" size="sm" variant="outline" onClick={onRetry}>
           <ArrowsCounterClockwise aria-hidden className="h-3.5 w-3.5" />
-          Re-run analysis
+          {tUi('m_15ceaf8667')}
         </Button>
       ) : null}
     </div>

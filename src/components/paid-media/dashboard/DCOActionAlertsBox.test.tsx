@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
-
+import { render } from '@/i18n/__tests__/render';
 import type { ActionLog } from '@/lib/types/dco';
+import commonEs from '../../../../messages/common/es.json';
+import commonPt from '../../../../messages/common/pt-BR.json';
+import scaleEs from '../../../../messages/scale/es.json';
+import scalePt from '../../../../messages/scale/pt-BR.json';
 import { DCOActionAlertsBox } from './DCOActionAlertsBox';
 
 const mockRefresh = mock();
@@ -149,7 +154,7 @@ describe('DCOActionAlertsBox', () => {
     expect(getByText('Hover to view creative comparison')).toBeTruthy();
 
     const creativeRow = Array.from(container.getElementsByTagName('tr')).find((row) =>
-      row.textContent?.includes('CREATIVE_SWITCH_EXTERNAL'),
+      row.textContent?.includes('Switch to external creative'),
     );
     expect(creativeRow).toBeTruthy();
     fireEvent.mouseEnter(creativeRow as HTMLTableRowElement);
@@ -184,3 +189,29 @@ describe('DCOActionAlertsBox', () => {
     expect(getByText('DCO actions will appear here')).toBeTruthy();
   });
 });
+
+for (const locale of ['pt-BR', 'es'] as const) {
+  it(`localizes action labels in ${locale} while preserving narratives and source IDs`, () => {
+    mockLogs = logs;
+    mockError = null;
+    const { container } = render(
+      <NextIntlClientProvider
+        locale={locale}
+        timeZone="UTC"
+        messages={{
+          scale: locale === 'pt-BR' ? scalePt : scaleEs,
+          common: locale === 'pt-BR' ? commonPt : commonEs,
+        }}
+      >
+        <DCOActionAlertsBox brandId="brand_1" metaAccountId="act_1" campaignId="cmp_1" />
+      </NextIntlClientProvider>,
+    );
+    expect(container.textContent).toContain(
+      locale === 'pt-BR' ? 'Ajustar orçamento' : 'Ajustar presupuesto',
+    );
+    expect(container.textContent).toContain('Creative swap applied');
+    expect(container.textContent).toContain('cmp_1');
+    expect(logs[0].actionType).toBe('ADJUST_BUDGET');
+    cleanup();
+  });
+}

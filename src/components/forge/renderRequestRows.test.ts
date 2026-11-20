@@ -1288,7 +1288,9 @@ describe('rowStatusOf: a row read with no request', () => {
     const refused = rowStatusOf({}, fit(verdict({})), 'Use a brand colour.');
     expect(refused).toEqual({ state: 'refused', reason: 'Use a brand colour.' });
     expect(isRenderable(refused)).toBe(false);
-    const calls = [{ override: 'acceptLinkedLineMismatch' as const, message: 'Two lines, three layers.' }];
+    const calls = [
+      { override: 'acceptLinkedLineMismatch' as const, message: 'Two lines, three layers.' },
+    ];
     const call = rowStatusOf({}, undefined, undefined, calls);
     expect(call).toEqual({ state: 'call', calls });
     expect(isRenderable(call)).toBe(true);
@@ -1331,4 +1333,49 @@ describe('rowStatusOf: a row read with no request', () => {
     expect(status.state).toBe('ai-check');
     if (status.state === 'ai-check') expect(status.fit.escalate).toBe(true);
   });
+});
+
+describe('localized row validation preserves imported values', () => {
+  for (const locale of ['pt-BR', 'es'] as const) {
+    test(locale, async () => {
+      const { createTranslator } = await import('next-intl');
+      const messages =
+        locale === 'pt-BR'
+          ? (await import('../../../messages/forge/pt-BR.json')).default
+          : (await import('../../../messages/forge/es.json')).default;
+      const translate = createTranslator({
+        locale,
+        messages: { forge: messages },
+        namespace: 'forge',
+      });
+      const fields = [
+        variable({ key: 'amount', kind: 'number' }),
+        variable({ key: 'hero', kind: 'image', required: true }),
+        variable({ key: 'choice', kind: 'enum', options: ['authored option'] }),
+      ];
+      expect(validateRow(fields, { amount: 'bad', choice: 'not an option' }, translate)).toEqual({
+        amount: messages.rowNotNumber,
+        hero: messages.rowPickLibrary,
+        choice: messages.rowNotOption,
+      });
+      const result = rowsFromMappedImport(
+        [{ Name: 'Authored campaign', Amount: '12.50', Choice: 'authored option' }],
+        { Name: '@name', Amount: 'amount', Choice: 'choice' },
+        fields,
+        [],
+        translate,
+      );
+      expect(result.errors).toEqual([]);
+      expect(result.rows[0]?.label).toBe('Authored campaign');
+      expect(result.rows[0]?.values).toMatchObject({ amount: 12.5, choice: 'authored option' });
+      const invalid = rowsFromMappedImport(
+        [{ Amount: 'bad' }],
+        { Amount: 'amount' },
+        fields,
+        [],
+        translate,
+      );
+      expect(invalid.errors[0]?.message).toBe(messages.rowNotNumber);
+    });
+  }
 });

@@ -6,6 +6,7 @@
 // lit when its dot on the chart is pointed at.
 
 import type { OptimizerLogRow } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import * as typeScale from '../../../typeScale';
 import { TimelineEntry, type TimelineTone } from '../../feedTimeline';
@@ -37,11 +38,12 @@ function FactList({ facts }: { facts: LifecycleFact[] }) {
  *  so a 40-ad-set drift does not bury the rest of the feed, but present rather than truncated
  *  to four keys with the rest silently dropped. */
 function DetailList({ lines }: { lines: string[] }) {
+  const uiText = useTranslations('scale');
   if (lines.length === 0) return null;
   return (
     <details className="mt-1">
       <summary className="hit-area cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline">
-        {lines.length} listed
+        {uiText.rich('sentence_27a6fa04a6b5', { v0: lines.length })}
       </summary>
       <ul className="mt-1 space-y-0.5">
         {lines.map((line) => (
@@ -64,7 +66,8 @@ export function LifecycleLogRow({
   eventId?: string;
   highlighted?: boolean;
 }) {
-  const read = readLifecycleRow(row);
+  const uiText = useTranslations('scale');
+  const read = readLifecycleRow(row, uiText);
   return (
     <TimelineEntry
       className={cn('-mx-2 rounded-md px-2 transition-colors', highlighted && 'bg-muted/70')}
@@ -77,7 +80,9 @@ export function LifecycleLogRow({
       <p className="text-sm leading-snug">
         <span className="font-semibold text-foreground">{read.title}</span>
         {row.level === 'warn' ? (
-          <span className={`${typeScale.label} ml-2 font-semibold text-warning`}>warn</span>
+          <span className={`${typeScale.label} ml-2 font-semibold text-warning`}>
+            {uiText('warn_aa63925')}
+          </span>
         ) : null}
         {row.portfolio_name ? (
           <span className="text-muted-foreground text-xs"> · {row.portfolio_name}</span>

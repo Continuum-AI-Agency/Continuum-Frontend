@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+
 // The Inspiration surface's two control shapes: a segmented switch for exclusive
 // modes (source, sort) and a chip row for filters, where each chip carries how
 // many posts it would return.
@@ -19,6 +22,7 @@ export function Segmented<T extends string>({
   size?: 'sm' | 'md';
   label?: string;
 }) {
+  const uiText = useTranslations('competitor');
   return (
     <fieldset
       aria-label={label}
@@ -40,7 +44,7 @@ export function Segmented<T extends string>({
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {option.label}
+            {localizeCompetitorCopy(option.label, uiText)}
           </button>
         );
       })}
@@ -61,8 +65,10 @@ export function FilterChips<T extends string>({
   total: number;
   onChange: (id: T | 'all') => void;
 }) {
+  const uiText = useTranslations('competitor');
+  const uiLocale = useLocale();
   const chips: Array<{ id: T | 'all'; label: string; count: number }> = [
-    { id: 'all', label: 'All', count: total },
+    { id: 'all', label: uiText('all_a52ace4'), count: total },
     ...options,
   ];
   return (
@@ -86,9 +92,9 @@ export function FilterChips<T extends string>({
                 : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
             )}
           >
-            {chip.label}
+            {localizeCompetitorCopy(chip.label, uiText)}
             <span className={cn('tabular-nums', active ? 'opacity-70' : 'opacity-60')}>
-              {chip.count}
+              {chip.count.toLocaleString(uiLocale)}
             </span>
           </button>
         );

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import * as React from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -9,11 +10,11 @@ type Props = {
 };
 
 function LiveStatusDotImpl({ isDryRun, isFetching }: Props) {
+  const tUi = useTranslations('common');
+
   // emerald-500 / amber-500 in oklch, matched to the rest of the paid-media surface.
   const color = isDryRun ? 'oklch(76% 0.17 80)' : 'oklch(70% 0.17 162)';
-  const label = isDryRun
-    ? 'Simulation mode — approvals will not hit Meta.'
-    : 'Live — approvals execute against Meta on approve.';
+  const label = isDryRun ? tUi('m_1dab60b683') : tUi('m_9a2537388d');
 
   return (
     <TooltipProvider delay={150}>

@@ -1,6 +1,7 @@
 'use client';
 
 import { XIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { type KeyboardEvent, useState } from 'react';
 import { z } from 'zod';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,7 @@ export function ExternalEmailChipsInput({
   onChange,
   max = 20,
 }: ExternalEmailChipsInputProps) {
+  const uiText = useTranslations('automations');
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +28,7 @@ export function ExternalEmailChipsInput({
     const email = draft.trim().replace(/,+$/, '');
     if (!email) return;
     if (!emailSchema.safeParse(email).success) {
-      setError(`"${email}" is not a valid email`);
+      setError(uiText('m_12095702d6', { email }));
       return;
     }
     if (value.some((existing) => existing.toLowerCase() === email.toLowerCase())) {
@@ -35,7 +37,7 @@ export function ExternalEmailChipsInput({
       return;
     }
     if (value.length >= max) {
-      setError(`At most ${max} external recipients`);
+      setError(uiText('m_9052b457a7', { count: max }));
       return;
     }
     onChange([...value, email]);
@@ -61,7 +63,7 @@ export function ExternalEmailChipsInput({
               {email}
               <button
                 type="button"
-                aria-label={`Remove ${email}`}
+                aria-label={uiText('m_00491f2a45', { email })}
                 className="rounded-full p-0.5 hover:bg-muted-foreground/20"
                 onClick={() => onChange(value.filter((existing) => existing !== email))}
               >
@@ -74,7 +76,7 @@ export function ExternalEmailChipsInput({
       <Input
         type="email"
         inputMode="email"
-        placeholder="stakeholder@company.com — press Enter to add"
+        placeholder={uiText('stakeholder_company_com_press_enter_to_add_df25b3f')}
         value={draft}
         onChange={(event) => {
           setDraft(event.target.value);
@@ -82,7 +84,7 @@ export function ExternalEmailChipsInput({
         }}
         onKeyDown={handleKeyDown}
         onBlur={commit}
-        aria-label="Add external recipient email"
+        aria-label={uiText('add_external_recipient_email_74b893e')}
       />
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

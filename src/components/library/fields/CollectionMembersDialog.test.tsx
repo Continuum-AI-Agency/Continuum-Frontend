@@ -9,7 +9,8 @@ mock.module('@/lib/supabase/client', () => ({
 }));
 mock.module('@/lib/supabase/realtime', () => ({ subscribeToRowBroadcasts: () => () => {} }));
 
-const { cleanup, render, screen } = await import('@testing-library/react');
+const { cleanup, screen } = await import('@testing-library/react');
+const { render } = await import('@/i18n/__tests__/render');
 const { CollectionMembersDialog } = await import('./CollectionMembersDialog');
 
 const realFetch = globalThis.fetch;

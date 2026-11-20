@@ -14,6 +14,9 @@ import type {
   CreativeSurface,
 } from '@continuum/contracts';
 
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+
 type EvidenceMetric = NonNullable<CreativeEvidenceItem['metric']>;
 
 export type ExemplarView = {
@@ -45,17 +48,27 @@ export type InsightRowView = {
   topPermalink: string | null;
 };
 
-const compactNumber = new Intl.NumberFormat(undefined, {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
+const compactNumbers = new Map<UiLocale, Intl.NumberFormat>();
+function compactNumber(locale: UiLocale) {
+  let formatter = compactNumbers.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
+    compactNumbers.set(locale, formatter);
+  }
+  return formatter;
+}
 
 // One-line audience descriptor, shared by the section header and each row.
-export function audienceLine(audience: CreativeAudience | null | undefined): string | null {
+export function audienceLine(
+  audience: CreativeAudience | null | undefined,
+  locale: UiLocale = 'en',
+): string | null {
   if (!audience) return null;
   if (audience.note) return audience.note;
   const seg = audience.segments[0];
-  return seg ? `${seg.label}${seg.sharePct !== null ? ` (${seg.sharePct}%)` : ''}` : null;
+  return seg
+    ? `${seg.label}${seg.sharePct !== null ? ` (${new Intl.NumberFormat(locale, { maximumFractionDigits: 20 }).format(seg.sharePct)}%)` : ''}`
+    : null;
 }
 
 export function humanizeMetricName(name: string): string {
@@ -65,18 +78,21 @@ export function humanizeMetricName(name: string): string {
 // Formats a measured metric for display, honoring its unit. Rates are stored
 // 0..1; ratios are multipliers; pct is already a percentage number; counts get
 // compacted (12.3K).
-export function formatMetricValue(metric: EvidenceMetric | null): string | null {
+export function formatMetricValue(
+  metric: EvidenceMetric | null,
+  locale: UiLocale = 'en',
+): string | null {
   if (!metric || !Number.isFinite(metric.value)) return null;
   const { value, unit } = metric;
   switch (unit) {
     case 'pct':
-      return `${Math.round(value * 10) / 10}%`;
+      return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(Math.round(value * 10) / 10)}%`;
     case 'rate':
-      return `${Math.round(value * 100)}%`;
+      return `${new Intl.NumberFormat(locale).format(Math.round(value * 100))}%`;
     case 'ratio':
-      return `${value.toFixed(2)}×`;
+      return `${formatDecimal(value, 2, locale)}×`;
     default:
-      return compactNumber.format(value);
+      return compactNumber(locale).format(value);
   }
 }
 
@@ -106,7 +122,10 @@ function averageMetric(evidence: CreativeEvidenceItem[]): {
 // Joins an insight's parallel exemplars[] and evidence[] by refId so each top
 // creative carries its own measured metric, then ranks them by that metric
 // (highest first) — turning anonymous thumbnails into the actual top performers.
-export function buildExemplarViews(insight: CreativeInsight): ExemplarView[] {
+export function buildExemplarViews(
+  insight: CreativeInsight,
+  locale: UiLocale = 'en',
+): ExemplarView[] {
   const evidenceByRef = new Map<string, CreativeEvidenceItem>();
   for (const item of insight.evidence) {
     if (!evidenceByRef.has(item.refId)) evidenceByRef.set(item.refId, item);
@@ -122,7 +141,7 @@ export function buildExemplarViews(insight: CreativeInsight): ExemplarView[] {
       snippet: exemplar.snippet,
       permalinkUrl: isHttpUrl(exemplar.permalinkUrl) ? exemplar.permalinkUrl : null,
       metric,
-      metricValueLabel: formatMetricValue(metric),
+      metricValueLabel: formatMetricValue(metric, locale),
       metricName: metric ? humanizeMetricName(metric.name) : null,
       capturedAt: evidence?.capturedAt ?? null,
     } satisfies ExemplarView;
@@ -133,12 +152,12 @@ export function buildExemplarViews(insight: CreativeInsight): ExemplarView[] {
 // Flattens an insight into a single sortable table row, precomputing the ranked
 // exemplars, the average metric (numeric for sorting + a formatted label), and
 // the best available permalink for row actions.
-export function toInsightRow(insight: CreativeInsight): InsightRowView {
-  const exemplars = buildExemplarViews(insight);
+export function toInsightRow(insight: CreativeInsight, locale: UiLocale = 'en'): InsightRowView {
+  const exemplars = buildExemplarViews(insight, locale);
   const avg = averageMetric(insight.evidence);
   const avgMetricLabel =
     avg.value !== null && avg.unit
-      ? formatMetricValue({ name: avg.name ?? '', value: avg.value, unit: avg.unit })
+      ? formatMetricValue({ name: avg.name ?? '', value: avg.value, unit: avg.unit }, locale)
       : null;
   return {
     id: insight.id,
@@ -148,7 +167,7 @@ export function toInsightRow(insight: CreativeInsight): InsightRowView {
     description: insight.description,
     recommendation: insight.recommendation,
     confidence: insight.confidence,
-    audienceNote: audienceLine(insight.audience),
+    audienceNote: audienceLine(insight.audience, locale),
     avgMetricValue: avg.value,
     avgMetricLabel,
     metricName: avg.name ? humanizeMetricName(avg.name) : null,
@@ -157,13 +176,16 @@ export function toInsightRow(insight: CreativeInsight): InsightRowView {
   };
 }
 
-export function toInsightRows(insights: CreativeInsight[]): InsightRowView[] {
+export function toInsightRows(
+  insights: CreativeInsight[],
+  locale: UiLocale = 'en',
+): InsightRowView[] {
   // Cluster ids (`kind-archetype`) can collide across parallel groups. Keep the
   // canonical insight id when unique; otherwise append the list index so tables
   // and pickers never remount two rows under one React key.
   const seen = new Map<string, number>();
   return insights.map((insight, index) => {
-    const row = toInsightRow(insight);
+    const row = toInsightRow(insight, locale);
     const count = seen.get(insight.id) ?? 0;
     seen.set(insight.id, count + 1);
     if (count === 0) {

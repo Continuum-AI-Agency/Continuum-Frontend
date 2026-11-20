@@ -1,3 +1,8 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { creativeAngleLabel } from '@/lib/paid-media/creativeDisplayLabels';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // What angle should each ad set run next?
 //
 // This replaces the "Audience × angle" heat map, which could not work as designed. It
@@ -103,9 +108,11 @@ export function portfolioAngleRanking(rows: readonly AdsetCreativeWinRateRow[]):
 }
 
 /** Values are closed angle ids (`angle_id`); a person reads the display name. */
-export const angleName = (value: string | undefined): string =>
+export const angleName = (value: string | undefined, uiTranslate?: ScaleCopy): string =>
   value && value in GLOBAL_ANGLE_LABELS
-    ? GLOBAL_ANGLE_LABELS[value as GlobalAngleId]
+    ? uiTranslate
+      ? creativeAngleLabel(value as GlobalAngleId, uiTranslate)
+      : GLOBAL_ANGLE_LABELS[value as GlobalAngleId]
     : (value ?? '');
 
 function buildAction(
@@ -113,17 +120,30 @@ function buildAction(
   recommended: AngleCandidate | null,
   current: AngleCandidate | null,
   kpi: string,
+  uiTranslate?: ScaleCopy,
 ): string {
   const kpiLabel = kpi || 'results';
   switch (verdict) {
     case 'double_down':
-      return `Build the next ads around "${angleName(recommended?.value)}" — it beats this ad set's median ${kpiLabel} in ${Math.round((recommended?.winRate ?? 0) * 100)}% of its ads.`;
+      return uiTranslate
+        ? uiTranslate('helper_a5fb88c4b988', {
+            v0: angleName(recommended?.value, uiTranslate),
+            v1: kpiLabel,
+            v2: Math.round((recommended?.winRate ?? 0) * 100),
+          })
+        : `Build the next ads around "${angleName(recommended?.value, uiTranslate)}" — it beats this ad set's median ${kpiLabel} in ${Math.round((recommended?.winRate ?? 0) * 100)}% of its ads.`;
     case 'introduce':
-      return `Try "${angleName(recommended?.value)}" here — it wins in other ad sets and has never run in this one.`;
+      return uiTranslate
+        ? uiTranslate('helper_f0c59f5551db', { v0: angleName(recommended?.value, uiTranslate) })
+        : `Try "${angleName(recommended?.value, uiTranslate)}" here — it wins in other ad sets and has never run in this one.`;
     case 'rebuild_craft':
-      return `Keep the "${angleName(current?.value)}" angle but rebuild the execution — it already carries most of the spend and is not beating the ad set's own median.`;
+      return uiTranslate
+        ? uiTranslate('helper_37c2602b933b', { v0: angleName(current?.value, uiTranslate) })
+        : `Keep the "${angleName(current?.value, uiTranslate)}" angle but rebuild the execution — it already carries most of the spend and is not beating the ad set's own median.`;
     default:
-      return 'Not enough compared ads in this ad set yet — ship a second variant so there is something to measure against.';
+      return uiTranslate
+        ? uiTranslate('creativeInsufficientCompare')
+        : 'Not enough compared ads in this ad set yet — ship a second variant so there is something to measure against.';
   }
 }
 
@@ -143,7 +163,10 @@ export type BuildAngleStandingInput = {
  * un-analyzed ad set and an ad set with nothing working are different states, and silently
  * dropping the first makes the panel look like a shorter list of healthy ad sets.
  */
-export function buildAdsetAngleStanding(input: BuildAngleStandingInput): AdsetAngleRow[] {
+export function buildAdsetAngleStanding(
+  input: BuildAngleStandingInput,
+  uiTranslate?: ScaleCopy,
+): AdsetAngleRow[] {
   const { winrateRows, enrolledIds, nameById } = input;
   const enrolled = new Set(enrolledIds);
   const byAdset = new Map<string, AdsetCreativeWinRateRow[]>();
@@ -188,7 +211,7 @@ export function buildAdsetAngleStanding(input: BuildAngleStandingInput): AdsetAn
         currentAngle,
         recommendedAngle,
         verdict,
-        action: buildAction(verdict, recommendedAngle, currentAngle, kpi),
+        action: buildAction(verdict, recommendedAngle, currentAngle, kpi, uiTranslate),
         confidence: isDegenerateWinRate(winnerHere.flags) ? 'thin' : 'proven',
         adsetMedianCpa,
         kpi,
@@ -206,7 +229,7 @@ export function buildAdsetAngleStanding(input: BuildAngleStandingInput): AdsetAn
         currentAngle,
         recommendedAngle: borrowed,
         verdict: 'introduce',
-        action: buildAction('introduce', borrowed, currentAngle, kpi),
+        action: buildAction('introduce', borrowed, currentAngle, kpi, uiTranslate),
         confidence: borrowed.eligibleAds >= MIN_ELIGIBLE_ADS * 2 ? 'proven' : 'thin',
         adsetMedianCpa,
         kpi,
@@ -219,7 +242,7 @@ export function buildAdsetAngleStanding(input: BuildAngleStandingInput): AdsetAn
       currentAngle,
       recommendedAngle: null,
       verdict: 'insufficient',
-      action: buildAction('insufficient', null, currentAngle, kpi),
+      action: buildAction('insufficient', null, currentAngle, kpi, uiTranslate),
       confidence: 'thin',
       adsetMedianCpa,
       kpi,

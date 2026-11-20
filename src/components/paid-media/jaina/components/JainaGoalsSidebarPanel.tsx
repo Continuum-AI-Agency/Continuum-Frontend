@@ -2,18 +2,21 @@
 
 import { FileText, Loader2, Target } from 'lucide-react';
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useGoals } from '@/hooks/useGoals';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 
 export function JainaGoalsSidebarPanel({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const query = useGoals(brandId);
 
   if (query.isLoading) {
     return (
       <div className="flex items-center gap-2 px-4 py-5 text-xs text-muted-foreground">
         <Loader2 className="size-3.5 animate-spin" />
-        Loading Goals…
+        {uiText('loading_goals_1c23423')}
       </div>
     );
   }
@@ -21,9 +24,9 @@ export function JainaGoalsSidebarPanel({ brandId }: { brandId: string }) {
   if (query.isError) {
     return (
       <div className="m-3 rounded-md border border-dashed border-border p-3">
-        <p className="text-xs font-medium">Goals are not available here yet.</p>
+        <p className="text-xs font-medium">{uiText('goals_are_not_available_here_yet_7121d57')}</p>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          This environment has not published the campaign Goal store.
+          {uiText('this_environment_has_not_published_the_campai_a19c98c')}
         </p>
       </div>
     );
@@ -34,9 +37,9 @@ export function JainaGoalsSidebarPanel({ brandId }: { brandId: string }) {
     return (
       <div className="m-3 rounded-md border border-dashed border-border p-4 text-center">
         <Target className="mx-auto size-4 text-muted-foreground" />
-        <p className="mt-2 text-xs font-medium">No campaign Goals yet</p>
+        <p className="mt-2 text-xs font-medium">{uiText('no_campaign_goals_yet_910c8b5')}</p>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          Create one from this Goals tab to start its structured campaign checklist.
+          {uiText('create_one_from_this_goals_tab_to_start_its_s_1f2b208')}
         </p>
       </div>
     );
@@ -60,7 +63,9 @@ export function JainaGoalsSidebarPanel({ brandId }: { brandId: string }) {
                 {goal.outcome}
               </span>
               <span className="mt-1 block font-mono text-xs text-muted-foreground">
-                Updated {formatRelativeTime(goal.updatedAt)}
+                {uiText.rich('sentence_5f1f7fcaedd2', {
+                  v0: () => formatRelativeTime(goal.updatedAt, undefined, uiLocale),
+                })}
               </span>
             </span>
           </Link>

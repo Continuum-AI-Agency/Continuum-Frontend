@@ -2,10 +2,12 @@
 
 import type { ViralityScore } from '@continuum/contracts';
 import { useCallback, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { scoreHookForBrand } from '@/lib/virality/scoreHook';
 
 // Small client hook wrapping the on-demand hook scorer with loading/error state.
 export function useViralityScore(brandId: string) {
+  const formatUiError = useUiErrorMessage();
   const [score, setScore] = useState<ViralityScore | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,13 +23,13 @@ export function useViralityScore(brandId: string) {
         setScore(result);
         return result;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not score this hook. Try again.');
+        setError(formatUiError(err));
         return null;
       } finally {
         setLoading(false);
       }
     },
-    [brandId],
+    [brandId, formatUiError],
   );
 
   const reset = useCallback(() => {

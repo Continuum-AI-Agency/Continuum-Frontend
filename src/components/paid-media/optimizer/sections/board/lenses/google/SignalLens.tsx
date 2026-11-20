@@ -8,6 +8,7 @@
 
 import type { BoardModuleSize } from '@continuum/contracts';
 import { LockIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -60,15 +61,15 @@ const INSIDE_LABEL_MIN = 0.12;
 
 /** The chrome's words for the V1 bars and the P5 steps. The card's own words follow the engine's
  *  language; the lens reads the bars by their flag and their order and names them itself. */
-const ATTENTION_LABEL = 'Visits and attention events';
-const REAL_LABEL = 'Leads and sales';
-const STEP_LABEL: Record<SignalStepRole, string> = {
-  clicks: 'Clicks',
-  leads: 'Leads',
-  sales: 'Sales',
-};
+const ATTENTION_LABEL = 'visits_and_attention_events_604d8a5';
+const REAL_LABEL = 'leads_and_sales_db0515d';
+const STEP_LABEL = {
+  clicks: 'clicks_921fc98',
+  leads: 'leads_2f10a26',
+  sales: 'sales_8de4e0e',
+} as const satisfies Record<SignalStepRole, string>;
 
-const NO_FINDING = "No conversion finding on this account's last cycle.";
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
 
 export type SignalLensState =
   | { status: 'loading' }
@@ -103,6 +104,7 @@ export function SignalLensView({
   size: BoardModuleSize;
   reason?: string;
 }) {
+  const uiText = useTranslations('scale');
   const windowDays = state.status === 'ready' ? state.model.windowDays : null;
   return (
     <ModuleFrame
@@ -113,7 +115,7 @@ export function SignalLensView({
       size={size}
       state={signalFrameState(state)}
       testId="board-module-signal"
-      title="Conversion signal"
+      title={uiText('conversion_signal_8d44c1e')}
     >
       <SignalBody size={size} state={state} />
     </ModuleFrame>
@@ -131,12 +133,19 @@ function sectionsOf(model: SignalModel): Section[] {
 }
 
 function SignalBody({ state, size }: { state: SignalLensState; size: BoardModuleSize }) {
+  const uiText = useTranslations('scale');
   if (state.status === 'loading') return <LensLoading size={size} testId="signal" />;
   if (state.status !== 'ready') {
     return <LensEmpty testId="signal-empty">{state.line}</LensEmpty>;
   }
   const { model } = state;
-  if (!hasSignal(model)) return <LensEmpty testId="signal-empty">{NO_FINDING}</LensEmpty>;
+  if (!hasSignal(model)) {
+    return (
+      <LensEmpty testId="signal-empty">
+        {uiText('no_conversion_finding_on_this_account_s_last__288115c')}
+      </LensEmpty>
+    );
+  }
   const figureWindow = figureWindowOf(model.windowDays ?? 0);
   if (isSmall(size)) return <SmallSignal figureWindow={figureWindow} model={model} />;
   const sections = sectionsOf(model);
@@ -174,7 +183,11 @@ function SignalBody({ state, size }: { state: SignalLensState; size: BoardModule
         return null;
       })}
       {model.windowDays != null ? (
-        <LensScope>Last {model.windowDays} days · the Optimizer's last cycle</LensScope>
+        <LensScope>
+          {uiText('days_plural_one_last_day_other_last_days_the__9964ca9', {
+            days: model.windowDays,
+          })}
+        </LensScope>
       ) : null}
       {takeaway ? <LensTakeaway testId="signal-takeaway">{takeaway}</LensTakeaway> : null}
     </div>
@@ -188,17 +201,18 @@ function SectionLabel({ children }: { children: string }) {
 // ── V1: what Google reports, split into attention events and real results ────────────────────
 
 function SplitBar({ split, thin }: { split: SignalSplit; thin: boolean }) {
+  const uiText = useTranslations('scale');
   const parts = [
     {
       key: 'attention',
-      label: ATTENTION_LABEL,
+      label: uiText(ATTENTION_LABEL),
       value: split.attention,
       share: split.attentionShare,
       color: ATTENTION,
     },
     {
       key: 'real',
-      label: REAL_LABEL,
+      label: uiText(REAL_LABEL),
       value: split.real,
       share: 1 - split.attentionShare,
       color: REAL,
@@ -234,10 +248,12 @@ function SplitBar({ split, thin }: { split: SignalSplit; thin: boolean }) {
   );
 }
 
-const SPLIT_LEGEND: readonly LegendItem[] = [
-  { label: ATTENTION_LABEL, color: ATTENTION },
-  { label: REAL_LABEL, color: REAL },
-];
+function splitLegend(uiText: ScaleCopy): LegendItem[] {
+  return [
+    { label: uiText(ATTENTION_LABEL), color: ATTENTION },
+    { label: uiText(REAL_LABEL), color: REAL },
+  ];
+}
 
 function CostTile({
   label,
@@ -269,11 +285,12 @@ function SplitSection({
   compact: boolean;
   figureWindow: FigureWindow;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <section className="space-y-2" data-testid="signal-split">
-      <SectionLabel>What Google counts as a conversion</SectionLabel>
+      <SectionLabel>{uiText('what_google_counts_as_a_conversion_1b6b2cc')}</SectionLabel>
       <SplitBar split={split} thin={compact} />
-      <Legend items={SPLIT_LEGEND} testId="signal-split-legend" />
+      <Legend items={splitLegend(uiText)} testId="signal-split-legend" />
       {compact ? null : (
         <>
           <dl className="grid grid-cols-2 gap-2">
@@ -284,15 +301,15 @@ function SplitSection({
                 currency,
                 figureWindow,
               )}
-              label="Cost per conversion Google reports"
+              label={uiText('cost_per_conversion_google_reports_89a2685')}
               value={formatCurrency(split.reportedCost, currency)}
             />
             <CostTile
               figure={figureProps('board.signal.real-cost', split.realCost, currency, figureWindow)}
-              label="Cost per real result"
+              label={uiText('cost_per_real_result_b135d0c')}
               value={
                 split.realCost == null && split.real < 1
-                  ? 'no real result'
+                  ? uiText('no_real_result_8001675')
                   : formatCurrency(split.realCost, currency)
               }
             />
@@ -301,9 +318,16 @@ function SplitSection({
             className="text-muted-foreground text-xs tabular-nums"
             data-testid="signal-split-counts"
           >
-            {split.reported != null ? `${countLabel(split.reported)} reported · ` : ''}
-            {countLabel(split.attention)} {ATTENTION_LABEL.toLowerCase()} · {countLabel(split.real)}{' '}
-            {REAL_LABEL.toLowerCase()}
+            {split.reported != null
+              ? uiText('reported_reported_attention_visits_and_attent_2cb6c12', {
+                  reported: countLabel(split.reported),
+                  attention: countLabel(split.attention),
+                  real: countLabel(split.real),
+                })
+              : uiText('attention_visits_and_attention_events_real_le_30f23af', {
+                  attention: countLabel(split.attention),
+                  real: countLabel(split.real),
+                })}
           </p>
         </>
       )}
@@ -313,28 +337,29 @@ function SplitSection({
 
 // ── E3: the conversion actions, their role and their value ────────────────────────────────────
 
-function valueText(value: SignalAction['value']): string {
-  if (value === 'unset') return 'no value set';
-  return value == null ? 'value —' : `value ${value}`;
+function valueText(value: SignalAction['value'], uiText: ScaleCopy): string {
+  if (value === 'unset') return uiText('no_value_set_b9484b6');
+  return value == null ? uiText('value_7454973') : uiText('value_value_dc331a3', { value });
 }
 
 function ActionsSection({ actions, compact }: { actions: SignalActions; compact: boolean }) {
+  const uiText = useTranslations('scale');
   const rows = compact ? actions.rows.slice(0, 3) : actions.rows;
   const longest = Math.max(...actions.rows.map((row) => row.share), 0.0001);
   const legend: LegendItem[] = [
     ...(actions.rows.some((row) => row.flagged)
-      ? [{ label: 'Flagged by the Optimizer', color: ATTENTION }]
+      ? [{ label: uiText('flagged_by_the_optimizer_7be0d00'), color: ATTENTION }]
       : []),
     ...(actions.rows.some((row) => !row.flagged)
-      ? [{ label: 'Other conversion actions', color: OTHER_ACTION }]
+      ? [{ label: uiText('other_conversion_actions_407f7e7'), color: OTHER_ACTION }]
       : []),
   ];
   return (
     <section className="space-y-2" data-testid="signal-actions">
       <SectionLabel>
         {actions.sameValue != null
-          ? `Conversion actions · all valued ${actions.sameValue}`
-          : 'Conversion actions and their value'}
+          ? uiText('conversion_actions_all_valued_value_e6a487c', { value: actions.sameValue })
+          : uiText('conversion_actions_and_their_value_0e0c690')}
       </SectionLabel>
       <ul className="space-y-1.5">
         {rows.map((row, index) => (
@@ -347,12 +372,14 @@ function ActionsSection({ actions, compact }: { actions: SignalActions; compact:
                 <span className="font-semibold tabular-nums">{countLabel(row.count)}</span>
                 {row.role ? (
                   <Badge variant={row.role === 'primary' ? 'outline' : 'muted'}>
-                    {row.role === 'primary' ? 'Primary' : 'Secondary'}
+                    {row.role === 'primary'
+                      ? uiText('primary_efe10c8')
+                      : uiText('secondary_62f2ccf')}
                   </Badge>
                 ) : null}
                 {compact ? null : (
                   <span className="text-muted-foreground" data-testid="signal-action-value">
-                    {valueText(row.value)}
+                    {valueText(row.value, uiText)}
                   </span>
                 )}
               </span>
@@ -371,8 +398,9 @@ function ActionsSection({ actions, compact }: { actions: SignalActions; compact:
       </ul>
       {compact && actions.rows.length > rows.length ? (
         <p className="text-muted-foreground text-xs">
-          +{actions.rows.length - rows.length} more conversion{' '}
-          {actions.rows.length - rows.length === 1 ? 'action' : 'actions'}
+          {uiText('count_plural_one_more_conversion_action_other_5f480f3', {
+            count: actions.rows.length - rows.length,
+          })}
         </p>
       ) : null}
       {legend.length > 1 ? <Legend items={legend} testId="signal-actions-legend" /> : null}
@@ -383,6 +411,7 @@ function ActionsSection({ actions, compact }: { actions: SignalActions; compact:
 // ── P5: from click to lead to sale ────────────────────────────────────────────────────────────
 
 function FunnelSteps({ funnel }: { funnel: SignalFunnel }) {
+  const uiText = useTranslations('scale');
   return (
     <ol
       className="grid gap-2"
@@ -403,13 +432,16 @@ function FunnelSteps({ funnel }: { funnel: SignalFunnel }) {
             <p className="font-semibold text-lg tabular-nums leading-tight">
               {countLabel(step.value)}
             </p>
-            <p className="text-muted-foreground text-xs">{STEP_LABEL[step.role]}</p>
+            <p className="text-muted-foreground text-xs">{uiText(STEP_LABEL[step.role])}</p>
             {rate && previous ? (
               <p
                 className="text-muted-foreground text-xs tabular-nums"
                 data-testid="signal-step-rate"
               >
-                {rate} of {STEP_LABEL[previous.role].toLowerCase()}
+                {uiText('rate_of_step_select_clicks_clicks_leads_leads_a7fd6d9', {
+                  rate,
+                  step: previous.role,
+                })}
               </p>
             ) : null}
           </li>
@@ -428,15 +460,16 @@ function FunnelSection({
   currency: string | null;
   compact: boolean;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <section className="space-y-2" data-testid="signal-funnel">
-      <SectionLabel>From click to sale</SectionLabel>
+      <SectionLabel>{uiText('from_click_to_sale_b4c406f')}</SectionLabel>
       <FunnelSteps funnel={funnel} />
       {compact ? null : (
         <>
           <dl className="grid grid-cols-2 gap-2">
             <div className="rounded-lg border px-3 py-2">
-              <dt className="text-muted-foreground text-xs">Sales value</dt>
+              <dt className="text-muted-foreground text-xs">{uiText('sales_value_45cb48d')}</dt>
               <dd className="font-semibold text-base" data-testid="signal-sales-value">
                 {formatCurrency(funnel.salesValue, currency)}
               </dd>
@@ -450,10 +483,11 @@ function FunnelSection({
           </dl>
           {funnel.keywords.length > 0 ? (
             <p className="text-muted-foreground text-xs" data-testid="signal-keywords">
-              Core keywords:{' '}
-              {funnel.keywords
-                .map((keyword) => `“${keyword.keyword}” ${keyword.score}`)
-                .join(' · ')}
+              {uiText('core_keywords_list_d04fdcd', {
+                list: funnel.keywords
+                  .map((keyword) => `“${keyword.keyword}” ${keyword.score}`)
+                  .join(' · '),
+              })}
             </p>
           ) : null}
           {funnel.blocked ? (
@@ -474,6 +508,7 @@ function FunnelSection({
 // ── The small lens: one figure and its mini chart ─────────────────────────────────────────────
 
 function SmallSignal({ model, figureWindow }: { model: SignalModel; figureWindow: FigureWindow }) {
+  const uiText = useTranslations('scale');
   if (model.split) {
     const split = model.split;
     return (
@@ -488,14 +523,16 @@ function SmallSignal({ model, figureWindow }: { model: SignalModel; figureWindow
           )}
           label={
             split.reported != null
-              ? `of the ${countLabel(split.reported)} conversions Google reports are attention events`
-              : 'of what Google reports are attention events'
+              ? uiText('of_the_count_conversions_google_reports_are_a_b1429d8', {
+                  count: countLabel(split.reported),
+                })
+              : uiText('of_what_google_reports_are_attention_events_71f3f16')
           }
           testId="signal-headline"
           value={shareLabel(split.attentionShare)}
         />
         <SplitBar split={split} thin />
-        <Legend items={SPLIT_LEGEND} testId="signal-split-legend" />
+        <Legend items={splitLegend(uiText)} testId="signal-split-legend" />
       </div>
     );
   }
@@ -506,7 +543,9 @@ function SmallSignal({ model, figureWindow }: { model: SignalModel; figureWindow
         {leads && sales ? (
           <LensHeadline
             figure={figureProps('board.signal.sales', sales.value, null, figureWindow, 'count')}
-            label={`${STEP_LABEL.leads.toLowerCase()} → ${STEP_LABEL.sales.toLowerCase()}, last ${model.windowDays ?? '—'} days`}
+            label={uiText('leads_sales_last_days_days_41331b3', {
+              days: model.windowDays ?? '—',
+            })}
             testId="signal-headline"
             value={`${countLabel(leads.value)} → ${countLabel(sales.value)}`}
           />
@@ -523,14 +562,16 @@ function SmallSignal({ model, figureWindow }: { model: SignalModel; figureWindow
       <LensHeadline
         label={
           actions.sameValue != null
-            ? `conversion actions, every one valued ${actions.sameValue}`
-            : 'conversion actions flagged by the Optimizer'
+            ? uiText('conversion_actions_every_one_valued_value_872bb45', {
+                value: actions.sameValue,
+              })
+            : uiText('conversion_actions_flagged_by_the_optimizer_ac234a2')
         }
         testId="signal-headline"
         value={
           actions.sameValue != null
-            ? `All ${actions.rows.length}`
-            : `${flagged} of ${actions.rows.length}`
+            ? uiText('all_count_7ad0009', { count: actions.rows.length })
+            : uiText('flagged_of_total_f59ea3b', { flagged, total: actions.rows.length })
         }
       />
       <ActionsSection actions={actions} compact />

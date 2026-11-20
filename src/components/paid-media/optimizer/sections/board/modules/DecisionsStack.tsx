@@ -12,6 +12,7 @@
 
 import type { AccountCandidate } from '@continuum/contracts';
 import { ArrowRightIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import {
   useAccountApprovals,
@@ -90,6 +91,7 @@ function useDismiss(brandId: string, adAccountId: string | null) {
 }
 
 function ReviewAll({ onOpenActions }: { onOpenActions: () => void }) {
+  const uiText = useTranslations('scale');
   return (
     <button
       className="hit-area inline-flex items-center gap-1 font-semibold text-primary-ink text-xs hover:underline"
@@ -97,13 +99,14 @@ function ReviewAll({ onOpenActions }: { onOpenActions: () => void }) {
       onClick={onOpenActions}
       type="button"
     >
-      Review all
+      {uiText('review_all_d05163f')}
       <ArrowRightIcon aria-hidden="true" className="size-3.5" />
     </button>
   );
 }
 
 function DecisionsModule({ ctx, slot, source }: BoardModuleProps & { source: DecisionsSource }) {
+  const uiText = useTranslations('scale');
   const { dismiss, stateOf } = useDismiss(ctx.brandId, ctx.adAccountId);
   const cards = useMemo(
     () =>
@@ -141,7 +144,7 @@ function DecisionsModule({ ctx, slot, source }: BoardModuleProps & { source: Dec
       size={slot.size}
       state={FRAME_STATE[source.status]}
       testId={TEST_ID}
-      title="Decisions"
+      title={uiText('decisions_cfa6a08')}
     >
       {source.status === 'ready' ? (
         <DecisionsView
@@ -169,13 +172,17 @@ function DecisionsModule({ ctx, slot, source }: BoardModuleProps & { source: Dec
 
 /** Meta: the account read of the selected act_ account. */
 function MetaDecisions({ ctx, slot }: BoardModuleProps) {
+  const uiText = useTranslations('scale');
   const accountRead = useOptimizerAccountRead(ctx.brandId, ctx.adAccountId);
   const approvals = useAccountApprovals(ctx.brandId, ctx.adAccountId);
   const read = accountRead.data?.read ?? null;
   const { isLoading, isError } = accountRead;
   const source = useMemo((): DecisionsSource => {
     if (ctx.adAccountId == null) {
-      return { status: 'empty', message: 'Pick a Meta ad account to see what waits on it.' };
+      return {
+        status: 'empty',
+        message: uiText('pick_a_meta_ad_account_to_see_what_waits_on_i_86f6084'),
+      };
     }
     if (read) {
       return {
@@ -189,20 +196,29 @@ function MetaDecisions({ ctx, slot }: BoardModuleProps) {
     if (isError) {
       return {
         status: 'error',
-        message:
-          'The account read could not be loaded, so this board cannot say which decisions wait.',
+        message: uiText('the_account_read_could_not_be_loaded_so_this__92cbf58'),
       };
     }
     return {
       status: 'empty',
-      message: 'The Optimizer has not read this account yet. It reads every account once a night.',
+      message: uiText('the_optimizer_has_not_read_this_account_yet_i_a31ecd0'),
     };
-  }, [ctx.adAccountId, ctx.currency, ctx.portfolios, read, approvals.data, isLoading, isError]);
+  }, [
+    ctx.adAccountId,
+    ctx.currency,
+    ctx.portfolios,
+    read,
+    approvals.data,
+    isLoading,
+    isError,
+    uiText,
+  ]);
   return <DecisionsModule ctx={ctx} slot={slot} source={source} />;
 }
 
 /** Google: the brand's pending Google cards, across its Google portfolios. */
 function GoogleDecisions({ ctx, slot }: BoardModuleProps) {
+  const uiText = useTranslations('scale');
   const platformCards = useOptimizerPlatformCards(ctx.brandId, 'google_ads');
   const source = useMemo((): DecisionsSource => {
     switch (platformCards.status) {
@@ -211,13 +227,12 @@ function GoogleDecisions({ ctx, slot }: BoardModuleProps) {
       case 'unavailable':
         return {
           status: 'empty',
-          message: "Google's recommendations are not available on this server yet.",
+          message: uiText('google_s_recommendations_are_not_available_on_9ae6dd9'),
         };
       case 'error':
         return {
           status: 'error',
-          message:
-            "Google's recommendations could not be read, so this board cannot say which wait for a decision.",
+          message: uiText('google_s_recommendations_could_not_be_read_so_f6becd5'),
         };
       case 'ready':
         return {
@@ -227,7 +242,7 @@ function GoogleDecisions({ ctx, slot }: BoardModuleProps) {
           dailySpend: planPerDay(ctx.portfolios),
         };
     }
-  }, [platformCards, ctx.currency, ctx.portfolios]);
+  }, [platformCards, ctx.currency, ctx.portfolios, uiText]);
   return <DecisionsModule ctx={ctx} slot={slot} source={source} />;
 }
 

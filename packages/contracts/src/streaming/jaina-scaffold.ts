@@ -17,6 +17,7 @@
  */
 
 import { z } from 'zod';
+import { mediaCostPlanSchema } from '../headless-content/costPlan';
 import { paidScaffoldPlanSchema } from '../paid/scaffold-plan';
 import { jainaApprovalVariantSchema } from './jaina-approval';
 
@@ -72,6 +73,8 @@ export const jainaToolApprovalRequiredPayloadSchema = z
     expiresAt: z.string(),
     /** Before → after rows for the card; absent when the tool declares none. */
     preview: jainaApprovalPreviewSchema.optional(),
+    /** Every model call a media tool makes once approved, priced; absent off media tools. */
+    costPlan: mediaCostPlanSchema.optional(),
   })
   .passthrough();
 export type JainaToolApprovalRequiredPayload = z.infer<

@@ -1,3 +1,5 @@
+import { useTranslations } from 'next-intl';
+
 // The three marks that make the Brand DNA reveal honest, in one place because they say
 // one thing: here is what we read, and here is where we read nothing.
 //
@@ -5,8 +7,8 @@
 // `settings/brand/BrandEnginePanels.tsx` already follows — a value carries where it came
 // from, and a gap is SHOWN rather than filled in.
 
+import { NoSpecimenText } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
-import { NO_SPECIMEN_NOTE } from '@/components/brand/typefaceHonesty';
 import { ColorSwatch } from './ColorSwatch';
 import type { FieldProvenance, RevealedColour, RevealedTypeface } from './reveal';
 
@@ -20,12 +22,15 @@ import type { FieldProvenance, RevealedColour, RevealedTypeface } from './reveal
 export function ProvenanceMark({
   field,
   provenance,
-  emptyLabel = 'nothing found',
+  emptyLabel,
 }: {
   field: string;
   provenance: FieldProvenance;
   emptyLabel?: string;
 }) {
+  const tUi = useTranslations('onboarding');
+  const tCommon = useTranslations('common');
+
   return (
     <Badge
       variant={provenance.read ? 'muted' : 'warning'}
@@ -34,7 +39,9 @@ export function ProvenanceMark({
       data-field={field}
       data-provenance={provenance.read ? 'read' : 'empty'}
     >
-      {provenance.read ? `read · ${provenance.source}` : emptyLabel}
+      {provenance.read
+        ? tUi('m_394dc1bb60', { v0: String(provenance.source) })
+        : (emptyLabel ?? tCommon('nothingFound'))}
     </Badge>
   );
 }
@@ -48,6 +55,8 @@ export function ProvenanceMark({
  * nothing.
  */
 export function TypefaceReadout({ slot, family, usedFor, provenance }: RevealedTypeface) {
+  const tUi = useTranslations('onboarding');
+
   return (
     <div
       className="min-w-0"
@@ -57,7 +66,7 @@ export function TypefaceReadout({ slot, family, usedFor, provenance }: RevealedT
       data-provenance={provenance.read ? 'read' : 'empty'}
     >
       <p className="truncate text-sm font-medium text-foreground">
-        {family ?? 'No typeface found'}
+        {family ?? tUi('m_a16a74355f')}
       </p>
       <p className="text-2xs text-muted-foreground">
         {slot} · {usedFor}
@@ -66,7 +75,7 @@ export function TypefaceReadout({ slot, family, usedFor, provenance }: RevealedT
         <ProvenanceMark
           field={`typeface-${slot.toLowerCase()}`}
           provenance={provenance}
-          emptyLabel="nothing found"
+          emptyLabel={tUi('m_bc45bfd7e5')}
         />
       </div>
     </div>
@@ -77,13 +86,10 @@ export function TypefaceReadout({ slot, family, usedFor, provenance }: RevealedT
 export function NoSpecimenNote() {
   return (
     <p className="text-2xs leading-snug text-muted-foreground" data-testid="no-specimen-note">
-      {NO_SPECIMEN_NOTE}
+      <NoSpecimenText />
     </p>
   );
 }
-
-const NO_ROLE =
-  'No role recorded — this colour arrived as a bare hex, so nothing here can say what it is for.';
 
 /**
  * The strip is recognition; the rows under it are the rule.
@@ -93,6 +99,7 @@ const NO_ROLE =
  * screen exists to stop making.
  */
 export function PaletteReadout({ colours }: { colours: RevealedColour[] }) {
+  const tCommon = useTranslations('common');
   return (
     <div data-testid="reveal-palette">
       <div className="flex flex-wrap gap-2" data-testid="reveal-palette-strip">
@@ -118,7 +125,7 @@ export function PaletteReadout({ colours }: { colours: RevealedColour[] }) {
               }`}
               data-testid="reveal-colour-rule"
             >
-              {colour.rule ?? NO_ROLE}
+              {colour.rule ?? tCommon('brandColourNoRecordedRole')}
             </p>
           </div>
         ))}

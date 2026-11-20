@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { resultWords } from '../account/overviewModel';
+
 // "By platform": one text row per platform from optimizer_get_portfolio_metrics (frontend.html
 // §3), then the mixed portfolio's story: the spend shares as one stacked bar, no blended cost
 // (MixedPortfolioStory). The source is named once, in this block's header; under GA4 or a
@@ -55,6 +58,8 @@ function PlatformRowLine({
   resultKind: string;
   sourceSuffix: string | null;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <li
       className="grid grid-cols-2 items-baseline gap-x-4 gap-y-1 py-2 sm:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))]"
@@ -66,24 +71,33 @@ function PlatformRowLine({
         <span className="truncate text-muted-foreground text-xs">{row.delivering}</span>
       </span>
       <span className="text-sm tabular-nums" data-testid="by-platform-cost">
-        <span className="font-semibold">{formatCpa(row.costPerResult, currency)}</span>{' '}
+        <span className="font-semibold">{formatCpa(row.costPerResult, currency, uiLocale)}</span>{' '}
         <span className="text-muted-foreground text-xs">
-          per {resultKind}
-          {sourceSuffix ? ` · ${sourceSuffix}` : ''}
+          {uiText.rich('sentence_067b1e96fdc7', {
+            v0: resultKind,
+            v1: sourceSuffix ? ` · ${sourceSuffix}` : '',
+          })}
         </span>
       </span>
       <span className="text-sm tabular-nums" data-testid="by-platform-results">
-        <span className="font-semibold">{formatResults(row.results)}</span>{' '}
-        <span className="text-muted-foreground text-xs">· {formatShare(row.resultsShare)}</span>
+        <span className="font-semibold">{formatResults(row.results, uiLocale)}</span>{' '}
+        <span className="text-muted-foreground text-xs">
+          · {formatShare(row.resultsShare, uiLocale)}
+        </span>
         {row.platformResults !== null ? (
           <span className="block text-muted-foreground text-xs" data-testid="by-platform-own-count">
-            {formatResults(row.platformResults)} by {PLATFORM_NAMES[row.platform]}
+            {uiText.rich('sentence_96a4abf93f40', {
+              v0: formatResults(row.platformResults, uiLocale),
+              v1: PLATFORM_NAMES[row.platform],
+            })}
           </span>
         ) : null}
       </span>
       <span className="text-sm tabular-nums" data-testid="by-platform-spend">
-        <span className="font-semibold">{formatCurrency(row.spend, currency)}</span>{' '}
-        <span className="text-muted-foreground text-xs">· {formatShare(row.spendShare)}</span>
+        <span className="font-semibold">{formatCurrency(row.spend, currency, uiLocale)}</span>{' '}
+        <span className="text-muted-foreground text-xs">
+          · {formatShare(row.spendShare, uiLocale)}
+        </span>
       </span>
       <span
         className={cn('text-xs font-medium', STATE_TONE[row.state.kind])}
@@ -106,30 +120,36 @@ export function ByPlatformView({
   /** Known, from another read, to hold a member off Meta. Unknown reads as Meta. */
   nonMetaMember?: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   if (state.status === 'loading') return null;
   if (state.status !== 'ready' && !nonMetaMember) return null;
   if (state.status === 'unavailable') {
-    return <MultiPlatformUnavailable detail="The figures below are Meta's, as today." />;
+    return <MultiPlatformUnavailable detail={uiText('byPlatformMetaFallback')} />;
   }
   if (state.status === 'error') {
     return (
       <p className="text-muted-foreground text-xs" data-testid="by-platform-error" role="status">
-        The by-platform read failed. The figures below are Meta's, as today.
+        {uiText('the_by_platform_read_failed_the_figures_below_d30c808')}
       </p>
     );
   }
   const { metrics } = state;
-  const view = buildByPlatform(metrics);
+  const view = buildByPlatform(metrics, uiText, uiLocale);
   if (view.metaOnly) return null;
-  const header = attributionHeader(metrics, now);
-  const sourceSuffix = view.sourceIsNotPlatform ? attributionSourceName(header.used) : null;
-  const resultKind = metrics.result_kind.replace(/s$/, '');
+  const header = attributionHeader(metrics, now, uiText, uiLocale);
+  const sourceSuffix = view.sourceIsNotPlatform ? attributionSourceName(header.used, uiText) : null;
+  const resultKind = resultWords(metrics.result_kind, metrics.result_kind, uiText).one;
   return (
-    <section aria-label="By platform" data-testid="by-platform">
+    <section aria-label={uiText('by_platform_64eb24a')} data-testid="by-platform">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-semibold text-sm">By platform</h3>
+        <h3 className="font-semibold text-sm">{uiText('by_platform_64eb24a')}</h3>
         <p className="text-muted-foreground text-xs" data-testid="by-platform-attribution">
-          {WINDOW_WORDS[metrics.window.label] ?? metrics.window.label} · {header.line}
+          {uiText('byPlatformWindow', {
+            period: metrics.window.label === 'period' ? 'yes' : 'no',
+            days: Number(metrics.window.label.replace(/^d/, '')) || 0,
+          })}{' '}
+          · {header.line}
         </p>
       </header>
       {header.fallback ? (

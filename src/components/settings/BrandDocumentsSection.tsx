@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { DocumentManager } from '@/components/documents';
 import type { OnboardingDocument } from '@/lib/onboarding/state';
 
@@ -11,13 +12,14 @@ interface BrandDocumentsSectionProps {
 
 export function BrandDocumentsSection({ brandId, documents }: BrandDocumentsSectionProps) {
   const router = useRouter();
+  const uiText = useTranslations('common');
   return (
     <DocumentManager
       brandId={brandId}
       seed={documents}
       density="full"
       onStateChange={() => router.refresh()}
-      emptyHint="Upload PDFs, Word docs, presentations, or images to ground brand intelligence."
+      emptyHint={uiText('brandDocumentsHint')}
     />
   );
 }

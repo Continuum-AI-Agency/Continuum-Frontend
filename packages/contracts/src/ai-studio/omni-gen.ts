@@ -1,4 +1,4 @@
-// Gemini Omni 1.1 Flash (gemini-omni-1.1-flash) — request contract for the canvas
+// Gemini Omni 1.2 Flash (gemini-omni-1.2-flash) — request contract for the canvas
 // Omni node's Backend route (POST /api/ai-studio/generate-video-omni).
 //
 // One "turn" per call. A turn is a fresh generate, or an edit/extend against
@@ -12,7 +12,7 @@ import { z } from 'zod';
 // Canvas node model id (routing keys off this string — do NOT rename).
 export const OMNI_GEN_MODEL_ID = 'gemini-omni-flash' as const;
 // The actual Interactions API model the Backend calls.
-export const OMNI_GEN_BACKEND_MODEL = 'gemini-omni-1.1-flash' as const;
+export const OMNI_GEN_BACKEND_MODEL = 'gemini-omni-1.2-flash' as const;
 
 export const omniAspectRatioSchema = z.enum(['16:9', '9:16']);
 export type OmniAspectRatio = z.infer<typeof omniAspectRatioSchema>;

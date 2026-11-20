@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Ad profitability as a profit/loss line. The BasedKit ProfitLossLine colors the
 // stroke by sign against a HARDCODED zero baseline, so we shift ROAS to a P&L
 // number (roas − break-even) upstream: the line runs green above break-even and
@@ -23,6 +25,7 @@ import { type RoasPoint, roasBreakevenSeries } from './vizData';
  *  reader cannot resolve. Uses the plot's own scale so it stays aligned on resize
  *  (same pattern as the hero's action pins). */
 export function BreakevenLine() {
+  const uiText = useTranslations('scale');
   const { innerWidth } = useChartStable();
   const yScale = useYScale();
   const y = yScale(0);
@@ -40,7 +43,7 @@ export function BreakevenLine() {
         y2={y}
       />
       <text className="text-xs" fill="var(--chart-foreground-muted)" x={4} y={y - 4}>
-        break-even
+        {uiText('break_even_b188e5e')}
       </text>
     </g>
   );
@@ -52,10 +55,11 @@ type RoasProfitLineProps = {
 };
 
 export function RoasProfitLine({ points, breakeven = 1 }: RoasProfitLineProps) {
+  const uiText = useTranslations('scale');
   const series = roasBreakevenSeries(points, breakeven);
 
   if (series.length < 2) {
-    return <ChartEmpty message="ROAS profitability appears after a few days of delivery." />;
+    return <ChartEmpty message={uiText('roas_profitability_appears_after_a_few_days_o_a4437c1')} />;
   }
 
   return (
@@ -81,7 +85,7 @@ export function RoasProfitLine({ points, breakeven = 1 }: RoasProfitLineProps) {
         rows={(point) => [
           {
             color: (point.pnl as number) >= 0 ? 'var(--success)' : 'var(--destructive)',
-            label: 'ROAS',
+            label: uiText('roas_b81bd97'),
             value: `${(point.roas as number).toFixed(2)}×`,
           },
         ]}

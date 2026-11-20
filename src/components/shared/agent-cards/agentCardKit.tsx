@@ -1,6 +1,7 @@
 'use client';
 
 import { Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -263,6 +264,7 @@ export function AgentButton({
   disabled,
   ...props
 }: AgentButtonProps) {
+  const uiText = useTranslations('common');
   return (
     <Button
       variant={variant === 'primary' ? 'default' : 'ghost'}
@@ -281,7 +283,7 @@ export function AgentButton({
       {loading ? (
         <>
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {variant === 'primary' && <span>Starting…</span>}
+          {variant === 'primary' && <span>{uiText('starting_bbe5fc3')}</span>}
         </>
       ) : (
         children
@@ -298,7 +300,7 @@ export function ApproveRejectActions({
   locked,
   loading,
   approveLabel,
-  rejectLabel = 'Dismiss',
+  rejectLabel: uiProvidedRejectLabel,
   onApprove,
   onReject,
   approveTestId,
@@ -313,6 +315,9 @@ export function ApproveRejectActions({
   onApprove: () => void;
   onReject: () => void;
 }) {
+  const defaultUiText = useTranslations('common');
+  const rejectLabel = uiProvidedRejectLabel ?? defaultUiText('dismiss_48845bf');
+
   return (
     <AgentActions>
       <AgentButton variant="ghost" disabled={locked || loading} onClick={onReject}>

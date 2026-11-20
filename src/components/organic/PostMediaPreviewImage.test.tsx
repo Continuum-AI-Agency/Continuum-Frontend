@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { PostMediaPreviewImage } from './PostMediaPreviewImage';
 

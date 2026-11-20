@@ -7,10 +7,16 @@ import {
   templateRevisionVariantSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import type { LayerDraftState } from '@/components/forge/layerDraft';
 import { useForgeExitGuard } from '@/components/forge/useForgeExitGuard';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const BRAND = '11111111-1111-4111-8111-111111111111';
 const ASSET = '22222222-2222-4222-8222-222222222222';

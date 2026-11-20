@@ -11,6 +11,7 @@
 // the same spot, and lets go of it when the reviewer unlinks them.
 
 import { Minus, Plus, ScanSearch } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
@@ -158,6 +159,8 @@ export function ZoomStage({
   controlsExtra,
   children,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState<Size | null>(null);
   const [natural, setNatural] = useState<Size | null>(null);
@@ -469,20 +472,32 @@ export function ZoomStage({
       ) : null}
 
       <div className="absolute right-3 top-3 z-20 flex items-center gap-0.5 rounded-full border border-border bg-background/85 p-0.5 text-foreground shadow-sm backdrop-blur">
-        <ZoomButton label="Zoom out (−)" testId="zoom-out" onClick={() => stepZoom(0.5)}>
+        <ZoomButton
+          label={translateUi('zoom_out_0b9aa910')}
+          testId="zoom-out"
+          onClick={() => stepZoom(0.5)}
+        >
           <Minus className="size-3.5" />
         </ZoomButton>
-        <ZoomButton label="Fit (0)" testId="zoom-fit" onClick={toFit}>
+        <ZoomButton label={translateUi('fit_0_513c52dd')} testId="zoom-fit" onClick={toFit}>
           {percent === null ? '—' : `${percent}%`}
         </ZoomButton>
-        <ZoomButton label="Zoom in (+)" testId="zoom-in" onClick={() => stepZoom(2)}>
+        <ZoomButton
+          label={translateUi('zoom_in_4949ad25')}
+          testId="zoom-in"
+          onClick={() => stepZoom(2)}
+        >
           <Plus className="size-3.5" />
         </ZoomButton>
-        <ZoomButton label="Actual size (100%)" testId="zoom-actual" onClick={toActualSize}>
+        <ZoomButton
+          label={translateUi('actual_size_100_3322819f')}
+          testId="zoom-actual"
+          onClick={toActualSize}
+        >
           1:1
         </ZoomButton>
         <ZoomButton
-          label="Marquee zoom (Z + drag)"
+          label={translateUi('marquee_zoom_z_drag_6e2690dd')}
           testId="zoom-marquee"
           pressed={marqueeArmed}
           onClick={() => setMarqueeArmed((armed) => !armed)}

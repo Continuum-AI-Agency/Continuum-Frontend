@@ -11,7 +11,7 @@ import {
   editorProjectV2Schema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import type { TimelineInputSource } from '../../types';
 import { EditorProjectV2Assembly } from './EditorProjectV2Assembly';

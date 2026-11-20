@@ -3,6 +3,7 @@
 import type { MediaSearchResultsFrame } from '@continuum/contracts';
 import { ArrowRight, RefreshCw } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import { SentDocumentAttachments } from '@/components/chat/attachments';
@@ -14,6 +15,7 @@ import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
+import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
 import { useOpenPlannerDraft } from '../openPlannerDraft';
 import { ActiveStagesPanel } from './ActiveStagesPanel';
 import { AeoSnapshotCard } from './AeoSnapshotCard';
@@ -67,8 +69,6 @@ export function useStableRowActions(actions: OrganicMessageRowActions): OrganicM
       onRetryJob: (...args) => latest.current.onRetryJob(...args),
       onPlanDecision: (...args) => latest.current.onPlanDecision(...args),
       onStartBulkRun: (...args) => latest.current.onStartBulkRun(...args),
-      onOpenDraftIn: (...args) => latest.current.onOpenDraftIn(...args),
-      onViewDraft: (...args) => latest.current.onViewDraft(...args),
       onUseAsset: (...args) => latest.current.onUseAsset(...args),
       onSkillSaved: () => latest.current.onSkillSaved(),
       onRetryTurn: (...args) => latest.current.onRetryTurn(...args),
@@ -78,30 +78,39 @@ export function useStableRowActions(actions: OrganicMessageRowActions): OrganicM
 }
 
 // What each strip-producing tool found, as the strip's caption. A tool not listed gets none.
-const MEDIA_STRIP_LABELS: Record<string, string> = {
-  searchMediaLibrary: 'Library',
-  listDrafts: 'Drafts',
-  getDraft: 'Draft',
-  listOwnInstagramMedia: 'Recent media',
-  getTopPosts: 'Top posts',
-  getMediaDetails: 'Media',
-  getCalendarPostedContent: 'Posted content',
-  getCompetitorInstagramTopPosts: 'Competitor posts',
-  listCompetitorInstagramPosts: 'Competitor posts',
-  listCompetitorAds: 'Competitor ads',
-  headlessStillCreate: 'New stills',
-  headlessGuidedCreate: 'New stills',
-  headlessReelCreate: 'Opening frames',
-  generateReelVideos: 'New reels',
-  unsplashSearch: 'Unsplash',
-  getFacebookPostDetail: 'Facebook post',
-  getTikTokPostDetail: 'TikTok post',
-  getFacebookOrganicAnalytics: 'Facebook posts',
-  getTikTokOrganicAnalytics: 'TikTok posts',
-  getYouTubeOrganicAnalytics: 'YouTube videos',
-  getOrganicAwarenessReport: 'Top posts',
-  correlateTrendsToPosts: 'Matched posts',
-};
+const MEDIA_STRIP_LABEL_KEYS = {
+  searchMediaLibrary: 'library_dc20b3d',
+  listDrafts: 'drafts_f592e6a',
+  getDraft: 'draft_ebf12ef',
+  listOwnInstagramMedia: 'stripRecentMedia',
+  getTopPosts: 'tool_getTopPosts',
+  getMediaDetails: 'media_d357175',
+  getCalendarPostedContent: 'tool_getCalendarPostedContent',
+  getCompetitorInstagramTopPosts: 'stripCompetitorPosts',
+  listCompetitorInstagramPosts: 'stripCompetitorPosts',
+  listCompetitorAds: 'stripCompetitorAds',
+  headlessStillCreate: 'stripNewStills',
+  headlessGuidedCreate: 'stripNewStills',
+  headlessReelCreate: 'stripOpeningFrames',
+  generateReelVideos: 'stripNewReels',
+  getFacebookPostDetail: 'stripFacebookPost',
+  getTikTokPostDetail: 'stripTikTokPost',
+  getFacebookOrganicAnalytics: 'stripFacebookPosts',
+  getTikTokOrganicAnalytics: 'stripTikTokPosts',
+  getYouTubeOrganicAnalytics: 'stripYoutubeVideos',
+  getOrganicAwarenessReport: 'tool_getTopPosts',
+  correlateTrendsToPosts: 'stripMatchedPosts',
+} as const;
+
+export function organicMediaStripLabel(
+  toolName: string,
+  translate: ReturnType<typeof useTranslations<'organic'>>,
+): string | undefined {
+  if (toolName === 'unsplashSearch') return 'Unsplash';
+  return Object.hasOwn(MEDIA_STRIP_LABEL_KEYS, toolName)
+    ? translate(MEDIA_STRIP_LABEL_KEYS[toolName as keyof typeof MEDIA_STRIP_LABEL_KEYS])
+    : undefined;
+}
 
 // Stable identity per rendered card so React reconciliation and enter-animations
 // key off the card's own id instead of its array index (which shifts as cards
@@ -140,8 +149,6 @@ export type OrganicMessageRowActions = {
   onRetryJob: (jobId: string) => void;
   onPlanDecision: (decision: PlanApprovalDecision) => void;
   onStartBulkRun: (run: BulkRunRef) => void;
-  onOpenDraftIn: (draftId: string, target: 'calendar' | 'list') => void;
-  onViewDraft: (draftId: string) => void;
   onUseAsset: (item: MediaSearchResultsFrame['data']['items'][number]) => void;
   onSkillSaved: () => void;
   onRetryTurn: (messageId: string) => void;
@@ -215,6 +222,7 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
   jobs,
   actions,
 }: OrganicMessageRowProps) {
+  const uiText = useTranslations('organic');
   // Composer uploads persist a 1h signed URL with their asset id: a failed tile re-signs.
   const { recover: recoverAttachment, resolve } = useAssetMediaRecovery(brandId);
   const attachments = useMemo(
@@ -226,11 +234,13 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
   return (
     <>
       <ChatMessage id={msg.id} role={msg.role}>
-        <div className="space-y-2">
+        {/* Chrome's page translation swaps text nodes for its own; a reply still streaming
+            would keep writing into the detached originals. Translated once it settles. */}
+        <div className="space-y-2" translate={isStreamingRow ? 'no' : undefined}>
           {msg.role === 'assistant' ? (
             msg.content ? (
               <SafeMarkdown
-                content={presentAgentMessage(msg.content)}
+                content={presentAgentMessage(msg.content, uiText)}
                 className={ASSISTANT_MARKDOWN_CLASS}
                 mode={isStreamingRow ? 'streaming' : 'static'}
                 isAnimating={isStreamingRow}
@@ -249,7 +259,7 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
               </p>
               <ChatMediaGrid
                 items={attachments}
-                lightboxTitle="Attachment"
+                lightboxTitle={uiText('attachmentLightboxTitle')}
                 onRecoverItem={recoverAttachment}
               />
               <SentDocumentAttachments documents={msg.metadata?.documents} />
@@ -261,6 +271,8 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
             cardsByToolCallId={pipelineCardsByToolCallId}
             onEnrichDraft={actions.onEnrichDraft}
             onGenerateMedia={actions.onGenerateMedia}
+            onRetryJob={actions.onRetryJob}
+            onOpenDraft={openPlannerDraft}
           />
           <ActiveStagesPanel stages={activeStages} isStreaming={isStreamingRow} />
           {msg.mediaSearchResults && msg.mediaSearchResults.length > 0 && (
@@ -322,7 +334,7 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
                           onRejectAction={() =>
                             actions.onPlanDecision({ decision: 'reject', planId })
                           }
-                          onViewDraftAction={actions.onOpenDraftIn}
+                          onOpenDraftAction={openPlannerDraft}
                           onEnrichDraftAction={actions.onEnrichDraft}
                           onGenerateMediaAction={actions.onGenerateMedia}
                           onRetryJobAction={actions.onRetryJob}
@@ -377,7 +389,7 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
                         brandId={brandId}
                         items={card.data.items}
                         total={card.data.total}
-                        label={MEDIA_STRIP_LABELS[card.data.toolName]}
+                        label={organicMediaStripLabel(card.data.toolName, uiText)}
                         stripId={card.data.toolCallId}
                       />
                     );
@@ -443,12 +455,14 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
               message={msg}
               pipelineCardsByToolCallId={pipelineCardsByToolCallId}
               jobs={jobs}
-              onViewDraft={actions.onViewDraft}
+              onOpenDraft={openPlannerDraft}
             />
           ) : null}
           {msg.role === 'assistant' && msg.error && !autoRetryPending ? (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
-              <span className="min-w-0 text-sm text-destructive">{msg.error}</span>
+              <span className="min-w-0 text-sm text-destructive">
+                {friendlyStreamError(msg.error, uiText)}
+              </span>
               {/* A reply to an approval has no prompt of its own: a retry would re-send the one before. */}
               {msg.approvalReply ? null : (
                 <AgentButton
@@ -457,7 +471,7 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
                   onClick={() => actions.onRetryTurn(msg.id)}
                 >
                   <RefreshCw className="size-3.5" />
-                  Retry
+                  {uiText('retry_942087c')}
                 </AgentButton>
               )}
             </div>
@@ -492,33 +506,36 @@ function draftIdsForMessage(
   if (toolCallIds.size === 0) return [];
 
   const draftIds = new Set<string>();
+  // A draft whose row is gone is never linked: its card offers Recreate draft instead.
+  // Every path that marks a draft missing also clears its id, so skipping the flag is enough.
   for (const toolCallId of toolCallIds) {
     for (const card of pipelineCardsByToolCallId.get(toolCallId) ?? []) {
-      if (card.draftId) draftIds.add(card.draftId);
+      if (card.draftId && !card.draftMissing) draftIds.add(card.draftId);
     }
   }
   for (const job of Object.values(jobs)) {
-    if (job.toolCallId && toolCallIds.has(job.toolCallId) && job.draftId) {
+    if (job.toolCallId && toolCallIds.has(job.toolCallId) && job.draftId && !job.draftMissing) {
       draftIds.add(job.draftId);
     }
   }
   return Array.from(draftIds);
 }
 
-// Persistent "View post" CTA(s) on an assistant turn that produced a draft, so the
+// Persistent "Open in Calendar" CTA(s) on an assistant turn that produced a draft, so the
 // ready post is always one obvious click away from the chat — the old text-based
 // linkifier never fired because the backend does not emit a "Draft ID:" line.
 function MessageDraftLinks({
   message,
   pipelineCardsByToolCallId,
   jobs,
-  onViewDraft,
+  onOpenDraft,
 }: {
   message: ConversationMessage;
   pipelineCardsByToolCallId: ReadonlyMap<string, PipelineCardState[]>;
   jobs: Readonly<Record<string, AgentJobState>>;
-  onViewDraft: (draftId: string) => void;
+  onOpenDraft: (draftId: string) => void;
 }) {
+  const uiText = useTranslations('organic');
   const draftIds = draftIdsForMessage(message, pipelineCardsByToolCallId, jobs);
   if (draftIds.length === 0) return null;
   const multiple = draftIds.length > 1;
@@ -529,10 +546,13 @@ function MessageDraftLinks({
         <button
           key={draftId}
           type="button"
-          onClick={() => onViewDraft(draftId)}
+          onClick={() => onOpenDraft(draftId)}
+          title={draftId}
           className="inline-flex items-center gap-1.5 rounded-full border border-brand-primary/40 bg-brand-primary/5 px-3 py-1 text-xs font-medium text-brand-primary transition-colors hover:bg-brand-primary/10"
         >
-          {multiple ? `View post ${index + 1}` : 'View post'}
+          {multiple
+            ? uiText('open_in_calendar_number_number_53f78d4', { number: index + 1 })
+            : uiText('open_in_calendar_7c61a62')}
           <ArrowRight className="size-3" />
         </button>
       ))}

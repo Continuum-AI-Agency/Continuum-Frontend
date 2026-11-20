@@ -1,6 +1,7 @@
 'use client';
 
 import { SearchIcon, XIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Input } from '@/components/ui/input';
@@ -31,10 +32,12 @@ export type ChatHistoryFilterBarProps = {
   className?: string;
 };
 
-const INITIATOR_OPTIONS: Array<{ value: SessionInitiatorFilter; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'user', label: 'Human' },
-  { value: 'agent', label: 'AI' },
+const getINITIATOR_OPTIONS = (
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+): Array<{ value: SessionInitiatorFilter; label: string }> => [
+  { value: 'all', label: tUi('all_a52ace4') },
+  { value: 'user', label: tUi('m_e31663b107') },
+  { value: 'agent', label: tUi('m_560040c54a') },
 ];
 
 export function ChatHistoryFilterBar({
@@ -45,6 +48,8 @@ export function ChatHistoryFilterBar({
   isSearching = false,
   className,
 }: ChatHistoryFilterBarProps) {
+  const uiText = useTranslations('common');
+  const INITIATOR_OPTIONS = getINITIATOR_OPTIONS(uiText);
   const [draftQuery, setDraftQuery] = useState(filters.q);
 
   // The committed value wins when the caller resets the filters (e.g. "Clear"),
@@ -69,14 +74,14 @@ export function ChatHistoryFilterBar({
           type="search"
           value={draftQuery}
           onChange={(event) => setDraftQuery(event.target.value)}
-          placeholder="Search conversations"
-          aria-label="Search conversations"
+          placeholder={uiText('m_7087888557')}
+          aria-label={uiText('m_7087888557')}
           className="h-7 pl-7 pr-7 text-xs"
         />
         {draftQuery ? (
           <button
             type="button"
-            aria-label="Clear search"
+            aria-label={uiText('clear_search_3b7ea51')}
             onClick={() => {
               setDraftQuery('');
               onFiltersChange({ ...filters, q: '' });
@@ -96,7 +101,7 @@ export function ChatHistoryFilterBar({
             value &&
             onFiltersChange(setSessionInitiatorFilter(filters, value as SessionInitiatorFilter))
           }
-          aria-label="Filter by who started the conversation"
+          aria-label={uiText('m_cb94511b0d')}
         >
           {INITIATOR_OPTIONS.map((option) => (
             <ToggleGroupItem key={option.value} value={option.value} className="h-6 px-2 text-xs">
@@ -107,7 +112,7 @@ export function ChatHistoryFilterBar({
 
         {isSearching ? (
           <span className="text-2xs text-muted-foreground" role="status">
-            Searching…
+            {uiText('m_1a6a5ba8c2')}
           </span>
         ) : null}
       </div>

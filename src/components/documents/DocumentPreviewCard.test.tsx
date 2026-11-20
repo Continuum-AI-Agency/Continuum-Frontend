@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { createContext, type ReactNode, useContext } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 // Base UI's Positioner drives @floating-ui autoUpdate, which re-arms a frame for as long as a
 // popup is mounted. Under happy-dom that chain never settles and `bun test` hangs on this file

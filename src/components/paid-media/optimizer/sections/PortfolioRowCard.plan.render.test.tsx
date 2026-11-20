@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The apply-mode pill wants a tooltip provider ancestor; not what this file is about.
 mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));

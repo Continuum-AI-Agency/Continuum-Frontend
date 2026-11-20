@@ -1,7 +1,8 @@
 'use client';
-
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { localizeScaffoldCopy } from './scaffoldPlanView';
 
 const DEFAULT_REASON =
   'Derived from your brand setup and the campaign objective. Shown for review; it is not edited here.';
@@ -24,8 +25,12 @@ export function DerivedValue({
   reason?: string;
   className?: string;
 }) {
+  const t = useTranslations('scale');
   return (
-    <span className={cn('text-muted-foreground', className)} title={reason}>
+    <span
+      className={cn('text-muted-foreground', className)}
+      title={localizeScaffoldCopy(reason, t)}
+    >
       {children}
     </span>
   );

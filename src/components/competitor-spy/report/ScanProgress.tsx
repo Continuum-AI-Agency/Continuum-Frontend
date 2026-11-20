@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { scanCountLabel } from './scanCountPresentation';
+
 // Live staged checklist for a running scan, driven purely by scanReducer state.
 // A run_error renders inline (the pipeline degrades per-competitor) instead of
 // killing the layout.
@@ -45,27 +50,36 @@ function StageIcon({ stage }: { stage: ScanStageState | undefined }) {
   return <Check aria-hidden="true" className="size-3.5 text-emerald-600 dark:text-emerald-400" />;
 }
 
-function stageCountsLabel(stage: ScanStageState | undefined): string | null {
+function stageCountsLabel(
+  stage: ScanStageState | undefined,
+  t: ReturnType<typeof useTranslations<'competitor'>>,
+  locale: string,
+): string | null {
   if (!stage?.counts) return null;
   const entries = Object.entries(stage.counts);
   if (entries.length === 0) return null;
-  return entries.map(([key, value]) => `${value} ${humanize(key)}`).join(' · ');
+  return entries.map(([key, value]) => scanCountLabel(key, value, t, locale)).join(' · ');
 }
 
 export function ScanProgress({ scan }: { scan: CompetitorScanState }) {
+  const uiText = useTranslations('competitor');
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
   return (
     <section className="space-y-4 rounded-xl border border-border bg-card p-4">
       <div>
-        <h2 className="text-sm font-semibold text-foreground">Scanning your competitors</h2>
+        <h2 className="text-sm font-semibold text-foreground">
+          {uiText('scanning_your_competitors_a7da334')}
+        </h2>
         <p className="text-xs text-muted-foreground">
-          This keeps running on our side even if you leave the page.
+          {uiText('this_keeps_running_on_our_side_even_if_you_le_71a6ad9')}
         </p>
       </div>
 
       <ul className="space-y-2">
         {STAGE_ORDER.map((stageId) => {
           const stage = scan.stages[stageId];
-          const counts = stageCountsLabel(stage);
+          const counts = stageCountsLabel(stage, uiText, uiLocale);
           return (
             <li className="flex items-center gap-2.5 text-sm" key={stageId}>
               <span className="grid w-4 place-items-center">
@@ -77,7 +91,7 @@ export function ScanProgress({ scan }: { scan: CompetitorScanState }) {
                   stage?.status === 'skipped' && 'text-muted-foreground line-through',
                 )}
               >
-                {STAGE_LABEL[stageId]}
+                {localizeCompetitorCopy(STAGE_LABEL[stageId], uiText)}
               </span>
               {counts ? (
                 <span className="text-xs tabular-nums text-muted-foreground">{counts}</span>
@@ -89,14 +103,14 @@ export function ScanProgress({ scan }: { scan: CompetitorScanState }) {
 
       {scan.error ? (
         <p className="text-xs text-destructive" role="alert">
-          {scan.error}
+          {formatUiError(scan.transportError ?? { code: scan.error })}
         </p>
       ) : null}
 
       {scan.analyzedCreatives.length > 0 ? (
         <div className="space-y-1.5">
           <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Freshly analyzed
+            {uiText('freshly_analyzed_81fd39b')}
           </p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {scan.analyzedCreatives.map((creative) => (
@@ -115,7 +129,9 @@ export function ScanProgress({ scan }: { scan: CompetitorScanState }) {
                   </span>
                 ) : null}
                 {!creative.hookArchetype && !creative.primaryTheme ? (
-                  <span className="text-3xs text-muted-foreground">analyzed</span>
+                  <span className="text-3xs text-muted-foreground">
+                    {uiText('analyzed_8db7255')}
+                  </span>
                 ) : null}
               </div>
             ))}

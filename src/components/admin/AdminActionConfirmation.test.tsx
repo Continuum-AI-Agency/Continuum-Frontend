@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { Button } from '@/components/ui/button';
+import { render } from '@/i18n/__tests__/render';
 import { AdminActionConfirmation } from './AdminActionConfirmation';
 
 Object.assign(globalThis, {

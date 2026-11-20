@@ -6,7 +6,13 @@
  */
 
 import { afterEach, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const BRAND = '33333333-3333-4333-8333-333333333333';
 
@@ -16,8 +22,8 @@ const show = mock((_options: unknown) => {});
 
 // Spread the real modules: a PARTIAL mock.module deletes a module's other
 // exports for every file that loads afterwards, in this whole process.
-const actions = await import('@/app/(post-auth)/settings/actions');
-mock.module('@/app/(post-auth)/settings/actions', () => ({
+const actions = await import('@/app/[locale]/(post-auth)/settings/actions');
+mock.module('@/app/[locale]/(post-auth)/settings/actions', () => ({
   ...actions,
   updateBrandMetaWritesAllowedAction,
 }));

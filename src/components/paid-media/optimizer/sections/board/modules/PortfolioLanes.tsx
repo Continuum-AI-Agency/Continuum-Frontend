@@ -20,6 +20,7 @@ import {
   TriangleAlertIcon,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -125,6 +126,7 @@ function LanesView({
   lanes,
   loading,
 }: BoardModuleProps & { lanes: PortfolioLane[]; loading: boolean }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const [sort, setSort] = useState<LaneSort>('distance');
   const frame = {
@@ -137,14 +139,14 @@ function LanesView({
     return (
       <ModuleFrame {...frame} state="missing">
         <p className="text-muted-foreground text-sm" data-testid="board-lanes-empty">
-          No portfolio holds this account's campaigns yet.{' '}
+          {uiText('no_portfolio_holds_this_account_s_campaigns_y_91398ce')}{' '}
           <button
             className="inline-flex items-center gap-1 font-medium text-primary-ink hover:underline"
             onClick={ctx.onCreatePortfolio}
             type="button"
           >
             <PlusIcon aria-hidden="true" className="size-3.5" />
-            Create a portfolio
+            {uiText('create_a_portfolio_2283fad')}
           </button>
         </p>
       </ModuleFrame>
@@ -166,7 +168,7 @@ function LanesView({
     <ModuleFrame {...frame}>
       <div className="space-y-3">
         <ToggleGroup
-          aria-label="Sort portfolios by"
+          aria-label={uiText('sort_portfolios_by_703463b')}
           className="flex-wrap"
           data-testid="board-lanes-sort"
           onValueChange={(next) => {
@@ -203,21 +205,33 @@ function LanesView({
 
 /** "$53.12 per conversation · goal $45.00" — the figure the bullet draws, always written; and
  *  without a cost, what the window did instead. */
-function laneFigureLine(lane: PortfolioLane): string {
+function laneFigureLine(lane: PortfolioLane, uiText: ReturnType<typeof useTranslations<'scale'>>) {
   const { cost, goal, currency, words, status, figure } = lane;
   const parts: string[] = [];
-  if (cost != null) parts.push(`${formatCpa(cost, currency)} per ${words.one}`);
-  else if (figure && figure.spend > 0)
-    parts.push(`${formatCurrency(figure.spend, currency)} spent, no ${words.one} yet`);
-  else if (figure) parts.push('nothing spent in the window');
-  else if (status === 'lost-ad-sets') parts.push('no cycle can move it until its ad sets return');
-  else parts.push(goal != null ? 'not read yet' : 'no figure yet');
-  if (goal != null) parts.push(`goal ${formatCpa(goal, currency)}`);
-  else if (cost != null) parts.push('no goal to judge it against');
+  if (cost != null) {
+    parts.push(
+      uiText('cost_per_result_ca02977', { cost: formatCpa(cost, currency), result: words.one }),
+    );
+  } else if (figure && figure.spend > 0) {
+    parts.push(
+      uiText('spend_spent_no_result_yet_fbc4536', {
+        spend: formatCurrency(figure.spend, currency),
+        result: words.one,
+      }),
+    );
+  } else if (figure) parts.push(uiText('nothing_spent_in_the_window_9b17f07'));
+  else if (status === 'lost-ad-sets') {
+    parts.push(uiText('no_cycle_can_move_it_until_its_ad_sets_return_a69474a'));
+  } else {
+    parts.push(goal != null ? uiText('not_read_yet_2d7534b') : uiText('no_figure_yet_b44fefa'));
+  }
+  if (goal != null) parts.push(uiText('goal_goal_118e036', { goal: formatCpa(goal, currency) }));
+  else if (cost != null) parts.push(uiText('no_goal_to_judge_it_against_a718dad'));
   return parts.join(' · ');
 }
 
 function Lane({ lane, onSelect }: { lane: PortfolioLane; onSelect: () => void }) {
+  const uiText = useTranslations('scale');
   const { portfolio, status, cost, goal, currency } = lane;
   const style = STATUS_STYLE[status];
   const StatusIcon = style.icon;
@@ -254,7 +268,10 @@ function Lane({ lane, onSelect }: { lane: PortfolioLane; onSelect: () => void })
           <BulletMark
             color={divergingColor(cost, goal)}
             goal={goal}
-            label={`${formatCpa(cost, currency)} against a goal of ${formatCpa(goal, currency)}`}
+            label={uiText('cost_against_a_goal_of_goal_4e99f4a', {
+              cost: formatCpa(cost, currency),
+              goal: formatCpa(goal, currency),
+            })}
             testId="board-lane-bullet"
             value={cost}
           />
@@ -264,7 +281,7 @@ function Lane({ lane, onSelect }: { lane: PortfolioLane; onSelect: () => void })
             className="text-foreground tabular-nums"
             {...figureProps(`board.lane.${portfolio.id}.cost`, cost, currency, 'd7')}
           >
-            {laneFigureLine(lane)}
+            {laneFigureLine(lane, uiText)}
           </span>
           {distance ? ` · ${distance}` : ''}
           {lane.asOf ? ` · ${lane.asOf}` : ''}
@@ -281,10 +298,12 @@ function Lane({ lane, onSelect }: { lane: PortfolioLane; onSelect: () => void })
             'per-period',
           )}
         >
-          {lane.dailyBudget != null ? `${formatCurrency(lane.dailyBudget, currency)} / day` : '—'}
+          {lane.dailyBudget != null
+            ? uiText('amount_day_bbf11b1', { amount: formatCurrency(lane.dailyBudget, currency) })
+            : '—'}
         </span>
         <span className="text-muted-foreground">
-          {lane.pending > 0 ? `${lane.pending} waiting` : 'nothing waiting'}
+          {uiText('count_plural_0_nothing_waiting_other_waiting_3b57563', { count: lane.pending })}
         </span>
       </div>
     </button>
@@ -292,6 +311,7 @@ function Lane({ lane, onSelect }: { lane: PortfolioLane; onSelect: () => void })
 }
 
 function LanesLegend() {
+  const uiText = useTranslations('scale');
   return (
     <div
       className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-xs"
@@ -299,7 +319,7 @@ function LanesLegend() {
     >
       <span className="inline-flex items-center gap-1.5">
         <span aria-hidden="true" className="size-2.5 rounded-full bg-muted-foreground" />
-        Cost per result, last 7 days
+        {uiText('cost_per_result_last_7_days_8bd3689')}
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span
@@ -307,14 +327,14 @@ function LanesLegend() {
           className="h-1.5 w-3 rounded-full"
           style={{ background: BOARD_COLOR.below, opacity: 0.22 }}
         />
-        Under the goal
+        {uiText('under_the_goal_3154722')}
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span
           aria-hidden="true"
           className="h-3 border-foreground/55 border-l-[1.5px] border-dashed"
         />
-        Goal
+        {uiText('goal_cdbf697')}
       </span>
     </div>
   );

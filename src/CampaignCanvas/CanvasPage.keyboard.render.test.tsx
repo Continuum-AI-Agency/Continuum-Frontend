@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // PP-DT-E-canvas-keyboard-order (deep test 2026-10-31, lane E): on /scale/campaign-canvas a
 // keyboard user tabbed through the sidebar, then every edge ("Edge from 3840b0bb-…") and node of

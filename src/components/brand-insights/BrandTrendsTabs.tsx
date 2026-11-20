@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +36,7 @@ export function BrandTrendsTabs({
   generatedAt,
   fill = false,
 }: Props) {
+  const uiText = useTranslations('common');
   const questionsCount = useMemo(() => countQuestions(questionsByNiche), [questionsByNiche]);
   // TikTok trends and Listening load only once their tab is opened.
   const [tab, setTab] = useState('trends');
@@ -71,20 +74,29 @@ export function BrandTrendsTabs({
             or a cap. The aria-label says which quantity, since a bare number beside
             a tab name is ambiguous to a screen reader. */}
         <TabsTrigger value="trends" className="h-6 min-w-0 px-2 text-xs">
-          <span className="truncate">Trends</span>{' '}
-          <Badge variant="secondary" aria-label={`${trends.length} trends available`}>
+          <span className="truncate">{uiText('trends_e856c6c')}</span>{' '}
+          <Badge
+            variant="secondary"
+            aria-label={uiText('m_edfe8798a9', { v0: String(trends.length) })}
+          >
             {trends.length}
           </Badge>
         </TabsTrigger>
         <TabsTrigger value="events" className="h-6 min-w-0 px-2 text-xs">
-          <span className="truncate">Events</span>{' '}
-          <Badge variant="secondary" aria-label={`${events.length} events available`}>
+          <span className="truncate">{uiText('events_8d14f6e')}</span>{' '}
+          <Badge
+            variant="secondary"
+            aria-label={uiText('m_7633d61b0f', { v0: String(events.length) })}
+          >
             {events.length}
           </Badge>
         </TabsTrigger>
         <TabsTrigger value="questions" className="h-6 min-w-0 px-2 text-xs">
-          <span className="truncate">Questions</span>{' '}
-          <Badge variant="secondary" aria-label={`${questionsCount} questions available`}>
+          <span className="truncate">{uiText('questions_9a72221')}</span>{' '}
+          <Badge
+            variant="secondary"
+            aria-label={uiText('m_05cab96d92', { v0: String(questionsCount) })}
+          >
             {questionsCount}
           </Badge>
         </TabsTrigger>
@@ -92,7 +104,7 @@ export function BrandTrendsTabs({
           <span className="truncate">TikTok</span>
         </TabsTrigger>
         <TabsTrigger value="listening" className="h-6 min-w-0 px-2 text-xs">
-          <span className="truncate">Listening</span>
+          <span className="truncate">{uiText('m_dc35348702')}</span>
         </TabsTrigger>
       </TabsList>
 

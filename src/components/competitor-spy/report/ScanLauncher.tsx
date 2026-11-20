@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Zero state for the Competitive Report: one primary action that kicks off the
 // full discover → pull → analyze → gap pipeline.
@@ -15,29 +16,33 @@ export function ScanLauncher({
   onStart: () => void;
   onManageCompetitors: () => void;
 }) {
+  const uiText = useTranslations('competitor');
   return (
     <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border p-12 text-center">
       <div className="grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
         <Radar aria-hidden="true" className="size-5" />
       </div>
       <div className="max-w-xl space-y-1.5">
-        <h2 className="text-lg font-semibold text-foreground">Scan your competitive landscape</h2>
+        <h2 className="text-lg font-semibold text-foreground">
+          {uiText('scan_your_competitive_landscape_ae1bbc6')}
+        </h2>
         <p className="text-sm text-muted-foreground">
-          We find your competitors, pull their Meta ads, break down the hooks and angles they keep
-          scaling, and show exactly where your ads fall short.
+          {uiText('we_find_your_competitors_pull_their_meta_ads__ee926df')}
         </p>
         {website ? (
           <p className="text-xs text-muted-foreground">
-            Scanning around <span className="font-medium text-foreground">{website}</span>
+            {uiText.rich('m_a68fe2250e', {
+              website: () => <span className="font-medium text-foreground">{website}</span>,
+            })}
           </p>
         ) : null}
       </div>
       <div className="flex flex-col items-center gap-1">
         <Button onClick={onStart} type="button">
-          Scan my competitors
+          {uiText('scan_my_competitors_80af81b')}
         </Button>
         <Button onClick={onManageCompetitors} size="sm" type="button" variant="link">
-          Or add competitors manually
+          {uiText('or_add_competitors_manually_6361ad9')}
         </Button>
       </div>
     </div>

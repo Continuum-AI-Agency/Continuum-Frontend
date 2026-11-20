@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import type { DesignArrangement, DesignLayersResponse, TemplateRevision } from '@continuum/contracts';
+import type {
+  DesignArrangement,
+  DesignLayersResponse,
+  TemplateRevision,
+} from '@continuum/contracts';
 
 const LAYERS: DesignLayersResponse = {
   source: 'photoshop',
@@ -20,7 +24,14 @@ mock.module('@/lib/library/templateSources', () => ({
   saveTemplateRevision: saved,
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { DesignLayersPanel } from './DesignLayersPanel';
 
 afterEach(() => {
@@ -30,7 +41,9 @@ afterEach(() => {
 });
 
 const names = (list: HTMLElement) =>
-  within(list).getAllByRole('listitem').map((item) => item.textContent?.trim());
+  within(list)
+    .getAllByRole('listitem')
+    .map((item) => item.textContent?.trim());
 const props = {
   brandId: 'brand-1',
   assetId: 'asset-1',
@@ -100,26 +113,36 @@ describe('DesignLayersPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Arrangements · extra formats/ }));
     const arrangement = await screen.findByRole('region', { name: 'Arrangement Alt' });
     expect(names(within(arrangement).getByRole('list', { name: 'Alt stack' }))).toEqual([
-      'LOGO VIVO', '<Rectángulo>', 'DE DESCUENTO',
+      'LOGO VIVO',
+      '<Rectángulo>',
+      'DE DESCUENTO',
     ]);
     fireEvent.click(within(arrangement).getByRole('button', { name: 'Reset to the file’s order' }));
     expect(names(within(arrangement).getByRole('list', { name: 'Alt stack' }))).toEqual([
-      'DE DESCUENTO', 'LOGO VIVO', '<Rectángulo>',
+      'DE DESCUENTO',
+      'LOGO VIVO',
+      '<Rectángulo>',
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'Save arrangement revision' }));
     await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
     expect(saved.mock.calls[0]?.[1]).toMatchObject({
-      brandId: 'brand-1', parentRevisionId: 'revision-1',
-      expectedHeadRevisionId: 'head-1', variantId: 'variant-1',
+      brandId: 'brand-1',
+      parentRevisionId: 'revision-1',
+      expectedHeadRevisionId: 'head-1',
+      variantId: 'variant-1',
       edits: { arrangement: { name: 'Alt', artboardId: null, order: [22, 5, 17] } },
     });
   });
 
   test('reports unsupported sources without attempting a save', async () => {
-    read = async () => { throw new Error('layer order can be changed only for Photoshop imports'); };
+    read = async () => {
+      throw new Error('layer order can be changed only for Photoshop imports');
+    };
     render(<DesignLayersPanel {...props} onSaved={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /Arrangements · extra formats/ }));
-    expect(await screen.findByText(/layer order can be changed only for Photoshop imports/)).toBeTruthy();
+    expect(
+      await screen.findByText(/layer order can be changed only for Photoshop imports/),
+    ).toBeTruthy();
     expect(saved).not.toHaveBeenCalled();
   });
 });

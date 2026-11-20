@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { AdminBrandOption } from '@/components/admin/adminUserTypes';
+import { render } from '@/i18n/__tests__/render';
 import { BrandTransferCombobox } from './BrandTransferCombobox';
 
 Object.assign(globalThis, {

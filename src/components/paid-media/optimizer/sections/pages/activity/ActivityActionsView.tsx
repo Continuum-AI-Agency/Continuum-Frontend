@@ -7,6 +7,7 @@
 
 import type { OptimizerFeedWindowDays } from '@continuum/contracts';
 import { useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useMemo, useRef, useState } from 'react';
 import {
   Select,
@@ -46,17 +47,15 @@ import {
 } from './useActivitySpend';
 import { type PlatformChangesRead, usePlatformChanges } from './usePlatformChanges';
 
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 /** What the change history could not say, so the timeline never passes for complete. */
-function changeHistoryNotes(read: PlatformChangesRead): string[] {
+function changeHistoryNotes(read: PlatformChangesRead, uiText: ScaleCopy): string[] {
   if (read.failed) {
-    return [
-      "Google's change history could not be read, so changes made in Google Ads are missing.",
-    ];
+    return [uiText('google_s_change_history_could_not_be_read_so__c8ed6da')];
   }
   if (read.truncated) {
-    return [
-      "Google's change history was cut short at its row limit: older changes may be missing.",
-    ];
+    return [uiText('google_s_change_history_was_cut_short_at_its__a9b53e3')];
   }
   return [];
 }
@@ -73,6 +72,7 @@ function ChartAccountPicker({
   value: string;
   onChange: (accountId: string) => void;
 }) {
+  const uiText = useTranslations('scale');
   if (accounts.length < 2) return null;
   const labelOf = (id: unknown) => {
     const account = accounts.find((candidate) => candidate.id === id);
@@ -80,7 +80,10 @@ function ChartAccountPicker({
   };
   return (
     <Select onValueChange={(next) => onChange(String(next))} value={value}>
-      <SelectTrigger aria-label="Ad account the line is drawn for" className="h-7 w-48 text-xs">
+      <SelectTrigger
+        aria-label={uiText('ad_account_the_line_is_drawn_for_953a2fb')}
+        className="h-7 w-48 text-xs"
+      >
         <SelectValue>{labelOf}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -103,6 +106,7 @@ export function ActivityActionsView({
   windowDays: OptimizerFeedWindowDays;
   footer?: ReactNode;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const [source, setSource] = useState<ActivitySourceFilter>('all');
   const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
@@ -183,7 +187,7 @@ export function ActivityActionsView({
         filter={<ActivitySourceTabs counts={counts} onChange={setSource} value={source} />}
         highlightedId={highlightedId}
         markers={markers}
-        notes={changeHistoryNotes(platformChanges)}
+        notes={changeHistoryNotes(platformChanges, uiText)}
         onHighlight={setHighlightedId}
         onPick={pick}
         overflow={overflow}

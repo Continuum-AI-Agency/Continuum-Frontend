@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The 3 / 7 / 14-day switch for cost-per-result reads. These are the engine's own
 // scoring windows (the numbers a move was judged on), which is why the choice stops at 14.
@@ -27,9 +28,10 @@ export function LookbackToggle({
   className,
   size = 'default',
 }: LookbackToggleProps) {
+  const uiText = useTranslations('scale');
   return (
     <ToggleGroup
-      aria-label="Cost per result lookback"
+      aria-label={uiText('cost_per_result_lookback_005e7bf')}
       className={className}
       onValueChange={(next) => {
         if (next) onChange(Number(next) as StoryLookback);
@@ -41,7 +43,7 @@ export function LookbackToggle({
     >
       {STORY_LOOKBACKS.map((days) => (
         <ToggleGroupItem className={ITEM_CLASS[size]} key={days} value={String(days)}>
-          {days}d
+          {uiText.rich('sentence_7dfb8b37fac2', { v0: days })}
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

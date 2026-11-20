@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 let feedData: { items: unknown[]; syncFaults: unknown[] } = { items: [], syncFaults: [] };
 
@@ -11,7 +12,12 @@ const postsMock = mock((_params: unknown) => ({
 }));
 
 mock.module('@/lib/api/competitorSpy', () => ({
-  useInstagramCompetitorSearch: () => ({ isLoading: false, isError: false, error: null, data: undefined }),
+  useInstagramCompetitorSearch: () => ({
+    isLoading: false,
+    isError: false,
+    error: null,
+    data: undefined,
+  }),
   useInstagramPosts: postsMock,
 }));
 
@@ -74,7 +80,10 @@ describe('CompetitorOrganicExplorer platforms', () => {
       <CompetitorOrganicExplorer brandId="b1" />,
     );
     fireEvent.click(getByRole('button', { name: 'Facebook' }));
-    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({ platform: 'facebook', sort: 'recent' });
+    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      platform: 'facebook',
+      sort: 'recent',
+    });
     expect(queryByLabelText('Search competitors')).toBeNull();
     expect(getByRole('button', { name: 'Outlier' })).toBeDefined();
     expect(queryByRole('button', { name: 'For your brand' })).toBeNull();

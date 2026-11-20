@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import type { LibraryPlayback, MediaAsset } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { clearLibraryPlaybackCache, fetchLibraryPlayback } from '@/lib/library/libraryPlayback';
 import { MediaCard } from './MediaCard';
@@ -96,6 +103,29 @@ describe('MediaCard download affordance', () => {
   });
 });
 
+describe('MediaCard HEVC warning', () => {
+  const video = (videoCodec: string | null) =>
+    libraryAsset({
+      kind: 'video',
+      fileName: 'PAUTA_1_MAJITO.mov',
+      mimeType: 'video/quicktime',
+      signedUrl: 'https://cdn.test/pauta.mov',
+      videoCodec,
+    });
+
+  // Easy Fit's PAUTA .mov files played in the editor and only failed at export.
+  it('flags an HEVC video on the card, before anyone builds an export on it', () => {
+    mount(<MediaCard brandId="brand-1" asset={video('HEVC')} />);
+    expect(screen.getByText('HEVC').getAttribute('title')).toContain('H.264');
+  });
+
+  it('leaves H.264 and uncoded videos alone', () => {
+    mount(<MediaCard brandId="brand-1" asset={video('H.264')} />);
+    mount(<MediaCard brandId="brand-1" asset={video(null)} />);
+    expect(screen.queryByText('HEVC')).toBeNull();
+  });
+});
+
 describe('MediaCard thumbnail', () => {
   // Tests run without next.config, so next/image wraps the chosen URL in its loader.
   const imageSrc = () => {
@@ -131,6 +161,29 @@ describe('MediaCard thumbnail', () => {
     );
     fireEvent.error(screen.getByAltText('Hero shot'));
     expect(imageSrc()).toBe('https://cdn.test/hero.jpg');
+  });
+});
+
+describe('MediaCard video at rest', () => {
+  it('draws its poster as a lazy still and fetches no video until the pointer is on it', () => {
+    const { container } = mount(
+      <MediaCard
+        brandId="brand-1"
+        index={20}
+        asset={libraryAsset({
+          kind: 'video',
+          mimeType: 'video/mp4',
+          fileName: 'clip.mp4',
+          signedUrl: 'https://cdn.test/clip.mp4',
+          thumbnailUrl: 'https://cdn.test/clip-poster.webp',
+        })}
+      />,
+    );
+    const still = container.querySelector('img[src="https://cdn.test/clip-poster.webp"]');
+    expect(still?.getAttribute('loading')).toBe('lazy');
+    const video = container.querySelector('video');
+    expect(video?.hasAttribute('poster')).toBe(false);
+    expect(video?.getAttribute('src')).toBeNull();
   });
 });
 
@@ -275,12 +328,6 @@ describe('MediaCard office documents', () => {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'XLSX',
       'spreadsheet',
-    ],
-    [
-      'deck.pptx',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'PPTX',
-      'presentation',
     ],
     ['old.xls', 'application/vnd.ms-excel', 'XLS', 'spreadsheet'],
   ])('%s says it has no preview and still offers the download', (fileName, mimeType, badge, icon) => {

@@ -8,8 +8,13 @@
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { SourceDropCandidate } from '../hooks/useEdgeDropNode';
 import { SourceDropNodePicker } from './SourceDropNodePicker';
 

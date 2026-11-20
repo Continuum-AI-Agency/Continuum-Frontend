@@ -2,7 +2,7 @@
 
 import type { Skill } from '@continuum/contracts';
 import { AnimatePresence } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Suggestion } from '@/components/ai-elements/suggestion';
@@ -29,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useOrganicAgentStream } from '@/hooks/useOrganicAgentStream';
 import { useSession } from '@/hooks/useSession';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   fetchCreativeInsightSuggestions,
   fetchOrganicInsightSuggestions,
@@ -72,7 +73,6 @@ import {
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { describeSkillForGeneration } from '@/lib/brands/generationConfigPresentation';
-import { requestOrganicJobRetry } from '@/lib/organic/agent-retry';
 import {
   fetchOrganicSessionMessagePage,
   type OrganicSessionMessage,
@@ -93,6 +93,7 @@ import { buildCanvasReference, getCanvasPreview } from './canvasMentions';
 import { resolveConceptPreviewUrls } from './conceptPreview';
 import { DraftTrayPreview } from './DraftTrayPreview';
 import { deriveOrganicAnchors } from './deriveOrganicAnchors';
+import { MessageRowBoundary } from './MessageRowBoundary';
 import {
   NO_ACTIVE_STAGES,
   OrganicMessageRow,
@@ -102,8 +103,8 @@ import {
 } from './OrganicMessageRow';
 import { OrganicSessionSidebar } from './OrganicSessionSidebar';
 import { PromptPickerButton } from './PromptPickerButton';
-import { buildPlannerDraftDeepLink } from './presentAgentMessage';
 import { type RestoredSession, restoreSessionFromMessages } from './restoreSession';
+import { retryJobInPlace } from './retryJobInPlace';
 import { SkillPickerButton } from './SkillPickerButton';
 import { organicSessionContent } from './sessionContent';
 import { ToolApprovalCard } from './ToolApprovalCard';
@@ -119,41 +120,6 @@ import { useOrganicSessions } from './useOrganicSessions';
 import { useProjectedRun } from './useProjectedRun';
 
 /** Top-level @-menu folders (order is display order). Nested children drill via keys. */
-const ROOT_MENTION_FOLDERS: Array<{
-  key: string;
-  label: string;
-  type: AgentMentionSuggestion['type'];
-  childrenLabel: string;
-}> = [
-  { key: 'folder:Brain', label: 'Brain', type: 'document', childrenLabel: 'Brand documents' },
-  { key: 'folder:Skills', label: 'Skills', type: 'skill', childrenLabel: 'Brand skills & library' },
-  {
-    key: 'folder:Media',
-    label: 'Media',
-    type: 'media_asset',
-    childrenLabel: 'Canvas & media library',
-  },
-  // Trends + events + questions share one nest (planner/signal surface).
-  {
-    key: 'folder:Signals',
-    label: 'Signals',
-    type: 'trend',
-    childrenLabel: 'Trends, events, questions',
-  },
-  { key: 'folder:Drafts', label: 'Drafts', type: 'draft', childrenLabel: 'Scheduled & backlog' },
-  {
-    key: 'folder:Published',
-    label: 'Published',
-    type: 'organic_post',
-    childrenLabel: 'Published posts from this brand',
-  },
-  {
-    key: 'folder:KPIs',
-    label: 'KPIs',
-    type: 'kpi',
-    childrenLabel: "Metrics, What's Working, insights",
-  },
-];
 
 const SKILLS_BRAND_FOLDER_KEY = 'folder:Skills:Brand';
 const SKILLS_LIBRARY_FOLDER_KEY = 'folder:Skills:Library';
@@ -240,7 +206,12 @@ const STARTER_PROMPTS = [
 // Lane-neutral on purpose. The old example ("Plan me 3 posts this week on the beauty trend")
 // was an EXECUTE-lane instruction in English shown to every brand, which primed generation
 // even when the reader only wanted to know how last week went.
-const COMPOSER_PLACEHOLDER = 'Ask about performance, or plan what comes next…';
+const STARTER_PROMPT_LABELS = [
+  'starterPlanWeek',
+  'starterAeo',
+  'starterTrending',
+  'starterReel',
+] as const;
 
 function resolveTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -374,6 +345,64 @@ export function OrganicAgentPanel({
   mentionContext,
   initialSessionId,
 }: OrganicAgentPanelProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('organic');
+  const libraryText = useTranslations('library');
+  const libraryTextRef = useRef(libraryText);
+  useEffect(() => {
+    libraryTextRef.current = libraryText;
+  }, [libraryText]);
+  const ROOT_MENTION_FOLDERS: Array<{
+    key: string;
+    label: string;
+    type: AgentMentionSuggestion['type'];
+    childrenLabel: string;
+  }> = [
+    {
+      key: 'folder:Brain',
+      label: uiText('brain_7e4d5c4'),
+      type: 'document',
+      childrenLabel: uiText('brand_documents_7bc955e'),
+    },
+    {
+      key: 'folder:Skills',
+      label: uiText('skills_66d0f52'),
+      type: 'skill',
+      childrenLabel: uiText('brand_skills_library_93c7a91'),
+    },
+    {
+      key: 'folder:Media',
+      label: uiText('media_d357175'),
+      type: 'media_asset',
+      childrenLabel: uiText('canvas_media_library_9b64ef9'),
+    },
+    // Trends + events + questions share one nest (planner/signal surface).
+    {
+      key: 'folder:Signals',
+      label: uiText('signals_88b01c8'),
+      type: 'trend',
+      childrenLabel: uiText('trends_events_questions_0299703'),
+    },
+    {
+      key: 'folder:Drafts',
+      label: uiText('drafts_f592e6a'),
+      type: 'draft',
+      childrenLabel: uiText('scheduled_backlog_4370be4'),
+    },
+    {
+      key: 'folder:Published',
+      label: uiText('published_2ef42ec'),
+      type: 'organic_post',
+      childrenLabel: uiText('published_posts_from_this_brand_4f8fffc'),
+    },
+    {
+      key: 'folder:KPIs',
+      label: uiText('kpis_5bfb147'),
+      type: 'kpi',
+      childrenLabel: uiText('metrics_what_s_working_insights_976228d'),
+    },
+  ];
+
   const [selectedAccountPlatforms, setSelectedAccountPlatforms] = useState(() =>
     Object.keys(platformAccountIds),
   );
@@ -387,20 +416,17 @@ export function OrganicAgentPanel({
   );
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
   const { show } = useToast();
-  const router = useRouter();
   const { attachRun } = useCalendarRunStream();
   const requestCalendarRefetch = useCalendarStore((s) => s.requestCalendarRefetch);
   const handleCalendarDraftSignal = useCallback(() => {
     // Fetch-all reload pulls in the new draft wherever it landed.
     requestCalendarRefetch();
   }, [requestCalendarRefetch]);
-  const { start, startControl, cancel, detach, isStreaming, liveRunId } = useOrganicAgentStream(
-    dispatch,
-    {
+  const { start, startControl, reattach, cancel, detach, isStreaming, liveRunId } =
+    useOrganicAgentStream(dispatch, {
       onRunStarted: attachRun,
       onCalendarDraftSignal: handleCalendarDraftSignal,
-    },
-  );
+    });
 
   // Render a turn that was already in flight when we got here — you sent a message,
   // navigated away, and came back. The app-level store kept tailing the run the whole time;
@@ -429,8 +455,6 @@ export function OrganicAgentPanel({
   const backlogDrafts = useCalendarStore((s) => s.backlogDrafts);
   const selectedDraftId = useCalendarStore((s) => s.selectedDraftId);
   const selectedTrendIds = useCalendarStore((s) => s.selectedTrendIds);
-  const setViewMode = useCalendarStore((s) => s.setViewMode);
-  const setSelectedDraftId = useCalendarStore((s) => s.setSelectedDraftId);
   const canvasNodes = useStudioStore((s) => s.nodes);
   // Chat-side approve-through: the same Stage-2 (expandDrafts) / Stage-3
   // (generateDraftMedia) client fns the planner uses, keyed onto the planner
@@ -465,35 +489,23 @@ export function OrganicAgentPanel({
     },
     [brandId, generateDraftMedia, resolveCalendarFeId],
   );
-  /**
-   * Retry a FAILED generation by resetting its existing row to queued, rather than
-   * enqueuing a second job for the same concept. The durable worker re-runs it from the
-   * context it already persisted, and the dead row does not stay behind inflating the
-   * queued count with work nobody is watching.
-   */
+  /** Retry (failed job) and Recreate draft (missing draft) — see retryJobInPlace. */
   const handleRetryJobFromChat = useCallback(
     (jobId: string) => {
-      dispatch({ type: 'JOB_UPDATE', job: { jobId, status: 'queued' } });
-      void requestOrganicJobRetry({ jobId, brandId }).catch((error: unknown) => {
-        dispatch({
-          type: 'JOB_UPDATE',
-          job: {
-            jobId,
-            status: 'failed',
-            error: {
-              message:
-                error instanceof Error ? error.message : 'Could not retry the failed generation.',
-            },
-          },
-        });
-        show({
-          title: 'Could not retry that generation',
-          description: error instanceof Error ? error.message : undefined,
-          variant: 'error',
-        });
+      void retryJobInPlace({
+        jobId,
+        brandId,
+        state: { jobs: state.jobs, pipeline: state.pipeline },
+        dispatch,
+        notifyFailure: (message) =>
+          show({
+            title: uiText('could_not_retry_that_generation_a9adf46'),
+            description: message,
+            variant: 'error',
+          }),
       });
     },
-    [brandId, show],
+    [brandId, show, state.jobs, state.pipeline, uiText],
   );
 
   const {
@@ -557,8 +569,8 @@ export function OrganicAgentPanel({
   );
 
   const anchors = useMemo(
-    () => deriveOrganicAnchors(state.messages, state.pipeline),
-    [state.messages, state.pipeline],
+    () => deriveOrganicAnchors(state.messages, state.pipeline, uiText),
+    [state.messages, state.pipeline, uiText],
   );
   const sessionContent = useMemo(
     () => organicSessionContent(state.pipeline, state.jobs),
@@ -925,8 +937,8 @@ export function OrganicAgentPanel({
             });
           }
           show({
-            title: 'Could not apply the plan decision',
-            description: error instanceof Error ? error.message : 'Please try again.',
+            title: uiText('could_not_apply_the_plan_decision_49a00dc'),
+            description: formatUiError(error),
             variant: 'error',
           });
         });
@@ -939,6 +951,8 @@ export function OrganicAgentPanel({
       activeSessionId,
       debouncedRefreshSessions,
       show,
+      uiText,
+      formatUiError,
     ],
   );
 
@@ -983,9 +997,10 @@ export function OrganicAgentPanel({
         dispatch({ type: 'DISCARD_MESSAGE', messageId: replyMessageId });
         dispatch({ type: 'TOOL_APPROVAL_ADD', approval });
         show({
-          title: approved ? 'Approval not delivered' : 'Denial not delivered',
-          description:
-            'The agent did not receive your decision. Nothing was published — please answer again.',
+          title: approved
+            ? uiText('approval_not_delivered_3acddb8')
+            : uiText('denial_not_delivered_273c81a'),
+          description: uiText('the_agent_did_not_receive_your_decision_nothi_51d6648'),
           variant: 'error',
         });
       });
@@ -999,6 +1014,7 @@ export function OrganicAgentPanel({
       activeSessionId,
       debouncedRefreshSessions,
       show,
+      uiText,
     ],
   );
 
@@ -1013,6 +1029,17 @@ export function OrganicAgentPanel({
 
       const idx = state.messages.findIndex((m) => m.id === assistantMessageId);
       if (idx === -1) return false;
+
+      // The connection dropped but the run kept going: pick it up in the same bubble. Re-sending
+      // the question would answer it twice, and file a second copy of it in the history.
+      const { resumeRun } = state.messages[idx];
+      if (resumeRun) {
+        dispatch({ type: 'RESUME_STREAMING', messageId: assistantMessageId });
+        reattach({ brandId, sessionId: currentSessionId, run: resumeRun })
+          .then(() => debouncedRefreshSessions())
+          .catch(() => {});
+        return true;
+      }
 
       let userMessage: ConversationMessage | undefined;
       for (let i = idx - 1; i >= 0; i--) {
@@ -1053,6 +1080,7 @@ export function OrganicAgentPanel({
       brandId,
       scopedPlatformAccountIds,
       start,
+      reattach,
       activeSessionId,
       debouncedRefreshSessions,
     ],
@@ -1070,13 +1098,6 @@ export function OrganicAgentPanel({
     }
   }, [state.pendingAutoRetry, isStreaming, handleRetryTurn]);
 
-  const handleViewDraft = useCallback(
-    (draftId: string) => {
-      router.push(buildPlannerDraftDeepLink(draftId));
-    },
-    [router],
-  );
-
   const handleStop = useCallback(async () => {
     // Stop the run on screen even if this reader doesn't own it — the projected run you
     // returned to. When it's not the local run, cancel's `reconcileCurrent` won't fire, so
@@ -1089,14 +1110,14 @@ export function OrganicAgentPanel({
     const result = await cancel(viewedRunId);
     if (!result.ok) {
       show({
-        title: 'Could not stop the run',
+        title: uiText('could_not_stop_the_run_b9bb8dc'),
         description: result.error,
         variant: 'error',
       });
       return;
     }
-    if (!ownsRun) dispatch({ type: 'STREAM_COMPLETE' });
-  }, [cancel, show, state.sessionId, activeSessionId, isStreaming]);
+    if (!ownsRun) dispatch({ type: 'STREAM_COMPLETE', cancelled: true });
+  }, [cancel, show, state.sessionId, activeSessionId, isStreaming, uiText]);
 
   const hasSession = Boolean(state.sessionId || activeSessionId);
   // Per-VIEWED-session streaming, from the app-level store: true whenever the conversation on
@@ -1106,7 +1127,7 @@ export function OrganicAgentPanel({
   const viewedSessionStreaming = useAgentRunStore(isSessionStreaming(state.sessionId ?? ''));
   const composerBusy = isStreaming || viewedSessionStreaming;
   const inputDisabled = composerBusy || !hasSession;
-  const composerHint = describeComposerBlock({ isStreaming: composerBusy, hasSession });
+  const composerHint = describeComposerBlock({ isStreaming: composerBusy, hasSession }, uiText);
   // Sessions with an organic run in flight — the sidebar marks these "Working" so the user can
   // see which chat is still generating while they read or start another.
   const streamingSessionIds = useAgentRunStore(
@@ -1406,9 +1427,12 @@ export function OrganicAgentPanel({
         });
         const [mediaSuggestions, creativeInsights, organicInsights, whatChanged] =
           await Promise.all([
-            fetchMediaMentionAssets({ brandId, query, limit: 6 }).catch(
-              () => [] as AgentMentionSuggestion[],
-            ),
+            fetchMediaMentionAssets({
+              brandId,
+              query,
+              limit: 6,
+              uiText: libraryTextRef.current,
+            }).catch(() => [] as AgentMentionSuggestion[]),
             fetchCreativeInsightSuggestions({ brandId }).catch(
               () => [] as AgentMentionSuggestion[],
             ),
@@ -1448,18 +1472,18 @@ export function OrganicAgentPanel({
           return [
             {
               key: SKILLS_BRAND_FOLDER_KEY,
-              label: 'Brand skills',
+              label: uiText('brand_skills_06012ba'),
               type: 'skill' as const,
               source: 'organic' as const,
-              childrenLabel: 'Your brand skills',
+              childrenLabel: uiText('your_brand_skills_70fd854'),
               isFolder: true,
             },
             {
               key: SKILLS_LIBRARY_FOLDER_KEY,
-              label: 'Library',
+              label: uiText('library_dc20b3d'),
               type: 'skill' as const,
               source: 'organic' as const,
-              childrenLabel: 'First-party skill templates',
+              childrenLabel: uiText('first_party_skill_templates_1f5c7e5'),
               isFolder: true,
             },
           ];
@@ -1476,18 +1500,18 @@ export function OrganicAgentPanel({
           return [
             {
               key: MEDIA_CANVAS_FOLDER_KEY,
-              label: 'Canvas',
+              label: uiText('canvas_3824a9f'),
               type: 'canvas_node' as const,
               source: 'organic' as const,
-              childrenLabel: 'Studio canvas nodes',
+              childrenLabel: uiText('studio_canvas_nodes_97c04ca'),
               isFolder: true,
             },
             {
               key: MEDIA_LIBRARY_FOLDER_KEY,
-              label: 'Media library',
+              label: uiText('media_library_f1ae34e'),
               type: 'media_asset' as const,
               source: 'organic' as const,
-              childrenLabel: 'Sources & collections',
+              childrenLabel: uiText('sources_collections_95f727c'),
               isFolder: true,
             },
           ];
@@ -1497,14 +1521,23 @@ export function OrganicAgentPanel({
         }
         if (parent.key === MEDIA_LIBRARY_FOLDER_KEY) {
           return query.trim().length >= 2
-            ? fetchMediaMentionAssets({ brandId, query, limit: 12 }).catch(() => [])
-            : fetchMediaLibraryFolders(brandId).catch(() => []);
+            ? fetchMediaMentionAssets({
+                brandId,
+                query,
+                limit: 12,
+                uiText: libraryTextRef.current,
+              }).catch(() => [])
+            : fetchMediaLibraryFolders(brandId, 'organic', libraryTextRef.current).catch(() => []);
         }
         const mediaFolder = parseMediaFolderKey(parent.key);
         if (mediaFolder) {
-          return fetchMediaMentionAssets({ brandId, query, limit: 24, ...mediaFolder }).catch(
-            () => [],
-          );
+          return fetchMediaMentionAssets({
+            brandId,
+            query,
+            limit: 24,
+            ...mediaFolder,
+            uiText: libraryTextRef.current,
+          }).catch(() => []);
         }
 
         // ── Brain / Drafts ──────────────────────────────────────────────────
@@ -1524,26 +1557,26 @@ export function OrganicAgentPanel({
           return [
             {
               key: SIGNALS_TRENDS_FOLDER_KEY,
-              label: 'Trends',
+              label: uiText('trends_e856c6c'),
               type: 'trend' as const,
               source: 'organic' as const,
-              childrenLabel: 'Active trends',
+              childrenLabel: uiText('active_trends_d153636'),
               isFolder: true,
             },
             {
               key: SIGNALS_EVENTS_FOLDER_KEY,
-              label: 'Events',
+              label: uiText('events_8d14f6e'),
               type: 'event' as const,
               source: 'organic' as const,
-              childrenLabel: 'Events',
+              childrenLabel: uiText('events_8d14f6e'),
               isFolder: true,
             },
             {
               key: SIGNALS_QUESTIONS_FOLDER_KEY,
-              label: 'Questions',
+              label: uiText('questions_9a72221'),
               type: 'question' as const,
               source: 'organic' as const,
-              childrenLabel: 'Questions',
+              childrenLabel: uiText('questions_9a72221'),
               isFolder: true,
             },
           ];
@@ -1646,6 +1679,7 @@ export function OrganicAgentPanel({
     organicPostRange,
     primaryInsightsAccount,
     scopedPlatformAccountIds,
+    uiText,
   ]);
 
   const expandPackSuggestion = useCallback(
@@ -1706,15 +1740,10 @@ export function OrganicAgentPanel({
     onRetryJob: handleRetryJobFromChat,
     onPlanDecision: handlePlanDecision,
     onStartBulkRun: (run) => dispatch({ type: 'BULK_RUN_START', run }),
-    onOpenDraftIn: (draftId, target) => {
-      setSelectedDraftId(draftId);
-      setViewMode(target === 'calendar' ? 'month' : 'list');
-    },
-    onViewDraft: handleViewDraft,
     onUseAsset: (item) =>
       setQueuedMentionSuggestions((current) => [
         ...current,
-        mediaAssetToMentionSuggestion(item.asset),
+        mediaAssetToMentionSuggestion(item.asset, 'organic', libraryText),
       ]),
     onSkillSaved: () => {
       void refreshBrandSkills();
@@ -1769,18 +1798,20 @@ export function OrganicAgentPanel({
           ) : state.messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-4 px-4">
               <p className="max-w-[220px] text-center text-sm text-muted-foreground/70 text-pretty">
-                Your AI marketing strategist. Start by describing what you need.
+                {uiText('your_ai_marketing_strategist_start_by_describ_2bd495a')}
               </p>
               <DisabledControl hint={composerHint}>
                 <div className="flex flex-wrap justify-center gap-1.5">
-                  {STARTER_PROMPTS.map((s) => (
+                  {STARTER_PROMPTS.map((s, index) => (
                     <Suggestion
                       key={s}
                       suggestion={s}
                       disabled={inputDisabled}
                       onClick={(text) => handleSubmit(text)}
                       className="h-auto px-3 py-1 text-sm font-normal text-muted-foreground"
-                    />
+                    >
+                      {uiText(STARTER_PROMPT_LABELS[index])}
+                    </Suggestion>
                   ))}
                 </div>
               </DisabledControl>
@@ -1795,18 +1826,19 @@ export function OrganicAgentPanel({
               {state.messages.map((msg) => {
                 const isStreamingRow = msg.id === state.streamingMessageId;
                 return (
-                  <OrganicMessageRow
-                    key={msg.id}
-                    msg={msg}
-                    brandId={brandId}
-                    isStreamingRow={isStreamingRow}
-                    activeStages={isStreamingRow ? activeStages : NO_ACTIVE_STAGES}
-                    autoRetryPending={state.pendingAutoRetry === msg.id}
-                    isStreaming={isStreaming}
-                    inputDisabled={inputDisabled}
-                    {...rowRunState(msg, runState)}
-                    actions={rowActions}
-                  />
+                  <MessageRowBoundary key={msg.id} messageId={msg.id}>
+                    <OrganicMessageRow
+                      msg={msg}
+                      brandId={brandId}
+                      isStreamingRow={isStreamingRow}
+                      activeStages={isStreamingRow ? activeStages : NO_ACTIVE_STAGES}
+                      autoRetryPending={state.pendingAutoRetry === msg.id}
+                      isStreaming={isStreaming}
+                      inputDisabled={inputDisabled}
+                      {...rowRunState(msg, runState)}
+                      actions={rowActions}
+                    />
+                  </MessageRowBoundary>
                 );
               })}
               {state.pendingToolApprovals.length > 0 && (
@@ -1834,7 +1866,7 @@ export function OrganicAgentPanel({
                 variant="pinned"
                 // response.retrying: subtle text swap on the existing indicator — the
                 // Backend is retrying a transient hiccup, the turn is still going.
-                label={state.streamRetrying ? 'Hit a snag — retrying…' : undefined}
+                label={state.streamRetrying ? uiText('hit_a_snag_retrying_1f6b9fa') : undefined}
               />
             ) : null}
           </AnimatePresence>
@@ -1846,8 +1878,9 @@ export function OrganicAgentPanel({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-medium">
-                    Couldn&apos;t fully load {state.mediaResolution.failed.length} grabbed{' '}
-                    {state.mediaResolution.failed.length === 1 ? 'item' : 'items'}
+                    {uiText.rich('sentence_d9eb70b8b57e', {
+                      count: state.mediaResolution.failed.length,
+                    })}
                   </p>
                   <ul className="mt-1 list-inside list-disc text-amber-900/80 dark:text-amber-100/80">
                     {state.mediaResolution.failed.slice(0, 4).map((fail) => (
@@ -1857,12 +1890,11 @@ export function OrganicAgentPanel({
                     ))}
                   </ul>
                   <p className="mt-1 text-amber-900/70 dark:text-amber-100/70">
-                    Resolved {state.mediaResolution.resolvedImages} image
-                    {state.mediaResolution.resolvedImages === 1 ? '' : 's'}
-                    {state.mediaResolution.resolvedVideos > 0
-                      ? ` · ${state.mediaResolution.resolvedVideos} video text`
-                      : ''}
-                    . The turn continued with the rest of your context.
+                    {uiText.rich('sentence_23d90e6f74ab', {
+                      images: state.mediaResolution.resolvedImages,
+                      hasVideos: state.mediaResolution.resolvedVideos > 0 ? 'yes' : 'no',
+                      videos: state.mediaResolution.resolvedVideos,
+                    })}
                   </p>
                 </div>
                 <button
@@ -1870,7 +1902,7 @@ export function OrganicAgentPanel({
                   className="shrink-0 rounded px-1.5 py-0.5 text-2xs uppercase tracking-wide hover:bg-amber-500/20"
                   onClick={() => dispatch({ type: 'CLEAR_MEDIA_RESOLUTION' })}
                 >
-                  Dismiss
+                  {uiText('dismiss_48845bf')}
                 </button>
               </div>
             </div>
@@ -1883,7 +1915,7 @@ export function OrganicAgentPanel({
             disabled={inputDisabled}
             isStreaming={composerBusy}
             onStop={handleStop}
-            ariaLabel="Message the organic agent"
+            ariaLabel={uiText('organicComposerAria')}
             className="px-0"
             mentionProvider={mentionProviderObj}
             slashSkills={allBrandSkills}
@@ -1910,7 +1942,7 @@ export function OrganicAgentPanel({
             actions={
               <>
                 <AgentDataScopePicker
-                  label="Organic accounts"
+                  label={uiText('organic_accounts_7d57a82')}
                   options={accountScopeOptions}
                   selectedIds={selectedAccountPlatforms}
                   onChange={setSelectedAccountPlatforms}
@@ -1943,7 +1975,7 @@ export function OrganicAgentPanel({
                 />
               </>
             }
-            placeholder={COMPOSER_PLACEHOLDER}
+            placeholder={uiText('agentComposerPlaceholder')}
           />
           {composerHint ? (
             <p className="mt-1 px-1 text-xs text-muted-foreground/80 text-pretty">

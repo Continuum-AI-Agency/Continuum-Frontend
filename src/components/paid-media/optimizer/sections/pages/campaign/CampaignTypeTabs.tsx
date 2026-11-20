@@ -9,8 +9,10 @@
 
 import type { GoogleSignalsRead } from '@continuum/contracts';
 import { motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { UiLocale } from '@/i18n/config';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../../format';
 import { BOARD_COLOR } from '../../board/palette';
@@ -31,11 +33,12 @@ import {
   type CampaignTabKey,
   campaignTabs,
   KIND_COLOR,
-  TAB_LABEL,
   TAB_ROWS,
 } from './campaignPageModel';
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const;
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
 
 export type CampaignTabsProps = {
   target: GoogleReadTarget;
@@ -58,9 +61,14 @@ type RankedRow = {
 };
 
 function RankedRows({ rows, hidden, label }: { rows: RankedRow[]; hidden: number; label: string }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   if (rows.length === 0) {
-    return <p className="text-muted-foreground text-xs">Nothing in this read for the campaign.</p>;
+    return (
+      <p className="text-muted-foreground text-xs">
+        {uiText('nothing_in_this_read_for_the_campaign_1786eea')}
+      </p>
+    );
   }
   return (
     <div className="space-y-2">
@@ -95,35 +103,44 @@ function RankedRows({ rows, hidden, label }: { rows: RankedRow[]; hidden: number
       </ul>
       {hidden > 0 ? (
         <p className="text-muted-foreground text-xs">
-          +{hidden} more in this read, by spend: open the Google tab's views for all of them.
+          {uiText('campaignTabHiddenRows', { count: hidden })}
         </p>
       ) : null}
     </div>
   );
 }
 
-function signalsReason(read: GoogleSignalsRead, block: string, noun: string): string | null {
+/** Why the keywords block is missing from the read, or null when it is there. */
+function keywordsReason(read: GoogleSignalsRead, uiText: ScaleCopy): string | null {
   if (!read.signals) {
-    return `The Google read came back incomplete${read.rejected.length ? `: ${read.rejected.join('; ')}` : ''}`;
+    return read.rejected.length
+      ? uiText('the_google_read_came_back_incomplete_details_0be288f', {
+          details: read.rejected.join('; '),
+        })
+      : uiText('the_google_read_came_back_incomplete_e9e31a9');
   }
   const google = read.signals.google as Record<string, unknown> | null | undefined;
-  if (google?.[block]) return null;
-  return read.skipped[`read_failed_${block}`]
-    ? `Google's ${noun} read failed`
-    : `${noun[0]?.toUpperCase()}${noun.slice(1)} were not read for this account`;
+  if (google?.keywords) return null;
+  return read.skipped.read_failed_keywords
+    ? uiText('google_s_keywords_read_failed_8d5884c')
+    : uiText('keywords_were_not_read_for_this_account_4363aec');
 }
 
-const conversionsText = (value: number | null) =>
-  value == null ? 'conversions not counted' : `${resultsText(value)} conv.`;
+const conversionsText = (value: number | null, uiText: ScaleCopy, uiLocale: UiLocale) =>
+  value == null
+    ? uiText('googleCopy_2c6d74e546')
+    : uiText('campaignConversionsShort', { value: resultsText(value, uiLocale) });
 
 const KEYWORD_BLOCKS = ['keywords'] as const;
 
 function KeywordsPanel({ target, campaignId, currency, kind }: CampaignTabsProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const read = viewRead(useGoogleSignals({ ...target, blocks: KEYWORD_BLOCKS }));
   return (
     <ReadGate read={read}>
       {(data) => {
-        const reason = signalsReason(data, 'keywords', 'keywords');
+        const reason = keywordsReason(data, uiText);
         if (reason) return <p className="text-muted-foreground text-xs">{reason}</p>;
         const keywords = (data.signals?.google?.keywords ?? [])
           .filter((keyword) => keyword.campaign_id === campaignId && !keyword.negative)
@@ -133,20 +150,27 @@ function KeywordsPanel({ target, campaignId, currency, kind }: CampaignTabsProps
           (keyword): RankedRow => ({
             key: keyword.criterion_id,
             name: keyword.text,
-            sub: `${keyword.match_type.toLowerCase()}${keyword.status === 'ENABLED' ? '' : ` · ${keyword.status.toLowerCase()}`}`,
+            sub: `${uiText('platformMatch', { match: keyword.match_type })}${
+              keyword.status === 'ENABLED'
+                ? ''
+                : ` · ${uiText('googleKeywordStatus', { status: keyword.status })}`
+            }`,
             share: max > 0 ? keyword.totals.spend / max : 0,
             color:
               keyword.quality_score != null && qsBand(keyword.quality_score) === 'low'
                 ? BOARD_COLOR.above
                 : KIND_COLOR[kind],
-            figure: formatCurrency(keyword.totals.spend, currency),
-            detail: `QS ${keyword.quality_score ?? '—'} · ${conversionsText(keyword.totals.conversions)}`,
+            figure: formatCurrency(keyword.totals.spend, currency, uiLocale),
+            detail: uiText('campaignKeywordDetail', {
+              score: keyword.quality_score ?? '—',
+              conversions: conversionsText(keyword.totals.conversions, uiText, uiLocale),
+            }),
           }),
         );
         return (
           <RankedRows
             hidden={keywords.length - rows.length}
-            label="Keywords by spend"
+            label={uiText('keywords_by_spend_54e7c5e')}
             rows={rows}
           />
         );
@@ -158,6 +182,8 @@ function KeywordsPanel({ target, campaignId, currency, kind }: CampaignTabsProps
 const TERM_BLOCKS = ['search_terms'] as const;
 
 function TermsPanel({ target, campaignId, currency, kind }: CampaignTabsProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const read = viewRead(useGoogleSignals({ ...target, blocks: TERM_BLOCKS }));
   return (
     <ReadGate read={read}>
@@ -175,20 +201,20 @@ function TermsPanel({ target, campaignId, currency, kind }: CampaignTabsProps) {
             name: term.term,
             sub:
               term.status === 'EXCLUDED' || term.status === 'ADDED_EXCLUDED'
-                ? 'excluded'
+                ? uiText('excluded_cfa5ad9')
                 : term.status === 'ADDED'
-                  ? 'added as keyword'
+                  ? uiText('added_as_keyword_323a05c')
                   : null,
             share: max > 0 ? term.totals.spend / max : 0,
             color: term.totals.conversions > 0 ? KIND_COLOR[kind] : BOARD_COLOR.mid,
-            figure: formatCurrency(term.totals.spend, currency),
-            detail: conversionsText(term.totals.conversions),
+            figure: formatCurrency(term.totals.spend, currency, uiLocale),
+            detail: conversionsText(term.totals.conversions, uiText, uiLocale),
           }),
         );
         return (
           <RankedRows
             hidden={terms.length - rows.length}
-            label="Search terms by spend"
+            label={uiText('search_terms_by_spend_080da3b')}
             rows={rows}
           />
         );
@@ -198,6 +224,8 @@ function TermsPanel({ target, campaignId, currency, kind }: CampaignTabsProps) {
 }
 
 function QualityPanel({ target, campaignId, currency, window }: CampaignTabsProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const read = viewRead(useGoogleKeywordQuality({ ...target, window, campaignId }));
   const reduce = useReducedMotion();
   return (
@@ -212,15 +240,17 @@ function QualityPanel({ target, campaignId, currency, window }: CampaignTabsProp
         return (
           <div className="space-y-2" data-testid="campaign-quality">
             <p className="text-sm">
-              Average{' '}
-              <span className="font-mono font-semibold tabular-nums">
-                <CellText cell={map.average} />
-              </span>
+              {uiText.rich('campaignQualityAverage', {
+                avg: () => (
+                  <span className="font-mono font-semibold tabular-nums">
+                    <CellText cell={map.average} />
+                  </span>
+                ),
+              })}
               <span className="text-muted-foreground text-xs">
-                {' '}
-                · {map.scored} of {map.total} keywords scored
+                {uiText('campaignQualityScored', { scored: map.scored, total: map.total })}
                 {spend > 0
-                  ? ` · ${Math.round((low / spend) * 100)}% of their spend at QS 3 or less`
+                  ? uiText('campaignQualityLowShare', { pct: Math.round((low / spend) * 100) })
                   : ''}
               </span>
             </p>
@@ -237,22 +267,28 @@ function QualityPanel({ target, campaignId, currency, window }: CampaignTabsProp
                     background: bucket.band === 'low' ? BOARD_COLOR.above : BOARD_COLOR.search,
                     opacity: bucket.keywords === 0 ? 0.25 : 1,
                   }}
-                  title={`QS ${bucket.score}: ${bucket.keywords} keywords, ${formatCurrency(bucket.spend, currency)}`}
+                  title={uiText('campaignQualityBucket', {
+                    score: bucket.score,
+                    count: bucket.keywords,
+                    spend: formatCurrency(bucket.spend, currency, uiLocale),
+                  })}
                   transition={{ duration: 0.5, ease: EASE_OUT, delay: index * 0.03 }}
                 />
               ))}
             </div>
             <div className="flex justify-between text-muted-foreground text-xs">
-              <span>QS 1</span>
-              <span>QS 10</span>
+              <span>{uiText('campaignQualityScore', { score: 1 })}</span>
+              <span>{uiText('campaignQualityScore', { score: 10 })}</span>
             </div>
             {map.waste && map.waste.keywords > 0 ? (
               <p className="text-xs">
-                <span className="font-mono font-semibold tabular-nums">
-                  {formatCurrency(map.waste.spend, currency)}
-                </span>{' '}
-                on {map.waste.keywords} {map.waste.keywords === 1 ? 'keyword' : 'keywords'} at QS 3
-                or less with no conversion.
+                {uiText.rich('campaignQualityWaste', {
+                  spend: formatCurrency(map.waste.spend, currency, uiLocale),
+                  count: map.waste.keywords,
+                  figure: (chunks) => (
+                    <span className="font-mono font-semibold tabular-nums">{chunks}</span>
+                  ),
+                })}
               </p>
             ) : null}
           </div>
@@ -271,6 +307,7 @@ const STRENGTH_STEPS: Readonly<Record<string, number>> = {
 };
 
 function GroupsPanel({ target, campaignId }: CampaignTabsProps) {
+  const uiText = useTranslations('scale');
   const read = viewRead(useGoogleSignals({ ...target, blocks: PMAX_BLOCKS }));
   return (
     <ReadGate read={read}>
@@ -283,7 +320,7 @@ function GroupsPanel({ target, campaignId }: CampaignTabsProps) {
         if (groups.length === 0) {
           return (
             <p className="text-muted-foreground text-xs">
-              Google listed no asset group for this campaign.
+              {uiText('google_listed_no_asset_group_for_this_campaig_84c5f04')}
             </p>
           );
         }
@@ -302,10 +339,13 @@ function GroupsPanel({ target, campaignId }: CampaignTabsProps) {
                   <div className="flex min-w-0 items-baseline justify-between gap-3">
                     <span className="min-w-0 truncate text-sm">{group.name}</span>
                     <span className="shrink-0 text-xs">
-                      Ad strength{' '}
-                      <span className="font-semibold">
-                        <CellText cell={group.strength} />
-                      </span>
+                      {uiText.rich('campaignAdStrength', {
+                        strength: () => (
+                          <span className="font-semibold">
+                            <CellText cell={group.strength} />
+                          </span>
+                        ),
+                      })}
                     </span>
                   </div>
                   <span
@@ -340,6 +380,8 @@ function GroupsPanel({ target, campaignId }: CampaignTabsProps) {
 const NETWORK = ['network'] as const;
 
 function ChannelsPanel({ target, campaignId, currency, kind, window }: CampaignTabsProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const read = viewRead(useGoogleBreakdown({ ...target, window, dimensions: NETWORK, campaignId }));
   return (
     <ReadGate read={read}>
@@ -351,13 +393,13 @@ function ChannelsPanel({ target, campaignId, currency, kind, window }: CampaignT
             name: slice.network,
             share: slice.share ?? 0,
             color: KIND_COLOR[kind],
-            figure: `${slice.share == null ? '—' : `${Math.round(slice.share * 100)}%`} · ${formatCurrency(slice.spend, currency)}`,
+            figure: `${slice.share == null ? '—' : `${Math.round(slice.share * 100)}%`} · ${formatCurrency(slice.spend, currency, uiLocale)}`,
             detail: slice.costPerConversion.reason
               ? null
-              : `${slice.costPerConversion.text} / conv.`,
+              : uiText('campaignCostPerConversion', { cost: slice.costPerConversion.text }),
           }),
         );
-        return <RankedRows hidden={0} label="Spend by channel" rows={rows} />;
+        return <RankedRows hidden={0} label={uiText('spend_by_channel_739301a')} rows={rows} />;
       }}
     </ReadGate>
   );
@@ -372,13 +414,14 @@ const PANELS: Record<CampaignTabKey, (props: CampaignTabsProps) => ReactNode> = 
 };
 
 export function CampaignTypeTabs(props: CampaignTabsProps) {
+  const uiText = useTranslations('scale');
   const tabs = campaignTabs(props.kind);
   return (
     <Tabs className="min-w-0 gap-3" data-testid="campaign-tabs" defaultValue={tabs[0]}>
       <TabsList className="max-w-full overflow-x-auto" variant="default">
         {tabs.map((tab) => (
           <TabsTrigger className={cn('px-2.5 text-xs')} key={tab} value={tab}>
-            {TAB_LABEL[tab]}
+            {uiText('campaignTabLabel', { tab })}
           </TabsTrigger>
         ))}
       </TabsList>

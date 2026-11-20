@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Onboarding / empty state — shown when the brand has no optimizer portfolios yet (or the
 // optimizer backend is not reachable; its edge functions deploy later, so reads degrade here
@@ -34,6 +35,7 @@ export function OptimizerOnboarding({
   currency,
   onCreated,
 }: OptimizerOnboardingProps) {
+  const uiText = useTranslations('scale');
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       {/* One line, laid out horizontally. The hero used to be a 6rem-tall centered block that
@@ -41,14 +43,15 @@ export function OptimizerOnboarding({
       <header className="flex shrink-0 items-center gap-3 border-border/60 border-b px-4 py-3">
         <GaugeCircleIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0">
-          <h2 className="font-semibold text-sm tracking-tight">Put ad sets under the Optimizer</h2>
+          <h2 className="font-semibold text-sm tracking-tight">
+            {uiText('put_ad_sets_under_the_optimizer_d652a07')}
+          </h2>
           {/* Says what the user gets, then the money-safety promise. The old line
               described the algorithm — "per-$ efficiency over trailing 3/7/14-day
               windows" — which is true, unreadable, and answers a question nobody
               arriving at an empty state is asking. */}
           <p className="truncate text-muted-foreground text-xs">
-            Pick the ad sets to manage as one budget. Every night it moves money toward whichever
-            ones buy results cheapest — and it changes nothing until you say so.
+            {uiText('pick_the_ad_sets_to_manage_as_one_budget_ever_e02678d')}
           </p>
         </div>
       </header>

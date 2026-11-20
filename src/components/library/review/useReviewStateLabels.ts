@@ -13,7 +13,8 @@ import {
   type ReviewStateLabel,
   resolveReviewStateLabels,
 } from '@continuum/contracts';
-import { useEffect, useSyncExternalStore } from 'react';
+import { useTranslations } from 'next-intl';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { type BrandReviewStates, fetchReviewStateLabels } from '@/lib/library/review';
 
 type Labels = Record<MediaReviewStatus, ReviewStateLabel>;
@@ -22,6 +23,15 @@ const DEFAULTS: Labels = resolveReviewStateLabels(DEFAULT_REVIEW_STATE_LABELS);
 const NO_CUSTOM_STATES: ReviewCustomState[] = [];
 const cache = new Map<string, Labels>();
 const customCache = new Map<string, ReviewCustomState[]>();
+const customizedCache = new Map<string, ReadonlySet<MediaReviewStatus> | null>();
+const NO_CUSTOMIZED_STATES: ReadonlySet<MediaReviewStatus> = new Set();
+const STATUS_COPY = {
+  none: 'reviewStatusNone',
+  draft: 'reviewStatusDraft',
+  in_review: 'reviewStatusInReview',
+  needs_changes: 'reviewStatusNeedsChanges',
+  approved: 'reviewStatusApproved',
+} as const;
 const inflight = new Map<string, Promise<void>>();
 const listeners = new Set<() => void>();
 
@@ -31,6 +41,11 @@ function notify() {
 
 export function setBrandReviewStates(brandId: string, states: BrandReviewStates) {
   cache.set(brandId, resolveReviewStateLabels(states.labels));
+  // An older server cannot identify authored labels; preserve all of its copy.
+  customizedCache.set(
+    brandId,
+    states.customizedStates === undefined ? null : new Set(states.customizedStates),
+  );
   customCache.set(
     brandId,
     [...states.customStates].sort((a, b) => a.position - b.position),
@@ -55,14 +70,27 @@ function subscribe(listener: () => void) {
 }
 
 export function useReviewStateLabels(brandId: string | null | undefined): Labels {
+  const t = useTranslations('library');
   useEffect(() => {
     if (brandId) load(brandId);
   }, [brandId]);
-  return useSyncExternalStore(
+  const labels = useSyncExternalStore(
     subscribe,
     () => (brandId ? (cache.get(brandId) ?? DEFAULTS) : DEFAULTS),
     () => DEFAULTS,
   );
+  const customized =
+    brandId && cache.has(brandId) ? customizedCache.get(brandId) : NO_CUSTOMIZED_STATES;
+  return useMemo(() => {
+    if (customized == null) return labels;
+    const localized = { ...labels };
+    for (const state of Object.keys(STATUS_COPY) as MediaReviewStatus[]) {
+      if (!customized.has(state)) {
+        localized[state] = { ...labels[state], label: t(STATUS_COPY[state]) };
+      }
+    }
+    return localized;
+  }, [labels, customized, t]);
 }
 
 /** The brand's custom states, ordered by position; [] until loaded. */

@@ -10,6 +10,7 @@ import type {
   PipelineStageNode,
   PipelineStageNodeStatus,
   PlanItemStatus,
+  ResumableRun,
   ToolApproval,
   ToolCallEvent,
   UiCard,
@@ -88,9 +89,22 @@ export type PanelAction =
       ok?: boolean;
       reason?: string;
     }
-  | { type: 'STREAM_COMPLETE' }
+  /** `cancelled`: the user stopped the run, so an empty turn is theirs, not a failure. */
+  | { type: 'STREAM_COMPLETE'; cancelled?: boolean }
   | { type: 'STREAM_STALLED' }
-  | { type: 'STREAM_ERROR'; error: string; code?: string; transient?: boolean }
+  | {
+      type: 'STREAM_ERROR';
+      error: string;
+      code?: string;
+      transient?: boolean;
+      /** The run is still going server-side; Retry re-attaches to it instead of re-sending. */
+      resumeRun?: ResumableRun;
+    }
+  /**
+   * The server persisted the user's message before the run started and named its row. The
+   * optimistic bubble takes that id, so a history page merges onto it instead of beside it.
+   */
+  | { type: 'ADOPT_USER_MESSAGE_ID'; clientId: string; serverId: string }
   | { type: 'STREAM_RETRYING'; attempt: number; reason?: string }
   | { type: 'AUTO_RETRY_ABANDON' }
   | { type: 'STREAM_QUEUED'; aheadOf: number }
@@ -99,6 +113,13 @@ export type PanelAction =
   | { type: 'STREAM_UI_CARD'; card: UiCard }
   | { type: 'STREAM_MEDIA_SEARCH_RESULTS'; frame: MediaSearchResultsFrame }
   | { type: 'JOB_UPDATE'; job: Partial<AgentJobState> & { jobId: string } }
+  /**
+   * Retry (failed job) and Recreate draft (missing draft) re-queue the SAME row. The card
+   * is reset to a fresh run rather than waiting for frames: a settled card refuses a
+   * non-terminal update, so without this it sat on "Failed" / "Not saved" after the click.
+   * `draftId` is the server's answer — a recreated draft is a NEW row.
+   */
+  | { type: 'JOB_RETRY'; jobId: string; draftId?: string | null }
   | { type: 'JOB_CANCEL_START'; jobId: string }
   | { type: 'JOB_CANCEL_SUCCESS'; jobId: string }
   | { type: 'JOB_CANCEL_FAILURE'; jobId: string }
@@ -122,6 +143,8 @@ const STAGE_ORDER: readonly PipelineStage[] = PIPELINE_STAGES;
 // the run store (or persisted twice, or a later status of the same batch) replaces its card where
 // it stands rather than stacking a second copy under the same turn.
 function sameUiCard(a: UiCard, b: UiCard): boolean {
+  const planId = planIdOf(a);
+  if (planId) return a.type === b.type && planIdOf(b) === planId;
   if (a.type === 'media_strip' && b.type === 'media_strip') {
     return a.data.toolCallId === b.data.toolCallId;
   }
@@ -134,6 +157,45 @@ function sameUiCard(a: UiCard, b: UiCard): boolean {
 export function upsertUiCard(cards: readonly UiCard[], card: UiCard): UiCard[] {
   const at = cards.findIndex((c) => sameUiCard(c, card));
   return at === -1 ? [...cards, card] : cards.map((c, i) => (i === at ? card : c));
+}
+
+export const EMPTY_TURN_MESSAGE = 'The agent stopped without replying. Retry to ask again.';
+
+function isEmptyAssistantTurn(message: ConversationMessage): boolean {
+  return (
+    message.role === 'assistant' &&
+    !message.error &&
+    !message.content.trim() &&
+    !message.toolCalls?.length &&
+    !message.uiCards?.length &&
+    !message.mediaSearchResults?.length
+  );
+}
+
+// A plan is ONE decision with ONE live card. The agent sends a pending plan's card again when a
+// tool is blocked on it, because the user never saw the first or lost it far up the thread. So
+// the card belongs where the conversation is now: the latest copy stays and older ones leave,
+// live and on reload alike. Deduping the new one instead left the user waiting on a card they
+// could not find.
+function planIdOf(card: UiCard): string | null {
+  return card.type === 'plan_card' || card.type === 'bulk_plan_card' ? card.data.planId : null;
+}
+
+function withoutPlanCard(message: ConversationMessage, card: UiCard): ConversationMessage {
+  if (!planIdOf(card) || !message.uiCards?.some((c) => sameUiCard(c, card))) return message;
+  return { ...message, uiCards: message.uiCards.filter((c) => !sameUiCard(c, card)) };
+}
+
+/** Each plan's card only on the latest message that carries it. Untouched messages keep identity. */
+export function keepLatestPlanCards(messages: ConversationMessage[]): ConversationMessage[] {
+  const kept = [...messages];
+  const later: UiCard[] = [];
+  for (let index = kept.length - 1; index >= 0; index -= 1) {
+    const message = later.reduce(withoutPlanCard, kept[index]);
+    kept[index] = message;
+    later.push(...(message.uiCards ?? []).filter((card) => planIdOf(card) !== null));
+  }
+  return kept;
 }
 
 // Unique per assistant turn. A random suffix avoids same-millisecond collisions
@@ -235,6 +297,7 @@ type DurableJobLike = {
   stage?: string | null;
   pct?: number | null;
   previewRevision?: string | null;
+  draftMissing?: boolean | null;
   error?: unknown;
 };
 
@@ -321,6 +384,12 @@ function pipelineCardFromDurableJob(
     ...(job.brandId ? { brandId: job.brandId } : {}),
     ...(job.platform ? { platform: job.platform } : {}),
     ...(job.draftId ? { draftId: job.draftId } : {}),
+    // The old id points at a deleted row: clear it, or the card keeps linking to nothing.
+    ...(job.draftMissing === true
+      ? { draftMissing: true, draftId: null }
+      : job.draftMissing === false
+        ? { draftMissing: false }
+        : {}),
     ...(job.toolCallId ? { toolCallId: job.toolCallId } : {}),
     ...(typeof job.planId === 'string' ? { planId: job.planId } : {}),
     ...(typeof job.planItemId === 'string' ? { planItemId: job.planItemId } : {}),
@@ -352,7 +421,8 @@ function reconcileJobFromPipeline(
 // ConceptCard/PipelineCard — which read pipeline and planItemStatus — spun forever.
 // Card rules mirror SYNC_GENERATION_SUMMARIES: a running card takes any update, a
 // settled card only takes a terminal one, and a card is only CREATED when the job
-// carries a toolCallId (cards without one have no place to render). The plan item
+// carries a toolCallId or a planItemId (the inline grid and the plan row are the two
+// places a card renders; a plan row needs it to learn its draft is gone). The plan item
 // is settled only by a terminal job status.
 function reconcilePipelineFromJob(
   pipeline: Record<string, PipelineCardState>,
@@ -366,7 +436,7 @@ function reconcilePipelineFromJob(
   const incomingTerminal = typeof job.status === 'string' && TERMINAL_JOB_STATUSES.has(job.status);
   const canWriteCard = existingCard
     ? incomingTerminal || existingCard.status === 'running'
-    : Boolean(job.toolCallId);
+    : Boolean(job.toolCallId || job.planItemId);
   const nextPipeline = canWriteCard
     ? {
         ...pipeline,
@@ -471,7 +541,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         // after the chat stream closes — so tool-dispatched jobs (toolCallId) get
         // their card here, and any restored card converges to the durable status.
         const durable = job as AgentJobState & DurableJobLike & { progress?: unknown };
-        if (!durable.toolCallId && !pipeline[job.jobId]) continue;
+        if (!durable.toolCallId && !durable.planItemId && !pipeline[job.jobId]) continue;
         const progress =
           durable.progress && typeof durable.progress === 'object'
             ? (durable.progress as { stage?: unknown; pct?: unknown })
@@ -537,6 +607,19 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         streamRetrying: null,
       };
 
+    case 'ADOPT_USER_MESSAGE_ID': {
+      const { clientId, serverId } = action;
+      if (clientId === serverId || !state.messages.some((m) => m.id === clientId)) return state;
+      // A history page that landed first already holds the server's copy: keep that one.
+      if (state.messages.some((m) => m.id === serverId)) {
+        return { ...state, messages: state.messages.filter((m) => m.id !== clientId) };
+      }
+      return {
+        ...state,
+        messages: state.messages.map((m) => (m.id === clientId ? { ...m, id: serverId } : m)),
+      };
+    }
+
     case 'DISCARD_MESSAGE':
       return { ...state, messages: state.messages.filter((m) => m.id !== action.messageId) };
 
@@ -592,7 +675,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
                 ...m,
                 uiCards: upsertUiCard(m.uiCards ?? [], action.card),
               }
-            : m,
+            : withoutPlanCard(m, action.card),
         ),
       };
 
@@ -620,9 +703,16 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       if (state.messages.some((m) => m.id === action.messageId)) {
         return {
           ...state,
+          // Re-attaching to a run whose connection was lost: the same bubble streams on, so
+          // the error it was showing no longer describes it.
+          messages: state.messages.map((m) =>
+            m.id === action.messageId ? { ...m, error: undefined, resumeRun: undefined } : m,
+          ),
           streamingMessageId: action.messageId,
           pendingAutoRetry: null,
-          autoRetryConsumed: false,
+          // Kept, not reset: a re-attach that fails again must paint the error row, not
+          // queue another silent attempt behind itself forever.
+          autoRetryConsumed: state.autoRetryConsumed,
           streamRetrying: null,
         };
       }
@@ -636,10 +726,26 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       };
     }
 
-    case 'STREAM_COMPLETE':
+    case 'STREAM_COMPLETE': {
       // The stream hook emits a trailing STREAM_COMPLETE after a terminal error frame,
       // so a queued silent auto-retry must survive it — only streaming state clears.
-      return { ...state, streamingMessageId: null, queuedAheadOf: null, streamRetrying: null };
+      const settled = {
+        ...state,
+        streamingMessageId: null,
+        queuedAheadOf: null,
+        streamRetrying: null,
+      };
+      // A run that ended without a word, a tool call or a card rendered as an empty bubble the
+      // user could only stare at. It gets the error row and its Retry instead. A turn that is
+      // waiting on a tool approval has said what it needs, through the approval card.
+      const turn = state.messages.find((m) => m.id === state.streamingMessageId);
+      if (!turn || !isEmptyAssistantTurn(turn)) return settled;
+      if (action.cancelled || state.pendingToolApprovals.length > 0) return settled;
+      return {
+        ...settled,
+        messages: state.messages.map((m) => (m === turn ? { ...m, error: EMPTY_TURN_MESSAGE } : m)),
+      };
+    }
 
     case 'STREAM_ERROR': {
       // First transient failure of a turn: stamp the error but queue ONE silent
@@ -654,7 +760,13 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         streamingMessageId: null,
         streamRetrying: null,
         messages: state.messages.map((m) =>
-          m.id === erroredMessageId ? { ...m, error: action.error } : m,
+          m.id === erroredMessageId
+            ? {
+                ...m,
+                error: action.error,
+                ...(action.resumeRun ? { resumeRun: action.resumeRun } : {}),
+              }
+            : m,
         ),
         ...(autoRetry ? { pendingAutoRetry: erroredMessageId, autoRetryConsumed: true } : {}),
       };
@@ -716,12 +828,60 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
           [action.job.jobId]: {
             ...(state.jobs[action.job.jobId] ?? {}),
             ...action.job,
+            ...(action.job.draftMissing ? { draftId: undefined } : {}),
           } as AgentJobState,
         },
         pipeline,
         planItemStatus,
         pendingJobCancellations,
       };
+    }
+
+    case 'JOB_RETRY': {
+      const existingJob = state.jobs[action.jobId];
+      const existingCard = state.pipeline[action.jobId];
+      if (!existingJob && !existingCard) return state;
+      const recreated = existingJob?.draftMissing === true || existingCard?.draftMissing === true;
+      const draftId =
+        action.draftId !== undefined
+          ? (action.draftId ?? undefined)
+          : recreated
+            ? undefined
+            : (existingJob?.draftId ?? existingCard?.draftId ?? undefined);
+      const jobs = existingJob
+        ? {
+            ...state.jobs,
+            [action.jobId]: {
+              ...existingJob,
+              status: 'queued' as const,
+              draftId,
+              draftMissing: false,
+              error: undefined,
+            },
+          }
+        : state.jobs;
+      const pipeline = existingCard
+        ? {
+            ...state.pipeline,
+            [action.jobId]: {
+              ...existingCard,
+              status: 'running' as const,
+              stages: STAGE_ORDER.map((stage) => ({ stage, status: 'pending' as const })),
+              currentStage: undefined,
+              pct: undefined,
+              checkpoint: undefined,
+              preview: recreated ? undefined : existingCard.preview,
+              error: undefined,
+              draftId: draftId ?? null,
+              draftMissing: false,
+            },
+          }
+        : state.pipeline;
+      const planItemId = existingCard?.planItemId ?? existingJob?.planItemId;
+      const planItemStatus = planItemId
+        ? { ...state.planItemStatus, [planItemId]: 'executing' as const }
+        : state.planItemStatus;
+      return { ...state, jobs, pipeline, planItemStatus };
     }
 
     // Terminal state of last resort: the stream idle watchdog fired after minutes of
@@ -973,21 +1133,23 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       if (state.sessionId !== null && state.sessionId === action.sessionId) {
         return {
           ...state,
-          messages: mergeRestoredMessages(state.messages, action.messages),
+          messages: keepLatestPlanCards(mergeRestoredMessages(state.messages, action.messages)),
           isHydrated: true,
         };
       }
       return {
         ...initialPanelState(),
         sessionId: action.sessionId,
-        messages: action.messages,
+        messages: keepLatestPlanCards(action.messages),
         isHydrated: true,
       };
     }
 
     case 'PREPEND_MESSAGES': {
       const messages = prependUnseen(state.messages, action.messages);
-      return messages === state.messages ? state : { ...state, messages };
+      return messages === state.messages
+        ? state
+        : { ...state, messages: keepLatestPlanCards(messages) };
     }
 
     // Polled/Realtime-refreshed generation summaries (brand-wide) converge this
@@ -1017,6 +1179,11 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
               ...(summary.agentName ? { agentName: summary.agentName } : {}),
               ...(typeof summary.pct === 'number' ? { pct: summary.pct } : {}),
               ...(summary.draftId ? { draftId: summary.draftId } : {}),
+              ...(summary.draftMissing === true
+                ? { draftMissing: true, draftId: undefined }
+                : summary.draftMissing === false
+                  ? { draftMissing: false }
+                  : {}),
               ...(summary.toolCallId ? { toolCallId: summary.toolCallId } : {}),
               ...(summary.error?.message
                 ? { error: { code: summary.error.code, message: summary.error.message } }

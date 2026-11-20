@@ -63,9 +63,9 @@ export function googleDeliveryStatusOf(
   const otherReasons = card.reasons.filter((reason) => reason !== SUSPENDED);
   const said = suspended
     ? otherReasons.length > 0
-      ? ` Google also reports: ${otherReasons.map(googleReasonInWords).join('; ')}.`
+      ? ` Google also reports: ${otherReasons.map((code) => googleReasonInWords(code)).join('; ')}.`
       : ''
-    : ` Google says: ${card.reasons.map(googleReasonInWords).join('; ')}.`;
+    : ` Google says: ${card.reasons.map((code) => googleReasonInWords(code)).join('; ')}.`;
   const fix = suspended
     ? ' Nothing here can change it: check billing and the account status in Google Ads.'
     : ' Fix it in Google Ads; no budget move here changes it.';

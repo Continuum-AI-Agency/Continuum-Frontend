@@ -1,3 +1,6 @@
+import type { UiLocale } from '@/i18n/config';
+import type { OptimizerDisplayTranslate } from '@/lib/paid-media/optimizationMetricPresentation';
+import { optimizerDisplayCopy } from '@/lib/paid-media/optimizationMetricPresentation';
 // Narrows the LOOSE CycleRunReport (DB jsonb read model) into the typed rows the
 // OptimizerTab renders. The report envelope stays loose per the "wire DTOs stay
 // loose" contracts rule; this parses each row ONCE with the contracts row schemas
@@ -134,10 +137,15 @@ export function measuredCpa(ci: LooseCostInterval): number | null {
 
 /** What to print where the upper bound would go, or null when there is one. The wording
  *  carries the same reason as the engine's upperBoundMissingBecause. */
-export function upperBoundNote(ci: LooseCostInterval): string | null {
+export function upperBoundNote(
+  ci: LooseCostInterval,
+  translate?: OptimizerDisplayTranslate,
+): string | null {
   if (!ci || ci.hi !== null) return null;
   const events = typeof ci.events === 'number' && ci.events > 0 ? ci.events : 0;
-  return `no upper bound yet (${events} conversion${events === 1 ? '' : 's'})`;
+  return translate
+    ? translate('noUpperBound', { count: events })
+    : `no upper bound yet (${events} conversion${events === 1 ? '' : 's'})`;
 }
 
 function portfolioLabel(portfolio: Record<string, unknown> | null | undefined): string | null {
@@ -179,6 +187,7 @@ const SURFACED_ACTIONABLES: readonly string[] = [
 
 export function conversionVolume(
   confidence: RunConfidence | null | undefined,
+  translate?: OptimizerDisplayTranslate,
 ): ConversionVolume | null {
   if (!confidence) return null;
   const events =
@@ -198,8 +207,9 @@ export function conversionVolume(
         ? 'building'
         : 'thin';
   const under = underFloorIds.length;
-  const note =
-    under > 0
+  const note = translate
+    ? translate(under > 0 ? 'volumeUnder' : 'volumeAll', { events, under, floor: floorEvents })
+    : under > 0
       ? `${events} conversion${events === 1 ? '' : 's'} in 14 days · ${under} ad set${under === 1 ? '' : 's'} under the ${floorEvents}-event floor`
       : `${events} conversion${events === 1 ? '' : 's'} in 14 days · every ad set clears the ${floorEvents}-event floor`;
   // kpi_mismatch leads: ad sets that bid for another result are held whatever their volume,
@@ -249,14 +259,19 @@ export function hasPendingWork(portfolio: {
 }
 
 /** Confidence band → badge variant + label, tolerant of loose DB strings. */
-export function confidenceBand(band: string | null | undefined): {
+export function confidenceBand(
+  band: string | null | undefined,
+  translate?: OptimizerDisplayTranslate,
+): {
   variant: 'success' | 'secondary' | 'destructive';
   label: string;
 } {
   const normalized = (band ?? '').toLowerCase();
-  if (normalized === 'high') return { variant: 'success', label: 'High' };
-  if (normalized === 'low') return { variant: 'destructive', label: 'Low' };
-  return { variant: 'secondary', label: 'Medium' };
+  if (normalized === 'high')
+    return { variant: 'success', label: optimizerDisplayCopy('confidenceHigh', translate) };
+  if (normalized === 'low')
+    return { variant: 'destructive', label: optimizerDisplayCopy('confidenceLow', translate) };
+  return { variant: 'secondary', label: optimizerDisplayCopy('confidenceMedium', translate) };
 }
 
 /** A cycle item's freeze reason → a labeled "Held" state. Returns null when the
@@ -269,55 +284,64 @@ export function confidenceBand(band: string | null | undefined): {
 export function freezeLabel(
   reason: string | null | undefined,
   entity?: EntityNounSource | null,
+  translate?: OptimizerDisplayTranslate,
 ): { label: string; hint: string } | null {
   if (!isMetaEntity(entity)) {
-    const platformHeld = platformFreezeLabel(reason, entity);
+    const platformHeld = platformFreezeLabel(reason, entity, translate);
     if (platformHeld) return platformHeld;
   }
   switch (reason) {
     case 'no_conversions':
       return {
-        label: 'Held · no conversion signal',
-        hint: 'Spending but no tracked conversions yet — budget left unchanged until signal arrives.',
+        label: optimizerDisplayCopy('heldNoConversions', translate),
+        hint: optimizerDisplayCopy('heldNoConversionsHint', translate),
       };
     case 'missing_window':
       return {
-        label: 'Held · incomplete data',
-        hint: 'Not enough trailing-window history to score reliably — held this cycle.',
+        label: optimizerDisplayCopy('heldIncomplete', translate),
+        hint: optimizerDisplayCopy('heldIncompleteHint', translate),
       };
     case 'unsupported_budget':
       return {
-        label: 'Held · CBO/lifetime',
-        hint: 'Budget is managed at the campaign level (CBO or lifetime) — the optimizer does not touch it. Convert the campaign to ad-set budgets to optimize its ad sets.',
+        label: optimizerDisplayCopy('heldCampaignBudget', translate),
+        hint: optimizerDisplayCopy('heldCampaignBudgetHint', translate),
       };
     case 'lifetime_budget':
       return {
-        label: 'Held · lifetime budget',
-        hint: 'This campaign has a whole-flight lifetime budget, not a daily one. The optimizer paces and scores in daily terms, so it will not resize a flight it cannot reason about.',
+        label: optimizerDisplayCopy('heldLifetime', translate),
+        hint: optimizerDisplayCopy('heldLifetimeHint', translate),
       };
     case 'no_spend':
       // The engine's own words (packages/optimization-engine/src/explain.ts).
       return {
-        label: 'Held · no spend',
-        hint: `This ${entityNoun(entity)} spent nothing in the last 14 days, so there is nothing to score it on and nothing of its own to redistribute — budget left unchanged. If it is funded and not being served, the delivery finding beside it says so.`,
+        label: optimizerDisplayCopy('heldNoSpend', translate),
+        hint: translate
+          ? translate('heldNoSpendHint', { entity: entityNoun(entity, translate) })
+          : `This ${entityNoun(entity)} spent nothing in the last 14 days, so there is nothing to score it on and nothing of its own to redistribute — budget left unchanged. If it is funded and not being served, the delivery finding beside it says so.`,
       };
     case 'no_own_budget':
       return {
-        label: 'Held · no budget of its own',
-        hint: 'This ad set has no ad-set budget for the optimizer to move — boosted posts and promoted posts usually look like this. It is left alone rather than handed a share of the pool it never had. Give it an ad-set daily budget in Meta if you want the optimizer to manage it.',
+        label: optimizerDisplayCopy('heldNoBudget', translate),
+        hint: optimizerDisplayCopy('heldNoOwnBudgetMetaHint', translate),
       };
     case 'no_declared_objective':
       return {
-        label: 'Held · no declared goal',
-        hint: 'This ad set does not tell Meta what result it is buying, and it has produced none of the results this portfolio measures. Scoring it would rank it on events it never claimed to buy, so it is held instead. Set an optimization goal on the ad set in Meta.',
+        label: optimizerDisplayCopy('heldNoGoal', translate),
+        hint: optimizerDisplayCopy('heldNoGoalMetaHint', translate),
       };
     case 'kpi_mismatch':
       return {
-        label: 'Held · different goal',
-        hint: `This ${entityNoun(entity)} is bidding for a different result than the portfolio prices (for example messaging conversations in a portfolio measured on leads). Ranking them together would compare a cheap event against an expensive one and hand the budget to whichever is cheaper, so it is held instead. Move it to a portfolio that measures what it actually buys.`,
+        label: optimizerDisplayCopy('heldDifferentGoal', translate),
+        hint: translate
+          ? translate('heldMismatchHint', { entity: entityNoun(entity, translate) })
+          : `This ${entityNoun(entity)} is bidding for a different result than the portfolio prices (for example messaging conversations in a portfolio measured on leads). Ranking them together would compare a cheap event against an expensive one and hand the budget to whichever is cheaper, so it is held instead. Move it to a portfolio that measures what it actually buys.`,
       };
     default:
-      if (reason) return { label: 'Held', hint: 'Budget left unchanged on purpose this cycle.' };
+      if (reason)
+        return {
+          label: optimizerDisplayCopy('held', translate),
+          hint: optimizerDisplayCopy('heldHint', translate),
+        };
       return null;
   }
 }
@@ -328,24 +352,40 @@ export function freezeLabel(
 function platformFreezeLabel(
   reason: string | null | undefined,
   entity: EntityNounSource | null | undefined,
+  translate?: OptimizerDisplayTranslate,
 ): { label: string; hint: string } | null {
   const noun = entityNoun(entity);
   const platform = platformName(entity);
   switch (reason) {
     case 'unsupported_budget':
       return {
-        label: 'Held · budget not movable',
-        hint: `The optimizer cannot move this ${noun}'s budget: it is shared with other campaigns, set at the campaign level, or the campaign type is read-only through the ${platform} API. It is left unchanged.`,
+        label: optimizerDisplayCopy('heldNotMovable', translate),
+        hint: translate
+          ? translate('platformBudgetHint', {
+              entity: entityNoun(entity, translate),
+              platform: platformName(entity, translate),
+            })
+          : `The optimizer cannot move this ${noun}'s budget: it is shared with other campaigns, set at the campaign level, or the campaign type is read-only through the ${platform} API. It is left unchanged.`,
       };
     case 'no_own_budget':
       return {
-        label: 'Held · no budget of its own',
-        hint: `This ${noun} has no budget of its own for the optimizer to move. It is left alone rather than handed a share of the pool it never had. Give it a daily budget in ${platform} if you want the optimizer to manage it.`,
+        label: optimizerDisplayCopy('heldNoBudget', translate),
+        hint: translate
+          ? translate('platformNoBudgetHint', {
+              entity: entityNoun(entity, translate),
+              platform: platformName(entity, translate),
+            })
+          : `This ${noun} has no budget of its own for the optimizer to move. It is left alone rather than handed a share of the pool it never had. Give it a daily budget in ${platform} if you want the optimizer to manage it.`,
       };
     case 'no_declared_objective':
       return {
-        label: 'Held · no declared goal',
-        hint: `This ${noun} does not tell ${platform} what result it is buying, and it has produced none of the results this portfolio measures. Scoring it would rank it on events it never claimed to buy, so it is held instead. Set a conversion goal on the ${noun} in ${platform}.`,
+        label: optimizerDisplayCopy('heldNoGoal', translate),
+        hint: translate
+          ? translate('platformNoGoalHint', {
+              entity: entityNoun(entity, translate),
+              platform: platformName(entity, translate),
+            })
+          : `This ${noun} does not tell ${platform} what result it is buying, and it has produced none of the results this portfolio measures. Scoring it would rank it on events it never claimed to buy, so it is held instead. Set a conversion goal on the ${noun} in ${platform}.`,
       };
     default:
       return null;
@@ -378,18 +418,19 @@ export function partitionHeldItems<T extends { apply_status?: string | null }>(
  *  cannot support. Only the two states that change what the row's numbers MEAN get a chip. */
 export function deliveryLabel(
   state: string | null | undefined,
+  translate?: OptimizerDisplayTranslate,
 ): { label: string; hint: string; tone: 'error' | 'warning' } | null {
   switch (state) {
     case 'dark':
       return {
-        label: 'Not delivering',
-        hint: 'Meta shows this ad set as live, and it has served nothing for days. Every cost and rate on this row is computed from the days before it stopped — treat them as history, not as current performance.',
+        label: optimizerDisplayCopy('notDelivering', translate),
+        hint: optimizerDisplayCopy('notDeliveringHint', translate),
         tone: 'error',
       };
     case 'throttled':
       return {
-        label: 'Delivery falling',
-        hint: 'Impressions are down by more than half against the previous week at the same budget. Efficiency figures here are drawn from a much smaller sample than they were.',
+        label: optimizerDisplayCopy('deliveryFalling', translate),
+        hint: optimizerDisplayCopy('deliveryFallingHint', translate),
         tone: 'warning',
       };
     default:
@@ -398,30 +439,33 @@ export function deliveryLabel(
 }
 
 /** Recommendation kind → a short human label + glyph for the actions queue. */
-export function recommendationLabel(kind: string): { label: string; glyph: string } {
+export function recommendationLabel(
+  kind: string,
+  translate?: OptimizerDisplayTranslate,
+): { label: string; glyph: string } {
   switch (kind) {
     case 'pause':
       // The app pauses the ad set on Meta through the audited adset-status drain, so the
       // label names the write the operator is authorizing — not a manual chore.
-      return { label: 'Pause ad set', glyph: '⏸' };
+      return { label: optimizerDisplayCopy('pauseAdSet', translate), glyph: '⏸' };
     case 'creative_refresh':
-      return { label: 'Refresh creative', glyph: '🎨' };
+      return { label: optimizerDisplayCopy('refreshCreative', translate), glyph: '🎨' };
     case 'audience_expand':
-      return { label: 'Expand audience', glyph: '👥' };
+      return { label: optimizerDisplayCopy('expandAudience', translate), glyph: '👥' };
     // --- Creative-level kinds. These name ONE AD inside the ad set, not the ad set. ---
     case 'settings':
-      return { label: 'Change a setting', glyph: '⚙' };
+      return { label: optimizerDisplayCopy('changeSetting', translate), glyph: '⚙' };
     case 'pause_ad':
-      return { label: 'Pause this ad', glyph: '⏸' };
+      return { label: optimizerDisplayCopy('pauseThisAd', translate), glyph: '⏸' };
     case 'variate_creative':
-      return { label: 'Make variations of the winner', glyph: '✦' };
+      return { label: optimizerDisplayCopy('makeWinnerVariations', translate), glyph: '✦' };
     case 'seed_experiment':
-      return { label: 'Nothing to learn from — add variants', glyph: '⚗' };
+      return { label: optimizerDisplayCopy('addVariants', translate), glyph: '⚗' };
     // --- Delivery. Not a performance finding: nothing is being SERVED, and the answer is
     // never a creative. The queue used to answer this state with "refresh creative", or
     // with silence.
     case 'restore_delivery':
-      return { label: 'Not being delivered', glyph: '📡' };
+      return { label: optimizerDisplayCopy('notBeingDelivered', translate), glyph: '📡' };
     default:
       return { label: kind.replace(/_/g, ' '), glyph: '•' };
   }
@@ -476,15 +520,18 @@ export function actionRoute(
  *  into the audited ad-set status writer that pauses the ad set on Meta, so the primary
  *  button names that write. Fatigue kinds (creative_refresh / audience_expand) open a
  *  tracked renewal task, so "Approve" is honest there. */
-export function recommendationActionCopy(kind: string): {
+export function recommendationActionCopy(
+  kind: string,
+  translate?: OptimizerDisplayTranslate,
+): {
   approveLabel: string;
   advisory: string | null;
 } {
   if (kind === 'pause') {
-    return { approveLabel: 'Pause ad set', advisory: null };
+    return { approveLabel: optimizerDisplayCopy('pauseAdSet', translate), advisory: null };
   }
   if (kind === 'settings') {
-    return { approveLabel: 'Apply setting', advisory: null };
+    return { approveLabel: optimizerDisplayCopy('applySetting', translate), advisory: null };
   }
   // Generated and stored, not yet actionable. The button says so rather than
   // pretending. One phrasing for this state across the surface — "not built yet",
@@ -492,16 +539,14 @@ export function recommendationActionCopy(kind: string): {
   // backlog, and it read as a configuration fault the user was expected to fix.
   if (kind === 'pause_ad') {
     return {
-      approveLabel: 'Pause ad',
-      advisory:
-        'Not built yet — the optimizer can find this ad but cannot pause it for you. Pause it in Meta and it stops draining the ad set.',
+      approveLabel: optimizerDisplayCopy('pauseAd', translate),
+      advisory: optimizerDisplayCopy('pauseAdAdvisory', translate),
     };
   }
   if (kind === 'variate_creative' || kind === 'seed_experiment') {
     return {
-      approveLabel: 'Request creative',
-      advisory:
-        'Approving opens a creative request with the brief below — a task your team fills, or a generation job when this portfolio has autogen on.',
+      approveLabel: optimizerDisplayCopy('requestCreative', translate),
+      advisory: optimizerDisplayCopy('requestCreativeAdvisory', translate),
     };
   }
   // Deliberately NOT an automatic un-pause. An ad set is usually off Meta because somebody
@@ -509,12 +554,11 @@ export function recommendationActionCopy(kind: string): {
   // Approving tracks the task; the reason says which fix it needs.
   if (kind === 'restore_delivery') {
     return {
-      approveLabel: 'Track this',
-      advisory:
-        'The optimizer will not resume an ad set for you — it is usually off because somebody turned it off. Approving keeps it on the list until delivery comes back.',
+      approveLabel: optimizerDisplayCopy('trackThis', translate),
+      advisory: optimizerDisplayCopy('trackDeliveryAdvisory', translate),
     };
   }
-  return { approveLabel: 'Approve', advisory: null };
+  return { approveLabel: optimizerDisplayCopy('approve', translate), advisory: null };
 }
 
 /** Render the creative brief for a recommendation from its generation seed. Deterministic
@@ -540,16 +584,16 @@ export function creativeBriefForRec(rec: {
 }
 
 /** The reason a not-yet-executable action is refused, shown to the user verbatim. */
-export function notImplementedMessage(kind: string): string {
+export function notImplementedMessage(kind: string, translate?: OptimizerDisplayTranslate): string {
   switch (kind) {
     case 'pause_ad':
-      return 'Pausing an ad from here is not built yet. The finding is real — pause it in Meta and it will stop draining the ad set.';
+      return optimizerDisplayCopy('pauseNotBuilt', translate);
     case 'variate_creative':
-      return 'Generating variations from here is not built yet. Copy the brief and take it into AI Studio.';
+      return optimizerDisplayCopy('variationsNotBuilt', translate);
     case 'seed_experiment':
-      return 'Seeding an experiment from here is not built yet. Add a second creative to this ad set and the optimizer can start telling you which one works.';
+      return optimizerDisplayCopy('experimentNotBuilt', translate);
     default:
-      return 'This action is not built yet.';
+      return optimizerDisplayCopy('actionNotBuilt', translate);
   }
 }
 
@@ -606,47 +650,84 @@ const SCOPE_WORDS: Record<keyof AutopilotScopes, string> = {
 };
 
 /** "budget moves, creative rotation" — the ON scopes, in the panel's order. */
-export function autopilotScopeWords(scopes: AutopilotScopes | null | undefined): string {
+export function autopilotScopeWords(
+  scopes: AutopilotScopes | null | undefined,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
+): string {
   const on = (Object.keys(SCOPE_WORDS) as (keyof AutopilotScopes)[]).filter((k) => scopes?.[k]);
-  return on.length > 0 ? on.map((k) => SCOPE_WORDS[k]).join(', ') : 'nothing yet';
+  if (!on.length) return optimizerDisplayCopy('scopeNothing', translate);
+  const scopeKeys = {
+    budget: 'scopeBudget',
+    creative_swap: 'scopeCreative',
+    audience_change: 'scopeAudienceChange',
+    new_audience: 'scopeNewAudience',
+    new_creatives: 'scopeNewCreatives',
+    budget_move: 'scopeCrossPlatform',
+  } as const;
+  const words = on.map((key) => (translate ? translate(scopeKeys[key]) : SCOPE_WORDS[key]));
+  return translate
+    ? new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(words)
+    : words.join(', ');
 }
 
 export function applyModeExplainer(
   applyMode: string | null | undefined,
   scopes?: AutopilotScopes | null,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
 ): string {
   // Written for a media buyer, not for us. "Soak tier" and "human-in-the-loop"
   // are our words for our rollout; what the reader needs is whether their money
   // can move, and what they do about it.
   const mode = (applyMode ?? '').toLowerCase();
   if (mode === 'observe') {
-    return 'Observe — the optimizer scores every night but never changes a budget. Switch to Recommend to start approving its moves.';
+    return optimizerDisplayCopy('observeExplainer', translate);
   }
   if (mode === 'autopilot') {
     return scopes
-      ? `Autopilot — approves ${autopilotScopeWords(scopes)} on its own; budget moves stay within your guardrails and anything created is born paused. Stop halts all of it without leaving this mode.`
-      : 'Autopilot — budgets change automatically, within your guardrails. Stop halts every write without leaving this mode.';
+      ? translate
+        ? translate('autopilotScopesExplainer', {
+            scopes: autopilotScopeWords(scopes, translate, locale),
+          })
+        : `Autopilot — approves ${autopilotScopeWords(scopes)} on its own; budget moves stay within your guardrails and anything created is born paused. Stop halts all of it without leaving this mode.`
+      : optimizerDisplayCopy('autopilotExplainer', translate);
   }
   if (mode === 'recommend') {
-    return 'Recommend — the optimizer proposes moves and nothing changes until you approve them.';
+    return optimizerDisplayCopy('recommendExplainer', translate);
   }
-  return 'Unknown apply mode.';
+  return optimizerDisplayCopy('unknownApplyMode', translate);
 }
 
 /** Dense pill metadata for the portfolio apply-mode identifier (ApplyModePill).
  *  Bottom→top tiers get distinct tones so autonomy is scannable next to mode/level chips. */
-export function applyModePill(applyMode: string | null | undefined): {
+export function applyModePill(
+  applyMode: string | null | undefined,
+  translate?: OptimizerDisplayTranslate,
+): {
   label: string;
   variant: 'muted' | 'violet' | 'success';
   indicator: 'info' | 'success' | 'warning';
 } | null {
   switch ((applyMode ?? '').toLowerCase()) {
     case 'observe':
-      return { label: 'Observe', variant: 'muted', indicator: 'info' };
+      return {
+        label: optimizerDisplayCopy('modeObserve', translate),
+        variant: 'muted',
+        indicator: 'info',
+      };
     case 'recommend':
-      return { label: 'Recommend', variant: 'violet', indicator: 'info' };
+      return {
+        label: optimizerDisplayCopy('modeRecommend', translate),
+        variant: 'violet',
+        indicator: 'info',
+      };
     case 'autopilot':
-      return { label: 'Autopilot', variant: 'success', indicator: 'success' };
+      return {
+        label: optimizerDisplayCopy('modeAutopilot', translate),
+        variant: 'success',
+        indicator: 'success',
+      };
     default:
       return null;
   }

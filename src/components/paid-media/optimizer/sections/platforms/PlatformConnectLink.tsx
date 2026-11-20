@@ -3,15 +3,13 @@
 
 import { PlugZapIcon } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import {
-  type AdPlatform,
-  PLATFORM_CONNECT_HREF,
-  PLATFORM_CONNECT_LABEL,
-} from './platformTabsModel';
+import { type AdPlatform, PLATFORM_CONNECT_HREF, PLATFORM_NAMES } from './platformTabsModel';
 
 export function PlatformConnectLink({ platform }: { platform: AdPlatform }) {
+  const uiText = useTranslations('scale');
   return (
     <Link
       className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'h-7 gap-1.5 px-2 text-xs')}
@@ -20,7 +18,7 @@ export function PlatformConnectLink({ platform }: { platform: AdPlatform }) {
       href={PLATFORM_CONNECT_HREF[platform]}
     >
       <PlugZapIcon aria-hidden="true" className="size-3.5" />
-      {PLATFORM_CONNECT_LABEL[platform]}
+      {uiText('connectPlatform', { platform: `${PLATFORM_NAMES[platform]} Ads` })}
     </Link>
   );
 }

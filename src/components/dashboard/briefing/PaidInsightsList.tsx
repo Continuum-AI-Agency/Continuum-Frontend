@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { useEffect, useMemo, useState } from 'react';
 import { DASHBOARD_PANEL_MAX_HEIGHT } from '@/components/dashboard/briefing/panelLayout';
@@ -41,6 +42,7 @@ export function PaidInsightsList({
   brandId: string;
   adAccountId: string | null;
 }) {
+  const uiText = useTranslations('dashboard');
   const [state, setState] = useState<State>({ status: 'idle' });
 
   useEffect(() => {
@@ -75,15 +77,15 @@ export function PaidInsightsList({
 
   return (
     <InsightsList
-      title="Insights"
+      title={uiText('insights_2a932f9')}
       items={items}
       maxHeight={DASHBOARD_PANEL_MAX_HEIGHT}
-      headerAction={<ModuleShortcutLink href="/scale" label="Scale" />}
+      headerAction={<ModuleShortcutLink href="/scale" label={uiText('scale_f102986')} />}
       isLoading={state.status === 'idle' || state.status === 'loading'}
       emptyState={
         state.status === 'error'
-          ? "Couldn't load insights right now."
-          : 'Insights appear as campaigns run.'
+          ? uiText('paidInsightsLoadFailedEmpty')
+          : uiText('paidInsightsEmpty')
       }
     />
   );

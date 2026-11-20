@@ -5,7 +5,7 @@
 // arguments those consumers are actually called with, before and after a mounted switch.
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 type ConsumerCall = { brandProfileId?: string; roomId?: string };
 type TestRoom = { id: string; brand_profile_id: string };

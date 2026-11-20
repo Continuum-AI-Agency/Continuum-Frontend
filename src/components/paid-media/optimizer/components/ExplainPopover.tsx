@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // "Why?" — every number the optimizer shows can open its own explanation. One trigger
 // style, one panel style, so an expert can skip it and a non-expert can trust it.
@@ -26,10 +27,12 @@ export function ExplainPopover({
   className,
   align = 'start',
 }: ExplainPopoverProps) {
+  const uiText = useTranslations('scale');
+
   return (
     <Popover>
       <PopoverTrigger
-        aria-label={`Why: ${title}`}
+        aria-label={uiText('template_1e716a2bc568', { v0: title })}
         className={cn(
           'hit-area inline-flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           className,

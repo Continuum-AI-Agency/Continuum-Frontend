@@ -1,5 +1,6 @@
 'use client';
 import { CircleCheck, CircleX, RotateCw, TriangleAlert } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 
 import React from 'react';
 import {
@@ -27,6 +28,8 @@ export function CanvasSyncStatus({
   roomsLoading = false,
   hasRoom = true,
 }: CanvasSyncStatusProps) {
+  const translateUi = useUiTranslations('studio');
+
   const state: CanvasConnectionState = deriveCanvasConnectionState({
     roomsLoading,
     hasRoom,
@@ -41,10 +44,10 @@ export function CanvasSyncStatus({
       return (
         <div
           className={`${PILL} bg-muted text-muted-foreground border-border`}
-          title="Loading your workspace…"
+          title={translateUi('loading_your_workspace_d7b46510')}
         >
           <RotateCw className="w-3.5 h-3.5 animate-spin opacity-70" />
-          <span>Loading workspace...</span>
+          <span>{translateUi('loading_workspace_6fce2f5f')}</span>
         </div>
       );
 
@@ -52,10 +55,10 @@ export function CanvasSyncStatus({
       return (
         <div
           className={`${PILL} bg-muted text-muted-foreground border-border`}
-          title="No workspace open yet."
+          title={translateUi('no_workspace_open_yet_d5ee45a5')}
         >
           <CircleCheck className="w-3.5 h-3.5" />
-          <span>Ready</span>
+          <span>{translateUi('ready_5fa7aac5')}</span>
         </div>
       );
 
@@ -63,10 +66,10 @@ export function CanvasSyncStatus({
       return (
         <div
           className={`${PILL} bg-red-500/10 text-red-600 border-red-500/20`}
-          title="Database sync failed. Reload to retry."
+          title={translateUi('database_sync_failed_reload_to_retr_916c8660')}
         >
           <CircleX className="w-3.5 h-3.5" />
-          <span>Sync Error</span>
+          <span>{translateUi('sync_error_0cfdb0c8')}</span>
         </div>
       );
 
@@ -74,10 +77,10 @@ export function CanvasSyncStatus({
       return (
         <div
           className={`${PILL} bg-amber-500/10 text-amber-600 border-amber-500/20`}
-          title="Presence disconnected. cursors may lag."
+          title={translateUi('presence_disconnected_cursors_may_l_173d1e22')}
         >
           <TriangleAlert className="w-3.5 h-3.5" />
-          <span>Live Disconnected</span>
+          <span>{translateUi('live_disconnected_d480ffa7')}</span>
         </div>
       );
 
@@ -85,7 +88,7 @@ export function CanvasSyncStatus({
       return (
         <div className={`${PILL} bg-blue-500/10 text-blue-600 border-blue-500/20`}>
           <RotateCw className="w-3.5 h-3.5 animate-spin" />
-          <span>Saving...</span>
+          <span>{translateUi('saving_dc85af8f')}</span>
         </div>
       );
 
@@ -93,10 +96,10 @@ export function CanvasSyncStatus({
       return (
         <div
           className={`${PILL} bg-muted text-muted-foreground border-border`}
-          title="Offline — your work is saved locally and syncs when you reconnect."
+          title={translateUi('offline_your_work_is_saved_locally__d52f8015')}
         >
           <CircleCheck className="w-3.5 h-3.5" />
-          <span>Saved locally</span>
+          <span>{translateUi('saved_locally_ea2c9daa')}</span>
         </div>
       );
 
@@ -104,7 +107,7 @@ export function CanvasSyncStatus({
       return (
         <div className={`${PILL} bg-amber-500/10 text-amber-600 border-amber-500/20`}>
           <RotateCw className="w-3.5 h-3.5 animate-spin" />
-          <span>Connecting...</span>
+          <span>{translateUi('connecting_5f04ae9e')}</span>
         </div>
       );
 
@@ -112,7 +115,7 @@ export function CanvasSyncStatus({
       return (
         <div className={`${PILL} bg-green-500/10 text-green-600 border-green-500/20`}>
           <CircleCheck className="w-3.5 h-3.5" />
-          <span>Saved</span>
+          <span>{translateUi('saved_b5c120b3')}</span>
         </div>
       );
   }

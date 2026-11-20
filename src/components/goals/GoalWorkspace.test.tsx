@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { render } from '@/i18n/__tests__/render';
 import type { GoalArtifactView, GoalWorkspaceView } from '@/lib/goals/models';
 import { GoalWorkspace } from './GoalWorkspace';
 

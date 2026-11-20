@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { AgentPreviewBuckets } from '../state/agentPreview';
 import { CardSurface } from './CardSurface';
@@ -10,14 +11,16 @@ type Props = {
 };
 
 export function UnderstandingCard({ buckets, settled, onRetry }: Props) {
+  const tUi = useTranslations('onboarding');
+
   const understanding = buckets?.understanding ?? null;
   const hasResult = Boolean(buckets?.result);
   const status = understanding ? 'done' : hasResult ? 'done' : 'indeterminate';
 
   return (
     <CardSurface
-      title="Understanding brief"
-      badge="Analysis"
+      title={tUi('m_4bd4f01160')}
+      badge={tUi('m_62c7fcf46e')}
       status={status}
       isEmpty={understanding === null}
       settled={settled}
@@ -41,7 +44,7 @@ export function UnderstandingCard({ buckets, settled, onRetry }: Props) {
           {understanding.positioning_thesis ? (
             <div>
               <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Positioning thesis
+                {tUi('m_6a90c39972')}
               </p>
               <p className="text-sm leading-snug text-foreground">
                 {understanding.positioning_thesis}
@@ -51,7 +54,7 @@ export function UnderstandingCard({ buckets, settled, onRetry }: Props) {
           {understanding.hypothesis_icp ? (
             <div>
               <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Hypothesis (ICP)
+                {tUi('m_e2193f44e0')}
               </p>
               <p className="text-sm leading-snug text-muted-foreground">
                 {understanding.hypothesis_icp}
@@ -61,7 +64,7 @@ export function UnderstandingCard({ buckets, settled, onRetry }: Props) {
           {understanding.tonal_signal ? (
             <div>
               <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Tonal signal
+                {tUi('m_aac6a2780a')}
               </p>
               <p className="text-sm leading-snug text-muted-foreground">
                 {understanding.tonal_signal}
@@ -69,17 +72,21 @@ export function UnderstandingCard({ buckets, settled, onRetry }: Props) {
             </div>
           ) : null}
           {understanding.brand_pillars && understanding.brand_pillars.length > 0 ? (
-            <ChipRow label="Brand pillars" values={understanding.brand_pillars} variant="violet" />
+            <ChipRow
+              label={tUi('m_352c56ff4d')}
+              values={understanding.brand_pillars}
+              variant="violet"
+            />
           ) : null}
           {understanding.content_pillars && understanding.content_pillars.length > 0 ? (
             <ChipRow
-              label="Content pillars"
+              label={tUi('m_c5a309f176')}
               values={understanding.content_pillars}
               variant="teal"
             />
           ) : null}
           {understanding.notable_evidence && understanding.notable_evidence.length > 0 ? (
-            <BulletList label="Notable evidence" items={understanding.notable_evidence} />
+            <BulletList label={tUi('m_1d791a1517')} items={understanding.notable_evidence} />
           ) : null}
         </>
       ) : null}

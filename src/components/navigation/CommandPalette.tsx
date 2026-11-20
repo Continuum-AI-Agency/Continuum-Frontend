@@ -2,7 +2,7 @@
 
 import { Building2, Loader2, Moon, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import React from 'react';
 import { z } from 'zod';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
@@ -17,6 +17,7 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from '@/components/ui/command';
+import { usePathname, useRouter } from '@/i18n/navigation';
 import {
   type AutomationDeploymentEnvironment,
   canAccessAutomations,
@@ -26,7 +27,7 @@ import { getLocalStorageJSON, setLocalStorageJSON } from '@/lib/storage';
 import { brandStorageKeyRecentPages, migrateLegacyRecentPages } from '@/lib/storage-keys';
 import { useCommandPalette } from './CommandPaletteProvider';
 import { runAfterForgeExit } from './guardedNavigation';
-import { APP_NAVIGATION, APP_NAVIGATION_FOOTER, getContextualSuggestions } from './routes';
+import { useNavigation } from './useNavigation';
 
 const recentPagesSchema = z.array(
   z.object({
@@ -54,6 +55,9 @@ export function CommandPalette({
 }: {
   automationEnvironment?: AutomationDeploymentEnvironment;
 }) {
+  const uiText = useTranslations('navigation');
+  const navigation = useNavigation();
+  const { items: APP_NAVIGATION, footer: APP_NAVIGATION_FOOTER } = navigation;
   const { open, setOpen } = useCommandPalette();
   const router = useRouter();
   const pathname = usePathname();
@@ -68,7 +72,7 @@ export function CommandPalette({
 
   // Page-specific suggestions, resolved from the current route (static map, no
   // backend). Teaches the user what is worth doing from where they already are.
-  const suggestions = getContextualSuggestions(pathname ?? '');
+  const suggestions = navigation.getSuggestions(pathname ?? '');
 
   const [recentPages, setRecentPages] = React.useState<RecentPage[]>([]);
 
@@ -110,7 +114,7 @@ export function CommandPalette({
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} showCloseButton={false}>
-      <CommandInput placeholder="Go to, search, or run..." />
+      <CommandInput placeholder={uiText('go_to_search_or_run_45d3111')} />
       <CommandList>
         <motion.div
           key={open ? 'open' : 'closed'}
@@ -118,19 +122,19 @@ export function CommandPalette({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
         >
-          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandEmpty>{uiText('no_results_found_7ecdbfe')}</CommandEmpty>
 
           {visibleRecentPages.length > 0 && (
             <>
-              <CommandGroup heading="Recent">
+              <CommandGroup heading={uiText('recent_690dbe9')}>
                 {visibleRecentPages.map((page) => (
                   <CommandItem
                     key={page.href}
-                    value={`recent ${page.label} ${page.href}`}
+                    value={`recent ${navigation.labelForHref(page.href, page.label)} ${page.href}`}
                     onSelect={() => leave(() => router.push(page.href))}
                   >
                     <span className="text-muted-foreground font-mono text-xs">↩</span>
-                    {page.label}
+                    {navigation.labelForHref(page.href, page.label)}
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -140,7 +144,7 @@ export function CommandPalette({
 
           {visibleSuggestions.length > 0 && (
             <>
-              <CommandGroup heading="Suggested for this page">
+              <CommandGroup heading={uiText('suggested_for_this_page_c75e001')}>
                 {visibleSuggestions.map((suggestion) => {
                   const Icon = suggestion.icon;
                   return (
@@ -164,7 +168,7 @@ export function CommandPalette({
             </>
           )}
 
-          <CommandGroup heading="Navigation">
+          <CommandGroup heading={uiText('navigation_3db65f8')}>
             {navigationItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -185,7 +189,7 @@ export function CommandPalette({
           {switchableBrands.length > 0 && (
             <>
               <CommandSeparator />
-              <CommandGroup heading="Switch Brand">
+              <CommandGroup heading={uiText('switch_brand_acf96db')}>
                 {switchableBrands.map((brand) => {
                   const isPending = isSwitching && switchingToBrandId === brand.id;
                   return (
@@ -219,7 +223,7 @@ export function CommandPalette({
 
           <CommandSeparator />
 
-          <CommandGroup heading="Settings">
+          <CommandGroup heading={uiText('settings_74a883a')}>
             {footerItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -239,14 +243,16 @@ export function CommandPalette({
 
           <CommandSeparator />
 
-          <CommandGroup heading="Actions">
+          <CommandGroup heading={uiText('actions_ff8059d')}>
             <CommandItem
               value={`toggle theme ${appearance === 'dark' ? 'light' : 'dark'} mode appearance`}
               onSelect={() => run(toggle)}
             >
               {appearance === 'dark' ? <Sun /> : <Moon />}
-              {appearance === 'dark' ? 'Switch to Light mode' : 'Switch to Dark mode'}
-              <CommandShortcut>Theme</CommandShortcut>
+              {appearance === 'dark'
+                ? uiText('switch_to_light_mode_c22ea81')
+                : uiText('switch_to_dark_mode_82de2f8')}
+              <CommandShortcut>{uiText('theme_efb52e7')}</CommandShortcut>
             </CommandItem>
           </CommandGroup>
         </motion.div>

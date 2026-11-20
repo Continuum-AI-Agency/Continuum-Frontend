@@ -5,15 +5,31 @@
 // messages through unchanged. The ideal fix is a friendly message at the backend
 // emit site — this is the owned, testable guard that fixes the visible box now.
 
-type FieldLabel = { test: RegExp; label: string };
+export type StreamErrorKey =
+  | 'streamGenerationFailed'
+  | 'streamValidationFailed'
+  | 'streamScheduleTime'
+  | 'streamSchedule'
+  | 'streamCaption'
+  | 'streamHashtags'
+  | 'streamMedia';
+export type StreamErrorTranslator = (
+  key: StreamErrorKey,
+  values?: { hasPost: string; post: number },
+) => string;
+type FieldLabel = { test: RegExp; label: string; key: StreamErrorKey };
 
 // Ordered most-specific first: the first matching path token wins.
 const FIELD_LABELS: FieldLabel[] = [
-  { test: /scheduledat/i, label: "Couldn't apply the schedule time" },
-  { test: /schedule/i, label: "Couldn't apply the schedule" },
-  { test: /caption/i, label: "Couldn't apply the caption" },
-  { test: /hashtag/i, label: "Couldn't apply the hashtags" },
-  { test: /media|asset|storyboard|creative/i, label: "Couldn't apply the media" },
+  { test: /scheduledat/i, label: "Couldn't apply the schedule time", key: 'streamScheduleTime' },
+  { test: /schedule/i, label: "Couldn't apply the schedule", key: 'streamSchedule' },
+  { test: /caption/i, label: "Couldn't apply the caption", key: 'streamCaption' },
+  { test: /hashtag/i, label: "Couldn't apply the hashtags", key: 'streamHashtags' },
+  {
+    test: /media|asset|storyboard|creative/i,
+    label: "Couldn't apply the media",
+    key: 'streamMedia',
+  },
 ];
 
 const GENERIC = "Some generated fields didn't validate — please retry.";
@@ -78,16 +94,28 @@ function postSuffix(path: string[]): string {
   return Number.isInteger(position) ? ` for post ${position + 1}` : '';
 }
 
-export function friendlyStreamError(raw: string | null | undefined): string {
+export function friendlyStreamError(
+  raw: string | null | undefined,
+  translate?: StreamErrorTranslator,
+): string {
   const text = typeof raw === 'string' ? raw.trim() : '';
-  if (!text) return 'Generation failed';
-  if (!looksLikeZodError(text)) return text;
+  if (!text) return translate?.('streamGenerationFailed') ?? 'Generation failed';
+  if (!looksLikeZodError(text)) return translate?.('streamGenerationFailed') ?? text;
 
   const path = extractIssuePath(text);
-  if (!path) return GENERIC;
+  if (!path) return translate?.('streamValidationFailed') ?? GENERIC;
 
   const joined = path.join('.');
-  const label = FIELD_LABELS.find(({ test }) => test.test(joined))?.label;
-  if (!label) return GENERIC;
-  return `${label}${postSuffix(path)}.`;
+  const match = FIELD_LABELS.find(({ test }) => test.test(joined));
+  if (!match) return translate?.('streamValidationFailed') ?? GENERIC;
+  if (translate) {
+    const placementsIndex = path.findIndex((token) => token.toLowerCase() === 'placements');
+    const index =
+      placementsIndex >= 0 ? Number.parseInt(path[placementsIndex + 1] ?? '', 10) : Number.NaN;
+    return translate(match.key, {
+      hasPost: Number.isInteger(index) ? 'yes' : 'no',
+      post: Number.isInteger(index) ? index + 1 : 0,
+    });
+  }
+  return `${match.label}${postSuffix(path)}.`;
 }

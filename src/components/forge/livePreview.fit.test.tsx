@@ -1,7 +1,11 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { PreviewFormat } from './FormatPreview';
 
 // One format's Live kit with nothing to place: every row measured in it lands.

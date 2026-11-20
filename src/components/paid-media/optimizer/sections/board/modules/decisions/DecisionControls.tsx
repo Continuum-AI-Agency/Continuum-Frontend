@@ -15,6 +15,7 @@ import {
   PlusIcon,
   WrenchIcon,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -86,13 +87,14 @@ function ApproveControl({
   currency: string | null;
   applied: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const [round, setRound] = useState(0);
   return (
     <>
       {applied ? (
         <Badge data-testid="decision-applied" variant="success">
           <CheckIcon aria-hidden="true" />
-          Applied
+          {uiText('applied_0c79a9c')}
         </Badge>
       ) : (
         <Button
@@ -102,7 +104,7 @@ function ApproveControl({
           type="button"
         >
           <CheckIcon aria-hidden="true" />
-          Approve
+          {uiText('approve_6007acb')}
         </Button>
       )}
       {round > 0 ? (
@@ -123,6 +125,7 @@ const COPY_RESET_MS = 1800;
 
 /** Copies the card's list. "Copied" only once the clipboard took it. */
 function CopyListControl({ text }: { text: string }) {
+  const uiText = useTranslations('scale');
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -152,7 +155,11 @@ function CopyListControl({ text }: { text: string }) {
       variant="outline"
     >
       {state === 'copied' ? <CheckIcon aria-hidden="true" /> : <CopyIcon aria-hidden="true" />}
-      {state === 'copied' ? 'Copied' : state === 'failed' ? 'Could not copy' : 'Copy list'}
+      {state === 'copied'
+        ? uiText('copied_8d525e5')
+        : state === 'failed'
+          ? uiText('could_not_copy_d5cb934')
+          : uiText('copy_list_682fc8d')}
     </Button>
   );
 }
@@ -178,6 +185,7 @@ export function DecisionControlView({
   onToggleSteps: () => void;
   onCreatePortfolio: () => void;
 }) {
+  const uiText = useTranslations('scale');
   switch (control.kind) {
     case 'approve':
       return (
@@ -193,7 +201,7 @@ export function DecisionControlView({
         <WithReason reason={QUEUED_NOTE}>
           <Badge data-testid="decision-queued" variant="success">
             <ClockIcon aria-hidden="true" />
-            Queued
+            {uiText('queued_661ff40')}
           </Badge>
         </WithReason>
       );
@@ -235,7 +243,7 @@ export function DecisionControlView({
       return (
         <Button data-testid="decision-create" onClick={onCreatePortfolio} size="sm" type="button">
           <PlusIcon aria-hidden="true" />
-          Create portfolio
+          {uiText('create_portfolio_a53487c')}
         </Button>
       );
     case 'locked':
@@ -267,8 +275,15 @@ export function DismissView({
   state: DismissState;
   onDismiss: (recommendationId: string) => void;
 }) {
+  const uiText = useTranslations('scale');
   if (control.kind === 'unavailable') {
-    return <DisabledControl label="Dismiss" reason={control.reason} testId="decision-dismiss" />;
+    return (
+      <DisabledControl
+        label={uiText('dismiss_48845bf')}
+        reason={control.reason}
+        testId="decision-dismiss"
+      />
+    );
   }
   const pending = state === 'pending';
   return (
@@ -282,11 +297,11 @@ export function DismissView({
         type="button"
         variant="ghost"
       >
-        {pending ? 'Dismissing…' : 'Dismiss'}
+        {pending ? uiText('dismissing_fb6d39d') : uiText('dismiss_48845bf')}
       </Button>
       {state === 'failed' ? (
         <span className="text-destructive text-xs" role="status">
-          Could not dismiss it. Nothing changed.
+          {uiText('could_not_dismiss_it_nothing_changed_79967d0')}
         </span>
       ) : null}
     </>

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Bulk "Attach creative…": one library pick applied to every selected draft, and saved where
 // publish reads it, through the field route's media patch, as a pick in the panel is. It used
@@ -16,6 +17,7 @@ export function useAttachCreative(): (
   targets: readonly OrganicCalendarDraft[],
   publishingAssets: PublishingAssets,
 ) => void {
+  const uiText = useTranslations('organic');
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const { show } = useToast();
   const { persistDraftFields } = useDraftFieldPersistence();
@@ -45,11 +47,15 @@ export function useAttachCreative(): (
               publishingAssets: before.publishingAssets,
               mediaSuggestion: before.mediaSuggestion,
             }));
-            show({ title: 'Creative not attached', description: result.message, variant: 'error' });
+            show({
+              title: uiText('creative_not_attached_73d2246'),
+              description: result.message,
+              variant: 'error',
+            });
           },
         );
       }
     },
-    [persistDraftFields, show, updateDraft],
+    [persistDraftFields, show, updateDraft, uiText],
   );
 }

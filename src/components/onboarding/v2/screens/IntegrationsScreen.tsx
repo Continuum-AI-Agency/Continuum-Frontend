@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import {
   type AssignerTrackEvent,
   BrandAssetAssigner,
@@ -22,6 +23,8 @@ const ONBOARDING_EVENT_BY_ASSIGNER_EVENT: Record<AssignerTrackEvent, OnboardingE
 };
 
 export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
+  const tUi = useTranslations('onboarding');
+
   const { brandId } = useOnboarding();
 
   return (
@@ -35,33 +38,28 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
           <header className="text-center">
             <div className="flex items-center justify-center gap-2">
               <h2 className="text-balance text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-                Tag accounts to this brand
+                {tUi('m_40f49fb0be')}
               </h2>
-              <HelpPopover label="What does Continuum read from these accounts?">
-                <p className="font-semibold text-foreground">What does Continuum read?</p>
+              <HelpPopover label={tUi('m_d1ee031968')}>
+                <p className="font-semibold text-foreground">{tUi('m_0eb7c44b8e')}</p>
                 <ul className="space-y-1 text-muted-foreground">
                   <li>
-                    <span className="font-medium text-foreground">Meta</span> — ad accounts, pages,
-                    and insights from Facebook, Instagram, and Threads.
+                    <span className="font-medium text-foreground">Meta</span>
+                    {tUi('m_ab49ae3ef7')}
                   </li>
                   <li>
-                    <span className="font-medium text-foreground">Google</span> — Google Ads,
-                    YouTube, and DV360 accounts plus performance data.
+                    <span className="font-medium text-foreground">Google</span>
+                    {tUi('m_3d9e9fa6d9')}
                   </li>
                   <li>
-                    <span className="font-medium text-foreground">TikTok</span> — your creator
-                    profile and its organic posts.
+                    <span className="font-medium text-foreground">TikTok</span>
+                    {tUi('m_4dd927c683')}
                   </li>
                 </ul>
-                <p className="text-[0.75rem] text-muted-foreground">
-                  Continuum never reads private messages or posts on your behalf.
-                </p>
+                <p className="text-[0.75rem] text-muted-foreground">{tUi('m_04cc0494a9')}</p>
               </HelpPopover>
             </div>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Pick the specific accounts this brand should use. You can change this any time in
-              Settings.
-            </p>
+            <p className="mt-1.5 text-sm text-muted-foreground">{tUi('m_83f03bc191')}</p>
             {assignedCount > 0 && (
               <button
                 type="button"
@@ -69,7 +67,7 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
                 disabled={clearing}
                 className="mt-2 text-sm text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {clearing ? 'Clearing…' : 'Clear all'}
+                {clearing ? tUi('m_bc7a2b5869') : tUi('m_c043160a89')}
               </button>
             )}
           </header>
@@ -82,7 +80,7 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
               onClick={onAdvance}
               className="text-muted-foreground hover:text-foreground"
             >
-              Continue
+              {tUi('m_2e02623966')}
             </Button>
           </div>
         }

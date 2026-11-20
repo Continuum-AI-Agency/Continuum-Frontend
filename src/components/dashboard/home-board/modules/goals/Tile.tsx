@@ -11,13 +11,14 @@
 // targets route is not deployed the tile is exactly that, with no form: its figure is real and
 // nothing is wrong. Never a projection.
 
-import type { HomeGoalPeriod } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import { lazy, useMemo, useState } from 'react';
 import { Sparkline } from '@/components/paid-media/optimizer/components/Sparkline';
 import type { ModuleFrameState } from '@/components/paid-media/optimizer/sections/board/ModuleFrame';
 import { GoogleReadNotice } from '@/components/paid-media/optimizer/sections/platforms/GoogleReadNotice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
 import { formatFigure } from '@/lib/home/format';
 import { useGoogleRefusal } from '@/lib/home/homeAccounts';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
@@ -37,7 +38,6 @@ import {
   goalTileView,
   goalWindowLabel,
   monthToDateWindow,
-  TARGETS_LATER,
 } from './goalModel';
 import type { GoalTargetStatus } from './goalTargetModel';
 import { useGoalProfiles } from './useGoalProfiles';
@@ -46,33 +46,34 @@ import { useGoalTargets } from './useGoalTargets';
 
 const GoalModule = lazy(() => import('./Module'));
 
-const SOURCE_LABELS: Record<GoalSource, string> = {
-  team: 'Set by your team',
-  results: 'Followed from your results',
-  business: 'Suggested by your Brand Book',
-};
+type DashboardText = ReturnType<typeof useTranslations<'dashboard'>>;
 
-function amountsText(figure: GoalFigure): string {
+const SOURCE_LABEL_KEYS = {
+  team: 'set_by_your_team_3a1fe54',
+  results: 'followed_from_your_results_a3839f4',
+  business: 'suggested_by_your_brand_book_1b11250',
+} as const satisfies Record<GoalSource, string>;
+
+function amountsText(figure: GoalFigure, uiText: DashboardText): string {
   if (figure.amounts.length === 0) {
-    return figure.unreported ? 'Not counted by Google Ads' : 'Not counted yet';
+    return figure.unreported
+      ? uiText('not_counted_by_google_ads_1e76a83')
+      : uiText('not_counted_yet_65a3ca0');
   }
   return figure.amounts
     .map((amount) => formatFigure(amount.value, figure.unit, amount.currency))
     .join(' · ');
 }
 
-const PERIOD_WORDS: Record<HomeGoalPeriod, string> = {
-  week: 'this week',
-  month: 'this month',
-  quarter: 'this quarter',
-  custom: 'this period',
-};
+/** The target's period when one sets the window, else 'none' (the month so far): the `period`
+ *  argument of the messages that say what the figure covers. */
+function figurePeriod(target: GoalTargetStatus): string {
+  return target.kind === 'compared' || target.kind === 'mismatch' ? target.target.period : 'none';
+}
 
-/** What the figure covers, in words: the target's period when one sets the window. */
-function figureWords(target: GoalTargetStatus): string | null {
-  return target.kind === 'compared' || target.kind === 'mismatch'
-    ? PERIOD_WORDS[target.target.period]
-    : null;
+/** A goal's own name is the team's words; a built-in metric name is said in the UI language. */
+function goalLabel(label: string, source: GoalSource, uiText: DashboardText): string {
+  return source === 'team' ? label : localizeDashboardCopy(label, uiText);
 }
 
 function TargetFooter({
@@ -84,9 +85,11 @@ function TargetFooter({
   target: GoalTargetStatus;
   onSetGoal: () => void;
 }) {
+  const uiText = useTranslations('dashboard');
+  const uiLocale = useLocale();
   const hasTarget =
     target.kind === 'compared' || target.kind === 'mismatch' || target.kind === 'not-running';
-  const note = goalTargetNote(target);
+  const note = goalTargetNote(target, uiText, uiLocale);
   return (
     <>
       {note ? (
@@ -96,14 +99,16 @@ function TargetFooter({
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
         {target.kind === 'none' || target.kind === 'unavailable' ? (
-          <span className="font-medium text-xs">No target set yet</span>
+          <span className="font-medium text-xs">{uiText('no_target_set_yet_354d24a')}</span>
         ) : null}
         <Button className="ml-auto h-7 text-xs" onClick={onSetGoal} size="sm" variant="outline">
-          {hasTarget ? 'Edit target' : 'Set a goal'}
+          {hasTarget ? uiText('edit_target_1455e66') : uiText('set_a_goal_8e331a7')}
         </Button>
       </div>
       {target.kind === 'unavailable' && size !== 's' ? (
-        <p className="text-2xs text-muted-foreground">{TARGETS_LATER}</p>
+        <p className="text-2xs text-muted-foreground">
+          {uiText('targets_and_periods_arrive_with_the_goals_upd_3e92ca5')}
+        </p>
       ) : null}
     </>
   );
@@ -118,14 +123,19 @@ function ReadyBody({
   size: 'l' | 'm' | 's';
   onSetGoal: () => void;
 }) {
+  const uiText = useTranslations('dashboard');
+  const uiLocale = useLocale();
   const { primary, headline, others, secondaries, target } = view;
-  const label = primary.objective.label;
+  const label = goalLabel(primary.objective.label, view.source, uiText);
   const compared = target.kind === 'compared' ? target : null;
-  const words = figureWords(target);
+  const period = figurePeriod(target);
+  const othersText = new Intl.ListFormat(uiLocale, { type: 'conjunction' }).format(
+    others.map((amount) => formatFigure(amount.value, primary.unit, amount.currency)),
+  );
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <p className="truncate text-2xs text-muted-foreground uppercase tracking-wide">
-        {label} · {words ?? 'month to date'}
+        {uiText('goal_period_select_week_this_week_month_this__df88b16', { goal: label, period })}
       </p>
       <div className="flex min-w-0 items-end justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
@@ -144,7 +154,7 @@ function ReadyBody({
               className="text-muted-foreground text-sm tabular-nums"
               data-testid="home-tile-goals-target"
             >
-              of {goalTargetFigure(compared.target)}
+              {uiText('of_target_de39515', { target: goalTargetFigure(compared.target) })}
             </span>
           ) : null}
         </div>
@@ -152,7 +162,10 @@ function ReadyBody({
           <Sparkline
             className="shrink-0"
             height={32}
-            label={`${label}, per day ${words ?? 'this month'}`}
+            label={uiText('goal_per_day_period_select_week_this_week_mon_5e2a2ec', {
+              goal: label,
+              period,
+            })}
             values={headline.series}
             width={size === 's' ? 72 : 120}
           />
@@ -162,29 +175,35 @@ function ReadyBody({
         <>
           <GoalProgressBar label={label} status={compared} />
           <p className="text-muted-foreground text-xs" data-testid="home-tile-goals-pace">
-            {goalPaceLine(compared)}
+            {goalPaceLine(compared, uiText)}
           </p>
         </>
       ) : null}
       <p className="text-muted-foreground text-xs">
-        {goalWindowLabel(view.figureWindow)} · {SOURCE_LABELS[view.source]}
+        {goalWindowLabel(view.figureWindow)} · {uiText(SOURCE_LABEL_KEYS[view.source])}
       </p>
       {others.length > 0 ? (
         <p className="text-muted-foreground text-xs" data-testid="home-tile-goals-currencies">
           {compared
-            ? `In ${headline.currency}, the target's currency. Also `
-            : `In ${headline.currency ?? 'an unknown currency'}, the currency most of the spending ad accounts use. Also `}
-          {others
-            .map((amount) => formatFigure(amount.value, primary.unit, amount.currency))
-            .join(' and ')}
-          , never added together.
+            ? uiText('in_currency_the_target_s_currency_also_others_12eb59e', {
+                currency: headline.currency ?? '',
+                others: othersText,
+              })
+            : headline.currency
+              ? uiText('in_currency_the_currency_most_of_the_spending_693dbd4', {
+                  currency: headline.currency,
+                  others: othersText,
+                })
+              : uiText('in_an_unknown_currency_the_currency_most_of_t_2569674', {
+                  others: othersText,
+                })}
         </p>
       ) : null}
       {view.unanswered > 0 ? (
         <p className="text-muted-foreground text-xs">
-          {view.unanswered === 1
-            ? '1 ad account didn’t answer and is not in these figures.'
-            : `${view.unanswered} ad accounts didn’t answer and are not in these figures.`}
+          {uiText('count_plural_one_ad_account_didn_t_answer_and_7f9907b', {
+            count: view.unanswered,
+          })}
         </p>
       ) : null}
       {size !== 's' && secondaries.length > 0 ? (
@@ -196,10 +215,10 @@ function ReadyBody({
               key={figure.objective.id}
             >
               <span className="truncate text-muted-foreground">
-                {figure.objective.label}
-                {words ? ' · month to date' : ''}
+                {goalLabel(figure.objective.label, view.source, uiText)}
+                {period === 'none' ? '' : ` · ${uiText('month_to_date_aff3da6')}`}
               </span>
-              <span className="shrink-0 font-mono tabular-nums">{amountsText(figure)}</span>
+              <span className="shrink-0 font-mono tabular-nums">{amountsText(figure, uiText)}</span>
             </li>
           ))}
         </ul>
@@ -210,6 +229,7 @@ function ReadyBody({
 }
 
 export default function GoalsTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
   // The day is fixed when the tile mounts: yesterday moves at midnight, the board does not.
   const [now] = useState(() => new Date());
   const monthWindow = useMemo(() => monthToDateWindow(now), [now]);
@@ -257,7 +277,11 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
     view.state === 'error' && refusal?.status === 'loading' ? 'loading' : view.state;
   const badge =
     view.state === 'ready'
-      ? `${view.primary.objective.label} ${figureWords(view.target) ?? 'this month'}: ${formatFigure(view.headline.value, view.primary.unit, view.headline.currency)}`
+      ? uiText('goal_period_select_week_this_week_month_this__ffc61b0', {
+          goal: goalLabel(view.primary.objective.label, view.source, uiText),
+          period: figurePeriod(view.target),
+          figure: formatFigure(view.headline.value, view.primary.unit, view.headline.currency),
+        })
       : null;
 
   return (
@@ -277,7 +301,7 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
           targetStatus={view.state === 'ready' ? view.target : null}
         />
       }
-      expandedDescription="The goals the Home measures and the target for the main one."
+      expandedDescription={uiText('the_goals_the_home_measures_and_the_target_fo_9088af8')}
       state={state}
       tile={tile}
     >
@@ -300,7 +324,7 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
           <GoogleReadNotice state={refusal} />
         ) : (
           <p className="text-destructive-ink text-xs" role="alert">
-            Couldn’t read these results — the ad platform didn’t answer.{' '}
+            {uiText('couldn_t_read_these_results_the_ad_platform_d_2ec1824')}{' '}
             <Button
               className="h-5 px-1 text-xs"
               onClick={() => setAttempt((count) => count + 1)}
@@ -308,7 +332,7 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
               type="button"
               variant="link"
             >
-              Retry
+              {uiText('retry_942087c')}
             </Button>
           </p>
         )}

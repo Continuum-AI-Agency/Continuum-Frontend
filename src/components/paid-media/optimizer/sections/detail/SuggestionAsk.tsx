@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // "Ask for a suggestion" — three categories, inside one portfolio, as one quiet row.
 //
 // Deliberately three plain controls and not a dropdown plus a button: the three categories
@@ -40,14 +42,15 @@ const CATEGORY_ICON: Record<AdhocSuggestionCategory, { Icon: LucideIcon; tone: s
 };
 
 export function SuggestionAsk({ gates, onAsk, pending, error = null }: SuggestionAskProps) {
+  const uiText = useTranslations('scale');
   return (
     <section className="@container mb-8" data-testid="suggestion-ask">
       <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="font-semibold text-base text-foreground tracking-tight">
-          Ask for a suggestion
+          {uiText('ask_for_a_suggestion_962cd0f')}
         </h3>
         <p className="text-muted-foreground text-xs">
-          Read on request, from this portfolio's own figures
+          {uiText('read_on_request_from_this_portfolio_s_own_fig_3207e3c')}
         </p>
       </header>
       {/* One quiet row of three asks: icon, label, one line on what asking gets, and the ask
@@ -89,12 +92,18 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
                     type="button"
                     variant="link"
                   >
-                    {working ? 'Reading…' : busy ? 'Asking…' : 'Ask'}
+                    {working
+                      ? uiText('reading_874bfa5')
+                      : busy
+                        ? uiText('asking_0b83284')
+                        : uiText('ask_b8c209c')}
                   </Button>
                   {note ? <span className="text-muted-foreground text-xs">{note}</span> : null}
                   {!note && gate.requests_left <= 1 ? (
                     <span className="text-muted-foreground text-xs">
-                      {gate.requests_left === 1 ? 'One more today' : 'None left today'}
+                      {gate.requests_left === 1
+                        ? uiText('one_more_today_1f4cc04')
+                        : uiText('none_left_today_2759999')}
                     </span>
                   ) : null}
                 </div>

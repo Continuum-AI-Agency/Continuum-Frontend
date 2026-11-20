@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // A question Jaina asked back, as the whole of her turn.
 //
@@ -28,15 +29,16 @@ export function ClarificationCard({
   onFocusInput,
   disabled = false,
 }: ClarificationCardProps) {
+  const uiText = useTranslations('scale');
   const selectableOptions = onSelectOption ? options : [];
   return (
     <section
       className="space-y-3 rounded-xl border border-amber-300/30 border-l-2 border-l-amber-400/60 bg-amber-50/8 px-4 py-3"
       data-testid="jaina-clarification"
-      aria-label="Jaina needs your input"
+      aria-label={uiText('jaina_needs_your_input_8dc43e1')}
     >
       <span className={`${JAINA_TYPE.label} block text-amber-700 dark:text-amber-300`}>
-        Needs your input
+        {uiText('needs_your_input_b677d37')}
       </span>
       {question ? (
         <p className={JAINA_TYPE.answer} data-testid="jaina-clarification-question">
@@ -64,7 +66,9 @@ export function ClarificationCard({
           onClick={onFocusInput}
           className="inline-flex cursor-pointer items-center text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
         >
-          {selectableOptions.length > 0 ? 'Or type your own answer' : 'Reply to this'}
+          {selectableOptions.length > 0
+            ? uiText('or_type_your_own_answer_8248fd8')
+            : uiText('reply_to_this_482349c')}
         </button>
       ) : null}
     </section>

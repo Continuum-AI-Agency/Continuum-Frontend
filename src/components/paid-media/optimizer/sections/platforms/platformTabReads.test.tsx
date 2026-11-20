@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // The Google tab's two reads (G2): its portfolios, selected from the ONE brand read the page
 // shell already holds, and its cards, from optimizer_get_platform_cards. The client is

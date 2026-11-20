@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { type CustomField, type CustomFieldType, customFieldSchema } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import es from '../../../messages/library/es.json';
 import { MAX_FIELD_TEXT_LENGTH } from './customFields';
 import {
   formatCustomFieldValue,
@@ -215,4 +217,27 @@ describe('formatCustomFieldValue — user_multi', () => {
     );
     expect(formatCustomFieldValue(people, null)).toBe('');
   });
+});
+
+it('localizes validation and former-member labels while retaining authored names and raw diagnostics', () => {
+  const translate = createTranslator({
+    locale: 'es',
+    messages: { library: es },
+    namespace: 'library',
+  });
+  const display = { locale: 'es', translate };
+  const checked = validateCustomFieldValue(
+    { ...singleSelect, name: 'English field' },
+    'missing',
+    display,
+  );
+  expect(checked.ok).toBe(false);
+  if (!checked.ok) {
+    expect(checked.error).toContain('English field');
+    expect(checked.error).not.toContain('not an option');
+    expect(checked.diagnosticReason).toContain('not an option');
+  }
+  expect(
+    formatCustomFieldValue(makeField('user_multi'), ['absent'], undefined, display),
+  ).not.toContain('Former member');
 });

@@ -145,6 +145,7 @@ describe('calendar draft persistence utils', () => {
     });
 
     expect(payload.scheduled_date).toBe('2020-01-07T09:00:00.000Z');
+    expect(payload.scheduledDateFloored).toBe(false);
   });
 
   it('DOES floor a past-dated scheduled draft, so the publish poller cannot fire on arrival', () => {
@@ -157,6 +158,21 @@ describe('calendar draft persistence utils', () => {
     });
 
     expect(Date.parse(payload.scheduled_date)).toBeGreaterThan(Date.now());
+    // Reported, so the autosave can tell the user their post moved instead of moving it silently.
+    expect(payload.scheduledDateFloored).toBe(true);
+  });
+
+  it('reports no floor for a scheduled post whose time is still ahead', () => {
+    const payload = buildPersistedDraftPayload({
+      brandId: '11111111-1111-4111-8111-111111111111',
+      weekStartId: '2099-01-05',
+      dayId: '2099-01-06',
+      draft: makeDraft({ status: 'scheduled', timeLabel: '9:00 AM' }),
+      timeZone: 'UTC',
+    });
+
+    expect(payload.scheduled_date).toBe('2099-01-06T09:00:00.000Z');
+    expect(payload.scheduledDateFloored).toBe(false);
   });
 
   it('maps persisted rows back into calendar entries', () => {
@@ -732,6 +748,24 @@ describe('field-edit read derivations', () => {
       days(),
     );
     expect(mapped?.draft.hasCopy).toBe(true);
+  });
+
+  // The row an approved plan leaves behind: status approved, content_json NULL, a brief.
+  it('reads an approved plan placement with no copy as its brief, not an empty "Saved draft"', () => {
+    const brief = 'Why typing invoices by hand costs a day a week';
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({
+        status: 'approved',
+        media_stage: 'text_only',
+        content_json: null,
+        slot_data: { dayId: '2026-04-21', brief, format: 'carousel', platform: 'linkedin' },
+      }),
+      days(),
+    );
+    expect(mapped?.draft.title).toBe(brief);
+    expect(mapped?.draft.brief).toBe(brief);
+    expect(mapped?.draft.hasCopy).toBe(false);
+    expect(mapped?.draft.status).toBe('draft');
   });
 
   // The publisher reads the snapshot's format first (a format edit rewrites it too), so a

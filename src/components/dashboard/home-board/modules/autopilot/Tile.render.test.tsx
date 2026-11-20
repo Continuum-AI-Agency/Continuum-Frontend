@@ -9,8 +9,9 @@ import {
   setSystemTime,
 } from 'bun:test';
 import type { HomeOvernightLogData, PortfolioListItem } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { OptimizerActionFeedRow } from '@/components/paid-media/optimizer/useOptimizerData';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeReadLoad } from '../../homeRead';
 import { homeContext, tileOf } from '../opps/__fixtures__/homeContext';
 import {

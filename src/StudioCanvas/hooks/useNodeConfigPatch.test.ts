@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import type { ToastOptions } from '@/components/ui/ToastProvider';
+import { renderHook } from '@/i18n/__tests__/render';
 
 const show = mock((_options: ToastOptions) => {});
 mock.module('@/components/ui/ToastProvider', () => ({

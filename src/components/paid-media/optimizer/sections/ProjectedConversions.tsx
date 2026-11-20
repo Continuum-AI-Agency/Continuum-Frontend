@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // The suggestion surface for an account whose campaigns all budget at the campaign level
 // (CBO). The suggester has nothing to group there, so instead of dead-ending it PROJECTS
@@ -37,12 +38,13 @@ export function ProjectedConversions({
   currency,
   projections,
 }: ProjectedConversionsProps) {
+  const uiText = useTranslations('scale');
   if (projections.length === 0) return null;
 
   return (
     <div className="space-y-2">
       <p className="text-muted-foreground text-xs">
-        Projections, not conversions &mdash; nothing changes on Meta until you convert.
+        {uiText('projections_not_conversions_nothing_changes_o_8b0173e')}
       </p>
       <div className="grid gap-3 2xl:grid-cols-2">
         {projections.map((projection) => (
@@ -70,6 +72,8 @@ function ProjectedConversionCard({
   currency: string | null;
   projection: ProjectedConversion;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const [open, setOpen] = useState(false);
   const cyclePreview = useCyclePreview();
   const ranRef = useRef(false);
@@ -91,22 +95,26 @@ function ProjectedConversionCard({
         <p className="flex items-center gap-2 font-semibold text-sm tracking-tight">
           <span className="min-w-0 truncate">{projection.campaignName}</span>
           <Badge variant="outline" className="shrink-0 text-xs">
-            projected
+            {uiText('projected_3a4b077')}
           </Badge>
         </p>
         <p className="text-muted-foreground text-xs">
-          If converted: {formatCurrency(totals.campaignBudgetToday, currency)}/d held at the
-          campaign &rarr; {adsetLabel} budgeted at about{' '}
-          <span className="font-medium text-foreground tabular-nums">
-            {formatCurrency(totals.newDailyTotal, currency)}/d
-          </span>{' '}
-          in total, scored on {humanize(objective)}.
+          {uiText.rich('sentence_dc0bae26967d', {
+            v0: formatCurrency(totals.campaignBudgetToday, currency, uiLocale),
+            v1: adsetLabel,
+            v2: () => (
+              <span className="font-medium text-foreground tabular-nums">
+                {uiText.rich('sentence_24e8fe03aac9', {
+                  v0: formatCurrency(totals.newDailyTotal, currency, uiLocale),
+                })}
+              </span>
+            ),
+            v3: humanize(objective, uiText),
+          })}
         </p>
         {floorAdsetCount > 0 ? (
           <p className="text-xs text-muted-foreground">
-            {floorAdsetCount} ad set{floorAdsetCount === 1 ? ' has' : 's have'} too little recent
-            spend to project from, so {floorAdsetCount === 1 ? 'it sits' : 'they sit'} on an assumed
-            account minimum. The real minimum comes back when you convert.
+            {uiText.rich('sentence_16c743fc6e00', { count: floorAdsetCount })}
           </p>
         ) : null}
       </div>
@@ -118,15 +126,20 @@ function ProjectedConversionCard({
           aria-expanded={open}
           className="flex w-full items-center gap-1.5 px-4 py-2 text-foreground text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <ChevronDownIcon
-            className={`size-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          />
-          <SparklesIcon className="size-3.5 text-primary-ink" aria-hidden="true" />
-          Project the first cycle
-          <span className="font-normal text-muted-foreground">
-            &mdash; what the optimizer would do
-          </span>
+          {uiText.rich('sentence_d938f59aa386', {
+            v0: () => (
+              <ChevronDownIcon
+                className={`size-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+                aria-hidden="true"
+              />
+            ),
+            v1: () => <SparklesIcon className="size-3.5 text-primary-ink" aria-hidden="true" />,
+            v2: () => (
+              <span className="font-normal text-muted-foreground">
+                {uiText('what_the_optimizer_would_do_600f2e8')}
+              </span>
+            ),
+          })}
         </button>
         {open ? (
           <div className="border-border/60 border-t p-3">
@@ -136,8 +149,7 @@ function ProjectedConversionCard({
               currency={currency}
             />
             <p className="mt-2 text-xs text-muted-foreground">
-              Estimated from each ad set&rsquo;s recent spend. Convert below to confirm the real
-              per-ad-set budgets &mdash; nothing here changes anything on Meta.
+              {uiText('estimated_from_each_ad_set_s_recent_spend_con_3528095')}
             </p>
           </div>
         ) : null}
@@ -155,11 +167,12 @@ function ProjectedCycleBody({
   isPending: boolean;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
   if (isPending || outcome == null) {
     return (
       <p className="flex items-center gap-2 text-muted-foreground text-sm" role="status">
         <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-        Running the optimizer over the projected ad sets&hellip;
+        {uiText('running_the_optimizer_over_the_projected_ad_s_d686cd9')}
       </p>
     );
   }
@@ -167,15 +180,14 @@ function ProjectedCycleBody({
   if (outcome.status === 'unavailable') {
     return (
       <p className="text-muted-foreground text-xs">
-        Projection isn&rsquo;t available yet &mdash; the optimizer preview service isn&rsquo;t live
-        for this account.
+        {uiText('projection_isn_t_available_yet_the_optimizer__665def3')}
       </p>
     );
   }
   if (outcome.status === 'error') {
     return (
       <p className="text-muted-foreground text-xs">
-        Couldn&rsquo;t run the projection just now. Try reopening in a moment.
+        {uiText('couldn_t_run_the_projection_just_now_try_reop_8ab4e4a')}
       </p>
     );
   }
@@ -196,8 +208,8 @@ function ProjectedCycleBody({
       <ReallocationFlow items={flowItems} currency={currency} />
       <p className="text-xs text-muted-foreground">
         {recCount === 0
-          ? 'No action recommendations raised on the projected ad sets.'
-          : `${recCount} action recommendation${recCount === 1 ? '' : 's'} raised on the projected ad sets.`}
+          ? uiText('no_action_recommendations_raised_on_the_proje_88da6e6')
+          : uiText('template_5ebea87cff1e', { count: recCount })}
       </p>
     </div>
   );

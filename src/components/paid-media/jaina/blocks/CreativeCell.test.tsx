@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 const requestPreview = mock(async () => ({
   thumbnail_url: 'https://cdn.example.com/creative.jpg',

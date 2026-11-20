@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { AgentPreviewBuckets } from '../state/agentPreview';
 import { CardSurface } from './CardSurface';
@@ -10,13 +11,15 @@ type Props = {
 };
 
 export function WebsiteSummaryCard({ buckets, settled, onRetry }: Props) {
+  const tUi = useTranslations('onboarding');
+
   const website = buckets?.website ?? null;
   const status = buckets?.sectionStatus.website ?? 'indeterminate';
 
   return (
     <CardSurface
-      title="Website summary"
-      badge="Source"
+      title={tUi('m_4fe61e2bd5')}
+      badge={tUi('dnaBadgeSource')}
       status={status}
       isEmpty={website === null}
       settled={settled}
@@ -58,7 +61,7 @@ export function WebsiteSummaryCard({ buckets, settled, onRetry }: Props) {
                 return (
                   <div>
                     <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Palette
+                      {tUi('m_bd6f1035d2')}
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {swatches.map((hex, idx) => (
@@ -72,12 +75,12 @@ export function WebsiteSummaryCard({ buckets, settled, onRetry }: Props) {
           {website.typography ? (
             <div>
               <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Typography
+                {tUi('m_f4beb9af58')}
               </p>
               <p className="text-sm text-muted-foreground">
                 {[website.typography.primary, website.typography.secondary]
                   .filter(Boolean)
-                  .join(' · ') || 'Not detected'}
+                  .join(' · ') || tUi('m_a5cb42ba3a')}
               </p>
             </div>
           ) : null}

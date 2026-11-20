@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { MediaAsset } from '@continuum/contracts';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, render, waitFor } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ReviewStatusControl } from './ReviewStatusControl';
 
 afterEach(cleanup);

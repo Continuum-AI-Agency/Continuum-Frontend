@@ -2,6 +2,7 @@
 
 import { type ElementRecord, isElementPersonCategory } from '@continuum/contracts';
 import { Layers } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { buildElementDragPayload, ELEMENT_DRAG_TYPE } from '@/lib/ai-studio/referenceDrop';
 
@@ -14,6 +15,8 @@ export function ElementCard({
   previewUrl?: string;
   onSelect: (id: string) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   // A character sheet is portrait: its top is the name, the profile and the turnaround.
   const fit = isElementPersonCategory(element.category)
     ? 'object-cover object-top'
@@ -41,14 +44,22 @@ export function ElementCard({
       >
         <div className="flex aspect-video w-full items-center justify-center bg-muted/30">
           {previewUrl ? (
-            <img src={previewUrl} alt={element.name} className={`h-full w-full ${fit}`} />
+            <img
+              src={previewUrl}
+              alt={element.name}
+              loading="lazy"
+              decoding="async"
+              className={`h-full w-full ${fit}`}
+            />
           ) : (
             <Layers className="size-5 text-muted-foreground" />
           )}
         </div>
         <div className="w-full truncate px-2 py-1.5 text-xs">{element.name}</div>
         {!element.defaultReferenceAssetId && !element.members.length ? (
-          <span className="px-2 pb-2 text-xs text-muted-foreground">Needs sheet</span>
+          <span className="px-2 pb-2 text-xs text-muted-foreground">
+            {translateUi('needs_sheet_21413096')}
+          </span>
         ) : null}
       </HoverCardTrigger>
       <HoverCardContent className="rounded-lg shadow-none">
@@ -57,7 +68,8 @@ export function ElementCard({
         ) : null}
         <p className="text-sm font-medium">{element.name}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Reusable {element.category} · Saved to your library
+          {translateUi('reusable_8ded2b38')} {element.category}{' '}
+          {translateUi('saved_to_your_library_015ba2f4')}
         </p>
         {element.facts?.map((fact) => (
           <p key={fact.label} className="mt-2 text-xs">
@@ -65,7 +77,7 @@ export function ElementCard({
           </p>
         ))}
         <p className="mt-2 text-xs text-muted-foreground">
-          Open to view or edit. Drag into the canvas to reuse.
+          {translateUi('open_to_view_or_edit_drag_into_the__572f504e')}
         </p>
       </HoverCardContent>
     </HoverCard>

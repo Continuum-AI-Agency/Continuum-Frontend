@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('motion/react', () => ({
   motion: {

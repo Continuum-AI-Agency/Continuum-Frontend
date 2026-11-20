@@ -1,15 +1,22 @@
 'use client';
 
 import { Upload, X } from 'lucide-react';
+
+import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { createSignedAssetUrl, uploadCreativeAsset } from '@/lib/creative-assets/storageClient';
 
 export function LogoUploader() {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('onboarding');
+
   const { brandId, state, updateState } = useOnboarding();
   const { show } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +50,7 @@ export function LogoUploader() {
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      show({ title: 'File too large', description: 'Logo must be under 2MB', variant: 'error' });
+      show({ title: tUi('m_a0704a4eaa'), description: tUi('m_8e5741d5c1'), variant: 'error' });
       return;
     }
 
@@ -58,12 +65,14 @@ export function LogoUploader() {
           logoPath: asset.fullPath,
         },
       });
-      show({ title: 'Logo uploaded', description: 'Brand logo updated.', variant: 'success' });
+      show({ title: tUi('m_1a3b73c794'), description: tUi('m_56c798f5cd'), variant: 'success' });
     } catch (error) {
       console.error(error);
       const description =
-        error instanceof Error && error.message ? error.message : 'Could not upload logo.';
-      show({ title: 'Upload failed', description, variant: 'error' });
+        error instanceof Error && uiErrorMessage(error)
+          ? uiErrorMessage(error)
+          : tUi('m_4bb4dc5e7a');
+      show({ title: tUi('m_ad0d0603e2'), description, variant: 'error' });
     } finally {
       setIsUploading(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -94,7 +103,11 @@ export function LogoUploader() {
         className="w-32 h-32 cursor-pointer border-4 border-muted-foreground/10 hover:border-primary/50 transition-all shadow-sm"
         onClick={() => inputRef.current?.click()}
       >
-        <AvatarImage src={previewUrl ?? undefined} alt="Brand Logo" className="object-cover" />
+        <AvatarImage
+          src={previewUrl ?? undefined}
+          alt={tUi('m_25dd48f3a2')}
+          className="object-cover"
+        />
         <AvatarFallback className="text-3xl font-semibold bg-transparent text-muted-foreground">
           {isUploading ? '...' : initials}
         </AvatarFallback>

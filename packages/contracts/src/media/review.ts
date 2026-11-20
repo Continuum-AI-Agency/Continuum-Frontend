@@ -162,6 +162,8 @@ export const listReviewStateLabelsResponseSchema = z
   .object({
     labels: z.array(reviewStateLabelSchema),
     customStates: z.array(reviewCustomStateSchema).default([]),
+    // Presence distinguishes stored brand copy from the defaults filled by the reader.
+    customizedStates: z.array(mediaReviewStatusSchema).optional(),
   })
   .strict();
 export type ListReviewStateLabelsResponse = z.infer<typeof listReviewStateLabelsResponseSchema>;

@@ -1,4 +1,7 @@
+import type { useTranslations } from 'next-intl';
 import { z } from 'zod';
+
+type SchemaTranslate = ReturnType<typeof useTranslations<'scale'>>;
 
 export const productCatalogVerticalSchema = z.enum([
   'adoptable_pets',
@@ -207,4 +210,47 @@ export function normalizeNullableText(value?: string | null): string | null {
   if (!value) return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+export function createProductCatalogFormSchema(translate?: SchemaTranslate) {
+  if (!translate) return productCatalogFormSchema;
+  return productCatalogFormSchema.extend({
+    name: z.string().trim().min(2, translate('schemaUi_18')).max(120),
+    businessId: z
+      .string()
+      .trim()
+      .min(1, translate('schemaUi_19'))
+      .max(64, translate('schemaUi_20')),
+    catalogStoreId: z
+      .string()
+      .trim()
+      .min(1, translate('schemaUi_21'))
+      .max(64, translate('schemaUi_22')),
+    feedUrl: z.string().url(translate('schemaUi_23')).max(1024).optional().or(z.literal('')),
+    defaultImageUrl: z
+      .string()
+      .url(translate('schemaUi_23'))
+      .max(1024)
+      .optional()
+      .or(z.literal('')),
+    fallbackImageUrl: z
+      .string()
+      .url(translate('schemaUi_23'))
+      .max(1024)
+      .optional()
+      .or(z.literal('')),
+  });
+}
+
+export function productCatalogVerticalLabel(
+  vertical: ProductCatalogVertical,
+  t: SchemaTranslate,
+): string {
+  return t('catalogVerticalLabel', { vertical });
+}
+export function productCatalogSyncStatusLabel(
+  status: ProductCatalogSyncStatus,
+  t: SchemaTranslate,
+): string {
+  return t('catalogSyncLabel', { status });
 }

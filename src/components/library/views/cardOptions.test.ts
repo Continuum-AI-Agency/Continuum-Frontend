@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'bun:test';
 import type { MediaAsset } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import es from '../../../../messages/library/es.json';
+import pt from '../../../../messages/library/pt-BR.json';
 import {
   CARD_DRAWN_FIELDS,
   cardAspectClass,
   cardFieldSortValue,
   cardFieldValue,
   cardGridTemplate,
-  isBuiltInCardField,
-  memberNameLookup,
   chosenCustomFieldIds,
   formatDurationMs,
+  isBuiltInCardField,
+  memberNameLookup,
   toggleCardField,
   visibleCardFields,
 } from './cardOptions';
@@ -142,7 +145,9 @@ describe('cardFieldValue', () => {
     };
     expect(cardFieldValue(VIDEO, 'comments', lookups)).toBe('0');
     expect(cardFieldValue(VIDEO, 'uploader', lookups)).toBe('Ana');
-    expect(cardFieldValue({ ...VIDEO, createdBy: 'gone' }, 'uploader', lookups)).toBe('Former member');
+    expect(cardFieldValue({ ...VIDEO, createdBy: 'gone' }, 'uploader', lookups)).toBe(
+      'Former member',
+    );
     expect(cardFieldValue(VIDEO, 'review', lookups)).toBe('Approved');
     expect(cardFieldValue(VIDEO, 'comments')).toBeNull();
     // No member lookup yet (still loading) reads as unknown, never as a former member.
@@ -171,4 +176,37 @@ describe('memberNameLookup', () => {
     expect(memberNameLookup(null)).toBeUndefined();
     expect(memberNameLookup([])).toBeUndefined();
   });
+});
+
+describe('localized technical field display', () => {
+  for (const [locale, messages, video, no] of [
+    ['pt-BR', pt, 'Vídeo', 'Não'],
+    ['es', es, 'Video', 'No'],
+  ] as const) {
+    it(`${locale}: localizes facts while preserving technical and authored values`, () => {
+      const translate = createTranslator({
+        locale,
+        namespace: 'library',
+        messages: { library: messages },
+      });
+      const lookups = { locale, translate };
+      expect(cardFieldValue(VIDEO, 'kind', lookups)).toBe(video);
+      expect(cardFieldValue(VIDEO, 'hasAlpha', lookups)).toBe(no);
+      expect(cardFieldValue(VIDEO, 'frameRate', lookups)).toBe('29,97 fps');
+      expect(cardFieldValue(VIDEO, 'bitRate', lookups)).toBe('184,3 Mb/s');
+      expect(cardFieldValue(VIDEO, 'audioChannels', lookups)).toBe('Estéreo');
+      expect(cardFieldValue(VIDEO, 'created', lookups)).toBe(
+        new Date(VIDEO.createdAt).toLocaleDateString(locale, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }),
+      );
+      expect(cardFieldValue(VIDEO, 'videoCodec', lookups)).toBe('ProRes 422 HQ');
+      expect(cardFieldValue(VIDEO, 'startTimecode', lookups)).toBe('01:00:00:00');
+      expect(cardFieldValue(VIDEO, 'notes', lookups)).toBe('Approved for EMEA');
+      expect(cardFieldValue(VIDEO, 'tags', lookups)).toBe('launch, hero');
+      expect(cardFieldSortValue(VIDEO, 'frameRate', lookups)).toBe(29.97);
+    });
+  }
 });

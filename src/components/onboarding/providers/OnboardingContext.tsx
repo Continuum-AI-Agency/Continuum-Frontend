@@ -1,7 +1,12 @@
 'use client';
 
+import { unstable_isUnrecognizedActionError } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import React, { createContext, useCallback, useContext, useTransition } from 'react';
-import { mutateOnboardingStateAction, resetOnboardingStateAction } from '@/app/onboarding/actions';
+import {
+  mutateOnboardingStateAction,
+  resetOnboardingStateAction,
+} from '@/app/[locale]/onboarding/actions';
 import { useToast } from '@/components/ui/ToastProvider';
 import { createSerializedMutationQueue } from '@/lib/onboarding/mutationQueue';
 import type { OnboardingPatch, OnboardingState } from '@/lib/onboarding/state';
@@ -15,7 +20,8 @@ type OnboardingContextValue = {
   state: OnboardingState;
   userId: string | null;
   isPending: boolean;
-  updateState: (patch: OnboardingPatch) => Promise<void>;
+  /** `notify: false` leaves the failure toast to a caller that words its own. */
+  updateState: (patch: OnboardingPatch, options?: { notify?: boolean }) => Promise<void>;
   resetState: () => Promise<void>;
   reloadState: (next: OnboardingState) => void;
 };
@@ -29,6 +35,8 @@ type OnboardingProviderProps = {
 };
 
 export function OnboardingProvider({ brandId, initialState, children }: OnboardingProviderProps) {
+  const tUi = useTranslations('onboarding');
+
   const [state, setState] = React.useState<OnboardingState>(initialState);
   const stateRef = React.useRef(initialState);
   const mutationQueue = React.useRef(createSerializedMutationQueue());
@@ -47,7 +55,7 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
   }, []);
 
   const updateState = useCallback(
-    (patch: OnboardingPatch) =>
+    (patch: OnboardingPatch, options?: { notify?: boolean }) =>
       mutationQueue.current.enqueue(async () => {
         const previous = stateRef.current;
         const nextOptimistic = mergeOnboardingState(previous, patch);
@@ -68,18 +76,26 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
           startTransition(() => {
             setState(previous);
           });
+          // A tab opened before a deploy posts Server Action ids the new build no longer has, so
+          // no retry from it can save. A reload resumes from the last saved step on the new build.
+          if (unstable_isUnrecognizedActionError(error)) {
+            window.location.reload();
+            throw error;
+          }
           console.error('Failed to update onboarding state', error);
-          show({
-            title: 'Save failed',
-            description: 'Could not update your changes.',
-            variant: 'error',
-          });
+          if (options?.notify !== false) {
+            show({
+              title: tUi('m_0a44446762'),
+              description: tUi('m_447945d50d'),
+              variant: 'error',
+            });
+          }
           throw error;
         } finally {
           setPendingCount((count) => Math.max(0, count - 1));
         }
       }),
-    [brandId, show],
+    [brandId, show, tUi],
   );
 
   const resetState = useCallback(
@@ -94,8 +110,8 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
             setState(next);
           });
           show({
-            title: 'Reset complete',
-            description: 'Onboarding state cleared.',
+            title: tUi('m_c64a0943dc'),
+            description: tUi('m_296ddc198a'),
             variant: 'success',
           });
         } catch (error) {
@@ -103,13 +119,13 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
           startTransition(() => {
             setState(previous);
           });
-          show({ title: 'Reset failed', description: 'Could not clear state.', variant: 'error' });
+          show({ title: tUi('m_ca42c6fe10'), description: tUi('m_7ea9320aa7'), variant: 'error' });
           throw error;
         } finally {
           setPendingCount((count) => Math.max(0, count - 1));
         }
       }),
-    [brandId, show],
+    [brandId, show, tUi],
   );
 
   const reloadState = useCallback((next: OnboardingState) => {
@@ -141,6 +157,8 @@ export function useOnboarding() {
 // this improves ergonomics and co-locates the selector pattern.
 // Full elimination requires context splitting (future work).
 export function useOnboardingField<T>(selector: (ctx: OnboardingContextValue) => T): T {
+  const tUi = useTranslations('onboarding');
+
   const context = useContext(OnboardingContext);
   if (!context) {
     throw new Error('useOnboardingField must be used within an OnboardingProvider');

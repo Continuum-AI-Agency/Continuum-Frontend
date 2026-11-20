@@ -52,9 +52,13 @@ const SLACK_FAILURE_COPY: Record<string, string> = {
 };
 
 /** A Slack or render-service failure in words; render_* codes use the discovery copy. */
-export function describeSlackFailure(error: unknown): string {
+export function describeSlackFailure(error: unknown, present?: (source: string) => string): string {
   const message = error instanceof Error ? error.message : '';
   const code = Object.keys(SLACK_FAILURE_COPY).find((key) => message.includes(key));
-  if (code) return SLACK_FAILURE_COPY[code]!;
-  return message ? describeRenderDiscoveryFailure(error) : 'Slack did not answer. Try again.';
+  if (code) return present ? present(SLACK_FAILURE_COPY[code]!) : SLACK_FAILURE_COPY[code]!;
+  return message
+    ? describeRenderDiscoveryFailure(error, present)
+    : present
+      ? present('Slack did not answer. Try again.')
+      : 'Slack did not answer. Try again.';
 }

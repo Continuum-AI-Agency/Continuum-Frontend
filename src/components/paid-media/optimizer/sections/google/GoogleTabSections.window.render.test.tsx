@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { BID_CARD, GOALS, HISTORY, WITH_E1 } from './__fixtures__/googleTab';
 
 // PP-DT-B-utc-complete-days-window: the tab's campaign sections read "the last 14 complete days"

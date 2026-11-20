@@ -8,6 +8,7 @@
 // pending. The feed is only read when it is needed.
 
 import { type HomeOvernightLogData, homeOvernightLogReadSchema } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { lazy, useEffect, useMemo, useState } from 'react';
 import {
   useOptimizerActions,
@@ -24,7 +25,6 @@ import {
   actionsInWindow,
   hasActingPortfolio,
   needsOlderPage,
-  OVERNIGHT_MISSING,
   overnightRowsOf,
   overnightSummary,
   portfolioRunsOf,
@@ -36,6 +36,7 @@ const Module = lazy(() => import('./Module'));
 const ROWS_AT_SIZE = { l: 3, m: 1, s: 0 } as const;
 
 export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
   const [now] = useState(() => new Date());
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const logLoad = useHomeRead<HomeOvernightLogData>({
@@ -77,7 +78,7 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
             void actions.refetch();
           }}
         >
-          The Optimizer's action log could not be read, so this tile cannot say what ran.
+          {uiText('the_optimizer_s_action_log_could_not_be_read__0e12f66')}
         </TileReadError>
       </HomeTileFrame>
     );
@@ -86,7 +87,7 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
   if (portfolios.hasAnswer && !hasActingPortfolio(portfolios.brandPortfolios)) {
     return (
       <HomeTileFrame state="missing" tile={tile}>
-        <TileMissing>{OVERNIGHT_MISSING}</TileMissing>
+        <TileMissing>{uiText('no_portfolio_lets_continuum_act_here_yet_ever_3dddfb5')}</TileMissing>
       </HomeTileFrame>
     );
   }
@@ -110,11 +111,12 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
   const allRows = fallsBack ? rows : logRows;
   const shown = allRows.slice(0, ROWS_AT_SIZE[tile.size]);
   const skippedByCap = log?.capSkipped.count ?? 0;
-  const said = count === 0 && skippedByCap === 0 ? 'Nothing ran in the last 24 h.' : summary;
+  const said =
+    count === 0 && skippedByCap === 0 ? uiText('nothing_ran_in_the_last_24_h_3c1b662') : summary;
 
   return (
     <HomeTileFrame
-      badge={`${count} in 24 h`}
+      badge={uiText('count_in_24_h_7bfd428', { count })}
       expanded={
         <Module
           capSkipped={log?.capSkipped.items ?? []}
@@ -124,7 +126,7 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
           truncated={log?.truncated ?? false}
         />
       }
-      expandedDescription="What the Optimizer recorded for this brand in the last 24 hours, and how each portfolio is set to run."
+      expandedDescription={uiText('what_the_optimizer_recorded_for_this_brand_in_f98bf5d')}
       state="ready"
       tile={tile}
     >
@@ -140,7 +142,9 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
             {count}
           </span>
           <span className="text-muted-foreground text-xs">
-            {count === 1 ? 'action in the last 24 h' : 'actions in the last 24 h'}
+            {uiText('count_plural_one_action_in_the_last_24_h_othe_bdc4e48', {
+              count,
+            })}
           </span>
         </p>
         <p

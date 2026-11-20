@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  type HomeCreativeSpotlightData,
+  homeCreativeSpotlightReadSchema,
+} from '@continuum/contracts';
 // H09 Creative spotlight, the small tile: how many ads the stored creative report judged, how
 // they stand, and (at m/l) their stored thumbnails, from the brand's paid_media.creative_reports
 // row (usePaidCreativeReport). The headline reproduces as
@@ -9,10 +13,7 @@
 // A second read, the Backend's Creative Spotlight (R3), adds each ad's hook rate, format and
 // whether it is fading. A brand with no report can still have one, and its headline then counts the
 // ads that spent. Without the read (the route is not deployed yet) the tile is as above.
-import {
-  type HomeCreativeSpotlightData,
-  homeCreativeSpotlightReadSchema,
-} from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,13 +31,17 @@ const CreativeModule = lazy(() => import('./Module'));
 const THUMBS_BY_SIZE = { s: 0, m: 4, l: 5 } as const;
 
 function SpotlightLine({ data }: { data: HomeCreativeSpotlightData }) {
+  const uiText = useTranslations('dashboard');
   return (
     <p
       className="text-muted-foreground text-xs leading-snug"
       data-ads={data.ads.length}
       data-testid="home-tile-creative-spotlight"
     >
-      Top {data.ads.length} by spend: {spotlightVerdictLine(data)}
+      {uiText('top_count_by_spend_verdicts_eb26d4a', {
+        count: data.ads.length,
+        verdicts: spotlightVerdictLine(data),
+      })}
     </p>
   );
 }
@@ -48,6 +53,7 @@ function SpotlightOnlyBody({
   data: HomeCreativeSpotlightData;
   size: 's' | 'm' | 'l';
 }) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div
@@ -58,7 +64,9 @@ function SpotlightOnlyBody({
       >
         {data.adsWithSpend}{' '}
         <small className="font-medium text-muted-foreground text-sm tracking-normal">
-          {data.adsWithSpend === 1 ? 'ad spending' : 'ads spending'}
+          {uiText('count_plural_one_ad_spending_other_ads_spendi_790b06a', {
+            count: data.adsWithSpend,
+          })}
         </small>
       </div>
       {THUMBS_BY_SIZE[size] > 0 ? (
@@ -88,6 +96,7 @@ function ReadyBody({
   read: HomeCreativeSpotlightData | null;
   size: 's' | 'm' | 'l';
 }) {
+  const uiText = useTranslations('dashboard');
   const thumbs = spotlight.cards.slice(0, THUMBS_BY_SIZE[size]);
   const readThumb = (adId: string) =>
     read?.ads.find((ad) => ad.adId === adId)?.thumbnailUrl ?? null;
@@ -100,7 +109,9 @@ function ReadyBody({
       >
         {spotlight.total}{' '}
         <small className="font-medium text-muted-foreground text-sm tracking-normal">
-          {spotlight.total === 1 ? 'ad judged' : 'ads judged'}
+          {uiText('count_plural_one_ad_judged_other_ads_judged_6425d61', {
+            count: spotlight.total,
+          })}
         </small>
       </div>
       {thumbs.length > 0 ? (
@@ -124,6 +135,7 @@ function ReadyBody({
 }
 
 export default function CreativeTile({ ctx, tile }: HomeTileProps) {
+  const uiText = useTranslations('dashboard');
   const read = usePaidCreativeReport(ctx.brandId);
   const view = creativeTileState(read, ctx.adAccounts);
   const spotlightRead = readyDataOf(
@@ -138,12 +150,15 @@ export default function CreativeTile({ ctx, tile }: HomeTileProps) {
     const { spotlight } = view;
     return (
       <HomeTileFrame
-        badge={`${spotlight.total} ads judged · ${spotlight.counts.winning} winning`}
+        badge={uiText('judged_plural_one_ad_judged_other_ads_judged__858207e', {
+          judged: spotlight.total,
+          winning: spotlight.counts.winning,
+        })}
         expanded={<CreativeModule ctx={ctx} read={spotlightRead} spotlight={spotlight} />}
         expandedDescription={
           spotlightRead
-            ? 'The brand’s top ads by spend, every ad the stored report judged, and the flywheel between organic, paid and creative.'
-            : 'Every ad the stored creative report judged, and the flywheel between organic, paid and creative.'
+            ? uiText('the_brand_s_top_ads_by_spend_every_ad_the_sto_3f435ce')
+            : uiText('every_ad_the_stored_creative_report_judged_an_9ad7122')
         }
         state="ready"
         tile={tile}
@@ -156,9 +171,11 @@ export default function CreativeTile({ ctx, tile }: HomeTileProps) {
   if (spotlightRead && view.state === 'missing') {
     return (
       <HomeTileFrame
-        badge={`${spotlightRead.adsWithSpend} ads spending`}
+        badge={uiText('count_plural_one_ad_spending_other_ads_spendi_9e51364', {
+          count: spotlightRead.adsWithSpend,
+        })}
         expanded={<CreativeModule ctx={ctx} read={spotlightRead} spotlight={null} />}
-        expandedDescription="The brand’s top ads by spend, and the flywheel between organic, paid and creative."
+        expandedDescription={uiText('the_brand_s_top_ads_by_spend_and_the_flywheel_60ac49c')}
         state="ready"
         tile={tile}
       >
@@ -178,7 +195,7 @@ export default function CreativeTile({ ctx, tile }: HomeTileProps) {
       ) : null}
       {view.state === 'error' ? (
         <p className="text-destructive-ink text-xs" role="alert">
-          The creative report could not be read.{' '}
+          {uiText('the_creative_report_could_not_be_read_3ac238f')}{' '}
           <Button
             className="h-5 px-1 text-xs"
             onClick={() => void read.refetch()}
@@ -186,7 +203,7 @@ export default function CreativeTile({ ctx, tile }: HomeTileProps) {
             type="button"
             variant="link"
           >
-            Retry
+            {uiText('retry_942087c')}
           </Button>
         </p>
       ) : null}

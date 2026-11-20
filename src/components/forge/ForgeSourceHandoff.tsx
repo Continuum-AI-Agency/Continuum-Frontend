@@ -2,6 +2,7 @@
 
 import { classifyLibraryFile } from '@continuum/contracts';
 import { useSearchParams } from 'next/navigation';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { expandDesignArchives } from '@/components/forge/designArchive';
 import {
@@ -10,6 +11,7 @@ import {
   partitionForgeProjectFiles,
 } from '@/components/forge/ForgeProjectDrop';
 import { Button } from '@/components/ui/button';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
 import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
 import { ACCEPTED_DOCUMENT_EXTENSIONS, hasDocumentExtension } from '@/lib/documents/uploadLimits';
 import {
@@ -30,14 +32,23 @@ async function uploadTemplateProject(brandId: string, file: File): Promise<Sourc
   if (!isForgeDesignFile(file.name))
     return { kind: 'template', asset_id: uploaded.assetId, version_id: uploaded.versionId };
   const imported = await importDesignTemplate(brandId, uploaded.assetId);
-  const source = (await fetchTemplateSources(brandId)).find((item) => item.assetId === imported.assetId);
-  if (!source) throw new Error(`${file.name} was imported but its template is not listed yet. Try again.`);
+  const source = (await fetchTemplateSources(brandId)).find(
+    (item) => item.assetId === imported.assetId,
+  );
+  if (!source)
+    throw new Error(`${file.name} was imported but its template is not listed yet. Try again.`);
   return { kind: 'template', asset_id: source.assetId, version_id: source.versionId };
 }
 
 export function ForgeSourceHandoff({ brandId }: { brandId: string }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('forge');
+
   const intentId = useSearchParams().get('mcpSourceIntent');
-  const [status, setStatus] = useState<'checking' | 'ready' | 'uploading' | 'completed' | 'error'>('checking');
+  const [status, setStatus] = useState<'checking' | 'ready' | 'uploading' | 'completed' | 'error'>(
+    'checking',
+  );
   const [message, setMessage] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState<string[]>([]);
@@ -46,20 +57,24 @@ export function ForgeSourceHandoff({ brandId }: { brandId: string }) {
   useEffect(() => {
     if (!intentId) return;
     let cancelled = false;
-    void createSupabaseBrowserClient().functions.invoke('library-upload', {
-      body: { action: 'get_forge_source_intent', brandId, uploadIntentId: intentId },
-    }).then(({ data, error }) => {
-      if (cancelled) return;
-      if (error || !data || data.status === 'expired') {
-        setStatus('error');
-        setMessage('This upload link expired. Ask the agent for a new one.');
-      } else if (data.status === 'completed') {
-        setStatus('completed');
-        setMessage('Sources are ready for the agent.');
-      } else setStatus('ready');
-    });
-    return () => { cancelled = true; };
-  }, [brandId, intentId]);
+    void createSupabaseBrowserClient()
+      .functions.invoke('library-upload', {
+        body: { action: 'get_forge_source_intent', brandId, uploadIntentId: intentId },
+      })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data || data.status === 'expired') {
+          setStatus('error');
+          setMessage(translateUi('this_upload_link_expired_ask_the_ag_7ea73eb3'));
+        } else if (data.status === 'completed') {
+          setStatus('completed');
+          setMessage(translateUi('sources_are_ready_for_the_agent_d15cd9f8'));
+        } else setStatus('ready');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, intentId, translateUi]);
 
   if (!intentId) return null;
   const upload = async () => {
@@ -67,6 +82,7 @@ export function ForgeSourceHandoff({ brandId }: { brandId: string }) {
     setStatus('uploading');
     setMessage('');
     const refs: SourceRef[] = [...completedRefs];
+    let fontsStored = 0;
     try {
       // A ZIP of Photoshop or Illustrator files opens into those files, as in the gallery; fonts are
       // stored first because a project is parsed seconds after it lands and that parse looks for them.
@@ -74,60 +90,125 @@ export function ForgeSourceHandoff({ brandId }: { brandId: string }) {
       const { fonts } = partitionForgeProjectFiles(expanded);
       if (fonts.length && !refs.length) {
         const { stored, refused } = await uploadTemplateFontFiles(brandId, fonts);
+        fontsStored = stored.length;
         setProgress((current) => [
           ...current,
-          ...(stored.length ? [`Fonts added: ${stored.join(', ')}`] : []),
-          ...(refused.length ? [`Fonts not added: ${refused.join('; ')}`] : []),
+          ...(stored.length
+            ? [translateUi('fonts_added_value0_664da924', { value0: stored.join(', ') })]
+            : []),
+          ...(refused.length
+            ? [translateUi('fonts_not_added_reasons_5bbd5ca', { reasons: refused.join('; ') })]
+            : []),
         ]);
       }
       for (const file of expanded.filter((file) => !fonts.includes(file)).slice(refs.length)) {
         const kind = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
         const project = partitionForgeProjectFiles([file]).accepted.length > 0;
         if (kind.accepted && (kind.originalKind === 'image' || kind.originalKind === 'video')) {
-          if (refs.filter((ref) => ref.kind === 'media').length >= 6) throw new Error('Use at most six images or videos.');
+          if (refs.filter((ref) => ref.kind === 'media').length >= 6)
+            throw new LocalizedUiError(translateUi('use_at_most_six_images_or_videos_e7c1f22'));
           const asset = await uploadMediaAsset({ brandId, file });
           refs.push({ kind: 'media', asset_id: asset.assetId, version_id: asset.versionId });
         } else if (hasDocumentExtension(file.name)) {
-          if (refs.filter((ref) => ref.kind === 'document').length >= 5) throw new Error('Use at most five documents.');
+          if (refs.filter((ref) => ref.kind === 'document').length >= 5)
+            throw new LocalizedUiError(translateUi('use_at_most_five_documents_da01846'));
           const document = await uploadBrandDocument({ brandId, file });
           refs.push({ kind: 'document', document_id: document.documentId });
         } else if (project) {
-          if (refs.filter((ref) => ref.kind === 'template').length >= 3) throw new Error('Use at most three template projects.');
+          if (refs.filter((ref) => ref.kind === 'template').length >= 3)
+            throw new LocalizedUiError(translateUi('use_at_most_three_template_projects_1a75286'));
           refs.push(await uploadTemplateProject(brandId, file));
-        } else throw new Error(`Unsupported file: ${file.name}`);
-        setProgress((current) => [...current, `${file.name} uploaded`]);
+        } else
+          throw new LocalizedUiError(
+            translateUi('unsupported_file_name_fb12dca', { name: file.name }),
+          );
+        setProgress((current) => [
+          ...current,
+          translateUi('name_uploaded_2ba2624', { name: file.name }),
+        ]);
         setCompletedRefs([...refs]);
       }
+      // Fonts are not a source the agent reads, and a handoff completes with at least one: keep it
+      // open for the project they were sent for.
+      if (!refs.length) {
+        if (!fontsStored)
+          throw new LocalizedUiError(
+            translateUi('no_fonts_were_added_choose_valid_ttf_or_otf_f_1b914a3'),
+          );
+        setStatus('ready');
+        setMessage(translateUi('fonts_added_now_choose_the_template_project_t_3eb0ec2'));
+        return;
+      }
       const { error } = await createSupabaseBrowserClient().functions.invoke('library-upload', {
-        body: { action: 'complete_forge_source_intent', brandId, uploadIntentId: intentId, sourceRefs: refs },
+        body: {
+          action: 'complete_forge_source_intent',
+          brandId,
+          uploadIntentId: intentId,
+          sourceRefs: refs,
+        },
       });
       if (error) throw error;
       setStatus('completed');
-      setMessage('Sources uploaded. The agent can continue with this handoff.');
+      setMessage(translateUi('sources_uploaded_the_agent_can_cont_913243b6'));
     } catch (error) {
       setStatus('error');
-      setMessage(error instanceof Error ? error.message : 'Could not finish the upload.');
+      setMessage(uiErrorText(error));
     }
   };
 
   return (
-    <section aria-label="Forge source handoff" className="mb-3 shrink-0 rounded-lg border bg-card p-3 text-sm">
-      <h2 className="font-medium">Add files for the agent</h2>
+    <section
+      aria-label={translateUi('forge_source_handoff_b08eee91')}
+      className="mb-3 shrink-0 rounded-lg border bg-card p-3 text-sm"
+    >
+      <h2 className="font-medium">{translateUi('add_files_for_the_agent_aab38c64')}</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Choose a template project (an After Effects package or ZIP, Photoshop, Illustrator, HTML) with its fonts, or
-        documents, spreadsheets, images, or videos for a draft. They stay in your brand files.
+        {translateUi('choose_a_template_project_an_after__1bee29cf')}
       </p>
       {status === 'ready' || status === 'error' ? (
         <div className="mt-2 flex items-center gap-2">
-          <input aria-label="Choose Forge source files" type="file" multiple accept={`${ACCEPTED_DOCUMENT_EXTENSIONS},image/*,video/*,${FORGE_PROJECT_ACCEPT}`}
-            onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); setCompletedRefs([]); setProgress([]); }} />
-          <Button type="button" size="sm" disabled={files.length === 0 || files.length > 8 || status === 'error' && message.includes('expired')}
-            onClick={() => void upload()}>Upload</Button>
+          <input
+            aria-label={translateUi('choose_forge_source_files_284cd4e5')}
+            type="file"
+            multiple
+            accept={`${ACCEPTED_DOCUMENT_EXTENSIONS},image/*,video/*,${FORGE_PROJECT_ACCEPT}`}
+            onChange={(event) => {
+              setFiles(Array.from(event.target.files ?? []));
+              setCompletedRefs([]);
+              setProgress([]);
+            }}
+          />
+          <Button
+            type="button"
+            size="sm"
+            disabled={
+              files.length === 0 ||
+              files.length > 8 ||
+              (status === 'error' && message.includes('expired'))
+            }
+            onClick={() => void upload()}
+          >
+            {translateUi('upload_865e89de')}
+          </Button>
         </div>
       ) : null}
-      {progress.length ? <ul className="mt-2 text-xs" role="status">{progress.map((item) => <li key={item}>{item}</li>)}</ul> : null}
-      {message ? <p className="mt-2 text-xs" role={status === 'error' ? 'alert' : 'status'}>{message}</p> : null}
-      {status === 'uploading' ? <p className="mt-2 text-xs" role="status">Uploading files…</p> : null}
+      {progress.length ? (
+        <ul className="mt-2 text-xs" role="status">
+          {progress.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+      {message ? (
+        <p className="mt-2 text-xs" role={status === 'error' ? 'alert' : 'status'}>
+          {message}
+        </p>
+      ) : null}
+      {status === 'uploading' ? (
+        <p className="mt-2 text-xs" role="status">
+          {translateUi('uploading_files_b6abaa85')}
+        </p>
+      ) : null}
     </section>
   );
 }

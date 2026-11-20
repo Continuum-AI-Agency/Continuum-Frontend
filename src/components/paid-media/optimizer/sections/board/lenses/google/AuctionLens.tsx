@@ -10,6 +10,7 @@
 import type { BoardModuleSize, GoogleTopCampaigns } from '@continuum/contracts';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { AlertTriangleIcon, LockIcon } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -60,10 +61,11 @@ import {
   useLensWindow,
 } from './MixAuctionSignalParts';
 
-const CHANNEL_NAME: Record<AuctionChannel, string> = {
-  search: 'Search',
-  pmax: 'Performance Max',
-};
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
+function channelName(channel: AuctionChannel, uiText: ScaleCopy): string {
+  return channel === 'search' ? uiText('search_49c266b') : 'Performance Max';
+}
 
 const CHANNEL_COLOR: Record<AuctionChannel, string> = {
   search: BOARD_COLOR.search,
@@ -74,16 +76,21 @@ const CHANNEL_COLOR: Record<AuctionChannel, string> = {
  *  neutral; the two losses take the warm and the cool pole, because they call for opposite
  *  fixes: budget buys back the first, only ads, pages and bids the second. */
 const PARTS = [
-  { key: 'shown', label: 'Shown', color: NEUTRAL_MARK, of: (row: AuctionRow) => row.shown },
+  {
+    key: 'shown',
+    label: 'shown_6ba2a0e',
+    color: NEUTRAL_MARK,
+    of: (row: AuctionRow) => row.shown,
+  },
   {
     key: 'budget',
-    label: 'Lost to budget',
+    label: 'lost_to_budget_d856931',
     color: BOARD_COLOR.above,
     of: (row: AuctionRow) => row.budgetLost,
   },
   {
     key: 'rank',
-    label: 'Lost to rank',
+    label: 'lost_to_rank_3029ccc',
     color: BOARD_COLOR.below,
     of: (row: AuctionRow) => row.rankLost,
   },
@@ -214,6 +221,7 @@ export function AuctionLensView({
   size: BoardModuleSize;
   reason?: string;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <ModuleFrame
       action={
@@ -226,7 +234,7 @@ export function AuctionLensView({
       size={size}
       state={auctionFrameState(state)}
       testId="board-module-auction"
-      title="Impression share"
+      title={uiText('impression_share_7df40c2')}
     >
       <AuctionBody size={size} state={state} />
     </ModuleFrame>
@@ -272,6 +280,7 @@ function AuctionBody({ state, size }: { state: AuctionLensState; size: BoardModu
 // ── The shares, a stacked bar per campaign ─────────────────────────────────────────────────────
 
 function ShareStack({ row, index }: { row: AuctionRow; index: number }) {
+  const uiText = useTranslations('scale');
   const parts = PARTS.flatMap((part) => {
     const value = part.of(row);
     return value != null && value > 0 ? [{ ...part, value }] : [];
@@ -286,7 +295,7 @@ function ShareStack({ row, index }: { row: AuctionRow; index: number }) {
           delay={index * 0.06 + order * 0.05}
           fillClassName="inset-0 rounded-[4px]"
           key={part.key}
-          label={`${row.name} · ${part.label}`}
+          label={`${row.name} · ${uiText(part.label)}`}
           style={{ flexBasis: `${(part.value * 100).toFixed(2)}%`, flexGrow: 0 }}
           testId={`auction-part-${part.key}`}
           value={shareText(part.value)}
@@ -319,6 +328,7 @@ function ShareRow({
   currency: string | null;
   small: boolean;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <li
       className="min-w-0 space-y-1"
@@ -337,11 +347,11 @@ function ShareRow({
               className="size-2 rounded-full"
               style={{ background: CHANNEL_COLOR[row.channel] }}
             />
-            {CHANNEL_NAME[row.channel]}
+            {channelName(row.channel, uiText)}
           </span>
           {row.budgetPerDay != null ? (
             <span className="ml-auto text-muted-foreground tabular-nums">
-              {formatCurrency(row.budgetPerDay, currency)}/day
+              {uiText('sentence_72ced7255fc0', { v0: formatCurrency(row.budgetPerDay, currency) })}
             </span>
           ) : null}
         </div>
@@ -352,9 +362,11 @@ function ShareRow({
           className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-muted-foreground text-xs"
           data-testid="auction-row-shares"
         >
-          <span>Shown {shareOrDash(row.shown)}</span>
-          <span>Lost to budget {shareOrDash(row.budgetLost)}</span>
-          <span>Lost to rank {shareOrDash(row.rankLost)}</span>
+          <span>{uiText('shown_share_fbcac83', { share: shareOrDash(row.shown) })}</span>
+          <span>
+            {uiText('lost_to_budget_share_7c2b111', { share: shareOrDash(row.budgetLost) })}
+          </span>
+          <span>{uiText('lost_to_rank_share_bea787b', { share: shareOrDash(row.rankLost) })}</span>
         </div>
       )}
       {!small && (row.v3 || row.locked) ? (
@@ -362,13 +374,13 @@ function ShareRow({
           {row.v3 ? (
             <Badge data-testid="auction-v3" variant="destructive">
               <AlertTriangleIcon aria-hidden="true" />
-              {`${shareText(V3_BUDGET_LOST)} or more lost to budget`}
+              {uiText('share_or_more_lost_to_budget_2fb4276', { share: shareText(V3_BUDGET_LOST) })}
             </Badge>
           ) : null}
           {row.locked ? (
             <Badge data-testid="auction-locked" variant="secondary">
               <LockIcon aria-hidden="true" />
-              Raise locked
+              {uiText('raise_locked_b576c4f')}
             </Badge>
           ) : null}
         </div>
@@ -377,14 +389,19 @@ function ShareRow({
   );
 }
 
-function sharesLegend(model: AuctionShares): LegendItem[] {
+function sharesLegend(model: AuctionShares, uiText: ScaleCopy): LegendItem[] {
   const items: LegendItem[] = [
-    { label: 'Shown', color: NEUTRAL_MARK },
-    { label: 'Lost to budget · more budget buys it back', color: BOARD_COLOR.above },
-    { label: 'Lost to rank · ads, pages and bids win it', color: BOARD_COLOR.below },
+    { label: uiText('shown_6ba2a0e'), color: NEUTRAL_MARK },
+    {
+      label: uiText('lost_to_budget_more_budget_buys_it_back_ec115c8'),
+      color: BOARD_COLOR.above,
+    },
+    { label: uiText('lost_to_rank_ads_pages_and_bids_win_it_b7d9661'), color: BOARD_COLOR.below },
   ];
   const unread = model.rows.some((row) => PARTS.some((part) => part.of(row) == null));
-  return unread ? [...items, { label: 'Not in this read', color: UNREAD_FILL }] : items;
+  return unread
+    ? [...items, { label: uiText('not_in_this_read_e94d097'), color: UNREAD_FILL }]
+    : items;
 }
 
 function SharesView({
@@ -398,6 +415,7 @@ function SharesView({
   size: BoardModuleSize;
   figureWindow: FigureWindow;
 }) {
+  const uiText = useTranslations('scale');
   const small = isSmall(size);
   const headline = auctionHeadline(model);
   const rows = small
@@ -417,7 +435,10 @@ function SharesView({
             figureWindow,
             'percent',
           )}
-          label={`${headline.row.name} · lost to ${headline.measure}`}
+          label={uiText('name_measure_select_budget_lost_to_budget_oth_facc403', {
+            name: headline.row.name,
+            measure: headline.measure,
+          })}
           testId="auction-headline"
           value={shareText(headline.share)}
         />
@@ -427,7 +448,7 @@ function SharesView({
           <ShareRow currency={currency} index={index} key={row.id} row={row} small={small} />
         ))}
       </ul>
-      {small ? null : <Legend items={sharesLegend(model)} testId="auction-legend" />}
+      {small ? null : <Legend items={sharesLegend(model, uiText)} testId="auction-legend" />}
       {!small && model.locked.length > 0 ? (
         <p
           className="flex items-start gap-1.5 text-muted-foreground text-xs"
@@ -435,8 +456,9 @@ function SharesView({
         >
           <LockIcon aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
           <span>
-            Raise locked for {model.locked.join(', ')}: fix the primary conversion first, then the
-            budget card proposes the raise against real leads.
+            {uiText('raise_locked_for_campaigns_fix_the_primary_co_842c17f', {
+              campaigns: model.locked.join(', '),
+            })}
           </span>
         </p>
       ) : null}
@@ -453,7 +475,11 @@ function SharesView({
 
 // ── The days without ads ──────────────────────────────────────────────────────────────────────
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+/** Monday to Sunday, short, in the UI's language (2024-01-01 was a Monday). */
+function weekdayNames(locale: string): string[] {
+  const format = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
+  return Array.from({ length: 7 }, (_, day) => format.format(Date.UTC(2024, 0, 1 + day)));
+}
 
 function DayCell({
   day,
@@ -466,6 +492,7 @@ function DayCell({
   currency: string | null;
   compact: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const cell = compact ? 'h-2.5 rounded-[3px]' : 'h-7 rounded-md';
   const number = Number(day.day.slice(8));
   if (!day.inRange) return <span aria-hidden="true" className={cell} />;
@@ -492,10 +519,10 @@ function DayCell({
       testId={dark ? 'auction-day-dark' : 'auction-day-served'}
       value={
         dark
-          ? 'No ad shown'
+          ? uiText('no_ad_shown_d3de8f6')
           : day.spend != null
-            ? `${formatCurrency(day.spend, currency)} spent`
-            : 'Ads shown'
+            ? uiText('amount_spent_f287dd9', { amount: formatCurrency(day.spend, currency) })
+            : uiText('ads_shown_9845e63')
       }
     >
       {compact ? null : <span className="text-foreground text-xs tabular-nums">{number}</span>}
@@ -503,15 +530,15 @@ function DayCell({
   );
 }
 
-function darkLegend(dark: AuctionDark): LegendItem[] {
+function darkLegend(dark: AuctionDark, uiText: ScaleCopy): LegendItem[] {
   const days = dark.weeks?.flat().filter((day) => day.inRange) ?? [];
   const items: LegendItem[] = [];
   if (days.some((day) => day.state === 'served')) {
-    items.push({ label: 'Ads shown · shade is the spend', color: SERVED_INK(28) });
+    items.push({ label: uiText('ads_shown_shade_is_the_spend_77b24d4'), color: SERVED_INK(28) });
   }
-  items.push({ label: 'No ad shown', color: BOARD_COLOR.above, mark: 'outline' });
+  items.push({ label: uiText('no_ad_shown_d3de8f6'), color: BOARD_COLOR.above, mark: 'outline' });
   if (days.some((day) => day.state === 'unknown')) {
-    items.push({ label: 'Not in the delivery card', color: UNREAD_FILL });
+    items.push({ label: uiText('not_in_the_delivery_card_979765d'), color: UNREAD_FILL });
   }
   return items;
 }
@@ -525,32 +552,39 @@ function DarkView({
   currency: string | null;
   small: boolean;
 }) {
-  const daysWord = dark.darkDays === 1 ? 'day' : 'days';
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const darkDaysText = uiText('count_plural_one_day_without_ads_other_days_w_a71b574', {
+    count: dark.darkDays,
+  });
   const weeks = dark.weeks ? (small ? dark.weeks.slice(-2) : dark.weeks) : null;
   return (
     <>
       {small ? (
         <LensHeadline
           figure={figureProps('board.auction.dark-days', dark.darkDays, null, 'none', 'count')}
-          label={`${daysWord} without ads${dark.suspended ? ' · Google suspended the account' : ''}`}
+          label={uiText('count_plural_one_day_without_ads_other_days_w_7a8c626', {
+            count: dark.darkDays,
+            suspended: dark.suspended ? 'yes' : 'no',
+          })}
           testId="auction-headline"
           value={String(dark.darkDays)}
         />
       ) : (
         <Badge className="self-start" data-testid="auction-dark-days" variant="destructive">
           <AlertTriangleIcon aria-hidden="true" />
-          {`${dark.darkDays} ${daysWord} without ads`}
+          {darkDaysText}
         </Badge>
       )}
       {weeks ? (
         <figure
-          aria-label={`${dark.darkDays} ${daysWord} without ads`}
+          aria-label={darkDaysText}
           className="min-w-0 space-y-1"
           data-testid="auction-calendar"
         >
           {small ? null : (
             <div className="grid grid-cols-7 gap-1 text-center text-muted-foreground text-xs">
-              {WEEKDAYS.map((name) => (
+              {weekdayNames(uiLocale).map((name) => (
                 <span key={name}>{name}</span>
               ))}
             </div>
@@ -568,7 +602,7 @@ function DarkView({
           </div>
         </figure>
       ) : null}
-      {small ? null : <Legend items={darkLegend(dark)} testId="auction-legend" />}
+      {small ? null : <Legend items={darkLegend(dark, uiText)} testId="auction-legend" />}
       {!small && dark.status ? (
         <div
           className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 sm:flex-row sm:items-start"
@@ -588,7 +622,7 @@ function DarkView({
             rel="noreferrer"
             target="_blank"
           >
-            Open in Google Ads
+            {uiText('open_in_google_ads_0131249')}
           </a>
         </div>
       ) : null}

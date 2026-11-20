@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // The one thing every optimizer read owed the user and never paid: saying it failed.
 //
 // Each surface used to render a failed read as its EMPTY state — "No optimizer activity
@@ -24,19 +27,15 @@ type OptimizerReadErrorProps = {
   className?: string;
 };
 
-function errorMessage(error: unknown): string | undefined {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string' && error.length > 0) return error;
-  return undefined;
-}
-
 export function OptimizerReadError({
   subject,
   error,
   onRetry,
   className,
 }: OptimizerReadErrorProps) {
-  const detail = errorMessage(error);
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
+  const detail = error == null ? undefined : formatUiError(error);
 
   return (
     <EmptyState
@@ -44,15 +43,15 @@ export function OptimizerReadError({
       action={
         <Button onClick={onRetry} size="sm" type="button" variant="secondary">
           <RefreshCwIcon aria-hidden="true" className="size-3.5" />
-          Retry
+          {uiText('retry_942087c')}
         </Button>
       }
       description={
         detail
-          ? `${detail}. Nothing was changed — this is a read.`
-          : 'Nothing was changed — this is a read.'
+          ? uiText('template_13dac35bc7a7', { v0: detail })
+          : uiText('nothing_was_changed_this_is_a_read_abf2f16')
       }
-      headline={`Couldn't load ${subject}`}
+      headline={uiText('optimizerLoadFailure', { subject })}
       media={<TriangleAlertIcon aria-hidden="true" />}
     />
   );

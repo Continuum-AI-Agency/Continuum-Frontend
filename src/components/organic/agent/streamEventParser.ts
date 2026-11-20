@@ -6,6 +6,7 @@ import {
   chatMediaStripDataSchema,
   headlessBatchQuoteSchema,
   type MediaSearchResultsFrame,
+  mediaCostPlanSchema,
   mediaSearchResultsFrameSchema,
   type OrganicStreamFrame,
   organicPlanStatusDataSchema,
@@ -68,7 +69,7 @@ export type ParsedOrganicStreamEvent =
     }
   | { kind: 'error'; message: string; code?: string; transient?: boolean }
   | { kind: 'retrying'; attempt: number; reason?: string }
-  | { kind: 'complete' }
+  | { kind: 'complete'; cancelled?: true }
   | { kind: 'uiCard'; card: UiCard }
   | { kind: 'postCard'; card: UiPostCard }
   | { kind: 'jobUpdate'; job: Partial<AgentJobState> & { jobId: string } }
@@ -240,6 +241,7 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
         brandId,
         status: 'completed' as const,
         draftId: readNonEmptyString(payload.draftId) ?? undefined,
+        ...(payload.draftMissing === true ? { draftMissing: true } : {}),
       };
     case 'job.failed':
       return {
@@ -507,6 +509,9 @@ function parsePlanStatus(event: Record<string, unknown>): ParsedPlanStatus | nul
 // (and with it the only card that may approve the batch's money).
 const lenientBatchQuoteSchema = z.object(headlessBatchQuoteSchema.shape);
 
+// Decoration beside the card, never its gate: an unreadable plan just drops.
+const lenientCostPlanSchema = z.object(mediaCostPlanSchema.shape);
+
 function parseToolApproval(event: Record<string, unknown>): ToolApproval | null {
   const payload = getEventPayload(event);
   const approvalId = readNonEmptyString(payload.approvalId);
@@ -514,12 +519,14 @@ function parseToolApproval(event: Record<string, unknown>): ToolApproval | null 
   const toolName = readNonEmptyString(payload.toolName);
   if (!approvalId || !toolCallId || !toolName) return null;
   const batchPreview = lenientBatchQuoteSchema.safeParse(payload.batchPreview);
+  const costPlan = lenientCostPlanSchema.safeParse(payload.costPlan);
   return {
     approvalId,
     toolCallId,
     toolName,
     input: payload.input,
     ...(batchPreview.success ? { batchPreview: batchPreview.data } : {}),
+    ...(costPlan.success ? { costPlan: costPlan.data } : {}),
   };
 }
 
@@ -560,7 +567,7 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     // The user stopped the run. It ended, but it did not fail — surfacing it as an error
     // would put a red banner on a turn they cancelled on purpose.
     case 'response.cancelled':
-      return { kind: 'complete' };
+      return { kind: 'complete', cancelled: true };
     case 'response.error': {
       const payload = getEventPayload(frame);
       const message = readNonEmptyString(payload.message) ?? 'Unknown stream error';

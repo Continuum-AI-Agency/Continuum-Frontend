@@ -1,5 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { googleCopy } from '../googlePresentation';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+
 // The search-term explorer (P6 view 4): Search and Performance Max terms grouped by root, each
 // root opening onto its terms. A free selection is a question for Jaina, never a write: batch
 // negatives and promotions go only through the Optimizer's G05 cards, and a term one of them
@@ -41,8 +49,21 @@ const COVER_WORDS: Record<CardCover, string> = {
   promote: 'In a Search term card',
 };
 
-function figures(spend: number, clicks: number, conversions: number, currency: string | null) {
-  return `${formatCurrency(spend, currency)} · ${clicks.toLocaleString('en-US')} clicks · ${resultsText(conversions)} conv.`;
+function figures(
+  spend: number,
+  clicks: number,
+  conversions: number,
+  currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+) {
+  return uiTranslate
+    ? uiTranslate('helper_0b3f2bbc8887', {
+        v0: formatCurrency(spend, currency, uiLocale),
+        v1: clicks.toLocaleString(uiLocale),
+        v2: resultsText(conversions, uiLocale),
+      })
+    : `${formatCurrency(spend, currency, uiLocale)} · ${clicks.toLocaleString(uiLocale)} clicks · ${resultsText(conversions, uiLocale)} conv.`;
 }
 
 function TermRow({
@@ -58,12 +79,15 @@ function TermRow({
   cover: CardCover | undefined;
   currency: string | null;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+
   const id = `search-term-${termKey(term)}`;
   const status = term.status ? STATUS_WORDS[term.status] : undefined;
   return (
     <li className="flex items-start gap-2 py-1.5" data-testid="search-term">
       <Checkbox
-        aria-label={`Select search term ${term.term}`}
+        aria-label={uiText('template_a5284a9c5ccd', { v0: term.term })}
         checked={checked}
         id={id}
         onCheckedChange={onToggle}
@@ -72,15 +96,22 @@ function TermRow({
         <span className="flex flex-wrap items-center gap-1.5 text-sm">
           <span className="break-words">{term.term}</span>
           {isPmaxTerm(term) ? <Badge variant="muted">PMax</Badge> : null}
-          {status ? <Badge variant="secondary">{status}</Badge> : null}
+          {status ? <Badge variant="secondary">{googleCopy(status, uiText)}</Badge> : null}
           {cover ? (
             <Badge data-testid="search-term-card" variant="violet">
-              {COVER_WORDS[cover]}
+              {googleCopy(COVER_WORDS[cover], uiText)}
             </Badge>
           ) : null}
         </span>
         <span className="block text-muted-foreground text-xs tabular-nums">
-          {figures(term.totals.spend, term.totals.clicks, term.totals.conversions, currency)}
+          {figures(
+            term.totals.spend,
+            term.totals.clicks,
+            term.totals.conversions,
+            currency,
+            uiText,
+            uiLocale,
+          )}
         </span>
       </label>
     </li>
@@ -100,13 +131,15 @@ function RootRow({
   covered: ReadonlyMap<string, CardCover>;
   currency: string | null;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const keys = group.terms.map(termKey);
   const ticked = keys.filter((key) => selected.has(key)).length;
   const shown = group.terms.slice(0, TERMS_SHOWN);
   return (
     <li className="flex items-start gap-2 py-2" data-root={group.root} data-testid="search-root">
       <Checkbox
-        aria-label={`Select every term under ${group.root}`}
+        aria-label={uiText('template_2aaa8cafd397', { v0: group.root })}
         checked={ticked === keys.length ? true : ticked > 0 ? 'indeterminate' : false}
         onCheckedChange={() => onChange(keys, ticked < keys.length)}
       />
@@ -115,12 +148,12 @@ function RootRow({
           <span className="flex flex-wrap items-baseline gap-x-2">
             <span className="font-medium text-sm">{group.root}</span>
             <span className="text-muted-foreground text-xs">
-              {group.terms.length} {group.terms.length === 1 ? 'term' : 'terms'}
-              <span className="group-open:hidden"> · show</span>
+              {uiText('term_count', { count: group.terms.length })}
+              <span className="group-open:hidden">{uiText('show_80c1e60')}</span>
             </span>
           </span>
           <span className="block text-muted-foreground text-xs tabular-nums">
-            {figures(group.spend, group.clicks, group.conversions, currency)}
+            {figures(group.spend, group.clicks, group.conversions, currency, uiText, uiLocale)}
           </span>
         </summary>
         <ul className="mt-1 divide-y divide-border/60">
@@ -140,8 +173,10 @@ function RootRow({
         </ul>
         {group.terms.length > shown.length ? (
           <p className="text-muted-foreground text-xs">
-            The {shown.length} that spent most; {group.terms.length - shown.length} more under this
-            root.
+            {uiText.rich('sentence_1e18e0074a8f', {
+              v0: shown.length,
+              v1: group.terms.length - shown.length,
+            })}
           </p>
         ) : null}
       </details>
@@ -160,11 +195,13 @@ function SearchTermBody({
   cards: readonly PlatformCard[];
   currency: string | null;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const groups = useMemo(() => groupByRoot(terms), [terms]);
   const covered = useMemo(() => termsInCards(cards), [cards]);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   if (terms.length === 0) {
-    return <ChartEmpty message="No search term spent in Google's last 30 complete days." />;
+    return <ChartEmpty message={uiText('no_search_term_spent_in_google_s_last_30_comp_ebc3749')} />;
   }
   const byKey = new Map(terms.map((term) => [termKey(term), term]));
   const picked = [...selected].flatMap((key) => byKey.get(key) ?? []);
@@ -186,15 +223,14 @@ function SearchTermBody({
   return (
     <div className="space-y-3">
       <ScopeLine>
-        {windowRangeLabel(window.since, window.until)} · Google's last 30 complete days · Search and
-        Performance Max terms · {terms.length.toLocaleString('en-US')} terms under {groups.length}{' '}
-        {groups.length === 1 ? 'root' : 'roots'}
+        {uiText.rich('sentence_538c7ab1692b', {
+          range: windowRangeLabel(window.since, window.until, uiLocale),
+          terms: terms.length.toLocaleString(uiLocale),
+          roots: groups.length,
+        })}
       </ScopeLine>
       <p className="text-muted-foreground text-xs" data-testid="search-terms-cards-note">
-        Negatives and new keywords come as the Optimizer's Negatives and Search term cards in
-        Actions
-        {inCards > 0 ? ` (${inCards} ${inCards === 1 ? 'term is' : 'terms are'} in one now)` : ''}.
-        Nothing changes from here.
+        {uiText.rich('sentence_0747a12ff16a', { count: inCards })}
       </p>
       <div
         className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
@@ -203,8 +239,10 @@ function SearchTermBody({
         {picked.length > 0 ? (
           <>
             <span className="tabular-nums">
-              {picked.length} {picked.length === 1 ? 'term' : 'terms'} selected ·{' '}
-              {formatCurrency(pickedSpend, currency)}
+              {uiText.rich('sentence_0a46eab3e584', {
+                count: picked.length,
+                spend: formatCurrency(pickedSpend, currency, uiLocale),
+              })}
             </span>
             <a
               className="text-primary-ink hover:underline"
@@ -218,19 +256,19 @@ function SearchTermBody({
                 { newConversation: true },
               )}
             >
-              Ask Jaina about these
+              {uiText('ask_jaina_about_these_736f511')}
             </a>
             <button
               className="hit-area text-muted-foreground text-xs hover:text-foreground"
               onClick={() => setSelected(new Set())}
               type="button"
             >
-              Clear
+              {uiText('clear_83b12c2')}
             </button>
           </>
         ) : (
           <span className="text-muted-foreground text-xs">
-            Tick terms, or a whole root, to ask Jaina about them.
+            {uiText('tick_terms_or_a_whole_root_to_ask_jaina_about_2ea7962')}
           </span>
         )}
       </div>
@@ -248,7 +286,10 @@ function SearchTermBody({
       </ul>
       {groups.length > shown.length ? (
         <p className="text-muted-foreground text-xs">
-          The {shown.length} roots that spent most; {groups.length - shown.length} more were read.
+          {uiText.rich('sentence_4d66e69673ef', {
+            v0: shown.length,
+            v1: groups.length - shown.length,
+          })}
         </p>
       ) : null}
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import type { ClientRenderJob } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import {
   createContext,
   type ReactNode,
@@ -49,6 +50,7 @@ type ClientRenderContextValue = {
   setInboxOpen(open: boolean): void;
   run(job: ClientRenderJob): Promise<void>;
   retry(job: ClientRenderJob): Promise<void>;
+  dismiss(job: ClientRenderJob): Promise<void>;
   stop(job: ClientRenderJob): Promise<void>;
   refresh(): Promise<void>;
   canExecute(job: ClientRenderJob): boolean;
@@ -90,6 +92,7 @@ const isAbort = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError';
 
 export function ClientRenderProvider({ children }: { children: ReactNode }) {
+  const uiText = useTranslations('common');
   registerDefaultClientRenderExecutors();
   const { user } = useSession();
   const viewerId = user?.id;
@@ -200,14 +203,14 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (readyCount > previousReadyCount.current && previousReadyCount.current >= 0) {
       show({
-        title: `${readyCount} ready to render`,
-        description: 'Open the render inbox to choose which jobs may use this device.',
+        title: uiText('renderJobsReady', { count: readyCount }),
+        description: uiText('open_the_render_inbox_to_choose_which_jobs_ma_db6c42c'),
         dedupeKey: `client-render-ready:${readyCount}`,
-        action: { label: 'Review jobs', onClick: () => setInboxOpen(true) },
+        action: { label: uiText('review_jobs_5ae2aa8'), onClick: () => setInboxOpen(true) },
       });
     }
     previousReadyCount.current = readyCount;
-  }, [readyCount, show]);
+  }, [readyCount, show, uiText]);
 
   // No brand filter: the queue spans every brand this person operates, and dropping an
   // update because it belongs to another brand would strand the job it describes.
@@ -227,12 +230,12 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
       const executor = getClientRenderExecutor(job.kind);
       if (!executor) {
         show({
-          title: 'Open the source to render',
-          description: 'This render adapter is not available on the current surface yet.',
+          title: uiText('open_the_source_to_render_7465acd'),
+          description: uiText('this_render_adapter_is_not_available_on_the_c_5f1584b'),
           variant: 'warning',
           dedupeKey: `client-render-unsupported:${job.id}`,
           action: {
-            label: 'View source',
+            label: uiText('view_source_6ee818a'),
             onClick: () => window.location.assign(job.executionSpec.origin.viewHref),
           },
         });
@@ -242,8 +245,8 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
       const capabilities = await probeClientRenderCapabilities();
       if (!capabilities.webCodecs || !capabilities.avc) {
         show({
-          title: "This browser can't render video",
-          description: 'Use Chrome or Edge on a desktop with WebCodecs enabled.',
+          title: uiText('this_browser_can_t_render_video_3477598'),
+          description: uiText('use_chrome_or_edge_on_a_desktop_with_webcodec_6665a6b'),
           variant: 'error',
           dedupeKey: `client-render-unsupported:${job.id}`,
         });
@@ -267,8 +270,8 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
         });
       } catch {
         show({
-          title: 'Job already claimed',
-          description: 'Another operator started this render first.',
+          title: uiText('job_already_claimed_0f5165e'),
+          description: uiText('another_operator_started_this_render_first_15a5275'),
           variant: 'warning',
         });
         await refresh();
@@ -329,8 +332,8 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
               if (released) replaceJob(released.job);
               return {
                 status: 'stale' as const,
-                title: 'Render stopped',
-                description: 'The unfinished job returned to the queue.',
+                title: uiText('renderStopped'),
+                description: uiText('renderReturnedToQueue'),
                 silent: true,
               };
             }
@@ -358,7 +361,7 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
       }
       localJobIds.current.set(job.id, local.jobId);
     },
-    [refresh, replaceJob, show, studioQueue],
+    [refresh, replaceJob, show, studioQueue, uiText],
   );
 
   const retry = useCallback(
@@ -369,6 +372,12 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
     },
     [replaceJob],
   );
+
+  const dismiss = useCallback(async (job: ClientRenderJob) => {
+    const { dismissClientRenderJob } = await jobsApi();
+    await dismissClientRenderJob(job.id, job.brandId);
+    setJobs((current) => current.filter((entry) => entry.id !== job.id));
+  }, []);
 
   const stop = useCallback(
     async (job: ClientRenderJob) => {
@@ -409,13 +418,14 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
       setInboxOpen,
       run,
       retry,
+      dismiss,
       stop,
       refresh,
       canExecute: (job) => hasClientRenderExecutor(job.kind),
       isRunningLocally: (job) => localJobIds.current.has(job.id),
       willAutoRun,
     }),
-    [inboxOpen, jobs, readyCount, refresh, retry, run, stop, willAutoRun],
+    [dismiss, inboxOpen, jobs, readyCount, refresh, retry, run, stop, willAutoRun],
   );
 
   return <ClientRenderContext.Provider value={value}>{children}</ClientRenderContext.Provider>;

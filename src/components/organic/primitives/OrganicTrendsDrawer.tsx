@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
@@ -18,6 +19,8 @@ type OrganicTrendsDrawerProps = {
   isFetching?: boolean;
   /** Set when the server-side trend fetch failed, so the workbench can say so. */
   insightsError?: string | null;
+  /** The first trend report waits on the brand report. */
+  waitingForBrandReport?: boolean;
   /** Required by the workbench's per-trend citations query; without it, it stays disabled. */
   brandProfileId?: string;
 };
@@ -34,8 +37,10 @@ export function OrganicTrendsDrawer({
   onFetch,
   isFetching,
   insightsError,
+  waitingForBrandReport,
   brandProfileId,
 }: OrganicTrendsDrawerProps) {
+  const uiText = useTranslations('organic');
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -43,7 +48,9 @@ export function OrganicTrendsDrawer({
         className="flex w-[clamp(320px,80vw,480px)] flex-col gap-0 p-0 sm:max-w-[clamp(320px,80vw,480px)]"
       >
         <SheetHeader className="shrink-0 border-b border-border/50 px-4 py-3">
-          <SheetTitle className="text-sm font-semibold">Trends &amp; Signals</SheetTitle>
+          <SheetTitle className="text-sm font-semibold">
+            {uiText('trends_signals_d38a65b')}
+          </SheetTitle>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-hidden">
           <TrendWorkbench
@@ -56,6 +63,7 @@ export function OrganicTrendsDrawer({
             onFetch={onFetch}
             isFetching={isFetching}
             insightsError={insightsError}
+            waitingForBrandReport={waitingForBrandReport}
             brandProfileId={brandProfileId}
           />
         </div>

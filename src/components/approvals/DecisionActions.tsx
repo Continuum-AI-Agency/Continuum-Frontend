@@ -2,15 +2,16 @@
 
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { buttonVariants } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
-import { loadFailureCause, loadFailureWhy } from '@/lib/api/loadFailure';
+import { loadFailureCause } from '@/lib/api/loadFailure';
 import { useApprove, useReject } from '@/lib/approvals/queries';
 import { useApprovalsStore } from '@/lib/approvals/store';
 import type { RuleAction } from '@/lib/approvals/types';
 import { cn } from '@/lib/utils';
-import { actionTypeLabel } from './formatters';
+import { useApprovalFormatters } from './formatters';
 import { RejectDialog } from './RejectDialog';
 
 /** Elements that own their keys: text entry, and every control whose Enter or Space activates
@@ -49,11 +50,16 @@ const KEY_OWNING_TARGET = [
  * on the platform; any other failure claims nothing it cannot know
  * (PP-DT-C-approve-failure-toast-raw-edge-string).
  */
-function decisionFailure(verb: 'Approve' | 'Reject', error: unknown): string {
-  const why = loadFailureWhy(error) ?? 'it did not go through.';
-  const source = error instanceof Error && error.cause !== undefined ? error.cause : error;
-  const neverLeft = verb === 'Approve' && loadFailureCause(source) === 'offline';
-  return `${verb} failed — ${why}${neverLeft ? ' Nothing changed on the platform.' : ''}`;
+function decisionFailure(
+  uiText: ReturnType<typeof useTranslations<'common'>>,
+  action: 'approve' | 'reject',
+  error: unknown,
+): string {
+  const cause = loadFailureCause(error);
+  if (action === 'approve' && cause === 'offline') {
+    return uiText('approve_failed_no_connection_to_the_server_no_46f8502');
+  }
+  return uiText('action_select_approve_approve_failed_other_re_26ebf42', { action, cause });
 }
 
 type DecisionActionsHandle = {
@@ -70,6 +76,8 @@ type Props = {
 
 export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
   function DecisionActions({ action, brandId, onAdvance, bindGlobalKeys = true }, ref) {
+    const uiText = useTranslations('common');
+    const { actionTypeLabel } = useApprovalFormatters();
     const approve = useApprove(brandId);
     const reject = useReject(brandId);
     const markOptimistic = useApprovalsStore((s) => s.markOptimistic);
@@ -87,18 +95,22 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
       try {
         const result = await approve.mutateAsync({ ruleActionId: action.id });
         if (!result.ok) {
-          toast.error(`Approve failed · ${result.error ?? 'Meta call rejected'}`);
+          toast.error(
+            result.error ? `${uiText('m_4bef5be9a8')} · ${result.error}` : uiText('m_4bef5be9a8'),
+          );
         } else if (result.alreadyExecuted) {
-          toast.info('Action was already executed.');
+          toast.info(uiText('m_d540b39f7b'));
         } else {
-          toast.success(`Approved · ${actionTypeLabel(action.action_type)}`);
+          toast.success(
+            uiText('m_827752f9da', { v0: String(actionTypeLabel(action.action_type)) }),
+          );
         }
       } catch (err) {
-        toast.error(decisionFailure('Approve', err));
+        toast.error(decisionFailure(uiText, 'approve', err));
       } finally {
         clearOptimistic(action.id);
       }
-    }, [action, approve, busy, clearOptimistic, markOptimistic, onAdvance]);
+    }, [action, approve, busy, clearOptimistic, markOptimistic, onAdvance, uiText]);
 
     const runReject = React.useCallback(
       async (reason: string) => {
@@ -108,17 +120,21 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
         try {
           const result = await reject.mutateAsync({ ruleActionId: action.id, reason });
           if (!result.ok) {
-            toast.error(`Reject failed · ${result.error ?? 'Unknown error'}`);
+            toast.error(
+              result.error ? `${uiText('m_49474675c1')} · ${result.error}` : uiText('m_49474675c1'),
+            );
           } else {
-            toast.success(`Rejected · ${actionTypeLabel(action.action_type)}`);
+            toast.success(
+              uiText('m_443110582b', { v0: String(actionTypeLabel(action.action_type)) }),
+            );
           }
         } catch (err) {
-          toast.error(decisionFailure('Reject', err));
+          toast.error(decisionFailure(uiText, 'reject', err));
         } finally {
           clearOptimistic(action.id);
         }
       },
-      [action, clearOptimistic, markOptimistic, onAdvance, reject],
+      [action, clearOptimistic, markOptimistic, onAdvance, reject, uiText],
     );
 
     React.useImperativeHandle(
@@ -170,7 +186,7 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
           ) : (
             <CheckCircle2 className="h-4 w-4" strokeWidth={1.5} />
           )}
-          <span>Approve</span>
+          <span>{uiText('approve_6007acb')}</span>
         </motion.button>
 
         <RejectDialog

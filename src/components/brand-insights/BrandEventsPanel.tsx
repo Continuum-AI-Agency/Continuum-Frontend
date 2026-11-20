@@ -1,4 +1,5 @@
 import { BookOpen, Calendar, Clock, Globe } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { GlassPanel } from '@/components/ui/GlassPanel';
@@ -14,11 +15,11 @@ type BrandEventsPanelProps = {
   status?: string;
 };
 
-function formatDate(value?: string) {
+function formatDate(value: string | undefined, uiLocale: string) {
   if (!value) return undefined;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return undefined;
-  return parsed.toLocaleDateString('en-US', {
+  return parsed.toLocaleDateString(uiLocale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -32,8 +33,11 @@ export function BrandEventsPanel({
   generatedAt,
   status,
 }: BrandEventsPanelProps) {
-  const weekLabel = formatDate(weekStartDate);
-  const generatedLabel = formatDate(generatedAt);
+  const tUi = useTranslations('common');
+  const uiLocale = useLocale();
+
+  const weekLabel = formatDate(weekStartDate, uiLocale);
+  const generatedLabel = formatDate(generatedAt, uiLocale);
 
   return (
     <GlassPanel className="p-[var(--card-pad)] space-y-4">
@@ -41,12 +45,10 @@ export function BrandEventsPanel({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
-            <span className="text-xs text-muted-foreground">Brand Insights · Events</span>
+            <span className="text-xs text-muted-foreground">{tUi('m_25a970ed1f')}</span>
           </div>
-          <h3 className="text-xl font-semibold text-foreground">Time-bound opportunities</h3>
-          <span className="block text-sm text-muted-foreground">
-            Key dates and campaigns aligned to the latest generation window.
-          </span>
+          <h3 className="text-xl font-semibold text-foreground">{tUi('m_e2036e64ba')}</h3>
+          <span className="block text-sm text-muted-foreground">{tUi('m_ef3fa863a4')}</span>
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -59,13 +61,15 @@ export function BrandEventsPanel({
           {weekLabel && (
             <Pill variant="violet">
               <Calendar className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-              Week of {weekLabel}
+              {tUi('m_7f262e0a5d')}
+              {weekLabel}
             </Pill>
           )}
           {generatedLabel && (
             <Pill variant="success">
               <Clock className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-              Updated {generatedLabel}
+              {tUi('m_c95815a044')}
+              {generatedLabel}
             </Pill>
           )}
           {status && <Pill variant="warning">{status}</Pill>}

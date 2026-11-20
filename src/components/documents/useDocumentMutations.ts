@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 import {
   createInlineDocumentUrlAction,
   createSignedDocumentUrlAction,
-} from '@/app/(post-auth)/settings/actions';
+} from '@/app/[locale]/(post-auth)/settings/actions';
 import {
   archiveDocumentAction,
   deleteDocumentPermanentlyAction,
@@ -13,7 +13,8 @@ import {
   restoreDocumentAction,
   saveDocumentPermanentlyAction,
   updateDocumentCategoryAction,
-} from '@/app/onboarding/actions';
+} from '@/app/[locale]/onboarding/actions';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
 import type { OnboardingState } from '@/lib/onboarding/state';
 
@@ -65,6 +66,8 @@ export type DocumentMutationsHandle = {
 };
 
 export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
+  const getUiErrorMessage = useUiErrorMessage();
+
   const [uploads, setUploads] = useState<UploadEntry[]>([]);
 
   const uploadOne = useCallback(
@@ -88,14 +91,14 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
         setUploads((prev) => prev.filter((p) => p.key !== entry.key));
         return true;
       } catch (err) {
-        const message = err instanceof Error ? err.message : `Failed to upload ${entry.file.name}`;
+        const message = getUiErrorMessage(err);
         setUploads((prev) =>
           prev.map((p) => (p.key === entry.key ? { ...p, status: 'error', error: message } : p)),
         );
         return false;
       }
     },
-    [brandId],
+    [brandId, getUiErrorMessage],
   );
 
   const uploadFiles = useCallback<DocumentMutationsHandle['uploadFiles']>(

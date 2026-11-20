@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type {
@@ -81,6 +82,7 @@ export function CampaignRow({
   onEventClick,
   selectedEventId,
 }: CampaignRowProps) {
+  const uiText = useTranslations('scale');
   const [expanded, setExpanded] = useState(false);
   const campaignMetricsDaily = useMemo(() => buildCampaignMetricsDaily(campaign), [campaign]);
   const adSetMetricsById = useMemo(
@@ -129,7 +131,10 @@ export function CampaignRow({
 
       {expanded ? (
         <div className="flex flex-col border-l border-border ml-6">
-          <TimelineCampaignInsights metricsDaily={campaignMetricsDaily} label="Campaign trends" />
+          <TimelineCampaignInsights
+            metricsDaily={campaignMetricsDaily}
+            label={uiText('campaign_trends_861f4e4')}
+          />
           {campaign.ad_sets?.map((adSet) => (
             <div key={adSet.id} className="flex flex-col">
               <TimelineRow
@@ -145,7 +150,7 @@ export function CampaignRow({
               />
               <TimelineCampaignInsights
                 metricsDaily={adSetMetricsById[adSet.id]}
-                label={`${adSet.name} trends`}
+                label={uiText('template_111a38ba5e18', { v0: adSet.name })}
               />
 
               {adSet.ads?.map((ad) => (

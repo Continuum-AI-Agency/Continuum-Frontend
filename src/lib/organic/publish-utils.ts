@@ -4,7 +4,10 @@ import {
   type PublishAccountCandidate,
   type PublishPlatform,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import type { UiLocale } from '@/i18n/config';
+import { isPlainSentence } from '@/lib/api/loadFailure';
 // draftReadiness reads inferPublishPlatform from here: a cycle that only resolves at call time.
 import { evaluateDraftReadiness } from './draftReadiness';
 import { groupMemberDrafts } from './groupDraft';
@@ -57,15 +60,26 @@ export function unpublishedMembers(card: OrganicCalendarDraft): OrganicCalendarD
  * own content — the card's row carries the group's platform union, and judging TikTok against
  * the Instagram row's image refused a group whose TikTok row had its video.
  */
-export function groupPublishBlocker(card: OrganicCalendarDraft): string | null {
+export function groupPublishBlocker(
+  card: OrganicCalendarDraft,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+  locale: UiLocale = 'en',
+): string | null {
   const drafts = unpublishedMembers(card);
-  if (drafts.length === 0) return 'Every platform of this post is already live.';
+  if (drafts.length === 0)
+    return translate?.('publishAllLive') ?? 'Every platform of this post is already live.';
   for (const draft of drafts) {
     const platform = inferPublishPlatform(draft);
-    if (!platform) return 'This draft has no platform we can publish to.';
-    const readiness = evaluateDraftReadiness({ ...draft, platforms: [platform] });
+    if (!platform)
+      return translate?.('publishNoPlatform') ?? 'This draft has no platform we can publish to.';
+    const readiness = evaluateDraftReadiness(
+      { ...draft, platforms: [platform] },
+      translate,
+      locale,
+    );
     if (readiness.ready) continue;
-    const reason = readiness.reason ?? 'This post is not ready to publish yet.';
+    const reason =
+      readiness.reason ?? translate?.('publishBlocked') ?? 'This post is not ready to publish yet.';
     return drafts.length > 1 ? `${PUBLISH_PLATFORM_LABELS[platform]}: ${reason}` : reason;
   }
   return null;
@@ -94,13 +108,46 @@ export const PUBLISH_ERROR_MESSAGES: Record<string, string> = {
   media_staging_failed:
     "We couldn't prepare your media for publishing. Re-attach the creative and try again.",
   media_upload_failed: "We couldn't upload your media to the platform. Try again in a moment.",
-  unsupported_format: "This post format isn't supported on that platform.",
   // X is pay-per-use: every post is paid from the brand's prepaid X API credits.
   credits_exhausted:
     'This brand is out of X API credits. Buy X credits in Billing (or turn on X auto-billing), then publish again.',
 };
 
-export function describePublishError(code: string, fallback: string): string {
+const PUBLISH_ERROR_KEYS = {
+  token_expired: 'publishErrorToken',
+  rate_limited: 'publishErrorRateLimited',
+  media_processing_error: 'publishErrorProcessing',
+  media_staging_failed: 'publishErrorStaging',
+  media_upload_failed: 'publishErrorUpload',
+  credits_exhausted: 'publishErrorCredits',
+} as const satisfies Partial<Record<import('@continuum/contracts').PublishErrorCode, string>>;
+
+/**
+ * `platform` names the connection to fix: an expired token reads "Reconnect LinkedIn", not a
+ * generic "the connection expired". `unsupported_format` has no entry on purpose: the backend
+ * sends the specific sentence (`unsupportedFormatMessage`: what the platform takes instead).
+ * With `translate`, any other unknown code reads as the localized generic failure, never as
+ * provider prose.
+ */
+export function describePublishError(
+  code: string,
+  fallback: string,
+  platform?: string,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+): string {
+  if (code === 'token_expired' && platform) {
+    return (
+      translate?.('reconnect_platform_its_connection_expired_or__e39c365', { platform }) ??
+      `Reconnect ${platform}: its connection expired or was revoked. Reconnect it in Integrations, then try again. We always post to the account you selected.`
+    );
+  }
+  if (translate && code !== 'unsupported_format') {
+    if (Object.hasOwn(PUBLISH_ERROR_KEYS, code))
+      return translate(PUBLISH_ERROR_KEYS[code as keyof typeof PUBLISH_ERROR_KEYS]);
+    // An unknown code keeps the platform's own reason ("(#200) … pages_manage_posts …"): it is
+    // the only thing that says what to fix. A library string or JSON gets the generic copy.
+    return isPlainSentence(fallback) ? fallback.trim() : translate('publishErrorUnknown');
+  }
   return PUBLISH_ERROR_MESSAGES[code] ?? fallback;
 }
 

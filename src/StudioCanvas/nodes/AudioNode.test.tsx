@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
+import { render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { AudioNode } from './AudioNode';
 

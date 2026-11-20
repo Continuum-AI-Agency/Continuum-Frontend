@@ -13,6 +13,7 @@ import {
   qualityLensTakeaway,
 } from '@continuum/contracts';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { formatCurrency } from '../../../../format';
 import { useGoogleKeywordQuality } from '../../../google/googleReads';
@@ -129,17 +130,20 @@ function QualityBody({
   money: Money;
   size: BoardModuleSize;
 }) {
+  const uiText = useTranslations('scale');
   if (model.kind === 'empty') {
     return (
       <LensNote testId="quality-empty">
-        No keyword spent in this window. Performance Max, Display and Video campaigns have no
-        keywords.
+        {uiText('no_keyword_spent_in_this_window_performance_m_3eaae4c')}
       </LensNote>
     );
   }
   const headline = (
     <LensFigure
-      caption={`of keyword spend at Quality Score ≤ ${LOW_QS_MAX} · ${money(model.low.spend)}`}
+      caption={uiText('of_keyword_spend_at_quality_score_max_spend_9ed96c2', {
+        max: LOW_QS_MAX,
+        spend: money(model.low.spend),
+      })}
       testId="quality-headline"
       value={pct(model.low.share)}
     />
@@ -158,12 +162,18 @@ function QualityBody({
         {headline}
         <Histogram height={size === 'l' ? 150 : 124} model={model} money={money} />
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-xs">
-          <LegendKey color={BAR_COLOR.low}>QS 1–{LOW_QS_MAX}: every click costs more</LegendKey>
-          <LegendKey color={BAR_COLOR.rest}>QS {LOW_QS_MAX + 1}–10</LegendKey>
+          <LegendKey color={BAR_COLOR.low}>
+            {uiText('qs_1_max_every_click_costs_more_ad56e1a', { max: LOW_QS_MAX })}
+          </LegendKey>
+          <LegendKey color={BAR_COLOR.rest}>
+            {uiText('qs_from_10_ab97fca', { from: LOW_QS_MAX + 1 })}
+          </LegendKey>
           {model.unscored.keywords > 0 ? (
             <span data-testid="quality-unscored">
-              Unscored: {money(model.unscored.spend)} on {model.unscored.keywords}{' '}
-              {model.unscored.keywords === 1 ? 'keyword' : 'keywords'}
+              {uiText('unscored_spend_on_count_plural_one_keyword_ot_635ecba', {
+                spend: money(model.unscored.spend),
+                count: model.unscored.keywords,
+              })}
             </span>
           ) : null}
         </div>
@@ -182,9 +192,20 @@ function QualityBody({
           })}
         </LensTakeaway>
         <LensNote testId="quality-scope">
-          {windowRangeLabel(model.window.since, model.window.until)} · {daysIn(model.window)}{' '}
-          complete days · the {model.total} keywords that spent most · {model.scored} scored
-          {model.average === null ? '' : ` · average Quality Score ${model.average.toFixed(1)}`}
+          {model.average === null
+            ? uiText('range_days_plural_one_complete_day_other_comp_e991bf0', {
+                range: windowRangeLabel(model.window.since, model.window.until),
+                days: daysIn(model.window),
+                total: model.total,
+                scored: model.scored,
+              })
+            : uiText('range_days_plural_one_complete_day_other_comp_429d8eb', {
+                range: windowRangeLabel(model.window.since, model.window.until),
+                days: daysIn(model.window),
+                total: model.total,
+                scored: model.scored,
+                average: model.average.toFixed(1),
+              })}
         </LensNote>
       </div>
     </div>
@@ -203,17 +224,20 @@ function Histogram({
   height: number;
   tile?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const top = Math.max(...model.histogram.map((bucket) => bucket.spend), 1);
   const bracket = tile ? 0 : 20;
   const label = model.histogram
     .filter((bucket) => bucket.keywords > 0)
-    .map((bucket) => `QS ${bucket.score}: ${money(bucket.spend)}`)
+    .map((bucket) =>
+      uiText('qs_score_spend_c2d7d14', { score: bucket.score, spend: money(bucket.spend) }),
+    )
     .join('; ');
   return (
     <div className="space-y-1">
       <figure
-        aria-label={`Keyword spend by Quality Score. ${label}`}
+        aria-label={uiText('keyword_spend_by_quality_score_list_67cd347', { list: label })}
         className="relative m-0 w-full"
         data-testid="quality-histogram"
         style={{ height }}
@@ -225,7 +249,7 @@ function Histogram({
             style={{ width: `${(LOW_QS_MAX / 10) * 100}%` }}
           >
             <span className="whitespace-nowrap font-medium text-foreground text-xs leading-none">
-              QS ≤ {LOW_QS_MAX} · {pct(model.low.share)}
+              {uiText('qs_max_share_c623b5a', { max: LOW_QS_MAX, share: pct(model.low.share) })}
             </span>
             <span
               aria-hidden="true"
@@ -240,7 +264,11 @@ function Histogram({
           {model.histogram.map((bucket, index) => {
             const low = bucket.score <= LOW_QS_MAX;
             const share = bucket.spend / model.keywordSpend;
-            const readout = `Quality Score ${bucket.score} · ${bucket.keywords} ${bucket.keywords === 1 ? 'keyword' : 'keywords'} · ${pct(share)} of keyword spend`;
+            const readout = uiText('quality_score_score_count_plural_one_keyword__3b0c026', {
+              score: bucket.score,
+              count: bucket.keywords,
+              share: pct(share),
+            });
             if (bucket.spend <= 0) {
               return (
                 <div
@@ -299,13 +327,14 @@ function Histogram({
 }
 
 function ComponentRow({ split }: { split: ComponentSplit }) {
+  const uiText = useTranslations('scale');
   const reduce = useReducedMotion();
   const label = QS_COMPONENT_LABEL[split.component];
   if (split.rated <= 0) {
     return (
       <li className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-2 text-xs">
         <span className="text-foreground">{label}</span>
-        <span className="text-muted-foreground">Not rated by Google yet</span>
+        <span className="text-muted-foreground">{uiText('not_rated_by_google_yet_28dd542')}</span>
       </li>
     );
   }
@@ -336,7 +365,10 @@ function ComponentRow({ split }: { split: ComponentSplit }) {
         ))}
       </span>
       <span className="whitespace-nowrap text-right text-muted-foreground tabular-nums">
-        <span className="font-medium text-foreground">{pct(below)}</span> below
+        {uiText.rich('b_share_b_below_fde68dc', {
+          share: pct(below),
+          b: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+        })}
       </span>
     </li>
   );
@@ -344,18 +376,19 @@ function ComponentRow({ split }: { split: ComponentSplit }) {
 
 /** How Google rates the low-score spend on its three components; all keywords when none is low. */
 function Components({ model }: { model: ReadModel }) {
+  const uiText = useTranslations('scale');
   const low = model.low.keywords > 0;
   const splits = low ? model.lowComponents : model.components;
   return (
     <section
-      aria-label="Quality Score components"
+      aria-label={uiText('quality_score_components_f9c5f77')}
       className="space-y-1.5"
       data-testid="quality-components"
     >
       <p className="font-medium text-muted-foreground text-xs">
         {low
-          ? `The QS ≤ ${LOW_QS_MAX} spend, as Google rates each component`
-          : 'The keyword spend, as Google rates each component'}
+          ? uiText('the_qs_max_spend_as_google_rates_each_compone_0a906df', { max: LOW_QS_MAX })
+          : uiText('the_keyword_spend_as_google_rates_each_compon_5a96220')}
       </p>
       <ul className="space-y-1.5">
         {splits.map((split) => (
@@ -380,11 +413,15 @@ const CHIP_TONE: Record<Rating, string> = {
 };
 
 function RatingChips({ keyword }: { keyword: LowKeyword }) {
+  const uiText = useTranslations('scale');
   return (
     <span className="inline-flex gap-0.5">
       {QS_COMPONENTS.map((component) => {
         const rating = keyword.ratings[component];
-        const text = `${QS_COMPONENT_LABEL[component]}: ${rating ? RATING_LABEL[rating] : 'not rated'}`;
+        const text = uiText('component_rating_8112277', {
+          component: QS_COMPONENT_LABEL[component],
+          rating: rating ? RATING_LABEL[rating] : uiText('not_rated_5425c43'),
+        });
         return (
           <span
             aria-label={text}
@@ -403,12 +440,16 @@ function RatingChips({ keyword }: { keyword: LowKeyword }) {
 }
 
 function LowestKeywords({ model, money }: { model: ReadModel; money: Money }) {
+  const uiText = useTranslations('scale');
   if (model.lowest.length === 0) return null;
   return (
-    <section aria-label="Low-score keywords" className="space-y-1" data-testid="quality-lowest">
+    <section
+      aria-label={uiText('low_score_keywords_2c44aa3')}
+      className="space-y-1"
+      data-testid="quality-lowest"
+    >
       <p className="font-medium text-muted-foreground text-xs">
-        The QS ≤ {LOW_QS_MAX} keywords that spent most · C R L = expected CTR, ad relevance, landing
-        page
+        {uiText('the_qs_max_keywords_that_spent_most_c_r_l_exp_78e7097', { max: LOW_QS_MAX })}
       </p>
       <ul className="divide-y divide-border/60">
         {model.lowest.map((keyword) => (
@@ -420,8 +461,11 @@ function LowestKeywords({ model, money }: { model: ReadModel; money: Money }) {
             <span className="min-w-0 break-words text-foreground">{keyword.keyword}</span>
             <RatingChips keyword={keyword} />
             <span className="text-right text-muted-foreground tabular-nums">
-              <span className="font-medium text-foreground">QS {keyword.score}</span> ·{' '}
-              {money(keyword.spend)}
+              {uiText.rich('b_qs_score_b_spend_27af372', {
+                score: keyword.score,
+                spend: money(keyword.spend),
+                b: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+              })}
             </span>
           </li>
         ))}

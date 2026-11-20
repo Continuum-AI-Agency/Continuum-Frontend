@@ -11,6 +11,7 @@ import {
   Trash2,
   Undo2,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -53,6 +54,7 @@ export function DocumentRowActions({
   brandId?: string;
   className?: string;
 }) {
+  const uiText = useTranslations('common');
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -78,7 +80,7 @@ export function DocumentRowActions({
 
       <DropdownMenu>
         <DropdownMenuTrigger
-          aria-label={`Actions for ${doc.name}`}
+          aria-label={uiText('m_2fcb3663ef', { v0: String(doc.name) })}
           className={cn(
             'inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
             className,
@@ -91,11 +93,11 @@ export function DocumentRowActions({
             <>
               <DropdownMenuItem onSelect={() => actions.onOpenInline(doc.storagePath ?? '')}>
                 <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                Open
+                {uiText('open_ed077f3')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => void actions.onDownload(doc.storagePath ?? '')}>
                 <Download className="mr-2 h-3.5 w-3.5" />
-                Download
+                {uiText('download_d6eafe8')}
               </DropdownMenuItem>
             </>
           ) : null}
@@ -112,11 +114,11 @@ export function DocumentRowActions({
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
                 <Pencil className="mr-2 h-3.5 w-3.5" />
-                Rename…
+                {uiText('m_94ac9a58b6')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => replaceInputRef.current?.click()}>
                 <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                Replace file…
+                {uiText('m_42ecfb8083')}
               </DropdownMenuItem>
             </>
           ) : null}
@@ -126,7 +128,7 @@ export function DocumentRowActions({
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => void actions.onSavePermanently(doc)}>
                 <BookmarkPlus className="mr-2 h-3.5 w-3.5" />
-                Save to Knowledge
+                {uiText('m_020fd1b143')}
               </DropdownMenuItem>
             </>
           ) : null}
@@ -136,20 +138,20 @@ export function DocumentRowActions({
             <>
               <DropdownMenuItem onSelect={() => void actions.onRestore(doc)}>
                 <ArchiveRestore className="mr-2 h-3.5 w-3.5" />
-                Restore
+                {uiText('m_3cbe6d6b9a')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onSelect={() => setConfirmDeleteOpen(true)}
               >
                 <Trash2 className="mr-2 h-3.5 w-3.5" />
-                Delete permanently
+                {uiText('m_e63b5153bd')}
               </DropdownMenuItem>
             </>
           ) : (
             <DropdownMenuItem onSelect={() => void actions.onArchive(doc)}>
               <Undo2 className="mr-2 h-3.5 w-3.5" />
-              Take down
+              {uiText('m_ad8a1a7943')}
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
@@ -167,15 +169,17 @@ export function DocumentRowActions({
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{doc.name}” permanently?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the file and everything indexed from it. It cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>
+              {uiText('m_4b267561dc')}
+              {doc.name}
+              {uiText('m_12c3359319')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{uiText('m_9f347c2eeb')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void actions.onDeletePermanently(doc)}>
-              Delete permanently
+              {uiText('m_e63b5153bd')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

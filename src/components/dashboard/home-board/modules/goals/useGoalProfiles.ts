@@ -9,7 +9,7 @@ import { useState, useTransition } from 'react';
 import {
   resetHomeObjectivesAction,
   saveHomeObjectivesAction,
-} from '@/app/(post-auth)/dashboard/actions';
+} from '@/app/[locale]/(post-auth)/dashboard/actions';
 import { toast } from '@/components/ui/toast-imperative';
 
 export type GoalProfiles = {

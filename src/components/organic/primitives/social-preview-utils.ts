@@ -169,11 +169,14 @@ export function postedPreviewInput(
 }
 
 /** "Sat, Oct 24" for a planner day id; `undefined` when there is no day to name. */
-export function frameDayLabel(dayId: string | null | undefined): string | undefined {
+export function frameDayLabel(
+  dayId: string | null | undefined,
+  locale: import('@/i18n/config').UiLocale = 'en',
+): string | undefined {
   if (!dayId) return undefined;
   const date = new Date(`${dayId}T12:00:00`);
   if (Number.isNaN(date.getTime())) return undefined;
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 /**

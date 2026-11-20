@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { createHmac, randomBytes } from 'node:crypto';
+import { createTranslator } from 'next-intl';
 import { ApiError } from '@/lib/api/errors';
+import en from '../../../../messages/scale/en.json';
+import es from '../../../../messages/scale/es.json';
+import pt from '../../../../messages/scale/pt-BR.json';
 import {
+  capiErrorMessage,
+  capiIssueMessage,
   chunk,
   invalidEventIssues,
   leafPaths,
@@ -67,3 +73,39 @@ describe('capi helpers', () => {
     expect(invalidEventIssues(new ApiError('nope', 403))).toBeNull();
   });
 });
+
+for (const locale of ['en', 'pt-BR', 'es'] as const) {
+  test(`localized CAPI guidance preserves fields and hides provider details (${locale})`, () => {
+    const translate = createTranslator({
+      locale,
+      namespace: 'scale',
+      messages: { scale: { en, 'pt-BR': pt, es }[locale] },
+    });
+    const issue = {
+      code: 'event_time_too_old' as const,
+      path: ['event_time'],
+      details: { maxAgeDays: 62 },
+    };
+    const message = capiIssueMessage(issue, translate);
+    expect(message).toContain('62');
+    expect(message).toContain('event_time');
+    expect(issue).toEqual({
+      code: 'event_time_too_old',
+      path: ['event_time'],
+      details: { maxAgeDays: 62 },
+    });
+    expect(capiErrorMessage(new Error('private.backend.example'), '', translate)).toBe(
+      translate('capi_request_failed'),
+    );
+    const csv = `email,event_time\na@example.com,${NOW - 30 * 86400}`;
+    const review = reviewCsv(
+      csv,
+      { eventName: 'Lead', actionSource: 'system_generated' },
+      NOW,
+      translate,
+    );
+    expect(review.events).toEqual([]);
+    expect(review.issues[0].line).toBe(2);
+    expect(review.issues[0].message).toBe(translate('capi_issue_old', { maxAgeDays: 7 }));
+  });
+}

@@ -1,3 +1,4 @@
+import type { useTranslations } from 'next-intl';
 import type { ToastOptions } from '@/components/ui/ToastProvider';
 
 export const DASHBOARD_WELCOME_TOAST_DURATION_MS = 5_000;
@@ -13,12 +14,14 @@ export function shouldShowDashboardWelcomeToast(
   return pathname === '/dashboard' && viewportWidth >= WELCOME_TOAST_MIN_VIEWPORT_PX;
 }
 
-export function createDashboardWelcomeToastOptions(displayName: string): ToastOptions {
-  const safeDisplayName = displayName.trim().length > 0 ? displayName.trim() : 'User';
+export function createDashboardWelcomeToastOptions(
+  displayName: string,
+  t: ReturnType<typeof useTranslations<'common'>>,
+): ToastOptions {
+  const safeDisplayName = displayName.trim().length > 0 ? displayName.trim() : t('unnamedUser');
   return {
-    title: `Welcome back, ${safeDisplayName}.`,
-    description:
-      'Your dashboard shows live brand insights and quick actions. Switch brands or add one from the top bar.',
+    title: t('dashboardWelcome', { name: safeDisplayName }),
+    description: t('dashboardWelcomeDescription'),
     variant: 'info',
     durationMs: DASHBOARD_WELCOME_TOAST_DURATION_MS,
   };

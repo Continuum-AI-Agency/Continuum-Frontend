@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { UseDraftMediaPlacementResult } from '@/components/organic/hooks/useDraftMediaPlacement';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('next/image', () => ({
   default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
@@ -100,6 +101,15 @@ describe('CarouselSlideStrip', () => {
   });
 
   it('renders video slides as video thumbnails while retaining their order', () => {
+    // On screen: a video slide with no poster loads its first frame once it is near.
+    const realObserver = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = class {
+      constructor(private readonly report: (entries: { isIntersecting: boolean }[]) => void) {}
+      observe() {
+        this.report([{ isIntersecting: true }]);
+      }
+      disconnect() {}
+    } as unknown as typeof IntersectionObserver;
     render(
       <CarouselSlideStrip
         slides={[
@@ -118,6 +128,7 @@ describe('CarouselSlideStrip', () => {
       'https://cdn/clip.mp4#t=0.01',
     );
     expect(screen.getByLabelText('Slide 2 (active)')).toBeTruthy();
+    globalThis.IntersectionObserver = realObserver;
   });
 
   it('routes remove, replace and enlarge through the same position', () => {

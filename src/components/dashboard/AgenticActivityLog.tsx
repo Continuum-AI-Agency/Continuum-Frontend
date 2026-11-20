@@ -1,5 +1,7 @@
 'use client';
+
 import { ArrowUpToLine, ScrollText, SquareArrowOutUpRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -30,6 +32,7 @@ function initialsFromName(name: string) {
 }
 
 export function AgenticActivityLog({ items, emptyMessage }: AgenticActivityLogProps) {
+  const uiText = useTranslations('dashboard');
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -38,17 +41,17 @@ export function AgenticActivityLog({ items, emptyMessage }: AgenticActivityLogPr
             <ScrollText aria-hidden="true" />
           </Pill>
           <div>
-            <h3 className="text-lg font-semibold">Recent activity</h3>
+            <h3 className="text-lg font-semibold">{uiText('recent_activity_6cb44b5')}</h3>
             <p className="text-sm text-muted-foreground">
-              Agentic DCO actions from the last 7 days.
+              {uiText('agentic_dco_actions_from_the_last_7_days_26e8888')}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" size="icon" aria-label="Open activity log">
+          <Button variant="secondary" size="icon" aria-label={uiText('open_activity_log_36b1007')}>
             <SquareArrowOutUpRight aria-hidden="true" />
           </Button>
-          <Button variant="secondary" size="icon" aria-label="Pin activity log">
+          <Button variant="secondary" size="icon" aria-label={uiText('pin_activity_log_85aa1aa')}>
             <ArrowUpToLine aria-hidden="true" />
           </Button>
         </div>
@@ -58,7 +61,7 @@ export function AgenticActivityLog({ items, emptyMessage }: AgenticActivityLogPr
 
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {emptyMessage ?? 'No DCO activity yet. Automations will appear here as they run.'}
+          {emptyMessage ?? uiText('no_dco_activity_yet_automations_will_appear_h_6967017')}
         </p>
       ) : (
         <div className="flex flex-col gap-3">

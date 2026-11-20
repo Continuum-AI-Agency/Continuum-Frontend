@@ -1,3 +1,5 @@
+import type { UiLocale } from '@/i18n/config';
+import { type GoogleText, googleCopy } from '../googlePresentation';
 // Performance Max health (P6 view 6): each asset group's Ad Strength and status with its assets
 // counted by Google's status, Poor groups said first as a finding of their own (presentation
 // standard §10), and each PMax campaign's spend by network from breakdown(network). Search
@@ -45,7 +47,12 @@ const STRENGTH_WORDS: Readonly<Record<string, string>> = {
 
 const ASSET_STATUS_ORDER = ['ELIGIBLE', 'LIMITED', 'PENDING', 'NOT_ELIGIBLE'];
 
-function assetsCell(groupId: string, assets: readonly PmaxAssetSignal[] | null): Cell {
+function assetsCell(
+  groupId: string,
+  assets: readonly PmaxAssetSignal[] | null,
+  uiTranslate?: GoogleText,
+  uiLocale: UiLocale = 'en',
+): Cell {
   if (assets === null) return missing("Google's asset read failed for this account");
   const counts = new Map<string, number>();
   for (const asset of assets) {
@@ -53,7 +60,8 @@ function assetsCell(groupId: string, assets: readonly PmaxAssetSignal[] | null):
     const status = asset.primary_status ?? 'UNKNOWN';
     counts.set(status, (counts.get(status) ?? 0) + 1);
   }
-  if (counts.size === 0) return shown('0 assets');
+  if (counts.size === 0)
+    return shown(uiTranslate ? uiTranslate('googleAssetsCount', { count: 0 }) : '0 assets');
   const order = (status: string) => {
     const at = ASSET_STATUS_ORDER.indexOf(status);
     return at === -1 ? ASSET_STATUS_ORDER.length : at;
@@ -61,7 +69,14 @@ function assetsCell(groupId: string, assets: readonly PmaxAssetSignal[] | null):
   return shown(
     [...counts.entries()]
       .sort(([a], [b]) => order(a) - order(b))
-      .map(([status, count]) => `${count} ${humanize(status).toLowerCase()}`)
+      .map(([status, count]) =>
+        uiTranslate
+          ? uiTranslate('googleAssetStatusCount', {
+              count,
+              status: uiTranslate('googleControlCode', { code: status }),
+            })
+          : `${count} ${humanize(status).toLowerCase()}`,
+      )
       .join(' · '),
   );
 }
@@ -69,41 +84,61 @@ function assetsCell(groupId: string, assets: readonly PmaxAssetSignal[] | null):
 function groupRow(
   group: AssetGroupSignal,
   assets: readonly PmaxAssetSignal[] | null,
+  uiTranslate?: GoogleText,
+  uiLocale: UiLocale = 'en',
 ): AssetGroupRow {
   const strength = group.ad_strength ? STRENGTH_WORDS[group.ad_strength] : undefined;
   return {
     id: group.asset_group_id,
     name: group.name,
     campaignId: group.campaign_id,
-    strength: strength ? shown(strength) : missing('Google has not rated this asset group'),
+    strength: strength
+      ? shown(googleCopy(strength, uiTranslate))
+      : missing(googleCopy('Google has not rated this asset group', uiTranslate)),
     poor: group.ad_strength === 'POOR',
     status: group.primary_status
-      ? shown(humanize(group.primary_status.toLowerCase()))
+      ? shown(
+          uiTranslate
+            ? uiTranslate('googleControlCode', { code: group.primary_status })
+            : humanize(group.primary_status.toLowerCase()),
+        )
       : missing('Google reported no status'),
-    assets: assetsCell(group.asset_group_id, assets),
+    assets: assetsCell(group.asset_group_id, assets, uiTranslate, uiLocale),
     missingItems: group.missing,
   };
 }
 
-export function buildPmaxHealth(read: GoogleSignalsRead): PmaxHealthModel {
+export function buildPmaxHealth(
+  read: GoogleSignalsRead,
+  uiTranslate?: GoogleText,
+  uiLocale: UiLocale = 'en',
+): PmaxHealthModel {
   if (!read.signals) {
     return {
       kind: 'unread',
-      reason: `The Google read came back incomplete${read.rejected.length ? `: ${read.rejected.join('; ')}` : ''}`,
+      reason: uiTranslate
+        ? uiTranslate('googleReadIncomplete')
+        : `The Google read came back incomplete${read.rejected.length ? `: ${read.rejected.join('; ')}` : ''}`,
     };
   }
   const google = read.signals.google;
   if (!google?.asset_groups) {
     return {
       kind: 'unread',
-      reason: read.skipped.read_failed_asset_groups
-        ? "Google's asset-group read failed"
-        : 'Asset groups were not read for this account',
+      reason: uiTranslate
+        ? uiTranslate(
+            read.skipped.read_failed_asset_groups
+              ? 'googleAssetGroupsFailed'
+              : 'googleAssetGroupsUnread',
+          )
+        : read.skipped.read_failed_asset_groups
+          ? "Google's asset-group read failed"
+          : 'Asset groups were not read for this account',
     };
   }
   const assets = google.pmax_assets ?? null;
   const groups = google.asset_groups
-    .map((group) => groupRow(group, assets))
+    .map((group) => groupRow(group, assets, uiTranslate, uiLocale))
     .sort((a, b) => Number(b.poor) - Number(a.poor) || a.name.localeCompare(b.name));
   return {
     kind: 'read',
@@ -134,7 +169,12 @@ export type NetworkSlice = {
 };
 
 /** One campaign's spend by network, most first. YouTube's search and watch rows are one. */
-export function networkSplit(read: GoogleBreakdownRead, currency: string | null): NetworkSlice[] {
+export function networkSplit(
+  read: GoogleBreakdownRead,
+  currency: string | null,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: GoogleText,
+): NetworkSlice[] {
   const byNetwork = new Map<string, { spend: number; conversions: number | null }>();
   for (const row of read.rows) {
     if (row.dimension !== 'network') continue;
@@ -152,18 +192,18 @@ export function networkSplit(read: GoogleBreakdownRead, currency: string | null)
   return [...byNetwork.entries()]
     .map(
       ([network, slice]): NetworkSlice => ({
-        network,
+        network: googleCopy(network, uiTranslate),
         spend: slice.spend,
         share: total > 0 ? slice.spend / total : null,
         conversions:
           slice.conversions === null
             ? missing(CONVERSIONS_NOT_COUNTED)
-            : shown(resultsText(slice.conversions)),
+            : shown(resultsText(slice.conversions, uiLocale)),
         costPerConversion:
           slice.conversions === null
             ? missing(CONVERSIONS_NOT_COUNTED)
             : slice.conversions > 0
-              ? shown(formatCurrency(slice.spend / slice.conversions, currency))
+              ? shown(formatCurrency(slice.spend / slice.conversions, currency, uiLocale))
               : missing('No conversions on this network in the window'),
       }),
     )

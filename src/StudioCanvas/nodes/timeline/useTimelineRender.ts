@@ -1,5 +1,7 @@
+import { type useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   isTerminalStudioRenderStatus,
   studioRenderOriginKey,
@@ -29,28 +31,35 @@ import { resolveOverlayTracks } from './multiTrack';
 // (#253) — and the local (non-queued) path used to say nothing at all.
 export function renderOutcomeMessage(
   outcome?: TimelineRenderCompletion['outcome'],
+  translate?: ReturnType<typeof useTranslations<'studio'>>,
 ): StudioRenderTaskResult {
   if (outcome === 'stale') {
     return {
       status: 'stale',
-      title: 'Video rendered, but the timeline changed',
-      description: 'The clip was saved to your media Library. Render again to apply it here.',
+      title: translate?.('renderOutcomeStaleTitle') ?? 'Video rendered, but the timeline changed',
+      description:
+        translate?.('renderOutcomeStaleDescription') ??
+        'The clip was saved to your media Library. Render again to apply it here.',
       variant: 'warning',
     };
   }
   if (outcome === 'missing') {
     return {
       status: 'stale',
-      title: 'Video rendered after the node was removed',
+      title:
+        translate?.('renderOutcomeMissingTitle') ?? 'Video rendered after the node was removed',
       description:
+        translate?.('renderOutcomeMissingDescription') ??
         'The clip is safe in your media Library, but the deleted node was not recreated.',
       variant: 'warning',
     };
   }
   return {
     status: 'completed',
-    title: 'Video render finished',
-    description: 'The clip was saved to your media Library and is ready on the canvas.',
+    title: translate?.('renderOutcomeCompletedTitle') ?? 'Video render finished',
+    description:
+      translate?.('renderOutcomeCompletedDescription') ??
+      'The clip was saved to your media Library and is ready on the canvas.',
     variant: 'success',
   };
 }
@@ -64,6 +73,10 @@ export interface UseTimelineRenderResult {
 }
 
 export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRenderResult {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const { show } = useToast();
   const queue = useStudioRenderQueue();
   const jobs = useStudioRenderStore((state) => state.jobs);
@@ -112,14 +125,18 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
   const validateTarget = useCallback(
     (sink?: TimelineRenderSinkKind) => {
       if (support && !support.ok) {
-        show({ title: 'Editor unavailable', description: support.reason, variant: 'warning' });
+        show({
+          title: translateUi('editor_unavailable_b62a24ad'),
+          description: support.reason,
+          variant: 'warning',
+        });
         return null;
       }
       const document = getDocument();
       if (document.items.length === 0) {
         show({
-          title: 'Nothing to render',
-          description: 'Place at least one clip or image on the timeline.',
+          title: translateUi('nothing_to_render_2ffb8ad0'),
+          description: translateUi('place_at_least_one_clip_or_image_on_2d560481'),
           variant: 'warning',
         });
         return null;
@@ -127,15 +144,15 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
       const target = sink ?? defaultSink;
       if (!target) {
         show({
-          title: 'Nowhere to render',
-          description: 'This editor has no render destination.',
+          title: translateUi('nowhere_to_render_1f03de2f'),
+          description: translateUi('this_editor_has_no_render_destinati_7292bd05'),
           variant: 'warning',
         });
         return null;
       }
       return { document, target };
     },
-    [defaultSink, getDocument, show, support],
+    [defaultSink, getDocument, show, support, translateUi],
   );
 
   const renderInBackground = useCallback(
@@ -147,8 +164,12 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
       try {
         snapshot = captureRenderSnapshot();
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to capture render inputs';
-        show({ title: 'Render unavailable', description: message, variant: 'warning' });
+        const message = uiErrorText(error);
+        show({
+          title: translateUi('render_unavailable_09a10bf5'),
+          description: message,
+          variant: 'warning',
+        });
         return false;
       }
       const exportPreset = resolveExportPreset(snapshot.document.exportPresetId);
@@ -204,7 +225,7 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
             URL.revokeObjectURL(result.objectUrl);
           }
 
-          return renderOutcomeMessage(completion?.outcome);
+          return renderOutcomeMessage(completion?.outcome, translateUi);
         },
         onFailure: (error) =>
           reportRenderState({ isExecuting: false, error: error.message || 'Render failed' }),
@@ -225,6 +246,8 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
       reportRenderState,
       show,
       validateTarget,
+      uiErrorText,
+      translateUi,
     ],
   );
 
@@ -276,9 +299,13 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
         show(renderOutcomeMessage(completion?.outcome));
         return true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Render failed';
+        const message = uiErrorText(error);
         reportRenderState({ isExecuting: false, error: message });
-        show({ title: 'Render failed', description: message, variant: 'warning' });
+        show({
+          title: translateUi('render_failed_b704deeb'),
+          description: message,
+          variant: 'warning',
+        });
         return false;
       } finally {
         setLocalIsRendering(false);
@@ -293,6 +320,8 @@ export function useTimelineRender(adapter: TimelineEditorAdapter): UseTimelineRe
       resolveSources,
       show,
       validateTarget,
+      translateUi,
+      uiErrorText,
     ],
   );
 

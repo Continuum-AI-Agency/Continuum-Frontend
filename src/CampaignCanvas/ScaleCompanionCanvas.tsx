@@ -2,6 +2,7 @@
 
 import { ReactFlowProvider } from '@xyflow/react';
 import { PencilLine } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef } from 'react';
 import type { CanvasViewContext } from '@/lib/campaign-canvas/canvasView';
 import type { ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
@@ -63,6 +64,7 @@ export function ScaleCompanionCanvas({
    */
   versions?: VersionLine | null;
 }) {
+  const uiText = useTranslations('scale');
   const canvasJaina = useMemo(() => canvasJainaSending(onSend), [onSend]);
   const { view, setView, isPhone, startEditing, openByHand, hint, dismissHint } = useCanvasView(
     viewContext,
@@ -116,7 +118,7 @@ export function ScaleCompanionCanvas({
                   data-testid="canvas-edit"
                 >
                   <PencilLine className="size-3.5" aria-hidden />
-                  Edit
+                  {uiText('edit_464c4ff')}
                 </button>
               ) : null}
               <CanvasViewToggle view={view} onChange={setView} mapDisabled={isPhone} />

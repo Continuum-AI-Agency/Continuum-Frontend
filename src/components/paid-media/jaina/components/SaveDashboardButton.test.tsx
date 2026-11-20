@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * What a saved dashboard remembers about the report it came from.
  *
@@ -17,7 +18,7 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import {
   MessageScroller,
   MessageScrollerContent,

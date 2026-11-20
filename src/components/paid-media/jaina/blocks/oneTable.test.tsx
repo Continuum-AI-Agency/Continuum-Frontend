@@ -1,7 +1,8 @@
 // A templated answer's table and a report's data table are the same table.
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { TemplateFigure, TemplateTable } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { DataTableBlockV2 } from '@/lib/jaina/schemas';
 import { JAINA_TABLE } from '../reading';
 import { TemplateTableView } from '../templates/TemplateTableView';

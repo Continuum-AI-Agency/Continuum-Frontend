@@ -1,3 +1,5 @@
+import { createTranslator } from 'next-intl';
+import studioMessages from '../../../messages/studio/en.json';
 // Airtable #289 — a Design Reference INFORMS a generation; it never blocks one.
 //
 // The owner's ruling: a connected palette contributes to the generation and its critique,
@@ -15,6 +17,11 @@ import { executeWorkflow } from './executeWorkflow';
 const rehydrateWorkflowMediaNodes = mock(async (input: StudioNode[]) => input);
 
 const buildControls = (executeGeneration: ReturnType<typeof mock>) => ({
+  translateUi: createTranslator({
+    locale: 'en',
+    messages: { studio: studioMessages },
+    namespace: 'studio',
+  }),
   executeGeneration,
   executeVideoExtension: mock(async () => ({
     success: true,
@@ -55,6 +62,11 @@ const run = async (nodes: StudioNode[], edges: Edge[]) => {
   await executeWorkflow(buildControls(executeGeneration) as never);
   await new Promise((resolve) => setTimeout(resolve, 0));
   return {
+    translateUi: createTranslator({
+      locale: 'en',
+      messages: { studio: studioMessages },
+      namespace: 'studio',
+    }),
     executeGeneration,
     node: useStudioStore.getState().nodes.find((entry) => entry.id === 'gen'),
   };

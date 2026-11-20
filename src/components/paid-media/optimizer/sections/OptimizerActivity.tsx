@@ -16,6 +16,7 @@
 // platform's own: a roster that drifted is listed beside the actions, because the platform did it.
 
 import { OPTIMIZER_FEED_WINDOW_DAYS, type OptimizerFeedWindowDays } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -74,11 +75,12 @@ function Segmented<TValue extends string | number>({
  *  answered: under the loading skeleton, the timeline that replaced the skeleton pushed it down
  *  (PP-DT-C-creative-insights-layout-shift-0.955, Activity CLS 0.151 on a phone). */
 function ActivityNotifications({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="mt-4 border-t border-border/60 pt-4">
-      <SectionHeader title="Notifications" />
+      <SectionHeader title={uiText('notifications_7880118')} />
       <p className="mt-2 text-xs text-muted-foreground">
-        Get a Slack message when the optimizer moves budget, instead of checking this log.
+        {uiText('get_a_slack_message_when_the_optimizer_moves__6b28c78')}
       </p>
       <div className="mt-3">
         <OptimizerNotificationsSection brandId={brandId} />
@@ -88,6 +90,7 @@ function ActivityNotifications({ brandId }: { brandId: string }) {
 }
 
 export function OptimizerActivity({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('scale');
   const [feed, setFeed] = useState<ActivityFeed>('actions');
   const [windowDays, setWindowDays] = useState<OptimizerFeedWindowDays>(7);
 
@@ -95,11 +98,22 @@ export function OptimizerActivity({ brandId }: { brandId: string }) {
   // portfolio filter shares; the Actions view puts its chart between them and its list.
   const controls = (
     <>
-      <Segmented legend="Choose a feed" onChange={setFeed} options={FEEDS} value={feed} />
       <Segmented
-        legend="Show events from the last"
+        legend={uiText('activityChooseFeed')}
+        onChange={setFeed}
+        options={FEEDS.map((feed) => ({
+          ...feed,
+          label: uiText('activityFeedLabel', { kind: feed.value }),
+        }))}
+        value={feed}
+      />
+      <Segmented
+        legend={uiText('activityLastWindow')}
         onChange={setWindowDays}
-        options={WINDOWS}
+        options={WINDOWS.map((window) => ({
+          ...window,
+          label: uiText('activityWindowShort', { days: window.value }),
+        }))}
         value={windowDays}
       />
     </>

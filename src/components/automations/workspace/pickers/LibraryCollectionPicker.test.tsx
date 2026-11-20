@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import type { MediaCollection } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { LibraryCollectionPicker } from './LibraryCollectionPicker';
 import { chooseOption, installPickerDomGlobals, openSelect, stubSource } from './pickerTestHarness';
 

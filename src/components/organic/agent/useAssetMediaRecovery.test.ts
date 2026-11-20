@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import type { ChatMedia } from '@/components/chat/media/media';
+import { renderHook } from '@/i18n/__tests__/render';
 import { resetSignedUrlCache } from '@/lib/organic/hyperframeSign';
 import { useAssetMediaRecovery } from './useAssetMediaRecovery';
 

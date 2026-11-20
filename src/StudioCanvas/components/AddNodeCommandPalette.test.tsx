@@ -4,7 +4,12 @@
   SyntaxError;
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { TechniqueItem } from '@/lib/ai-studio/techniques';
 import { AddNodeCommandPalette, type PaletteTechniques } from './AddNodeCommandPalette';

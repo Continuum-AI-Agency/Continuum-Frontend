@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // The hook opens a realtime channel and reads the signed-in user; neither is
 // what this spec is about, so both are stubbed down to the surface it touches.
@@ -9,7 +10,11 @@ const mockChannel = {
 };
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
-    auth: { getSession: async () => ({ data: { session: { user: { id: 'user-1', email: 'jane@test.dev' } } } }) },
+    auth: {
+      getSession: async () => ({
+        data: { session: { user: { id: 'user-1', email: 'jane@test.dev' } } },
+      }),
+    },
     channel: () => mockChannel,
     removeChannel: () => {},
   }),

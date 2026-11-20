@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 
 const RING_SIZE = 28;
 const STROKE_WIDTH = 2.5;
@@ -48,6 +49,7 @@ export function TrendGenerationProgress({
   errorMessage,
   etaSeconds,
 }: TrendGenerationProgressProps) {
+  const uiText = useTranslations('common');
   const pct = clampPercent(progressPercent);
   const showEta = !isError && typeof etaSeconds === 'number' && pct < 100;
   const offset = CIRCUMFERENCE * (1 - pct / 100);
@@ -60,7 +62,7 @@ export function TrendGenerationProgress({
         height={RING_SIZE}
         viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
         className="shrink-0"
-        aria-hidden
+        aria-hidden="true"
       >
         <circle
           cx={center}
@@ -97,7 +99,7 @@ export function TrendGenerationProgress({
             exit="exit"
             className="truncate text-xs font-medium text-foreground"
           >
-            {isError ? 'Generation failed' : currentLabel}
+            {isError ? uiText('generation_failed_7825756') : currentLabel}
           </motion.span>
         </AnimatePresence>
         {isError && errorMessage && (

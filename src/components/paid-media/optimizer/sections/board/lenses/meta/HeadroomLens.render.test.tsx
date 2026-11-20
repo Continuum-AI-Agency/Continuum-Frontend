@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { PORTFOLIOS, TOP_CAMPAIGNS } from './__fixtures__/easyFitMeta';
 import { buildMix } from './branchesModel';
 import { HeadroomView } from './HeadroomLens';

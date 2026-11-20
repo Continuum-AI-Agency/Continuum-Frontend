@@ -1,5 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
+
 // /dashboard?view=all — organic reach per platform beside paid spend, for ONE period.
 // Organic comes from the same per-account snapshot and Blend math as the Compare view;
 // paid from the account-overview edge the paid dashboard reads, asked for the exact dates
@@ -97,6 +101,8 @@ export function OrganicPaidOverview({
   organicAccounts: SnapshotAccountRef[];
   adAccounts: PaidAdAccountRef[];
 }) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('organic');
   const [preset, setPreset] = React.useState<Preset>('last_7d');
   const [state, setState] = React.useState<
     { status: 'loading' } | { status: 'ready'; data: Loaded } | { status: 'error'; message: string }
@@ -113,14 +119,14 @@ export function OrganicPaidOverview({
         if (!cancelled) {
           setState({
             status: 'error',
-            message: error instanceof Error ? error.message : 'Could not load this period.',
+            message: formatUiError(error),
           });
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [brandId, organicAccounts, adAccounts, preset]);
+  }, [brandId, organicAccounts, adAccounts, preset, formatUiError]);
 
   const period = state.status === 'ready' ? state.data.period : null;
 
@@ -132,7 +138,7 @@ export function OrganicPaidOverview({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-base font-semibold tracking-tight text-foreground">
-            Organic and paid
+            {uiText('organic_and_paid_056dab0')}
           </h2>
           <p
             className="text-xs text-muted-foreground"
@@ -140,11 +146,11 @@ export function OrganicPaidOverview({
           >
             {period
               ? `${formatDay(period.since)} – ${formatDay(period.until)}`
-              : 'Loading the period…'}
+              : uiText('loading_the_period_b35c488')}
           </p>
         </div>
         <nav
-          aria-label="Period"
+          aria-label={uiText('period_6e795d4')}
           className="inline-flex rounded-md border border-border bg-background p-0.5"
         >
           {PRESETS.map((option) => (
@@ -160,7 +166,9 @@ export function OrganicPaidOverview({
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {option.label}
+              {uiText('comparison_window_days', {
+                count: Number(option.id.replace('last_', '').replace('d', '')),
+              })}
             </button>
           ))}
         </nav>
@@ -205,14 +213,16 @@ function OrganicPanel({
   state: { status: 'loading' } | { status: 'ready'; data: Loaded };
   hasAccounts: boolean;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const rows = state.status === 'ready' ? organicReachByPlatform(state.data.snapshot) : [];
   const missing = state.status === 'ready' ? state.data.snapshot.missing : [];
   return (
-    <section aria-label="Organic reach" className={PANEL}>
-      <PanelHeader title="Organic reach" unit="people reached" />
+    <section aria-label={uiText('organic_reach_b9faa63')} className={PANEL}>
+      <PanelHeader title={uiText('organic_reach_b9faa63')} unit={uiText('overviewPeopleReached')} />
       {!hasAccounts ? (
         <p className="p-3 text-sm text-muted-foreground">
-          No Instagram or Facebook account is connected to this brand.
+          {uiText('no_instagram_or_facebook_account_is_connected_a9ff83f')}
         </p>
       ) : state.status === 'loading' ? (
         <LoadingRows />
@@ -236,7 +246,7 @@ function OrganicPanel({
                 </span>
                 <span className="flex shrink-0 items-baseline gap-2">
                   <span className="font-mono text-sm font-semibold tabular-nums">
-                    {formatNumber(row.reach)}
+                    {formatNumber(row.reach, uiLocale)}
                   </span>
                   {typeof row.deltaPct === 'number' ? <DeltaBadge value={row.deltaPct} /> : null}
                 </span>
@@ -248,7 +258,7 @@ function OrganicPanel({
               <span className="min-w-0 truncate text-sm text-muted-foreground">
                 {organicPlatformLabel(account.platform)} · {account.name}
               </span>
-              <span className="text-xs text-muted-foreground">Unavailable</span>
+              <span className="text-xs text-muted-foreground">{uiText('unavailable_ca18449')}</span>
             </li>
           ))}
         </ul>
@@ -264,13 +274,15 @@ function PaidPanel({
   state: { status: 'loading' } | { status: 'ready'; data: Loaded };
   hasAccounts: boolean;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const results = state.status === 'ready' ? state.data.paid : [];
   return (
-    <section aria-label="Paid spend" className={PANEL}>
-      <PanelHeader title="Paid spend" unit="Meta ads" />
+    <section aria-label={uiText('paid_spend_94b93a2')} className={PANEL}>
+      <PanelHeader title={uiText('paid_spend_94b93a2')} unit={uiText('overviewMetaAds')} />
       {!hasAccounts ? (
         <p className="p-3 text-sm text-muted-foreground">
-          No Meta ad account is connected to this brand.
+          {uiText('no_meta_ad_account_is_connected_to_this_brand_f68bde2')}
         </p>
       ) : state.status === 'loading' ? (
         <LoadingRows />
@@ -297,7 +309,7 @@ function PaidPanel({
                   </span>
                   {typeof result.overview.comparison?.spend?.percentageChange === 'number' ? (
                     <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-                      {`${result.overview.comparison.spend.percentageChange >= 0 ? '+' : ''}${result.overview.comparison.spend.percentageChange.toFixed(1)}%`}
+                      {`${result.overview.comparison.spend.percentageChange >= 0 ? '+' : ''}${formatDecimal(result.overview.comparison.spend.percentageChange, 1, uiLocale)}%`}
                     </span>
                   ) : null}
                 </span>
@@ -307,7 +319,9 @@ function PaidPanel({
                 <span className="min-w-0 truncate text-sm text-muted-foreground">
                   {result.account.name}
                 </span>
-                <span className="text-xs text-muted-foreground">Unavailable</span>
+                <span className="text-xs text-muted-foreground">
+                  {uiText('unavailable_ca18449')}
+                </span>
               </li>
             ),
           )}

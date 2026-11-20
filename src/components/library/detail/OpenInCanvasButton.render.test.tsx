@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaAsset } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
+const navigation = await import('next/navigation');
 mock.module('next/navigation', () => ({
+  ...navigation,
   useRouter: () => ({ push: () => {} }),
 }));
 

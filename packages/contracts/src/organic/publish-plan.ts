@@ -712,6 +712,77 @@ export const PUBLISH_PLATFORM_LABELS: Readonly<Record<PublishPlatform, string>> 
 const label = (platform: PublishPlatform): string => PUBLISH_PLATFORM_LABELS[platform];
 
 /**
+ * A format as people write it, on that platform: LinkedIn calls a reel a video post, and what
+ * we publish there as a carousel is a multi-image post (LinkedIn's own "carousel" is a PDF
+ * document, which the publisher does not send).
+ */
+export function publishFormatLabel(platform: PublishPlatform, format: PublishFormat): string {
+  if (format === 'REEL' && platform === 'linkedin') return 'video post';
+  if (format === 'CAROUSEL' && platform === 'linkedin') return 'multi-image post';
+  if (format === 'REEL' && platform === 'youtube') return 'Short';
+  if (format === 'REEL' && (platform === 'facebook' || platform === 'x' || platform === 'tiktok'))
+    return 'video';
+  return { POST: 'post', REEL: 'Reel', CAROUSEL: 'carousel', STORY: 'Story' }[format];
+}
+
+// Closest substitute first: a video idea stays video, a multi-image idea stays multi-image.
+const FORMAT_SUBSTITUTES: Readonly<Record<PublishFormat, readonly PublishFormat[]>> = {
+  STORY: ['REEL', 'POST', 'CAROUSEL'],
+  REEL: ['STORY', 'POST', 'CAROUSEL'],
+  CAROUSEL: ['POST', 'REEL', 'STORY'],
+  POST: ['CAROUSEL', 'REEL', 'STORY'],
+};
+
+/** `format` when `platform` publishes it, else the nearest format it does publish. */
+export function nearestSupportedFormat(
+  platform: PublishPlatform,
+  format: PublishFormat,
+): PublishFormat {
+  if (supportsFormat(platform, format)) return format;
+  return (
+    FORMAT_SUBSTITUTES[format].find((candidate) => supportsFormat(platform, candidate)) ?? 'REEL'
+  );
+}
+
+/**
+ * The one sentence for an unsupported platform+format pair, with what to do instead:
+ * "LinkedIn doesn't publish Stories. Use a post, carousel or video post instead."
+ */
+export function unsupportedFormatMessage(platform: PublishPlatform, format: PublishFormat): string {
+  const alternatives = publishFormatSchema.options
+    .filter((candidate) => supportsFormat(platform, candidate))
+    .map((candidate) => publishFormatLabel(platform, candidate));
+  const list =
+    alternatives.length > 1
+      ? `${alternatives.slice(0, -1).join(', ')} or ${alternatives[alternatives.length - 1]}`
+      : (alternatives[0] ?? 'another format');
+  const article = /^[aeiou]/i.test(list) ? 'an' : 'a';
+  const noun = publishFormatLabel(platform, format);
+  const plural = noun === 'Story' ? 'Stories' : `${noun}s`;
+  return `${label(platform)} doesn't publish ${plural}. Use ${article} ${list} instead.`;
+}
+
+// LinkedIn has neither shape under that name, and an agent that did not know it told users a
+// LinkedIn reel or carousel could not be made. Both publish; these say what goes out instead.
+const LINKEDIN_FORMAT_NOTICES: Partial<Record<PublishFormat, string>> = {
+  REEL: 'LinkedIn has no Reels: this one publishes as a native LinkedIn video post.',
+  CAROUSEL:
+    'LinkedIn publishes this carousel as a multi-image post; a PDF document carousel is not supported.',
+};
+
+/**
+ * What the user needs to hear about `format` on `platform`, or null: why it cannot publish
+ * and what to use instead, or what a format LinkedIn names differently publishes as.
+ */
+export function publishFormatNotice(
+  platform: PublishPlatform,
+  format: PublishFormat,
+): string | null {
+  if (!supportsFormat(platform, format)) return unsupportedFormatMessage(platform, format);
+  return platform === 'linkedin' ? (LINKEDIN_FORMAT_NOTICES[format] ?? null) : null;
+}
+
+/**
  * How an account is named to a person — never a UUID. A Facebook Page reads as its name.
  * Some providers store the handle with its '@' (YouTube's `@channel`), so one is stripped.
  */
@@ -1107,7 +1178,7 @@ export function checkPublishability(plan: PublishPlan): PublishPlanVerdict {
   if (!supportsFormat(plan.platform, plan.format)) {
     blockers.push({
       reason: 'unsupported_format',
-      message: `${platform} cannot publish a ${plan.format.toLowerCase()} — choose another format`,
+      message: unsupportedFormatMessage(plan.platform, plan.format),
       fix: 'format',
     });
   }

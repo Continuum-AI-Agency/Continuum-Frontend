@@ -437,11 +437,11 @@ describe('video generator provider groups', () => {
     ]);
   });
 
-  it('makes Omni 1.1 Flash the default Google video model', () => {
+  it('makes Omni 1.2 Flash the default Google video model', () => {
     expect(DEFAULT_VIDEO_GENERATOR_MODEL).toBe('gemini-omni-flash');
     expect(getVideoGeneratorProvider(DEFAULT_VIDEO_GENERATOR_MODEL)).toBe('google');
     expect(createNodeData('videoGen').data.model).toBe('gemini-omni-flash');
-    expect(getVideoGeneratorBackendModel('gemini-omni-flash')).toBe('gemini-omni-1.1-flash');
+    expect(getVideoGeneratorBackendModel('gemini-omni-flash')).toBe('gemini-omni-1.2-flash');
   });
 
   it('keeps a saved node with no model on the Veo 3.1 Fast it has always rendered on', () => {

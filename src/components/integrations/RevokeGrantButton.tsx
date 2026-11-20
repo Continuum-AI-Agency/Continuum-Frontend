@@ -1,11 +1,14 @@
 'use client';
 
 import { Loader2, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { revokeIntegrationFromBrandAction } from '@/app/(post-auth)/settings/integrations/actions';
+import { revokeIntegrationFromBrandAction } from '@/app/[locale]/(post-auth)/settings/integrations/actions';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 
 type RevokeGrantButtonProps = {
   grantId: string;
@@ -18,6 +21,9 @@ export function RevokeGrantButton({
   brandProfileId,
   integrationLabel,
 }: RevokeGrantButtonProps) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
   const router = useRouter();
   const { show } = useToast();
   const [isPending, setIsPending] = React.useState(false);
@@ -27,14 +33,14 @@ export function RevokeGrantButton({
     try {
       await revokeIntegrationFromBrandAction(grantId, brandProfileId);
       show({
-        title: 'Access revoked',
-        description: `${integrationLabel} is no longer shared with this brand.`,
+        title: uiText('m_7d420ec72f'),
+        description: uiText('m_8f2143c002', { v0: String(integrationLabel) }),
       });
       router.refresh();
     } catch (error) {
       show({
-        title: 'Could not revoke access',
-        description: error instanceof Error ? error.message : 'Unknown error.',
+        title: uiText('m_a73da5ed22'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -45,7 +51,7 @@ export function RevokeGrantButton({
   return (
     <Button variant="ghost" size="sm" onClick={handleRevoke} disabled={isPending}>
       {isPending ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
-      <span className="ml-1.5">Revoke</span>
+      <span className="ml-1.5">{uiText('revoke_87e6d00')}</span>
     </Button>
   );
 }

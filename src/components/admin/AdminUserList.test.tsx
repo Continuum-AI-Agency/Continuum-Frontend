@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { AdminPagination, AdminUser, PermissionRow } from '@/components/admin/adminUserTypes';
+import { render } from '@/i18n/__tests__/render';
 
 let searchParamsValue = 'query=a&page=1&pageSize=50';
 const pushMock = mock((_href: string) => {});
@@ -334,7 +334,7 @@ describe('AdminUserList brand access', () => {
 
     expect(screen.queryByText(/^Tier \d$/)).toBeNull();
     expect(screen.queryByText('Product access activates at billing go-live.')).toBeNull();
-    expect(screen.getByTestId('brand-billing-plan').textContent).toBe('Performance Plus · active');
+    expect(screen.getByTestId('brand-billing-plan').textContent).toBe('Performance Plus · Active');
     const performance = screen.getByRole('checkbox', { name: 'Performance' });
     expect(performance.getAttribute('aria-checked')).toBe('true');
     expect(performance.getAttribute('aria-disabled')).toBe('true');
@@ -355,32 +355,32 @@ describe('AdminUserList brand access', () => {
     invokeMock.mockImplementation(async (name) => {
       if (name !== 'admin-update-access') return { data: null, error: null };
       return {
-      data: {
-        ok: true,
-        brandId: BRAND,
-        changes: [
-          {
-            kind: 'product',
-            product: 'studio',
-            before: null,
-            after: { active: true, source: 'admin' },
-          },
-        ],
-        access: saved,
-        entitlements: {
+        data: {
+          ok: true,
           brandId: BRAND,
-          planCode: 'paid_media',
-          status: 'active',
-          billingModel: 'stripe',
-          plans: ['paid_media'],
-          products: ['paid_media', 'studio'],
-          addons: [],
-          trendsTier: null,
-          buckets: [],
-          creditBalance: { totalCredits: 0, purchasedCredits: 0, rolloverCredits: 0 },
+          changes: [
+            {
+              kind: 'product',
+              product: 'studio',
+              before: null,
+              after: { active: true, source: 'admin' },
+            },
+          ],
+          access: saved,
+          entitlements: {
+            brandId: BRAND,
+            planCode: 'paid_media',
+            status: 'active',
+            billingModel: 'stripe',
+            plans: ['paid_media'],
+            products: ['paid_media', 'studio'],
+            addons: [],
+            trendsTier: null,
+            buckets: [],
+            creditBalance: { totalCredits: 0, purchasedCredits: 0, rolloverCredits: 0 },
+          },
         },
-      },
-      error: null,
+        error: null,
       };
     });
     renderList(membership({ brand_access: stripeAccess }), true);
@@ -479,7 +479,7 @@ describe('AdminUserList brand access', () => {
     await settleRenderedEffects();
 
     expect(screen.getByTestId('brand-canvas-credits').textContent).toBe('2,000 credits');
-    const amount = screen.getByRole('spinbutton', { name: 'Credits to add (USD)' });
+    const amount = screen.getByRole('textbox', { name: 'Credits to add (USD)' });
     const reason = screen.getByRole('textbox', { name: 'Reason for the credits' });
     const add = screen.getByRole('button', { name: 'Add credits' });
     fireEvent.change(amount, { target: { value: '25' } });
@@ -510,7 +510,7 @@ describe('AdminUserList brand access', () => {
     renderList(membership({ brand_access: noPlan }), true);
     await settleRenderedEffects();
 
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Credits to add (USD)' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Credits to add (USD)' }), {
       target: { value: '1000.01' },
     });
     fireEvent.change(screen.getByRole('textbox', { name: 'Reason for the credits' }), {

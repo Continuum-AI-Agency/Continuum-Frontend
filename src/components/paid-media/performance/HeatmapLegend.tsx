@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
 
@@ -11,6 +12,7 @@ type HeatmapLegendProps = {
 };
 
 export function HeatmapLegend({ className }: HeatmapLegendProps) {
+  const uiText = useTranslations('scale');
   return (
     <div
       className={cn(
@@ -18,10 +20,10 @@ export function HeatmapLegend({ className }: HeatmapLegendProps) {
         className,
       )}
     >
-      <span className="font-medium">Relative to peer set</span>
+      <span className="font-medium">{uiText('relative_to_peer_set_618a757')}</span>
       <div className="flex items-center gap-1.5">
         <span className="font-mono normal-case tracking-normal text-muted-foreground/80">
-          Worse
+          {uiText('worse_4f01e2d')}
         </span>
         <div className="flex overflow-hidden rounded-sm border border-border/60">
           {RAMP_STOPS.map((light, index) => (
@@ -38,11 +40,11 @@ export function HeatmapLegend({ className }: HeatmapLegendProps) {
           ))}
         </div>
         <span className="font-mono normal-case tracking-normal text-muted-foreground/80">
-          Better
+          {uiText('better_7bf8c23')}
         </span>
       </div>
       <span className="text-muted-foreground/70 normal-case tracking-normal">
-        CPC &amp; CPA inverted &middot; Spend / Impr. / Clicks neutral
+        {uiText('cpc_cpa_inverted_spend_impr_clicks_neutral_817f260')}
       </span>
     </div>
   );

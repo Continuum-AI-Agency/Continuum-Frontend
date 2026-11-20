@@ -2,6 +2,7 @@
 
 import type { EditorMarker } from '@continuum/contracts';
 import { Flag, Waves } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -34,6 +35,8 @@ export function TimelineRuler({
   onDetectBeats: () => void;
   onAddMarker: () => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const step = labelStepSec(pxPerSec);
   const labels = Array.from(
     { length: Math.floor(totalSec / step) + 1 },
@@ -82,10 +85,13 @@ export function TimelineRuler({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         <ContextMenuItem onClick={onDetectBeats}>
-          <Waves /> {beats.length > 0 ? 'Re-detect beats' : 'Detect beats'}
+          <Waves />{' '}
+          {beats.length > 0
+            ? translateUi('re_detect_beats_5c975ad1')
+            : translateUi('detect_beats_a8d9bcb5')}
         </ContextMenuItem>
         <ContextMenuItem onClick={onAddMarker}>
-          <Flag /> Add marker at playhead
+          <Flag /> {translateUi('add_marker_at_playhead_1e77d8db')}{' '}
           <ContextMenuShortcut>{KEYS.marker}</ContextMenuShortcut>
         </ContextMenuItem>
       </ContextMenuContent>

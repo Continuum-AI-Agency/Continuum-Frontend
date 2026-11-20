@@ -2,8 +2,11 @@
 
 import type { Competitor } from '@continuum/contracts';
 import { X } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { TikTokIcon, YouTubeIcon } from '@/components/shared/icons/brandIcon';
 import { Skeleton } from '@/components/ui/skeleton';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   useAdCounts,
   useCompetitors,
@@ -39,6 +42,9 @@ function paidBadge(c: Competitor): { label: string; className: string } {
 }
 
 export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('competitor');
+  const formatUiError = useUiErrorMessage();
   const { data: competitors, isLoading } = useCompetitors(brandId);
   const { data: adCounts } = useAdCounts(brandId);
   const remove = useDeleteCompetitor(brandId);
@@ -72,9 +78,9 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
   if (tracked.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border p-6 text-center">
-        <p className="text-sm font-medium">No competitors tracked yet</p>
+        <p className="text-sm font-medium">{uiText('no_competitors_tracked_yet_c06aead')}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Search above to add one, or accept a recommendation below.
+          {uiText('search_above_to_add_one_or_accept_a_recommend_727a679')}
         </p>
       </div>
     );
@@ -84,7 +90,7 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
     <ul className="space-y-2">
       {tracked.map((c) => {
         const paid = paidBadge(c);
-        const followers = compactCount(c.instagramFollowersCount);
+        const followers = compactCount(c.instagramFollowersCount, uiLocale);
         // A YouTube channel alone is enough for organic posts.
         const organicReady = c.organicStatus === 'ready' || Boolean(c.youtubeChannelId);
         return (
@@ -104,7 +110,11 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
                 {c.instagramUsername ? (
                   <span className="font-mono">@{c.instagramUsername}</span>
                 ) : null}
-                {followers ? <span className="tabular-nums">{followers} followers</span> : null}
+                {followers ? (
+                  <span className="tabular-nums">
+                    {uiText.rich('sentence_c52f81dffa13', { v0: () => followers })}
+                  </span>
+                ) : null}
                 {c.youtubeChannelId ? (
                   <span className="inline-flex items-center gap-1 font-mono">
                     <YouTubeIcon className="size-3" />
@@ -119,11 +129,13 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
                 {c.tiktokUsername &&
                 trendingHashtagsByHandle.has(c.tiktokUsername.toLowerCase()) ? (
                   <span>
-                    in top TikTok videos for{' '}
-                    {trendingHashtagsByHandle
-                      .get(c.tiktokUsername.toLowerCase())
-                      ?.map((label) => `#${label}`)
-                      .join(', ')}
+                    {uiText.rich('sentence_d0279e740a17', {
+                      v0: () =>
+                        trendingHashtagsByHandle
+                          .get(c.tiktokUsername?.toLowerCase() ?? '')
+                          ?.map((label) => `#${label}`)
+                          .join(', '),
+                    })}
                   </span>
                 ) : null}
               </div>
@@ -136,17 +148,23 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
                       : 'border-border bg-muted text-muted-foreground'
                   }`}
                 >
-                  {organicReady ? 'Organic ready' : 'Needs Instagram'}
+                  {organicReady
+                    ? uiText('organic_ready_be84257')
+                    : uiText('needs_instagram_a4b7db3')}
                 </span>
                 <span
                   className={`rounded-full border px-2 py-0.5 text-2xs font-medium ${paid.className}`}
-                  title={c.metaPageResolutionError ?? undefined}
+                  title={
+                    c.metaPageResolutionError
+                      ? formatUiError({ code: c.metaPageResolutionError })
+                      : undefined
+                  }
                 >
-                  {paid.label}
+                  {localizeCompetitorCopy(paid.label, uiText)}
                 </span>
                 {c.source === 'auto' ? (
                   <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
-                    auto
+                    {uiText('auto_929260a')}
                   </span>
                 ) : null}
               </div>
@@ -159,14 +177,14 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
                   disabled={resolvePaid.isPending}
                   className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
                 >
-                  Resolve paid
+                  {uiText('resolve_paid_08f4322')}
                 </button>
               ) : null}
               <button
                 type="button"
                 onClick={() => remove.mutate(c.id)}
                 disabled={remove.isPending}
-                aria-label={`Remove ${c.name}`}
+                aria-label={uiText('m_df7193a589', { name: c.name })}
                 className="text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
               >
                 <X className="size-4" />

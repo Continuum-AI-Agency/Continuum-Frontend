@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type ForgeRowText = ReturnType<typeof useTranslations<'forge'>>;
+
 import {
   API_RENDER_MEDIA_LIST_MAX,
   type ApiRenderAssistOp,
@@ -530,6 +534,7 @@ export function isDefaultValue(
 export function validateRow(
   variables: ApiRenderVariable[],
   values: Record<string, ApiRenderInputValue>,
+  translate?: ForgeRowText,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const variable of variables) {
@@ -537,27 +542,29 @@ export function validateRow(
     const value = values[variable.key];
     const empty = isEmptyInput(variable, value);
     if (variable.kind === 'image' || variable.kind === 'video') {
-      if (variable.required && empty) errors[variable.key] = 'Pick something from the Library';
+      if (variable.required && empty)
+        errors[variable.key] = translate?.('rowPickLibrary') ?? 'Pick something from the Library';
       else if (pinCount(value) > (variable.multiple ? API_RENDER_MEDIA_LIST_MAX : 1))
         errors[variable.key] = variable.multiple
-          ? `At most ${API_RENDER_MEDIA_LIST_MAX} items`
-          : 'One item only';
+          ? (translate?.('rowMaxItems', { count: API_RENDER_MEDIA_LIST_MAX }) ??
+            `At most ${API_RENDER_MEDIA_LIST_MAX} items`)
+          : (translate?.('rowOneItem') ?? 'One item only');
       continue;
     }
     if (empty) {
-      if (variable.required) errors[variable.key] = 'Required';
+      if (variable.required) errors[variable.key] = translate?.('rowRequired') ?? 'Required';
       continue;
     }
     if (variable.kind === 'number' && (typeof value !== 'number' || !Number.isFinite(value)))
-      errors[variable.key] = 'Not a number';
+      errors[variable.key] = translate?.('rowNotNumber') ?? 'Not a number';
     else if (
       variable.kind === 'enum' &&
       variable.options.length > 0 &&
       !variable.options.includes(String(value))
     )
-      errors[variable.key] = 'Not one of the options';
+      errors[variable.key] = translate?.('rowNotOption') ?? 'Not one of the options';
     else if (variable.kind === 'color' && !/^#?[0-9A-Fa-f]{6}$/.test(String(value)))
-      errors[variable.key] = 'Not a hex colour';
+      errors[variable.key] = translate?.('rowNotHex') ?? 'Not a hex colour';
   }
   return errors;
 }
@@ -811,28 +818,40 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function importCell(
   variable: ApiRenderVariable,
   raw: string,
+  translate?: ForgeRowText,
 ): { value?: ApiRenderInputValue; error?: string } {
   const text = raw.trim();
   if (text === '') return {};
   if (isMediaVariable(variable)) {
     const ids = text.split(/[\s,;]+/).filter(Boolean);
-    if (ids.some((id) => !UUID.test(id))) return { error: 'Not a Library asset id' };
+    if (ids.some((id) => !UUID.test(id)))
+      return { error: translate?.('importNotAssetId') ?? 'Not a Library asset id' };
     const max = variable.multiple ? API_RENDER_MEDIA_LIST_MAX : 1;
-    if (ids.length > max) return { error: max === 1 ? 'One asset id only' : `At most ${max} ids` };
+    if (ids.length > max)
+      return {
+        error:
+          max === 1
+            ? (translate?.('importOneAssetId') ?? 'One asset id only')
+            : (translate?.('importMaxAssetIds', { count: max }) ?? `At most ${max} ids`),
+      };
     const pins: PinnedRenderAsset[] = ids.map((assetId) => ({ assetId }));
     return { value: variable.multiple ? pins : pins[0]! };
   }
   const value = coerce(variable, text);
   if (variable.kind === 'color' && !/^#?[0-9A-Fa-f]{6}$/.test(text))
-    return { error: 'Not a hex colour' };
+    return { error: translate?.('rowNotHex') ?? 'Not a hex colour' };
   if (value !== undefined) return { value };
   switch (variable.kind) {
     case 'number':
-      return { error: 'Not a number' };
+      return { error: translate?.('rowNotNumber') ?? 'Not a number' };
     case 'boolean':
-      return { error: 'Use true or false' };
+      return { error: translate?.('importUseBoolean') ?? 'Use true or false' };
     default:
-      return { error: `Not one of: ${variable.options.join(', ')}` };
+      return {
+        error:
+          translate?.('importNotOneOf', { options: variable.options.join(', ') }) ??
+          `Not one of: ${variable.options.join(', ')}`,
+      };
   }
 }
 
@@ -840,6 +859,7 @@ function importCell(
 function importFormats(
   raw: string,
   outputs: ApiRenderTemplateContract['outputs'],
+  translate?: ForgeRowText,
 ): { ids: string[]; error?: string } {
   const tokens = raw
     .split(/[,;|]/)
@@ -854,7 +874,11 @@ function importFormats(
         item.label.toLowerCase().replace(/\s+/g, '') === lower ||
         item.ratio?.replace(/\s+/g, '') === lower,
     );
-    if (!output) return { ids: [], error: `Unknown format: ${token}` };
+    if (!output)
+      return {
+        ids: [],
+        error: translate?.('importUnknownFormat', { format: token }) ?? `Unknown format: ${token}`,
+      };
     if (!ids.includes(output.id)) ids.push(output.id);
   }
   return { ids };
@@ -871,6 +895,7 @@ export function rowsFromMappedImport(
   mappings: Record<string, string>,
   variables: ApiRenderVariable[],
   outputs: ApiRenderTemplateContract['outputs'] = [],
+  translate?: ForgeRowText,
 ): { rows: RequestRow[]; errors: ImportCellError[] } {
   if (duplicateMappedVariable(mappings, IMPORT_SKIP))
     throw new Error('render_import_duplicate_mapping');
@@ -888,12 +913,12 @@ export function rowsFromMappedImport(
     for (const [column, key] of Object.entries(mappings)) {
       const variable = byKey.get(key);
       if (!variable) continue;
-      const { value, error } = importCell(variable, source[column] ?? '');
+      const { value, error } = importCell(variable, source[column] ?? '', translate);
       if (error) errors.push({ row: index, column, message: error });
       else if (value !== undefined) row.values[key] = value;
     }
     if (formatsColumn && source[formatsColumn]?.trim()) {
-      const { ids, error } = importFormats(source[formatsColumn], outputs);
+      const { ids, error } = importFormats(source[formatsColumn], outputs, translate);
       if (error) errors.push({ row: index, column: formatsColumn, message: error });
       else row.outputIds = ids;
     }
@@ -908,10 +933,18 @@ export function rowsFromMappedImport(
       if (!parentName) return;
       const matches = rows.filter((row) => row.label.trim().toLowerCase() === parentName);
       const fail = (message: string) => errors.push({ row: index, column: parentColumn, message });
-      if (matches.length === 0) fail(`No row is named ${source[parentColumn]!.trim()}`);
+      if (matches.length === 0)
+        fail(
+          translate?.('importMissingParent', { name: source[parentColumn]!.trim() }) ??
+            `No row is named ${source[parentColumn]!.trim()}`,
+        );
       else if (matches.length > 1)
-        fail(`More than one row is named ${source[parentColumn]!.trim()}`);
-      else if (matches[0]!.id === rows[index]!.id) fail('A row cannot be its own parent');
+        fail(
+          translate?.('importAmbiguousParent', { name: source[parentColumn]!.trim() }) ??
+            `More than one row is named ${source[parentColumn]!.trim()}`,
+        );
+      else if (matches[0]!.id === rows[index]!.id)
+        fail(translate?.('importSelfParent') ?? 'A row cannot be its own parent');
       else rows[index]!.parentId = matches[0]!.id;
     });
     rows.forEach((row, index) => {
@@ -922,8 +955,9 @@ export function rowsFromMappedImport(
         row: index,
         column: parentColumn,
         message: Number.isFinite(depth)
-          ? `Forks go at most ${FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH} levels deep`
-          : 'These parents form a loop',
+          ? (translate?.('importMaxDepth', { count: FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH }) ??
+            `Forks go at most ${FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH} levels deep`)
+          : (translate?.('importParentCycle') ?? 'These parents form a loop'),
       });
     });
   }
@@ -1506,3 +1540,23 @@ export function mergeSetRows(
 
 export const draftStorageKey = (brandId: string, templateKey: string): string =>
   `forge:render-drafts:${brandId}:${templateKey}`;
+
+const OVERRIDE_COPY_KEYS = {
+  acceptMissingFonts: {
+    title: 'overrideMissingFontTitle',
+    consequence: 'overrideMissingFontConsequence',
+  },
+  acceptLinkedLineMismatch: {
+    title: 'overrideHeadlineTitle',
+    consequence: 'overrideHeadlineConsequence',
+  },
+  acceptOffPaletteColor: {
+    title: 'overrideOffPaletteTitle',
+    consequence: 'overrideOffPaletteConsequence',
+  },
+} as const;
+
+export function renderOverrideCopy(override: RenderOverride, translate: ForgeRowText) {
+  const keys = OVERRIDE_COPY_KEYS[override];
+  return { title: translate(keys.title), consequence: translate(keys.consequence) };
+}

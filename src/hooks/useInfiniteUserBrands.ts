@@ -2,6 +2,7 @@
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { BrandSummary } from '@/components/DashboardLayoutShell';
+import { isExternalLogoUrl } from '@/lib/brands/external-logo-url';
 
 const USER_BRANDS_PAGE_SIZE = 20;
 const LOGO_SIGNED_URL_TTL_SECONDS = 604800;
@@ -43,27 +44,31 @@ async function signLogoUrls(
   logoPaths: string[],
 ): Promise<Map<string, string>> {
   const uniquePaths = Array.from(new Set(logoPaths.filter(Boolean)));
-  if (uniquePaths.length === 0) {
-    return new Map();
+  const externalUrls = uniquePaths.filter(isExternalLogoUrl);
+  const storageKeys = uniquePaths.filter((path) => !isExternalLogoUrl(path));
+  const external = new Map(externalUrls.map((url): [string, string] => [url, url]));
+  if (storageKeys.length === 0) {
+    return external;
   }
 
   const { data, error } = await supabase.storage
     .from('brand-profile-assets')
-    .createSignedUrls(uniquePaths, LOGO_SIGNED_URL_TTL_SECONDS);
+    .createSignedUrls(storageKeys, LOGO_SIGNED_URL_TTL_SECONDS);
 
   if (error) {
-    return new Map();
+    return external;
   }
 
-  return new Map(
-    (data ?? []).flatMap((item): Array<[string, string]> => {
+  return new Map([
+    ...external,
+    ...(data ?? []).flatMap((item): Array<[string, string]> => {
       if (!item.path || !item.signedUrl) {
         return [];
       }
 
       return [[item.path, item.signedUrl]];
     }),
-  );
+  ]);
 }
 
 type BrandIntegrationStatusRow = {

@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { AdminPagination, AdminUser, PermissionRow } from '@/components/admin/adminUserTypes';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
 
 // lucide-react used to be mocked here with a hand-written allowlist of glyph names. That
 // allowlist could only ever be a snapshot: every icon a new child component reached for
@@ -12,7 +12,10 @@ import type { AdminPagination, AdminUser, PermissionRow } from '@/components/adm
 const routerPushSpy = vi.fn<(path: string) => void>();
 let searchParams = new URLSearchParams();
 
+// Spread the real module: the localized links read usePathname/useParams from it.
+const navigation = await import('next/navigation');
 vi.mock('next/navigation', () => ({
+  ...navigation,
   useRouter: () => ({ push: routerPushSpy }),
   useSearchParams: () => ({
     get: (key: string) => searchParams.get(key),

@@ -1,12 +1,18 @@
 'use client';
 
 import { ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo, useState } from 'react';
 import { Progress } from '@/components/ui/progress';
 import type { BudgetPacingAdSetEntry, BudgetPacingEntry } from '@/lib/schemas/budgetPacing';
 import { cn } from '@/lib/utils';
 import type { RangeOption } from './BudgetPacingChart';
 import { BudgetPacingStatusBadge } from './BudgetPacingStatusBadge';
+import {
+  budgetPacingColumnLabels,
+  formatBudgetPacingPercent,
+  formatBudgetPacingCurrency as formatCurrency,
+} from './budgetPacingPresentation';
 
 const PAGE_SIZE = 10;
 const DAY_MS = 86_400_000;
@@ -19,14 +25,6 @@ type Props = {
   onFocusKey: (key: string | null) => void;
   selectedRange: RangeOption;
 };
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 function toDay(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -64,20 +62,6 @@ const RANGE_DAYS: Record<RangeOption, number | null> = {
   '14d': 14,
   '30d': 30,
   all: null,
-};
-
-const SPEND_LABEL: Record<RangeOption, string> = {
-  '7d': '7D Spend',
-  '14d': '14D Spend',
-  '30d': '30D Spend',
-  all: 'Spend',
-};
-
-const REMAINING_LABEL: Record<RangeOption, string> = {
-  '7d': '7D Left',
-  '14d': '14D Left',
-  '30d': '30D Left',
-  all: 'Remaining',
 };
 
 const paceColor: Record<string, string> = {
@@ -120,6 +104,8 @@ function PacingRow({
   indent?: boolean;
   expandSlot?: React.ReactNode;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const days = RANGE_DAYS[selectedRange];
   const windowSpend = computeWindowSpend(row.dailyTrend, days);
   const windowTarget = computeWindowTarget(
@@ -133,6 +119,7 @@ function PacingRow({
     days === null ? row.budgetRemaining : windowTarget !== null ? windowTarget - windowSpend : null;
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: The grid row contains an independent expansion button.
     <div
       role="button"
       tabIndex={0}
@@ -156,37 +143,43 @@ function PacingRow({
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{row.name}</p>
           {row.daysRemaining !== null ? (
-            <p className="text-xs text-muted-foreground">{row.daysRemaining}d left</p>
+            <p className="text-xs text-muted-foreground">
+              {uiText.rich('sentence_a846e5afbc10', { count: row.daysRemaining })}
+            </p>
           ) : (
             <p className="text-xs text-muted-foreground">—</p>
           )}
         </div>
       </div>
 
-      <span className="rounded bg-muted px-1.5 py-0.5 text-xs">{row.budgetType}</span>
+      <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
+        {uiText(row.budgetType === 'daily' ? 'daily_b36c261' : 'lifetime_bdcd897')}
+      </span>
 
       <span className="tabular-nums text-sm text-right">
-        {row.totalBudget > 0 ? formatCurrency(row.totalBudget) : '—'}
+        {row.totalBudget > 0 ? formatCurrency(row.totalBudget, uiLocale) : '—'}
       </span>
 
       <div className="text-right">
-        <p className="tabular-nums text-sm">{formatCurrency(windowSpend)}</p>
+        <p className="tabular-nums text-sm">{formatCurrency(windowSpend, uiLocale)}</p>
         {row.budgetType === 'daily' && (
-          <p className="text-xs text-muted-foreground">Today {formatCurrency(row.todaySpend)}</p>
+          <p className="text-xs text-muted-foreground">
+            {uiText.rich('sentence_01ebc82a3601', { v0: formatCurrency(row.todaySpend, uiLocale) })}
+          </p>
         )}
       </div>
 
       <span className="tabular-nums text-sm text-right">
-        {windowRemaining !== null ? formatCurrency(windowRemaining) : '—'}
+        {windowRemaining !== null ? formatCurrency(windowRemaining, uiLocale) : '—'}
       </span>
 
       <div className="flex flex-col items-end gap-1">
         <span className={cn('tabular-nums text-sm', paceColor[row.paceStatus])}>
           {row.paceMethod === 'trend' ? '~' : ''}
-          {row.pacePct.toFixed(1)}%
+          {formatBudgetPacingPercent(row.pacePct, uiLocale)}
         </span>
         {row.paceMethod === 'trend' && (
-          <span className="text-2xs text-muted-foreground">vs 7d avg</span>
+          <span className="text-2xs text-muted-foreground">{uiText('vs_7d_avg_d7903c1')}</span>
         )}
         <Progress value={Math.min(100, row.pacePct)} className="h-1 w-16" />
       </div>
@@ -235,6 +228,16 @@ function toAdSetRow(a: BudgetPacingAdSetEntry): RowData {
 }
 
 export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRange }: Props) {
+  const uiText = useTranslations('scale');
+  const columnLabels = useMemo(
+    () =>
+      budgetPacingColumnLabels(selectedRange, (field, days) => {
+        if (days === null) return uiText(field === 'spend' ? 'spend_85f3d55' : 'remaining_f3e4352');
+        return uiText(field === 'spend' ? 'budgetWindowSpend' : 'budgetWindowRemaining', { days });
+      }),
+    [selectedRange, uiText],
+  );
+
   const [query, setQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -249,7 +252,9 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
 
   if (active.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">No active campaigns found.</p>
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        {uiText('no_active_campaigns_found_4be89d9')}
+      </p>
     );
   }
 
@@ -270,7 +275,8 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
     <div className="space-y-2">
       <input
         type="search"
-        placeholder="Search campaigns…"
+        placeholder={uiText('search_campaigns_a1f838c')}
+        aria-label={uiText('search_campaigns_a1f838c')}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -283,13 +289,13 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
         <div
           className={`grid ${GRID} min-w-[640px] gap-x-3 border-b border-border/60 bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground`}
         >
-          <span>Campaign</span>
-          <span>Type</span>
-          <span className="text-right">Budget</span>
-          <span className="text-right">{SPEND_LABEL[selectedRange]}</span>
-          <span className="text-right">{REMAINING_LABEL[selectedRange]}</span>
-          <span className="text-right">Pace</span>
-          <span>Status</span>
+          <span>{uiText('campaign_268286d')}</span>
+          <span>{uiText('type_baaddf7')}</span>
+          <span className="text-right">{uiText('budget_1c6225e')}</span>
+          <span className="text-right">{columnLabels.spend}</span>
+          <span className="text-right">{columnLabels.remaining}</span>
+          <span className="text-right">{uiText('pace_9582b50')}</span>
+          <span>{uiText('status_920e413')}</span>
         </div>
 
         <div className="min-w-[640px] max-h-[360px] overflow-y-auto">
@@ -317,7 +323,11 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
                           if (e.key === 'Enter' || e.key === ' ')
                             toggleExpand(campaign.campaignId, e);
                         }}
-                        aria-label={isExpanded ? 'Collapse adsets' : 'Expand adsets'}
+                        aria-label={
+                          isExpanded
+                            ? uiText('collapse_adsets_1efada8')
+                            : uiText('expand_adsets_44968ba')
+                        }
                       >
                         <ChevronRight
                           className={cn(
@@ -355,7 +365,10 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
               onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
               className="w-full py-2.5 text-center text-xs text-muted-foreground transition-[transform,background-color] hover:bg-muted/50 active:scale-[0.96]"
             >
-              Show {Math.min(PAGE_SIZE, remaining)} more of {remaining} remaining
+              {uiText.rich('sentence_b5598cb3ecb1', {
+                v0: Math.min(PAGE_SIZE, remaining),
+                v1: remaining,
+              })}
             </button>
           )}
         </div>
