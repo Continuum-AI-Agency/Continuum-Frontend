@@ -1,5 +1,7 @@
 # Home dot presentation draft
 
+Latest review: [committed compression draft design council](home-dot-design-council.md), 2026-11-20, **66.25/100 — needs work**. Its design-focused rubric differs from the historical council below. The implementation is committed locally as `82090d9a`; no push, merge or deployment has occurred.
+
 Status: local development draft, 2026-11-19. The current compression follow-up is documented in [home-dot-density.md](home-dot-density.md); the council score below belongs to the preceding layout. The fixed-rubric council reached **93.75/100**, with both gates passing. Scoped authenticated Chrome presentation checks pass; the independent oracle run completed with two failed checks, documented in the council record. This is an ordinary extension of adaptive Home, not an approved replacement for Continuum's durable design system.
 
 ### Initial one-off screenshot, 2026-11-19
@@ -14,7 +16,7 @@ This initial capture proves one real-data desktop view rendered. Subsequent coun
 
 The implementation is the working-tree diff and new files based on Frontend `1b1096e9da477bf20ae302a8b3c86d389d596299` in this checkout. That base commit alone does not contain the draft.
 
-Rebased onto Frontend main `35d621acb` and ported onto the i18n catalogs: every new draft string lives in `messages/dashboard/{en,es,pt-BR}.json`, and the dot adapters take the dashboard translator.
+Rebased onto Frontend main `3c60eb23` and ported onto the i18n catalogs: every new draft string lives in `messages/dashboard/{en,es,pt-BR}.json`, and the dot adapters take the dashboard translator.
 
 - [Dashboard route](../src/app/[locale]/(post-auth)/dashboard/page.tsx) passes the presentation through [HomeBoardDataWrapper](../src/components/dashboard/server/HomeBoardDataWrapper.tsx).
 - [homePresentation.ts](../src/components/dashboard/home-board/homePresentation.ts) accepts exactly `homeDraft=dots` only when `NODE_ENV` is `development`. The default and production presentation remain `current`; no runtime rollout flag is added.
@@ -26,7 +28,7 @@ The local route is `http://localhost:3112/dashboard?homeDraft=dots` while the ad
 
 The draft uses rounded panels, restrained lilac recorded observations, coral attention observations, foreground-colored neutral observations, and hollow unknown observations. Text and accessible labels explain state; color is supplementary. Panel styling is scoped to Home's draft context. Existing typography, page chrome, adaptive selection, order, tile sizes, sorting, pinning, and shared Optimizer frame remain authoritative.
 
-Hover or focus a dot to read its source label, value, reporting period, and available freshness. Unreported freshness is explicit. One active record is coordinated across the board. Click toggles a held observation; Escape clears it even after focus moves outside its inspector. Arrow keys move focus through the displayed observations. Buttons expose their full description and pressed state, and the readout announces changes politely. Reduced-motion CSS removes dot transitions; the board retains its existing reduced-motion handling. The scoped Chrome records exercise these behaviors; physical-device and screen-reader qualification remain unrun. Goal and Creative also expose a list of the same observations for closely spaced touch targets. Health groups every check by recorded state, exposes names on wider tiles, and updates its evidence panel during inspection. Small summary panels use their content height within the original board spans.
+Hover or focus a dot to read its source label, value, reporting period, and available freshness. Unreported freshness is explicit. One active record is coordinated across the board. Click toggles a held observation; Escape clears it even after focus moves outside its inspector. Arrow keys move focus through the displayed observations. Buttons expose their full description and pressed state, and the readout announces changes politely. Reduced-motion CSS removes dot transitions; the board retains its existing reduced-motion handling. The scoped Chrome records exercise these behaviors; physical-device and screen-reader qualification remain unrun. Goal and Creative also expose a list of the same observations for closely spaced touch targets. Health groups every check by recorded state, retains names in inspection, accessible labels and List mode, and updates its evidence panel during inspection. Draft panels use their content height within the original board spans.
 
 Read-only applies to business changes. Goal saves/removals, approval and scheduling, promotion, and report/email sending are guarded or disabled in this presentation. The board and module sheets show the read-only explanation. Local sorting, pinning, inspection, sheet navigation, and checklist export remain available.
 
