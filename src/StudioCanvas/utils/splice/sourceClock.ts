@@ -59,6 +59,27 @@ export function sourceSecAt(
   return Math.min(Math.max(sec, range.startSec), Math.max(range.startSec, range.endSec - 0.001));
 }
 
+/**
+ * How far before a track's first frame a request may still be served that frame. An MP4 whose
+ * video starts after its audio carries an empty edit, so its first frame sits a frame or so past
+ * 0 (TH #23: 0.023 s and 0.033 s) and a decoder asked for 0 has nothing to return. Every player
+ * shows the first frame there. A gap wider than this is real missing picture and stays an error.
+ */
+export const LEAD_IN_TOLERANCE_SEC = 0.1;
+
+/** `sec`, or the first frame's time when `sec` falls inside the track's lead-in. */
+export const atDecodableTime = (sec: number, firstFrameSec: number): number =>
+  sec < firstFrameSec && firstFrameSec - sec <= LEAD_IN_TOLERANCE_SEC ? firstFrameSec : sec;
+
+/** Names where a decode came back empty, so an export failure points at the frame (TH #23). */
+export const missingFrameMessage = (
+  sourceSec: number | undefined,
+  timelineSec: number,
+  firstFrameSec: number,
+): string =>
+  `No decoded frame at source ${sourceSec?.toFixed(3) ?? '?'} s (timeline ${timelineSec.toFixed(3)} s); ` +
+  `the source's first frame is at ${firstFrameSec.toFixed(3)} s.`;
+
 type TimestampSink<F> = { canvasesAtTimestamps(times: number[]): AsyncIterable<F | null> };
 
 /** Output frames of a single chunk when the source runs backwards or jumps around. */
