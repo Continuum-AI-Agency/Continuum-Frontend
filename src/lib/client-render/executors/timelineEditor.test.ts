@@ -14,6 +14,7 @@ import {
   opacityFor,
   resolveTransformAt,
 } from '@/StudioCanvas/utils/render/effectSpec';
+import { findActiveCues } from '@/StudioCanvas/utils/splice/captionCues';
 import {
   assertSupportedTimelineEditorExport,
   buildTimelineEditorRenderPlan,
@@ -1504,5 +1505,90 @@ describe('retimed clips and the new transitions in the render plan', () => {
       ],
     );
     expect(plan.items[1]?.transition).toEqual({ type: 'flash', durationSec: 0.4 });
+  });
+});
+
+// TH #25: a two-line hook_title exported with only its first line. The Backend's add_text now
+// writes one text clip per template layer (primary at y 0.30, the second line 0.25 s later at
+// y 0.37, on one text track; Backend editorOps/motion.test.ts). This pins the export side: both
+// clips become burn-in cues that are live together, each at its own height, so the frame loop in
+// appendRange draws both.
+describe('a two-line hook_title in the export plan', () => {
+  it('turns both template layers into concurrent cues at their own heights', async () => {
+    globalThis.fetch = (async () =>
+      new Response(new Blob(['media-bytes'], { type: 'video/mp4' }), {
+        status: 200,
+      })) as typeof fetch;
+    const created = createEditorProjectV2({
+      projectId: '00000000-0000-4000-8000-000000000325',
+      title: 'Hook title',
+      width: 1080,
+      height: 1920,
+      now: '2026-11-23T12:00:00.000Z',
+    });
+    const layer = (id: string, text: string, startSec: number, y: number) => ({
+      id,
+      kind: 'text',
+      name: id === 'hook' ? 'Hook title' : 'Hook title (second line)',
+      tags: ['template:hook_title'],
+      timelineStartSec: startSec,
+      durationSec: 3 - startSec,
+      text,
+      style: { fontFamily: 'Inter', fontSizePx: 96, fontWeight: 800, color: '#ffffff' },
+      transform: { position: { x: 0.5, y, unit: 'normalized' } },
+    });
+    const project = editorProjectV2Schema.parse({
+      ...created,
+      durationSec: 3,
+      tracks: [
+        {
+          id: 'v1',
+          name: 'V1',
+          order: 0,
+          kind: 'video',
+          clips: [
+            {
+              id: 'shot',
+              timelineStartSec: 0,
+              durationSec: 3,
+              kind: 'video',
+              source: { sourceType: 'library_asset', assetId: 'asset-shot', renditionId: 'v' },
+            },
+          ],
+        },
+        {
+          id: 'titles',
+          name: 'Titles',
+          order: 1,
+          kind: 'text',
+          clips: [
+            layer('hook', 'STOP SCROLLING', 0, 0.3),
+            layer('hook:second', 'the second line', 0.25, 0.37),
+          ],
+        },
+      ],
+    });
+    const plan = await buildTimelineEditorRenderPlan({
+      project,
+      jobInputs: [
+        {
+          sourceId: 'shot',
+          sourceAssetId: 'asset-shot',
+          sourceRevision: 'v',
+          storage: { bucket: 'media-library', path: 'brand/shot.bin' },
+        },
+      ],
+      signedUrls: new Map([['media-library\nbrand/shot.bin', 'https://signed.example/shot']]),
+      signal: new AbortController().signal,
+    });
+    const live = findActiveCues(plan.captionCues, 1);
+    expect(live.map((cue) => cue.words.map((word) => word.text).join(' '))).toEqual([
+      'STOP SCROLLING',
+      'the second line',
+    ]);
+    const heights = live.map((cue) => resolveTransformAt(cue.motion, 1 - cue.startSec).offsetY);
+    expect(heights[0]).not.toBeCloseTo(heights[1] ?? 0, 3);
+    // Before the second line's delay only the first is live.
+    expect(findActiveCues(plan.captionCues, 0.1).map((cue) => cue.id)).toEqual(['hook']);
   });
 });
