@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { type AgentPreviewBuckets, emptyBuckets } from '../state/agentPreview';
 import { AnalysisErrorContext, CardSurface } from './CardSurface';
 import { RunProgressBanner } from './RunProgressBanner';
