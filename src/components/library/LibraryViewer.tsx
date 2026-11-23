@@ -929,7 +929,8 @@ export function LibraryViewer({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div
-        className="flex shrink-0 items-center gap-1 border-b border-border px-0.5 pt-2"
+        // Tabs carry px-3 of their own, so tab text starts on the page gutter line, above the rail's rows.
+        className="flex shrink-0 items-center gap-1 border-b border-border px-[calc(var(--page-pad-inline)-0.75rem)] pt-2"
         role="tablist"
         aria-label={translateUi('library_sections_47f7820e')}
       >
