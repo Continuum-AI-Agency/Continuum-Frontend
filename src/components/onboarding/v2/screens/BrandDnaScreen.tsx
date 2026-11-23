@@ -25,6 +25,7 @@ import type { AgentPreviewBuckets } from '../state/agentPreview';
 type BrandDnaScreenProps = {
   agentBuckets: AgentPreviewBuckets | null;
   readinessLoading?: boolean;
+  analysisError?: string | null;
   onRetry?: () => void;
 };
 
@@ -93,7 +94,12 @@ function findingFor(
   return readiness?.findings?.find((f) => f.dimension === dim) ?? null;
 }
 
-export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: BrandDnaScreenProps) {
+export function BrandDnaScreen({
+  agentBuckets,
+  readinessLoading,
+  analysisError = null,
+  onRetry,
+}: BrandDnaScreenProps) {
   const tUi = useTranslations('onboarding');
 
   const voiceSkeleton = renderVoiceSkeleton(tUi);
@@ -161,6 +167,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           <RunProgressBanner
             buckets={agentBuckets}
             running={readinessLoading ?? false}
+            error={analysisError}
             onRetry={onRetry}
           />
         </div>
