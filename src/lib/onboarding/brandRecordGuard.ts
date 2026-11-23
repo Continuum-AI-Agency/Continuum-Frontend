@@ -50,3 +50,14 @@ export function adoptBrandRecord(
     emailReportOptIn: record.email_report_opt_in ?? true,
   };
 }
+
+/**
+ * Once the brand row exists, its logo is the truth: the Backend's set-brand-logo route writes
+ * it (with the brand tokens generation reads) for any admin, from Settings or the Library. A
+ * load takes the row's logo into the caller's state rather than writing the state's older one
+ * back over it; only a mutation that changes the logo (the onboarding uploader) pushes it.
+ */
+export function adoptRowLogo(state: OnboardingState, rowLogoPath: string | null): OnboardingState {
+  if ((state.brand.logoPath ?? null) === rowLogoPath) return state;
+  return { ...state, brand: { ...state.brand, logoPath: rowLogoPath } };
+}

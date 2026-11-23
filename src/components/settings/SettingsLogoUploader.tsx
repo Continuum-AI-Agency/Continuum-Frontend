@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { updateBrandLogoAction } from '@/app/[locale]/(post-auth)/settings/actions';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';
-import { createSignedAssetUrl, uploadCreativeAsset } from '@/lib/creative-assets/storageClient';
+import { setBrandLogo, uploadRequestFor } from '@/lib/brands/brandLogo';
+import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
 
 type SettingsLogoUploaderProps = {
   brandId: string;
@@ -69,14 +69,8 @@ export function SettingsLogoUploader({
 
     setIsUploading(true);
     try {
-      const extension = file.name.split('.').pop() || 'png';
-      const namedFile = new File([file], `logo.${extension}`, { type: file.type });
-
-      const { asset } = await uploadCreativeAsset(brandId, 'branding', namedFile);
-
-      await updateBrandLogoAction(brandId, asset.fullPath);
-
-      setLogoPath(asset.fullPath);
+      const { logoPath: savedPath } = await setBrandLogo(await uploadRequestFor(brandId, file));
+      setLogoPath(savedPath);
       show({ title: tUi('m_1a3b73c794'), description: tUi('m_56c798f5cd'), variant: 'success' });
       router.refresh();
     } catch (error) {
@@ -98,7 +92,7 @@ export function SettingsLogoUploader({
 
     setIsUploading(true);
     try {
-      await updateBrandLogoAction(brandId, null);
+      await setBrandLogo({ source: 'none', brandId });
       setLogoPath(null);
       setPreviewUrl(null);
       show({ title: tUi('m_5ea3c45acf'), description: tUi('m_a0e645e284'), variant: 'success' });
@@ -123,7 +117,7 @@ export function SettingsLogoUploader({
         type="file"
         ref={inputRef}
         className="hidden"
-        accept="image/png,image/jpeg,image/svg+xml"
+        accept="image/png,image/jpeg,image/svg+xml,image/webp"
         onChange={handleFileChange}
         disabled={isUploading || disabled}
       />
