@@ -9,6 +9,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database, Json } from '@/lib/supabase/types';
 import {
   adoptBrandRecord,
+  adoptRowLogo,
   type BrandRecordFields,
   canPersistBrandRecord,
 } from './brandRecordGuard';
@@ -123,7 +124,12 @@ async function ensureBrandProfileRecord(
   brandId: string,
   owner: BrandMember,
   state?: OnboardingState,
-  options: { reuseMatchingBrand?: boolean; onlyEmptyShell?: boolean } = {},
+  options: {
+    reuseMatchingBrand?: boolean;
+    onlyEmptyShell?: boolean;
+    /** Set on a load: an existing row's logo is reported here and never overwritten (adoptRowLogo). */
+    onExistingRowLogo?: (logoPath: string | null) => void;
+  } = {},
 ): Promise<string> {
   const { data: rawData, error } = await supabase
     .schema('brand_profiles')
@@ -144,6 +150,8 @@ async function ensureBrandProfileRecord(
   if (error && error.code !== 'PGRST116') {
     throw error;
   }
+  const rowOwnsLogo = Boolean(data && options.onExistingRowLogo);
+  if (data && options.onExistingRowLogo) options.onExistingRowLogo(data.logo_path);
 
   // Only the brand's creator may persist global fields from their onboarding
   // state. An invited member's state name is defaulted to "<their-name>'s Brand";
@@ -155,7 +163,7 @@ async function ensureBrandProfileRecord(
   }
 
   const brandName = resolveBrandProfileName(state);
-  const logoPath = state?.brand?.logoPath ?? null;
+  const logoPath = rowOwnsLogo && data ? data.logo_path : (state?.brand?.logoPath ?? null);
   const completedAt = state?.completedAt ?? null;
   // The end-of-onboarding toggle. Persisted on the same row whose completed_at
   // fires the first-value report enqueue trigger, so the trigger reads the
@@ -830,14 +838,25 @@ async function loadOnboardingContext(requestedBrandId?: string): Promise<Onboard
 
   // Independent reads: the brand row check only reads the state's name, logo, completion and
   // email opt-in, none of which the documents sync touches.
+  let rowLogoPath: string | null | undefined;
   const [documentsDirty, resolvedBrandId] = await Promise.all([
     syncBrandDocuments(supabase, normalizedMetadata, brandId),
-    ensureBrandProfileRecord(supabase, brandId, owner, normalizedMetadata.brands[brandId]),
+    ensureBrandProfileRecord(supabase, brandId, owner, normalizedMetadata.brands[brandId], {
+      onExistingRowLogo: (logoPath) => {
+        rowLogoPath = logoPath;
+      },
+    }),
   ]);
+  // Adopted after the documents sync, which replaces this brand's state object.
+  const loadedState = normalizedMetadata.brands[brandId];
+  if (rowLogoPath !== undefined) {
+    normalizedMetadata.brands[brandId] = adoptRowLogo(loadedState, rowLogoPath);
+  }
+  const logoAdopted = normalizedMetadata.brands[brandId] !== loadedState;
 
   // A documents sync changes this brand's state only. It is dirty on most loads while uploads
   // finish processing, so it writes that one row rather than re-persisting every brand.
-  if (documentsDirty) {
+  if (documentsDirty || logoAdopted) {
     await persistBrandState(supabase, user.id, brandId, normalizedMetadata.brands[brandId]);
   }
 
@@ -1251,17 +1270,6 @@ export async function renameBrandProfile(brandId: string, name: string): Promise
   return updateBrandState(brandId, (state) =>
     mergeOnboardingState(state, {
       brand: { name },
-    }),
-  );
-}
-
-export async function updateBrandLogo(
-  brandId: string,
-  logoPath: string | null,
-): Promise<OnboardingState> {
-  return updateBrandState(brandId, (state) =>
-    mergeOnboardingState(state, {
-      brand: { logoPath },
     }),
   );
 }

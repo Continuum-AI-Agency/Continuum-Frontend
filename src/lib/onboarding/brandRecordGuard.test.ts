@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { adoptBrandRecord, canPersistBrandRecord } from './brandRecordGuard';
+import { adoptBrandRecord, adoptRowLogo, canPersistBrandRecord } from './brandRecordGuard';
 import { createDefaultOnboardingState } from './state';
 
 describe('canPersistBrandRecord', () => {
@@ -61,5 +61,24 @@ describe('adoptBrandRecord', () => {
       email_report_opt_in: true,
     });
     expect(adopted.brand.name).toBe("duane's Brand");
+  });
+});
+
+describe('adoptRowLogo', () => {
+  const state = createDefaultOnboardingState();
+  const withLogo = { ...state, brand: { ...state.brand, logoPath: 'b/branding/logo.png' } };
+
+  it('takes a logo set elsewhere (Library, Settings by another admin) into the state', () => {
+    expect(adoptRowLogo(withLogo, 'b/branding/logo.jpg').brand.logoPath).toBe(
+      'b/branding/logo.jpg',
+    );
+  });
+
+  it('takes a cleared logo too, so the stale one is not written back', () => {
+    expect(adoptRowLogo(withLogo, null).brand.logoPath).toBeNull();
+  });
+
+  it('returns the same state when the row already agrees', () => {
+    expect(adoptRowLogo(withLogo, 'b/branding/logo.png')).toBe(withLogo);
   });
 });
