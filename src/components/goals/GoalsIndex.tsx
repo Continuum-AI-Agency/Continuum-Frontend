@@ -20,7 +20,7 @@ export function GoalsIndex({ brandId, brandName, goals }: GoalsIndexProps) {
 
   const uiText = useTranslations('dashboard');
   return (
-    <div className="flex h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] min-w-0 flex-col gap-[var(--app-shell-gap)] py-[var(--page-pad-block)]">
+    <div className="flex h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] min-w-0 flex-col gap-[var(--app-shell-gap)] px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
       <PageHeader
         title={uiText('goals_116cd39')}
         description={uiText('m_6c257227b1', { v0: String(brandName) })}

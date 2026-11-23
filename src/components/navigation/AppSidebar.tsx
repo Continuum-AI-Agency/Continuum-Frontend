@@ -575,7 +575,9 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                 }
               />
             ) : null}
-            <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
+            {/* px-1 matches SidebarGroup's p-1 in the content above, so footer icons and labels
+              share the nav's icon column and text line. */}
+            <SidebarMenu className="gap-1 px-1 group-data-[collapsible=icon]:items-center">
               {APP_NAVIGATION_FOOTER.map((item) => {
                 if (item.adminOnly && !isAdmin) return null;
                 const active = isRouteActive(pathname, searchParams, item);
@@ -628,46 +630,52 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
             </SidebarMenu>
 
             <SidebarSeparator className="my-2 bg-[var(--color-border)]" />
-            <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip={
-                    appearance === 'dark'
-                      ? uiText('switch_to_light_mode_c22ea81')
-                      : uiText('switch_to_dark_mode_82de2f8')
-                  }
-                  size="default"
-                  onClick={toggle}
-                  className="group btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)]"
-                >
-                  <ThemeToggleGlyph appearance={appearance} reduce={reduce} />
-                  <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                    <ThemeToggleText appearance={appearance} />
-                  </span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  size="lg"
-                  className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  {/* Collapsed, the row is 27px with no padding, so a 32px avatar overflows and
+            {/* The identity row stays on the header's frame line (its 32px avatar is wider than the
+              icon column and pairs with the brand switcher), so only the theme row takes the inset. */}
+            <div className="flex flex-col gap-1">
+              <SidebarMenu className="gap-1 px-1 group-data-[collapsible=icon]:items-center">
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip={
+                      appearance === 'dark'
+                        ? uiText('switch_to_light_mode_c22ea81')
+                        : uiText('switch_to_dark_mode_82de2f8')
+                    }
+                    size="default"
+                    onClick={toggle}
+                    className="group btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)]"
+                  >
+                    <ThemeToggleGlyph appearance={appearance} reduce={reduce} />
+                    <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                      <ThemeToggleText appearance={appearance} />
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+              <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    size="lg"
+                    className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  >
+                    {/* Collapsed, the row is 27px with no padding, so a 32px avatar overflows and
                     SidebarMenuButton's own overflow-hidden crops it flat top and bottom. The
                     important modifier is needed because the size arrives as an inline style. */}
-                  <div className="flex items-center justify-center w-8 group-data-[collapsible=icon]:w-auto">
-                    <CurrentUserAvatar
-                      size={32}
-                      className="group-data-[collapsible=icon]:!size-6"
-                    />
-                  </div>
-                  <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                    <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">
-                      {userDisplayName}
-                    </span>
-                  </div>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+                    <div className="flex items-center justify-center w-8 group-data-[collapsible=icon]:w-auto">
+                      <CurrentUserAvatar
+                        size={32}
+                        className="group-data-[collapsible=icon]:!size-6"
+                      />
+                    </div>
+                    <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                      <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">
+                        {userDisplayName}
+                      </span>
+                    </div>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </div>
           </SidebarFooter>
         </LayoutGroup>
       </Sidebar>

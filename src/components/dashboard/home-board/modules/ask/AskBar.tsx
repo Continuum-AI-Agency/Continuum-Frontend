@@ -37,7 +37,7 @@ export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
   return (
     <section
       aria-label={uiText('ask_jaina_0d70d16')}
-      className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3"
+      className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-4"
       data-testid="home-ask"
     >
       <form className="flex min-w-0 items-center gap-2" onSubmit={onSubmit}>

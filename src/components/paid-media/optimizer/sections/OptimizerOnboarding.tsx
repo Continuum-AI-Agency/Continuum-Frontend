@@ -37,7 +37,7 @@ export function OptimizerOnboarding({
 }: OptimizerOnboardingProps) {
   const uiText = useTranslations('scale');
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
       {/* One line, laid out horizontally. The hero used to be a 6rem-tall centered block that
           ate the fold before the user saw a single ad set. */}
       <header className="flex shrink-0 items-center gap-3 border-border/60 border-b px-4 py-3">

@@ -16,7 +16,7 @@ export function BrandIdentityHeader({ brandId, name, logoUrl }: BrandIdentityHea
   const initial = name.trim().charAt(0).toUpperCase() || '?';
 
   return (
-    <div className="mb-5 flex items-center gap-3 rounded-lg border border-border/50 bg-card/30 px-4 py-3">
+    <div className="mb-5 flex items-center gap-3 rounded-lg border border-border/50 bg-card/30 px-[var(--card-pad)] py-3">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-sm font-semibold uppercase text-muted-foreground">
         {logoUrl ? (
           <Image
