@@ -4,7 +4,7 @@ import { mergeProps } from '@base-ui/react/merge-props';
 import { useRender } from '@base-ui/react/use-render';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { PanelLeftIcon } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
+import { animate, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { isValidElement } from 'react';
@@ -27,6 +27,18 @@ const SIDEBAR_WIDTH = 'var(--shell-sidebar-w)';
 const SIDEBAR_WIDTH_MOBILE = '18rem';
 const SIDEBAR_WIDTH_ICON = 'var(--shell-sidebar-w-icon)';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
+// How long the pointer rests on the rail before it opens: longer than a pass on the way elsewhere.
+const HOVER_OPEN_DELAY_MS = 150;
+// One spring for the panel and for the room the page makes for it, so a pin moves both edges together.
+const SIDEBAR_SPRING = { type: 'spring', bounce: 0, duration: 0.3 } as const;
+
+// '15rem' for 'var(--shell-sidebar-w)': a custom property only interpolates between concrete values.
+function resolveWidth(value: string) {
+  const name = /^var\((--[\w-]+)\)$/.exec(value)?.[1];
+  return name
+    ? getComputedStyle(document.documentElement).getPropertyValue(name).trim() || value
+    : value;
+}
 
 type SidebarContextProps = {
   state: 'expanded' | 'collapsed';
@@ -79,6 +91,7 @@ const SidebarProvider = React.forwardRef<
     ref,
   ) => {
     const isMobile = useIsMobile();
+    const reduceMotion = useReducedMotion();
     const [openMobile, setOpenMobile] = React.useState(false);
     const cssVars = (style ?? {}) as React.CSSProperties & {
       '--sidebar-width'?: string;
@@ -141,15 +154,22 @@ const SidebarProvider = React.forwardRef<
 
     // The width the page makes room for follows the pinned state only: a hover expands the panel
     // OVER the page, so the fixed surfaces that offset by this width stay where they are
-    // (PP-DT-H-sidebar-hover-pushes-page: a hover moved the whole page 174 px right).
+    // (PP-DT-H-sidebar-hover-pushes-page: a hover moved the whole page 174 px right). A pin
+    // animates it on the panel's own spring: the page edge and every fixed surface placed with
+    // --app-sidebar-width travel with the panel edge instead of jumping ahead of it.
     React.useEffect(() => {
+      const root = document.documentElement;
       const nextWidth = isMobile
         ? '0px'
-        : pinnedOpen
-          ? providedSidebarWidth
-          : providedSidebarWidthIcon;
-      document.documentElement.style.setProperty('--app-sidebar-width', nextWidth);
-    }, [isMobile, pinnedOpen, providedSidebarWidth, providedSidebarWidthIcon]);
+        : resolveWidth(pinnedOpen ? providedSidebarWidth : providedSidebarWidthIcon);
+      const current = root.style.getPropertyValue('--app-sidebar-width');
+      if (!current || isMobile || reduceMotion || current === nextWidth) {
+        root.style.setProperty('--app-sidebar-width', nextWidth);
+        return;
+      }
+      const controls = animate(root, { '--app-sidebar-width': nextWidth }, SIDEBAR_SPRING);
+      return () => controls.stop();
+    }, [isMobile, pinnedOpen, providedSidebarWidth, providedSidebarWidthIcon, reduceMotion]);
 
     React.useEffect(() => {
       return () => {
@@ -243,27 +263,39 @@ const Sidebar = React.forwardRef<
 
     // Hover intent is bound to the panel element itself (below) rather than to
     // document-level pointer geometry: the collapsed rail is always present at
-    // left-0, so mouseenter/leave fire reliably. Leave starts a short grace
-    // timer so a quick re-entry cancels the collapse without flicker.
+    // left-0, so mouseenter/leave fire reliably. Entering opens only once the
+    // pointer has rested on the rail, so passing over it on the way to the top bar
+    // does not throw the panel over the page; leave starts a short grace timer so a
+    // quick re-entry cancels the collapse without flicker.
+    const openTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const collapseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const cancelCollapse = React.useCallback(() => {
-      if (collapseTimerRef.current) {
-        clearTimeout(collapseTimerRef.current);
-        collapseTimerRef.current = null;
+    const cancelTimers = React.useCallback(() => {
+      for (const timer of [openTimerRef, collapseTimerRef]) {
+        if (timer.current) {
+          clearTimeout(timer.current);
+          timer.current = null;
+        }
       }
     }, []);
-    const handleHoverEnter = React.useCallback(() => {
-      cancelCollapse();
-      setHoverExpanded(true);
-    }, [cancelCollapse, setHoverExpanded]);
+    const handleHoverEnter = React.useCallback(
+      (event: React.MouseEvent<HTMLDivElement>) => {
+        cancelTimers();
+        const panel = event.currentTarget;
+        openTimerRef.current = setTimeout(() => {
+          openTimerRef.current = null;
+          if (panel.matches(':hover')) setHoverExpanded(true);
+        }, HOVER_OPEN_DELAY_MS);
+      },
+      [cancelTimers, setHoverExpanded],
+    );
     const handleHoverLeave = React.useCallback(() => {
-      cancelCollapse();
+      cancelTimers();
       collapseTimerRef.current = setTimeout(() => {
         collapseTimerRef.current = null;
         setHoverExpanded(false);
       }, 180);
-    }, [cancelCollapse, setHoverExpanded]);
-    React.useEffect(() => cancelCollapse, [cancelCollapse]);
+    }, [cancelTimers, setHoverExpanded]);
+    React.useEffect(() => cancelTimers, [cancelTimers]);
     const hoverHandlers =
       useHoverWidth && !isMobile
         ? { onMouseEnter: handleHoverEnter, onMouseLeave: handleHoverLeave }
@@ -326,7 +358,7 @@ const Sidebar = React.forwardRef<
             isIconCollapsible
               ? variant === 'floating' || variant === 'inset'
                 ? 'w-[calc(var(--sidebar-width-icon)+(--spacing(4)))] group-data-[state=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear'
-                : 'w-(--sidebar-width-icon) group-data-[pinned=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear'
+                : 'w-[var(--app-sidebar-width,var(--sidebar-width-icon))]'
               : 'w-(--sidebar-width) transition-[width] duration-200 ease-linear',
             !isIconCollapsible && 'group-data-[collapsible=offcanvas]:w-0',
             'group-data-[side=right]:rotate-180',
@@ -342,11 +374,13 @@ const Sidebar = React.forwardRef<
               : undefined
           }
           initial={false}
-          transition={reduce ? { duration: 0 } : { type: 'spring', bounce: 0, duration: 0.3 }}
+          transition={reduce ? { duration: 0 } : SIDEBAR_SPRING}
           className={cn(
             'fixed inset-y-0 z-[45] hidden h-svh md:flex',
+            // The rail is the open panel clipped to the icon column, so opening only reveals it: nothing
+            // inside re-lays out, and every icon stays where it is.
             useHoverWidth
-              ? 'w-(--sidebar-width-icon) group-data-[state=expanded]:shadow-2xl group-data-[state=expanded]:shadow-black/40'
+              ? 'w-(--sidebar-width-icon) overflow-hidden group-data-[state=expanded]:shadow-2xl group-data-[state=expanded]:shadow-black/40'
               : 'w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear',
             side === 'left'
               ? 'left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
@@ -363,7 +397,10 @@ const Sidebar = React.forwardRef<
         >
           <div
             data-sidebar="sidebar"
-            className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col overflow-x-hidden group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
+            className={cn(
+              'bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full flex-col overflow-x-hidden group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm',
+              useHoverWidth ? 'w-(--sidebar-width) shrink-0' : 'w-full',
+            )}
           >
             {children}
           </div>
@@ -546,7 +583,7 @@ const SidebarGroupLabel = React.forwardRef<
       {
         className: cn(
           'text-sidebar-foreground/70 ring-sidebar-ring flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium outline-hidden transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
-          'group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0',
+          'group-data-[collapsible=icon]:opacity-0',
           className,
         ),
       },
@@ -573,7 +610,7 @@ const SidebarGroupAction = React.forwardRef<
           'text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute top-3.5 right-3 flex aspect-square w-5 items-center justify-center rounded-md p-0 outline-hidden transition-transform focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
           // Increases the hit area of the button on mobile.
           'after:absolute after:-inset-2 md:after:hidden',
-          'group-data-[collapsible=icon]:hidden',
+          'group-data-[collapsible=icon]:invisible',
           className,
         ),
       },
@@ -629,7 +666,7 @@ const SidebarMenuItem = React.forwardRef<HTMLLIElement, React.ComponentProps<'li
 SidebarMenuItem.displayName = 'SidebarMenuItem';
 
 const sidebarMenuButtonVariants = cva(
-  'peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-has-data-[sidebar=menu-badge]/menu-item:pr-7 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
+  'peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-has-data-[sidebar=menu-badge]/menu-item:pr-7 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -640,7 +677,7 @@ const sidebarMenuButtonVariants = cva(
       size: {
         default: 'h-8 text-sm',
         sm: 'h-7 text-xs',
-        lg: 'h-12 text-sm group-data-[collapsible=icon]:p-0!',
+        lg: 'h-12 text-sm',
       },
     },
     defaultVariants: {
@@ -732,7 +769,7 @@ const SidebarMenuAction = React.forwardRef<
           'peer-data-[size=sm]/menu-button:top-1',
           'peer-data-[size=default]/menu-button:top-1.5',
           'peer-data-[size=lg]/menu-button:top-2.5',
-          'group-data-[collapsible=icon]:hidden',
+          'group-data-[collapsible=icon]:invisible',
           showOnHover &&
             'peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0',
           className,
@@ -759,7 +796,7 @@ const SidebarMenuBadge = React.forwardRef<HTMLDivElement, React.ComponentProps<'
           'peer-data-[size=sm]/menu-button:top-1',
           'peer-data-[size=default]/menu-button:top-1.5',
           'peer-data-[size=lg]/menu-button:top-2.5',
-          'group-data-[collapsible=icon]:hidden',
+          'group-data-[collapsible=icon]:invisible',
           className,
         )}
         {...props}
@@ -802,7 +839,7 @@ const SidebarMenuSub = React.forwardRef<HTMLUListElement, React.ComponentProps<'
         data-sidebar="menu-sub"
         className={cn(
           'border-sidebar-border mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l px-2.5 py-0.5',
-          'group-data-[collapsible=icon]:hidden',
+          'group-data-[collapsible=icon]:invisible',
           className,
         )}
         {...props}
@@ -845,7 +882,7 @@ const SidebarMenuSubButton = React.forwardRef<
           'data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground',
           size === 'sm' && 'text-xs',
           size === 'md' && 'text-sm',
-          'group-data-[collapsible=icon]:hidden',
+          'group-data-[collapsible=icon]:invisible',
           className,
         ),
       },
