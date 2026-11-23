@@ -475,6 +475,7 @@ export const previewStatusSnapshotSchema = z
     completedAt: z.union([z.string(), z.null()]).optional(),
     result: previewWorkflowResultSchema.nullable().optional(),
     error: z.object({ message: z.string() }).passthrough().nullable().optional(),
+    commitError: z.string().nullable().optional(),
   })
   .passthrough();
 export type PreviewStatusSnapshot = z.infer<typeof previewStatusSnapshotSchema>;

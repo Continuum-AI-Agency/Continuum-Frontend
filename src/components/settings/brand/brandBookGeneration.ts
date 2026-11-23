@@ -186,22 +186,32 @@ export async function waitForBrandBookRefresh<Book extends RebuiltBook>(params: 
   return null;
 }
 
-// What the dialog may truthfully say once a run finished. A book that never refreshed does not
-// show the new analysis was saved: the commit can fail after the run reports done. An edit still
-// in place after a replace means one was saved while the run went, and the Backend kept it.
+// What the dialog may truthfully say once a run finished. The commit can fail after the run
+// reports done: the Backend records why on the run (`commitError`), and a book that never
+// refreshed without one may still be saving. An edit still in place after a replace means one
+// was saved while the run went, and the Backend kept it.
 export function reanalysisOutcome(params: {
   fresh: RebuiltBook | null;
+  commitError: string | null;
   keptEdits: boolean;
   discardRequested: boolean;
 }): {
-  title: 'brandDnaReanalyzeDone' | 'brandDnaReanalyzeFinished';
+  title: 'brandDnaReanalyzeDone' | 'brandDnaReanalyzeFinished' | 'brandDnaReanalyzeFailed';
   description:
     | 'brandDnaReanalyzeDoneLater'
+    | 'brandDnaReanalyzeNotSaved'
     | 'brandDnaReanalyzeDoneEditKept'
     | 'brandDnaReanalyzeDoneKeptEdits'
     | 'brandDnaReanalyzeDoneDescription';
-  variant: 'success' | 'info';
+  variant: 'success' | 'info' | 'error';
 } {
+  if (!params.fresh && params.commitError) {
+    return {
+      title: 'brandDnaReanalyzeFailed',
+      description: 'brandDnaReanalyzeNotSaved',
+      variant: 'error',
+    };
+  }
   if (!params.fresh) {
     return {
       title: 'brandDnaReanalyzeFinished',
@@ -256,7 +266,7 @@ export async function runBrandBookGeneration({
   onEvent?: (event: OnboardingPreviewEvent) => void;
   runPreview: PreviewRunner;
   approve: PreviewApprover;
-}): Promise<void> {
+}): Promise<{ runId: string | null }> {
   let failure = null as string | null;
   let finished = null as CompleteStatusValue | null;
   const { runId } = await runPreview({
@@ -275,4 +285,5 @@ export async function runBrandBookGeneration({
     if (!runId) throw new BrandBookRunIncompleteError(null);
     await approve({ payload: { ...payload, preview_run_id: runId }, signal });
   }
+  return { runId };
 }

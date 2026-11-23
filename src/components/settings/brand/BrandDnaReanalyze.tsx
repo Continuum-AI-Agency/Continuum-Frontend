@@ -27,6 +27,7 @@ import { Link } from '@/i18n/navigation';
 import { fetchBrandBookClient } from '@/lib/brands/useBrandBook.client';
 import {
   approveOnboardingBrandProfile,
+  fetchPreviewStatus,
   PreviewRateLimitedError,
   runOnboardingPreview,
 } from '@/lib/onboarding/agentClient';
@@ -151,7 +152,7 @@ export function BrandDnaReanalyze({
       const websiteUrl = scrape?.url ?? url;
       const discardEditSha256 =
         editedBrandMd !== null && discardEdits ? await sha256Hex(editedBrandMd) : null;
-      await runBrandBookGeneration({
+      const { runId } = await runBrandBookGeneration({
         payload: brandBookReanalysisPayload(payload, {
           websiteUrl,
           scrape,
@@ -182,9 +183,14 @@ export function BrandDnaReanalyze({
         fetchBook: fetchBrandBookClient,
         signal: controller.signal,
       });
+      const status =
+        fresh || !runId
+          ? null
+          : await fetchPreviewStatus(runId, { signal: controller.signal }).catch(() => null);
       if (controller.signal.aborted) return;
       const outcome = reanalysisOutcome({
         fresh,
+        commitError: status?.commitError ?? null,
         keptEdits: isEdited && !discardEdits,
         discardRequested: discardEditSha256 !== null,
       });

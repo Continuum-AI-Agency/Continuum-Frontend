@@ -245,7 +245,7 @@ describe('runBrandBookGeneration', () => {
   it('resolves when a website-only run completes; the Backend commits it', async () => {
     const approve = mock(async () => ({}));
     const seen: string[] = [];
-    await runBrandBookGeneration({
+    const run = await runBrandBookGeneration({
       payload: payload(),
       runPreview: events({ type: 'run', runId: 'run-1', reused: false }, complete('ok')),
       approve,
@@ -253,6 +253,7 @@ describe('runBrandBookGeneration', () => {
     });
     expect(approve).not.toHaveBeenCalled();
     expect(seen).toEqual(['run', 'complete']);
+    expect(run.runId).toBe('run-1');
   });
 
   it('throws when the stream reports an error, even though the stream itself ended normally', async () => {
@@ -350,25 +351,35 @@ describe('reanalysisOutcome', () => {
   const book = (edited: boolean) => ({ refreshed_at: '2026-11-21T10:01:00Z', brand_md_is_edited: edited });
 
   it('does not claim the analysis was saved while the page has not updated', () => {
-    expect(reanalysisOutcome({ fresh: null, keptEdits: false, discardRequested: true })).toEqual({
+    expect(reanalysisOutcome({ fresh: null, commitError: null, keptEdits: false, discardRequested: true })).toEqual({
       title: 'brandDnaReanalyzeFinished',
       description: 'brandDnaReanalyzeDoneLater',
       variant: 'info',
     });
   });
 
+  it('says the analysis was not saved when the Backend recorded a failed commit', () => {
+    expect(
+      reanalysisOutcome({ fresh: null, commitError: 'write failed', keptEdits: false, discardRequested: false }),
+    ).toEqual({
+      title: 'brandDnaReanalyzeFailed',
+      description: 'brandDnaReanalyzeNotSaved',
+      variant: 'error',
+    });
+  });
+
   it('says so when the edit it was told to replace is still there', () => {
     expect(
-      reanalysisOutcome({ fresh: book(true), keptEdits: false, discardRequested: true }),
+      reanalysisOutcome({ fresh: book(true), commitError: null, keptEdits: false, discardRequested: true }),
     ).toMatchObject({ description: 'brandDnaReanalyzeDoneEditKept', variant: 'success' });
   });
 
   it('reports kept edits and a clean swap as they are', () => {
     expect(
-      reanalysisOutcome({ fresh: book(true), keptEdits: true, discardRequested: false }).description,
+      reanalysisOutcome({ fresh: book(true), commitError: null, keptEdits: true, discardRequested: false }).description,
     ).toBe('brandDnaReanalyzeDoneKeptEdits');
     expect(
-      reanalysisOutcome({ fresh: book(false), keptEdits: false, discardRequested: true }).description,
+      reanalysisOutcome({ fresh: book(false), commitError: null, keptEdits: false, discardRequested: true }).description,
     ).toBe('brandDnaReanalyzeDoneDescription');
   });
 });
