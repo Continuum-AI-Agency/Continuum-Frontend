@@ -160,6 +160,8 @@ function PlanAction({
       return <p className="text-xs text-muted-foreground">{tUi('m_2c8487e4a0')}</p>;
     case 'requires_organic':
       return <p className="text-xs text-muted-foreground">{tUi('m_eb885520a1')}</p>;
+    case 'granted':
+      return <p className="text-xs text-muted-foreground">{tUi('billingPlanGrantedNote')}</p>;
   }
 }
 

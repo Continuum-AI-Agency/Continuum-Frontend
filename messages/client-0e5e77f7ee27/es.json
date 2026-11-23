@@ -747,6 +747,7 @@
     "billingNeedsPlanReason": "Elige un plan primero; la facturación automática cobra el uso adicional a la tarjeta de tu suscripción.",
     "billingOrganic": "Agente Orgánico, calendario y publicación",
     "billingPaidMedia": "Jaina, creación de anuncios en Forge, aprobaciones y optimizador",
+    "billingPlanGrantedReason": "Continuum activó tu plan, así que no hay una suscripción con tarjeta a la que cobrar el uso adicional. Compra paquetes de créditos para seguir generando.",
     "billingStudio": "AI Canvas",
     "billingTrends": "Trends"
   },

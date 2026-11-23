@@ -7,6 +7,7 @@ import { BillingApiRequestError, promoErrorMessage, withCheckoutSessionId } from
 import {
   AUTO_BILLING_CONTRACT,
   AUTO_BILLING_NEEDS_PLAN,
+  AUTO_BILLING_PLAN_GRANTED,
   toBillingView as buildBillingView,
   checkoutReturnParams,
   isBrandOwner,
@@ -228,6 +229,59 @@ describe('toBillingView — states', () => {
   });
 });
 
+describe('toBillingView — a plan Continuum activated (admin grant, no Stripe)', () => {
+  // Alcaldía's shape in prod: admin-granted products, no subscription row, entitlements.plans [].
+  const adminGranted = (patch: Parameters<typeof overview>[0] = {}) =>
+    overview({
+      entitlements: { products: ['mcp', 'organic_agent', 'studio', 'trends'] },
+      ...patch,
+    });
+
+  test('a plan whose products the brand already holds reads as active, with nothing to buy', () => {
+    const view = selfServe(adminGranted());
+    expect(view.plans.map((plan) => [plan.planCode, plan.status, plan.action])).toEqual([
+      ['organic_studio', 'active', 'granted'],
+      ['paid_media', 'available', 'checkout'],
+    ]);
+  });
+
+  test('auto-billing says the plan came from Continuum, never "Choose a plan first"', () => {
+    const view = selfServe(
+      adminGranted({ x: { balanceUsd: 0, overageEnabled: false, overageCapUsd: null } }),
+    );
+    expect(view.autoBilling).toEqual({
+      enabled: false,
+      capUsd: null,
+      disabledReason: AUTO_BILLING_PLAN_GRANTED,
+    });
+    expect(view.x?.autoBilling.disabledReason).toBe(AUTO_BILLING_PLAN_GRANTED);
+  });
+
+  test('a partial grant does not activate the plan', () => {
+    const view = selfServe(overview({ entitlements: { products: ['studio'] } }));
+    expect(view.plans[0]).toMatchObject({ status: 'available', action: 'checkout' });
+    expect(view.autoBilling.disabledReason).toBe(AUTO_BILLING_NEEDS_PLAN);
+  });
+
+  test('next to a live subscription, the granted plan is never offered as an add-on', () => {
+    const view = selfServe(
+      adminGranted({
+        entitlements: {
+          billingModel: 'stripe',
+          plans: ['paid_media'],
+          products: ['organic_agent', 'paid_media', 'studio'],
+        },
+        subscription: subscription(['paid_media']),
+      }),
+    );
+    expect(view.plans.map((plan) => [plan.planCode, plan.status, plan.action])).toEqual([
+      ['organic_studio', 'active', 'granted'],
+      ['paid_media', 'active', 'none'],
+    ]);
+    expect(view.autoBilling.disabledReason).toBeNull();
+  });
+});
+
 describe('toBillingView — Trends+ add-on', () => {
   const withTrendsPlus = (input: BillingOverview): BillingOverview => ({
     ...input,
@@ -404,7 +458,7 @@ describe('toBillingView — credit packs for a brand with Canvas but no subscrip
     const view = selfServe(grandfathered(0));
     expect(view).toMatchObject({ hasLiveSubscription: false, canBuyCredits: true });
     expect(view.outOfCredits).toBe(true);
-    expect(view.autoBilling.disabledReason).toBe(AUTO_BILLING_NEEDS_PLAN);
+    expect(view.autoBilling.disabledReason).toBe(AUTO_BILLING_PLAN_GRANTED);
   });
 
   test('a grandfathered brand with a balance can buy more and is not out of credits', () => {

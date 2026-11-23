@@ -838,6 +838,8 @@
   "billingNeedListening": "escucha de marca",
   "billingIncludedCredits": "{count, number} créditos de Canvas incluidos al mes",
   "billingNeedsPlanReason": "Elige un plan primero; la facturación automática cobra el uso adicional a la tarjeta de tu suscripción.",
+  "billingPlanGrantedReason": "Continuum activó tu plan, así que no hay una suscripción con tarjeta a la que cobrar el uso adicional. Compra paquetes de créditos para seguir generando.",
+  "billingPlanGrantedNote": "Activado por Continuum. Contacta a tu equipo de Continuum para cambiarlo.",
   "billingContractReason": "Las marcas con contrato se facturan según su acuerdo, sin cobro por uso.",
   "autoBillingOn": "Activada. Cuando se agotan los créditos, el {usage} se cobra a tu tarjeta a {rate} por crédito{cap}.",
   "autoBillingOff": "Desactivada. Cuando se agotan los créditos, {paused} hasta que compres un paquete. Actívala para {keepGoing} a {rate} por crédito{cap}.",
