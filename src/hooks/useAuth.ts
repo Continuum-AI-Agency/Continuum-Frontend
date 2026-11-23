@@ -23,11 +23,17 @@ type UseAuthOptions = {
 
 type SignInResult = Awaited<ReturnType<typeof signInWithPasswordAction>>;
 
+// Auth refuses a second email to the same address inside its frequency window, and a send the
+// provider refused (quota spent) will not go through on an immediate retry either. Holding the
+// send button for this long stops resend loops that spend the project's hourly email budget.
+export const EMAIL_SEND_HOLD_MS = 60_000;
+
 export function useAuth(options?: UseAuthOptions) {
   const uiText = useTranslations('common');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(options?.initialError ?? null);
   const [isGooglePending, setIsGooglePending] = useState(false);
+  const [isEmailSendHeld, setIsEmailSendHeld] = useState(false);
   const router = useRouter();
 
   const endSessions = async (signOut: typeof logoutAction): Promise<boolean> => {
@@ -69,6 +75,11 @@ export function useAuth(options?: UseAuthOptions) {
     return new Promise((resolve) => {
       startTransition(async () => {
         const result = await sendMagicLinkAction(input);
+
+        if (result.success || result.retryLater) {
+          setIsEmailSendHeld(true);
+          setTimeout(() => setIsEmailSendHeld(false), EMAIL_SEND_HOLD_MS);
+        }
 
         if (!result.success) {
           setError(result.error);
@@ -180,6 +191,7 @@ export function useAuth(options?: UseAuthOptions) {
     signInWithGooglePopup,
     isPending,
     isGooglePending,
+    isEmailSendHeld,
     error,
     setError,
     clearError,
