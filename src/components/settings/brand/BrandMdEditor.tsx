@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { resetBrandMd, saveBrandMd } from '@/lib/api/brandBook.client';
+import { ApiError } from '@/lib/api/errors';
 import { BrandBrainSections } from './BrandBrain/BrandBrainSections';
 import { readBrainDoc, writeBrainDoc } from './BrandBrain/brandBrain';
 import { useBrandMdDirty } from './BrandMdDirtyContext';
@@ -20,6 +21,10 @@ type Props = {
   // Null when brand.md has not been generated yet (un-migrated brand).
   initialBrandMd: string | null;
   isEdited: boolean;
+  // The version this doc was read at; a save made against an older one is refused (409).
+  version?: string | null;
+  // Viewers see the document but cannot change it (the Backend refuses their save anyway).
+  canEdit: boolean;
 };
 
 export function canSaveBrandMd(draft: string): boolean {
@@ -32,7 +37,13 @@ export function canSaveBrandMd(draft: string): boolean {
 // Front-matter validity is derived via parseBrandMd and shown as a non-blocking hint.
 // Save/reset write through saveBrandMd / resetBrandMd and then router.refresh() so
 // the parent RSC re-fetches the updated envelope.
-export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
+export function BrandMdEditor({
+  brandId,
+  initialBrandMd,
+  isEdited,
+  version = null,
+  canEdit,
+}: Props) {
   const tUi = useTranslations('settings');
   const uiErrorMessage = useUiErrorMessage();
 
@@ -47,6 +58,10 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
   // Track whether the current draft differs from the last-saved value.
   const savedRef = useRef(initialBrandMd ?? '');
   const dirty = draft !== savedRef.current;
+  const versionRef = useRef(version);
+  useEffect(() => {
+    versionRef.current = version;
+  }, [version]);
 
   // Keep the context dirty flag in sync so BrandBookActions can suppress refresh.
   useEffect(() => {
@@ -72,7 +87,8 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
   const handleSave = () => {
     startTransition(async () => {
       try {
-        const result = await saveBrandMd(brandId, draft);
+        const result = await saveBrandMd(brandId, draft, versionRef.current);
+        versionRef.current = result.version ?? versionRef.current;
         const saved = result.brand_md ?? draft;
         savedRef.current = saved;
         setDraft(saved);
@@ -80,9 +96,11 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
         show({ title: tUi('m_1a48a3ee2e'), variant: 'success' });
         router.refresh();
       } catch (e) {
+        // A conflict keeps the draft on screen: refreshing would replace it with the other edit.
         show({
           title: tUi('m_0a44446762'),
-          description: uiErrorMessage(e),
+          description:
+            e instanceof ApiError && e.status === 409 ? tUi('brandMdConflict') : uiErrorMessage(e),
           variant: 'error',
         });
       }
@@ -93,6 +111,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
     startResetTransition(async () => {
       try {
         const result = await resetBrandMd(brandId);
+        versionRef.current = result.version ?? versionRef.current;
         const next = result.brand_md ?? '';
         savedRef.current = next;
         setDraft(next);
@@ -118,7 +137,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
     );
   }
 
-  const isBusy = isPending || isResetting;
+  const isBusy = isPending || isResetting || !canEdit;
 
   return (
     <div className="space-y-3">
@@ -189,6 +208,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
             onChange={(e) => setDraft(e.target.value)}
             rows={24}
             spellCheck={false}
+            readOnly={!canEdit}
             className="w-full resize-y rounded-md border border-border/60 bg-muted/30 px-3 py-2 font-mono text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             aria-label={tUi('m_f2cdbcb7bd')}
           />

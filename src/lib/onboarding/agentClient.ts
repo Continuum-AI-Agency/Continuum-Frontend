@@ -156,6 +156,9 @@ export const agentRunContextSchema = z.object({
   integrated_platforms: z.array(integrationProviderSchema).default([]),
   brand_voice_tags: z.array(z.string().min(1)).default([]),
   integration_account_ids: z.array(z.string().uuid()).default([]),
+  // A Settings re-analysis replacing the user's Brand DNA edit; the Backend applies it only
+  // once the new analysis is stored.
+  discard_brand_md_edit: z.boolean().optional(),
 });
 
 export type AgentRunContext = z.infer<typeof agentRunContextSchema>;
