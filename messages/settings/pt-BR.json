@@ -1147,7 +1147,9 @@
   "brandDnaReanalyzeVoiceLabel": "A voz da sua marca",
   "brandDnaReanalyzeVoiceHint": "As tags que você marcar orientam a nova análise. Deixe todas desmarcadas para que ela leia a voz a partir das suas evidências.",
   "brandDnaReanalyzeUpdating": "Análise salva. Atualizando a página de DNA da marca…",
-  "brandDnaReanalyzeDoneLater": "A nova análise de {url} foi salva. A página de DNA da marca ainda está sendo atualizada; recarregue-a em um minuto.",
+  "brandDnaReanalyzeDoneLater": "A análise de {url} terminou, mas a página de DNA da marca ainda não foi atualizada. Recarregue-a em alguns minutos. Se ela ainda mostrar o DNA da marca anterior, a nova análise não foi salva; execute-a novamente.",
   "brandDnaReanalyzeAudienceLabel": "Quem são seus clientes? (opcional)",
-  "brandDnaReanalyzeAudienceHint": "Com suas próprias palavras. A nova análise monta o público a partir disso em vez de deduzi-lo do site."
+  "brandDnaReanalyzeAudienceHint": "Com suas próprias palavras. A nova análise monta o público a partir disso em vez de deduzi-lo do site.",
+  "brandDnaReanalyzeFinished": "Análise concluída",
+  "brandDnaReanalyzeDoneEditKept": "A nova análise de {url} foi salva, mas uma edição salva enquanto ela rodava foi mantida em vez de substituída. Suas edições continuam com prioridade; redefina-as no editor abaixo para ver a nova análise."
 }

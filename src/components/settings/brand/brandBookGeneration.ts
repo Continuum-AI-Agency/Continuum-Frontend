@@ -109,7 +109,9 @@ export type BrandDnaReanalysisInputs = {
   social?: Pick<AgentRequestPayload, 'instagram_profile' | 'facebook_profile'>;
   // The voice tags the user picked (onboarding's tone picker); none is a valid choice.
   voiceTags?: string[];
-  discardEdit: boolean;
+  // SHA-256 of the edit the user chose to replace (`sha256Hex`); absent keeps it. The Backend
+  // replaces only that edit, so one saved while the run was going survives.
+  discardEditSha256?: string | null;
 };
 
 // A re-analysis starts from the user's own evidence: the website and, when given, their
@@ -140,7 +142,7 @@ export function brandBookReanalysisPayload(
       brand_voice_tags: inputs.voiceTags ?? [],
       // Account ids only re-link accounts the brand already has; the analysis never reads them.
       integration_account_ids: [],
-      ...(inputs.discardEdit ? { discard_brand_md_edit: true } : {}),
+      ...(inputs.discardEditSha256 ? { discard_brand_md_edit: inputs.discardEditSha256 } : {}),
     },
     scrape: inputs.scrape,
     ...(instagram ? { instagram_profile: instagram } : {}),
@@ -159,27 +161,65 @@ export function brandBookReanalysisPayload(
   };
 }
 
+type RebuiltBook = { refreshed_at: string | null; brand_md_is_edited?: boolean };
+
 // Settings renders the materialized brand book, which a commit only queues a refresh for. After a
 // run, wait until the book has been rebuilt since the run started, so the page shows the new DNA
-// instead of the one it replaces. False when it did not happen in time.
-export async function waitForBrandBookRefresh(params: {
+// instead of the one it replaces. Null when it did not happen in time.
+export async function waitForBrandBookRefresh<Book extends RebuiltBook>(params: {
   brandId: string;
   refreshedBefore: string | null;
-  fetchBook: (brandId: string) => Promise<{ refreshed_at: string | null } | null>;
+  fetchBook: (brandId: string) => Promise<Book | null>;
   timeoutMs?: number;
   intervalMs?: number;
   signal?: AbortSignal;
   sleep?: (ms: number) => Promise<void>;
-}): Promise<boolean> {
+}): Promise<Book | null> {
   const sleep = params.sleep ?? ((ms: number) => new Promise((done) => setTimeout(done, ms)));
   const intervalMs = params.intervalMs ?? 2_000;
   const attempts = Math.ceil((params.timeoutMs ?? 30_000) / intervalMs);
   for (let attempt = 0; attempt < attempts && !params.signal?.aborted; attempt += 1) {
-    const refreshedAt = (await params.fetchBook(params.brandId))?.refreshed_at ?? null;
-    if (refreshedAt && refreshedAt !== params.refreshedBefore) return true;
+    const book = await params.fetchBook(params.brandId);
+    if (book?.refreshed_at && book.refreshed_at !== params.refreshedBefore) return book;
     await sleep(intervalMs);
   }
-  return false;
+  return null;
+}
+
+// What the dialog may truthfully say once a run finished. A book that never refreshed does not
+// show the new analysis was saved: the commit can fail after the run reports done. An edit still
+// in place after a replace means one was saved while the run went, and the Backend kept it.
+export function reanalysisOutcome(params: {
+  fresh: RebuiltBook | null;
+  keptEdits: boolean;
+  discardRequested: boolean;
+}): {
+  title: 'brandDnaReanalyzeDone' | 'brandDnaReanalyzeFinished';
+  description:
+    | 'brandDnaReanalyzeDoneLater'
+    | 'brandDnaReanalyzeDoneEditKept'
+    | 'brandDnaReanalyzeDoneKeptEdits'
+    | 'brandDnaReanalyzeDoneDescription';
+  variant: 'success' | 'info';
+} {
+  if (!params.fresh) {
+    return {
+      title: 'brandDnaReanalyzeFinished',
+      description: 'brandDnaReanalyzeDoneLater',
+      variant: 'info',
+    };
+  }
+  const edited = params.fresh.brand_md_is_edited === true;
+  return {
+    title: 'brandDnaReanalyzeDone',
+    description:
+      params.discardRequested && edited
+        ? 'brandDnaReanalyzeDoneEditKept'
+        : params.keptEdits
+          ? 'brandDnaReanalyzeDoneKeptEdits'
+          : 'brandDnaReanalyzeDoneDescription',
+    variant: 'success',
+  };
 }
 
 /** The run ended without a stored Brand DNA; whatever the brand had before still stands. */

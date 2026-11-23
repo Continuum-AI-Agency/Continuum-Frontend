@@ -8,6 +8,7 @@ import {
   brandBookSectionLabel,
   canGenerateBrandBook,
   runBrandBookGeneration,
+  reanalysisOutcome,
   waitForBrandBookRefresh,
 } from './brandBookGeneration';
 
@@ -134,7 +135,6 @@ describe('brandBookReanalysisPayload', () => {
       brandBookReanalysisPayload(base, {
         websiteUrl: 'https://right.example',
         scrape,
-        discardEdit: false,
       }),
     ).toEqual({
       brandProfile: {
@@ -156,9 +156,10 @@ describe('brandBookReanalysisPayload', () => {
     const out = brandBookReanalysisPayload(base, {
       websiteUrl: 'https://right.example',
       scrape,
-      discardEdit: true,
+      discardEditSha256: 'a'.repeat(64),
     });
-    expect(out.runContext.discard_brand_md_edit).toBe(true);
+    // Named by its hash, so the Backend replaces only the edit the user saw.
+    expect(out.runContext.discard_brand_md_edit).toBe('a'.repeat(64));
   });
 
   it("grounds the run on the user's own description and documents", () => {
@@ -167,7 +168,6 @@ describe('brandBookReanalysisPayload', () => {
       scrape,
       description: '  We rent bikes in Cali.  ',
       documentIds: ['doc-1'],
-      discardEdit: false,
     });
     expect(out.intake).toEqual({
       kind: 'website',
@@ -183,7 +183,6 @@ describe('brandBookReanalysisPayload', () => {
       websiteUrl: 'https://right.example',
       scrape,
       audience: '  Commuters and tourists in Cali.  ',
-      discardEdit: false,
     });
     expect(out.brandProfile.target_audience).toEqual({ summary: 'Commuters and tourists in Cali.' });
     expect(out.runContext.integration_account_ids).toEqual([]);
@@ -194,7 +193,6 @@ describe('brandBookReanalysisPayload', () => {
       websiteUrl: 'https://right.example',
       scrape,
       voiceTags: ['Playful', 'Bold'],
-      discardEdit: false,
     });
     expect(out.runContext.brand_voice_tags).toEqual(['Playful', 'Bold']);
   });
@@ -205,7 +203,6 @@ describe('brandBookReanalysisPayload', () => {
       websiteUrl: 'https://right.example',
       scrape,
       social: { instagram_profile: instagram as never },
-      discardEdit: false,
     });
     expect(out.instagram_profile).toEqual(instagram as never);
     expect(out.intake).toBeUndefined();
@@ -217,7 +214,6 @@ describe('brandBookReanalysisPayload', () => {
       websiteUrl: 'https://right.example',
       scrape,
       social: { facebook_profile: facebook as never },
-      discardEdit: false,
     });
     expect(out.facebook_profile).toEqual(facebook as never);
     expect(out.intake).toMatchObject({ kind: 'website', url: 'https://right.example' });
@@ -229,7 +225,6 @@ describe('brandBookReanalysisPayload', () => {
       scrape,
       description: '   ',
       documentIds: ['doc-1'],
-      discardEdit: false,
     });
     expect(out.intake?.description).toBeNull();
     expect(out.document_ids).toEqual(['doc-1']);
@@ -332,7 +327,7 @@ describe('waitForBrandBookRefresh', () => {
       fetchBook,
       sleep,
     });
-    expect(fresh).toBe(true);
+    expect(fresh).toEqual({ refreshed_at: '2026-11-21T10:01:00Z' });
     expect(fetchBook).toHaveBeenCalledTimes(3);
   });
 
@@ -346,7 +341,34 @@ describe('waitForBrandBookRefresh', () => {
       intervalMs: 2_000,
       sleep,
     });
-    expect(fresh).toBe(false);
+    expect(fresh).toBeNull();
     expect(fetchBook).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('reanalysisOutcome', () => {
+  const book = (edited: boolean) => ({ refreshed_at: '2026-11-21T10:01:00Z', brand_md_is_edited: edited });
+
+  it('does not claim the analysis was saved while the page has not updated', () => {
+    expect(reanalysisOutcome({ fresh: null, keptEdits: false, discardRequested: true })).toEqual({
+      title: 'brandDnaReanalyzeFinished',
+      description: 'brandDnaReanalyzeDoneLater',
+      variant: 'info',
+    });
+  });
+
+  it('says so when the edit it was told to replace is still there', () => {
+    expect(
+      reanalysisOutcome({ fresh: book(true), keptEdits: false, discardRequested: true }),
+    ).toMatchObject({ description: 'brandDnaReanalyzeDoneEditKept', variant: 'success' });
+  });
+
+  it('reports kept edits and a clean swap as they are', () => {
+    expect(
+      reanalysisOutcome({ fresh: book(true), keptEdits: true, discardRequested: false }).description,
+    ).toBe('brandDnaReanalyzeDoneKeptEdits');
+    expect(
+      reanalysisOutcome({ fresh: book(false), keptEdits: false, discardRequested: true }).description,
+    ).toBe('brandDnaReanalyzeDoneDescription');
   });
 });

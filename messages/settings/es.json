@@ -1147,7 +1147,9 @@
   "brandDnaReanalyzeVoiceLabel": "La voz de tu marca",
   "brandDnaReanalyzeVoiceHint": "Las etiquetas que marques guían el nuevo análisis. Déjalas todas sin marcar para que lea la voz a partir de tu evidencia.",
   "brandDnaReanalyzeUpdating": "Análisis guardado. Actualizando la página de ADN de marca…",
-  "brandDnaReanalyzeDoneLater": "El nuevo análisis de {url} quedó guardado. La página de ADN de marca todavía se está actualizando; recárgala en un minuto.",
+  "brandDnaReanalyzeDoneLater": "El análisis de {url} terminó, pero la página de ADN de marca aún no se ha actualizado. Recárgala en unos minutos. Si sigue mostrando el ADN de marca anterior, el nuevo análisis no se guardó; vuelve a ejecutarlo.",
   "brandDnaReanalyzeAudienceLabel": "¿Quiénes son tus clientes? (opcional)",
-  "brandDnaReanalyzeAudienceHint": "Con tus propias palabras. El nuevo análisis construye la audiencia a partir de esto en lugar de deducirla del sitio web."
+  "brandDnaReanalyzeAudienceHint": "Con tus propias palabras. El nuevo análisis construye la audiencia a partir de esto en lugar de deducirla del sitio web.",
+  "brandDnaReanalyzeFinished": "Análisis terminado",
+  "brandDnaReanalyzeDoneEditKept": "El nuevo análisis de {url} está guardado, pero se conservó una edición guardada mientras se ejecutaba, en lugar de reemplazarla. Tus ediciones siguen teniendo prioridad; restablécelas en el editor de abajo para ver el nuevo análisis."
 }

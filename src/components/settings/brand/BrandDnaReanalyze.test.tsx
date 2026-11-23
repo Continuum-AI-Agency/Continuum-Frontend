@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { sha256Hex } from '@continuum/contracts';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { render } from '@/i18n/__tests__/render';
 import type { AgentRequestPayload, OnboardingPreviewEvent } from '@/lib/onboarding/agentClient';
@@ -41,7 +42,9 @@ const navigation = await import('next/navigation');
 mock.module('next/navigation', () => ({ ...navigation, useRouter: () => ({ refresh }) }));
 mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
 // The rebuilt book: newer than the one on screen, so the dialog stops waiting at once.
-const fetchBrandBookClient = mock(async () => ({ refreshed_at: '2026-11-21T10:05:00Z' }));
+const REBUILT = { refreshed_at: '2026-11-21T10:05:00Z', brand_md_is_edited: false };
+let rebuilt: { refreshed_at: string; brand_md_is_edited: boolean } = REBUILT;
+const fetchBrandBookClient = mock(async () => rebuilt);
 mock.module('@/lib/brands/useBrandBook.client', () => ({ fetchBrandBookClient }));
 
 const { BrandDnaReanalyze } = await import('./BrandDnaReanalyze');
@@ -60,13 +63,15 @@ const PAYLOAD: AgentRequestPayload = {
   },
 };
 
-function open(isEdited = true, payload: AgentRequestPayload = PAYLOAD) {
+const EDIT = '# Acme\n## Positioning\nBike rentals, corrected by hand.';
+
+function open(editedBrandMd: string | null = EDIT, payload: AgentRequestPayload = PAYLOAD) {
   render(
     <BrandDnaReanalyze
       brandId="brand-1"
       payload={payload}
       currentWebsite="https://wrong.example"
-      isEdited={isEdited}
+      editedBrandMd={editedBrandMd}
       documents={[{ id: '0f1e2d3c-4b5a-4968-8776-655443322110', name: 'Brand guide.pdf' }]}
       refreshedAt="2026-11-21T10:00:00Z"
     />,
@@ -82,6 +87,7 @@ function submit(url = 'right.example') {
 describe('BrandDnaReanalyze', () => {
   beforeEach(() => {
     streamed = [];
+    rebuilt = REBUILT;
     for (const fn of [runOnboardingPreview, approveOnboardingBrandProfile, refresh, show]) {
       fn.mockClear();
     }
@@ -123,7 +129,7 @@ describe('BrandDnaReanalyze', () => {
     expect(sent?.brandProfile.website_url).toBe('https://right.example/');
     expect(sent?.runContext).toMatchObject({
       brand_voice_tags: ['Bold', 'Playful'],
-      discard_brand_md_edit: true,
+      discard_brand_md_edit: await sha256Hex(EDIT),
     });
     expect(sent?.intake).toMatchObject({ description: 'We rent bikes in Cali.' });
     expect(sent?.document_ids).toEqual(['0f1e2d3c-4b5a-4968-8776-655443322110']);
@@ -160,8 +166,21 @@ describe('BrandDnaReanalyze', () => {
     });
   });
 
+  it('says so when an edit saved during the run was kept instead of replaced', async () => {
+    streamed = [{ type: 'complete', status: 'ok' }];
+    rebuilt = { ...REBUILT, brand_md_is_edited: true };
+    open();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Replace my edits/ }));
+    submit();
+
+    await waitFor(() => expect(show).toHaveBeenCalledTimes(1));
+    expect(show.mock.calls[0]?.[0]).toMatchObject({
+      description: expect.stringContaining('saved while it ran was kept'),
+    });
+  });
+
   it('starts from what the user wrote about the business at onboarding', () => {
-    open(false, {
+    open(null, {
       ...PAYLOAD,
       intake: {
         kind: 'description',
@@ -178,7 +197,7 @@ describe('BrandDnaReanalyze', () => {
   });
 
   it('refuses a website in the social page field and runs nothing', async () => {
-    open(false);
+    open(null);
     fireEvent.change(screen.getByLabelText('Instagram or Facebook page (optional)'), {
       target: { value: 'right.example' },
     });
@@ -192,7 +211,7 @@ describe('BrandDnaReanalyze', () => {
   });
 
   it('refuses an address that is not a website and ties the error to the field', () => {
-    open(false);
+    open(null);
     submit('not a website');
 
     const field = screen.getByLabelText('Website');

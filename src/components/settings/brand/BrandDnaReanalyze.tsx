@@ -8,6 +8,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { sha256Hex } from '@continuum/contracts';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -35,6 +36,7 @@ import {
   BrandBookRunIncompleteError,
   brandBookGenerationStatus,
   brandBookReanalysisPayload,
+  reanalysisOutcome,
   runBrandBookGeneration,
   waitForBrandBookRefresh,
 } from './brandBookGeneration';
@@ -56,20 +58,22 @@ export function BrandDnaReanalyze({
   brandId,
   payload,
   currentWebsite,
-  isEdited,
+  editedBrandMd,
   documents,
   refreshedAt,
 }: {
   brandId: string;
   payload: BrandBookGenerationPayload;
   currentWebsite: string | null;
-  isEdited: boolean;
+  // The user's edit as stored, or null when the book is the generated one.
+  editedBrandMd: string | null;
   // The brand's ready documents; each can ground the new run.
   documents: ReanalysisDocument[];
   // When the book on screen was built; the dialog waits for a newer one before refreshing.
   refreshedAt: string | null;
 }) {
   const tUi = useTranslations('settings');
+  const isEdited = editedBrandMd !== null;
   const uiErrorMessage = useUiErrorMessage();
   const router = useRouter();
   const { show } = useToast();
@@ -145,6 +149,8 @@ export function BrandDnaReanalyze({
       }
       const scrape = source.kind === 'web' ? source.scrape : null;
       const websiteUrl = scrape?.url ?? url;
+      const discardEditSha256 =
+        editedBrandMd !== null && discardEdits ? await sha256Hex(editedBrandMd) : null;
       await runBrandBookGeneration({
         payload: brandBookReanalysisPayload(payload, {
           websiteUrl,
@@ -159,7 +165,7 @@ export function BrandDnaReanalyze({
                 ? { facebook_profile: socialSource.facebook_profile }
                 : undefined,
           voiceTags,
-          discardEdit: isEdited && discardEdits,
+          discardEditSha256,
         }),
         signal: controller.signal,
         onEvent: (event) => {
@@ -177,18 +183,15 @@ export function BrandDnaReanalyze({
         signal: controller.signal,
       });
       if (controller.signal.aborted) return;
+      const outcome = reanalysisOutcome({
+        fresh,
+        keptEdits: isEdited && !discardEdits,
+        discardRequested: discardEditSha256 !== null,
+      });
       show({
-        title: tUi('brandDnaReanalyzeDone'),
-        // Kept edits still override the new analysis, so say so rather than claim it is showing.
-        description: tUi(
-          !fresh
-            ? 'brandDnaReanalyzeDoneLater'
-            : isEdited && !discardEdits
-              ? 'brandDnaReanalyzeDoneKeptEdits'
-              : 'brandDnaReanalyzeDoneDescription',
-          { url: websiteUrl },
-        ),
-        variant: 'success',
+        title: tUi(outcome.title),
+        description: tUi(outcome.description, { url: websiteUrl }),
+        variant: outcome.variant,
       });
       setOpen(false);
       router.refresh();

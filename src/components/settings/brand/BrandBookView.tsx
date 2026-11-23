@@ -847,7 +847,7 @@ export function BrandDnaPanel({
                 brandId={brandBook.brand_id}
                 payload={reanalysisPayload}
                 currentWebsite={website}
-                isEdited={brandBook.brand_md_is_edited}
+                editedBrandMd={brandBook.brand_md_is_edited ? brandBook.brand_md : null}
                 documents={readyDocuments(brandBook)}
                 refreshedAt={brandBook.refreshed_at}
               />

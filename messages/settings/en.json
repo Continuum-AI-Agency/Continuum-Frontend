@@ -1147,7 +1147,9 @@
   "brandDnaReanalyzeVoiceLabel": "Your brand's voice",
   "brandDnaReanalyzeVoiceHint": "The tags you tick guide the new analysis. Leave them all unticked to let it read the voice from your evidence.",
   "brandDnaReanalyzeUpdating": "Analysis saved. Updating the Brand DNA page…",
-  "brandDnaReanalyzeDoneLater": "The new analysis of {url} is saved. The Brand DNA page is still updating; refresh it in a minute.",
+  "brandDnaReanalyzeDoneLater": "The analysis of {url} finished, but the Brand DNA page has not updated yet. Refresh it in a few minutes. If it still shows the old Brand DNA, the new analysis was not saved; run it again.",
   "brandDnaReanalyzeAudienceLabel": "Who are your customers? (optional)",
-  "brandDnaReanalyzeAudienceHint": "In your own words. The new analysis builds the audience from this instead of guessing it from the website."
+  "brandDnaReanalyzeAudienceHint": "In your own words. The new analysis builds the audience from this instead of guessing it from the website.",
+  "brandDnaReanalyzeFinished": "Analysis finished",
+  "brandDnaReanalyzeDoneEditKept": "The new analysis of {url} is saved, but an edit saved while it ran was kept instead of replaced. Your edits still take priority; reset them in the editor below to see the new analysis."
 }
