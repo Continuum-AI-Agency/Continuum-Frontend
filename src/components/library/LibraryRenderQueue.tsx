@@ -68,7 +68,7 @@ export function LibraryRenderQueue() {
       <section aria-labelledby="library-render-queue-title" className="rounded-xl border bg-card">
         <button
           type="button"
-          className="flex w-full items-center gap-3 px-4 py-3 text-left"
+          className="flex w-full items-center gap-3 px-3 py-3 text-left"
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
         >
@@ -93,7 +93,7 @@ export function LibraryRenderQueue() {
         </button>
 
         <div
-          className={`grid grid-cols-2 gap-[var(--app-shell-gap)] border-t px-4 py-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 ${open ? '' : 'hidden'}`}
+          className={`grid grid-cols-2 gap-[var(--app-shell-gap)] border-t px-3 py-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 ${open ? '' : 'hidden'}`}
         >
           {jobs.map((job) => {
             const active = ['claimed', 'rendering', 'saving'].includes(job.state);

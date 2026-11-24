@@ -320,7 +320,7 @@ function AccountHeader({
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-border/60 border-b pb-3">
       <p className="min-w-0 truncate text-sm">
-        <span className="text-muted-foreground">{uiText('optimizing_account_84a3ef7')}</span>
+        <span className="text-muted-foreground">{uiText('optimizing_account_84a3ef7')}</span>{' '}
         <span className="font-semibold tracking-tight">{name}</span>
       </p>
       <div className="flex items-center gap-1.5">

@@ -160,7 +160,7 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
         })}
       </div>
       <div className="hidden overflow-x-auto md:block">
-        <Table className="min-w-[36rem]">
+        <Table className="min-w-[36rem] [&_tr>*:first-child]:pl-0 [&_tr>*:last-child]:pr-0">
           <TableHeader>
             <TableRow>
               <TableHead>{tUi('m_84add5b295')}</TableHead>

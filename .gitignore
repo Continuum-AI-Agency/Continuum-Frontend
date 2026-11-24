@@ -98,3 +98,6 @@ calendar/
 
 # Generated shell-review and E2E Next.js worktrees must not be Tailwind sources.
 /tmp/continuum-next-e2e-shell/
+
+# gridlines alignment captures (local only)
+.gridlines/

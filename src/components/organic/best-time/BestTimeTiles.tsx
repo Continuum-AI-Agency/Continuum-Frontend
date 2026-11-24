@@ -60,7 +60,7 @@ export function BestTimeTiles({ bestTimes }: { bestTimes: OrganicBestTimes }) {
     <div
       data-tour-id="organic-best-time-tiles"
       data-platform={bestTimes.platform}
-      className="grid grid-cols-1 gap-2 py-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+      className="grid grid-cols-1 gap-2 px-3 py-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
     >
       <section aria-label={uiText('best_time_to_post_6358fac')} className={TILE}>
         <div className="flex items-baseline justify-between gap-2">

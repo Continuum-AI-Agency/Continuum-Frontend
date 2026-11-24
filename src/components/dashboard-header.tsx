@@ -57,9 +57,11 @@ function DashboardHeaderInner({ changelogEntries }: { changelogEntries: Changelo
   const shouldReduceMotion = useReducedMotion();
 
   return (
-    <header className="group/app-header flex h-[var(--app-header-h)] shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4 max-sm:has-[[data-testid=scale-header-bar]]:px-3">
+    <header className="group/app-header flex h-[var(--app-header-h)] shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-[var(--page-pad-inline)] max-sm:has-[[data-testid=scale-header-bar]]:px-3">
       <div className="flex shrink-0 items-center gap-2">
-        <SidebarTrigger className="-ml-1 md:hidden" />
+        {/* -ml-1.5 is the ghost button's own inset ((size-7 − size-4) / 2), so the glyph, not the
+         *  button, starts on the page gutter line. */}
+        <SidebarTrigger className="-ml-1.5 md:hidden" />
         <Separator
           orientation="vertical"
           className={cn('mr-2 h-4 md:hidden', YIELDS_TO_PAGE_BAR)}
@@ -92,7 +94,9 @@ function DashboardHeaderInner({ changelogEntries }: { changelogEntries: Changelo
        *  tabs). The page portals into it; everywhere else it stays empty. */}
       <div id={APP_HEADER_MODULE_SLOT_ID} className="flex min-w-0 flex-1 items-center gap-2" />
 
-      <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:group-has-[[data-testid=scale-header-bar]]/app-header:gap-0.5">
+      {/* -mr-2.5 takes back the icon buttons' own padding, so the last glyph ends on the page's
+       *  trailing line instead of 9px inside it. */}
+      <div className="ml-auto -mr-2.5 flex shrink-0 items-center gap-3 max-sm:group-has-[[data-testid=scale-header-bar]]/app-header:gap-0.5">
         <ClientRenderInbox />
         <WhatsNewBell entries={changelogEntries} />
         <ClientOnly fallback={BELL_SLOT}>
@@ -107,7 +111,7 @@ export function DashboardHeader({ changelogEntries }: { changelogEntries: Change
   return (
     <Suspense
       fallback={
-        <header className="flex h-[var(--app-header-h)] shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4" />
+        <header className="flex h-[var(--app-header-h)] shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-[var(--page-pad-inline)]" />
       }
     >
       <DashboardHeaderInner changelogEntries={changelogEntries} />
