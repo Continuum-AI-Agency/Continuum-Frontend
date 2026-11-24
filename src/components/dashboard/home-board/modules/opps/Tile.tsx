@@ -23,11 +23,11 @@ import { cn } from '@/lib/utils';
 import { HomeDots } from '../../HomeDots';
 import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
-import { opportunityDotItems } from '../../homeDotItems';
+import { checkedPortfolioDotItems, opportunityDotItems } from '../../homeDotItems';
 import { readyDataOf } from '../../homeRead';
 import type { HomeTileProps } from '../../types';
 import { useHomeGoalRead } from '../../useHomeGoalRead';
-import { OPTIMIZER_LINKS, oppsViewOf, portfolioDecisionsHref } from './oppsModel';
+import { OPTIMIZER_LINKS, oppsViewOf, portfolioDecisionsHref, proposesChanges } from './oppsModel';
 import { oppImpactLine, oppLeadOf } from './oppsStack';
 import { ROW_LINK, ROW_LINK_LIST, TileReadError, useWaitingLine } from './tileParts';
 
@@ -111,6 +111,20 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
             rows
             label={uiText('portfolios_with_decisions_waiting_8b7fe22')}
             items={opportunityDotItems(view.portfolios, uiText)}
+          />
+        ) : draft && brandPortfolios.some(proposesChanges) ? (
+          <HomeDots
+            rows
+            label={uiText('portfolios_checked_for_decisions_c93e5a2')}
+            items={checkedPortfolioDotItems(
+              brandPortfolios.filter(proposesChanges).map((portfolio) => ({
+                id: portfolio.id,
+                name: portfolio.name,
+                detail: uiText('current_portfolio_decision_queue_9338c82'),
+              })),
+              uiText('count_waiting_15c46d8', { count: 0 }),
+              uiText('current_queue_d6be95d'),
+            )}
           />
         ) : null}
         {lead ? (

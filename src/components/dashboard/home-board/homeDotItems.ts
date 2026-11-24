@@ -144,6 +144,22 @@ export function checklistDotItems(
   }));
 }
 
+/** A quiet answer still shows what was checked: one dot per portfolio the read covered. */
+export function checkedPortfolioDotItems(
+  portfolios: readonly { id: string; name: string; detail: string }[],
+  value: string,
+  period: string,
+): HomeDot[] {
+  return portfolios.map((portfolio) => ({
+    id: portfolio.id,
+    label: portfolio.name,
+    value,
+    detail: portfolio.detail,
+    period,
+    tone: 'neutral',
+  }));
+}
+
 export function overnightDotItems(rows: readonly OvernightRow[], uiText: DashboardText): HomeDot[] {
   return rows.map((row) => ({
     id: row.id,
