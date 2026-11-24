@@ -29,6 +29,13 @@
   height: auto;
   align-self: flex-start;
 }
+.board [data-board-slot] {
+  align-self: start;
+}
+.board [data-testid="home-board"][data-masonry] {
+  grid-auto-rows: 1px;
+  row-gap: 0;
+}
 .frame > header {
   align-items: center;
   gap: 8px;

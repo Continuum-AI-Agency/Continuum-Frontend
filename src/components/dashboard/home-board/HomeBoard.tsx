@@ -17,7 +17,7 @@ import {
 } from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useRef, useState } from 'react';
 import { ModuleFrameSkeleton } from '@/components/paid-media/optimizer/sections/board/ModuleFrame';
 import { boardPaletteClass } from '@/components/paid-media/optimizer/sections/board/palette';
 import { BOARD_SIZE_CLASS } from '@/components/paid-media/optimizer/sections/board/types';
@@ -34,6 +34,7 @@ import styles from './homeDots.module.css';
 import type { HomePresentation } from './homePresentation';
 import { HOME_TILES } from './registry';
 import type { HomeBoardContext } from './types';
+import { useDotsMasonry } from './useDotsMasonry';
 import { usePinnedTiles } from './usePinnedTiles';
 
 const AskBar = lazy(() => import('./modules/ask/AskBar'));
@@ -84,6 +85,9 @@ export function HomeBoard({
     () => ({ isPinned: (id: HomeTileId) => pinned.has(id), togglePin }),
     [pinned, togglePin],
   );
+  const grid = useRef<HTMLDivElement>(null);
+  const boardOrder = tiles.map((tile) => tile.id).join(',');
+  useDotsMasonry(grid, presentation === 'dots', boardOrder);
 
   return (
     <HomePresentationContext.Provider value={presentation}>
@@ -145,10 +149,11 @@ export function HomeBoard({
             <motion.div
               animate="shown"
               className={HOME_BOARD_GRID}
-              data-board-order={tiles.map((tile) => tile.id).join(',')}
+              data-board-order={boardOrder}
               data-mode={ctx.board.mode}
               data-testid="home-board"
               initial={reduce ? false : 'hidden'}
+              ref={grid}
               variants={GRID}
             >
               {tiles.map((tile, index) => {
