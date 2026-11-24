@@ -2027,6 +2027,12 @@ async function benchBrand(
         edgeRefusals.set(`${fn} ${account}`, `${response.status()} ${body.slice(0, 160)}`);
       });
   });
+  // The Ask check navigates to Jaina's /scale. On a dev server that route compiles on first
+  // request, which took over 180 s under load; start it now so it compiles alongside the checks.
+  // A read-only GET with the bench session; its result is not graded.
+  void context.request
+    .get(`${baseURL}/scale?tab=jaina`, { timeout: 900_000 })
+    .catch(() => undefined);
   const navigations: string[] = [];
   page.on('framenavigated', (frame) => {
     if (frame === page.mainFrame()) navigations.push(frame.url());
