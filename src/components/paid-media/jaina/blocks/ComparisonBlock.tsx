@@ -2,6 +2,14 @@
 
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { formatValue } from '@/lib/jaina/formatValue';
 import type { ComparisonBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
@@ -106,108 +114,111 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
           {sharedWindow}
         </p>
       ) : null}
-      <div className={cn(JAINA_TABLE.wrap, '@container/comparison')}>
-        <table className={cn(JAINA_TABLE.table, NARROW.table)}>
-          <thead className={NARROW.head}>
-            <tr className={JAINA_TABLE.headRow}>
-              {headings.map((heading) => (
-                <th
-                  key={heading.key}
-                  // One alignment per column, and the figure columns sit over their own
-                  // figures. This used to read `text-left first:text-left text-right`, two
-                  // conflicting utilities on every cell whose winner was decided by the
-                  // order Tailwind happened to emit them in — a header row that could not
-                  // line up with the body it labels.
-                  className={cn(JAINA_TABLE.th, heading.numeric ? 'text-right' : 'text-left')}
+      <Table
+        containerClassName="@container/comparison"
+        className={cn(JAINA_TABLE.table, NARROW.table)}
+      >
+        <TableHeader className={NARROW.head}>
+          <TableRow className={JAINA_TABLE.headRow}>
+            {headings.map((heading) => (
+              <TableHead
+                key={heading.key}
+                // One alignment per column, and the figure columns sit over their own
+                // figures. This used to read `text-left first:text-left text-right`, two
+                // conflicting utilities on every cell whose winner was decided by the
+                // order Tailwind happened to emit them in — a header row that could not
+                // line up with the body it labels.
+                className={cn(JAINA_TABLE.th, heading.numeric ? 'text-right' : 'text-left')}
+              >
+                {heading.label}
+                {heading.detail ? (
+                  <span className="block font-normal normal-case tracking-normal">
+                    {heading.detail}
+                  </span>
+                ) : null}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody className={NARROW.body}>
+          {block.pairs.map((pair, index) => {
+            // THE FIX: this column used to colour off `pair.severity` alone, so a change
+            // the model did not explicitly judge — which is nearly all of them — rendered
+            // in muted ink, and nothing here ever asked which DIRECTION was welcome. A
+            // cost per result that fell 12% is good news; the old code had no way to say
+            // so. `judgeDelta` keeps the order of authority: an explicit severity wins,
+            // then the metric's polarity, then, last, the sign.
+            const judgement = judgeDelta({
+              change: pair.change,
+              goodWhenDown: fallsAreGood(pair.label),
+              severity: explicitSeverity(pair.severity),
+            });
+            const hasChange = pair.change !== null && pair.change !== undefined;
+            return (
+              <TableRow key={`${pair.label}-${index}`} className={cn(JAINA_TABLE.row, NARROW.row)}>
+                <TableCell
+                  className={cn(JAINA_TABLE.td, 'font-medium text-foreground', NARROW.metric)}
                 >
-                  {heading.label}
-                  {heading.detail ? (
-                    <span className="block font-normal normal-case tracking-normal">
-                      {heading.detail}
-                    </span>
-                  ) : null}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className={NARROW.body}>
-            {block.pairs.map((pair, index) => {
-              // THE FIX: this column used to colour off `pair.severity` alone, so a change
-              // the model did not explicitly judge — which is nearly all of them — rendered
-              // in muted ink, and nothing here ever asked which DIRECTION was welcome. A
-              // cost per result that fell 12% is good news; the old code had no way to say
-              // so. `judgeDelta` keeps the order of authority: an explicit severity wins,
-              // then the metric's polarity, then, last, the sign.
-              const judgement = judgeDelta({
-                change: pair.change,
-                goodWhenDown: fallsAreGood(pair.label),
-                severity: explicitSeverity(pair.severity),
-              });
-              const hasChange = pair.change !== null && pair.change !== undefined;
-              return (
-                <tr key={`${pair.label}-${index}`} className={cn(JAINA_TABLE.row, NARROW.row)}>
-                  <td className={cn(JAINA_TABLE.td, 'font-medium text-foreground', NARROW.metric)}>
-                    <MediaText>{pair.label}</MediaText>
-                    <CitationChips
-                      citeIds={pair.cite_ids}
-                      citations={block.citations}
-                      className="ml-1"
-                    />
-                  </td>
-                  <td
-                    className={cn(JAINA_TABLE.td, 'text-right', NARROW.leg)}
-                    data-side={sideA.label}
+                  <MediaText>{pair.label}</MediaText>
+                  <CitationChips
+                    citeIds={pair.cite_ids}
+                    citations={block.citations}
+                    className="ml-1"
+                  />
+                </TableCell>
+                <TableCell
+                  className={cn(JAINA_TABLE.td, 'text-right', NARROW.leg)}
+                  data-side={sideA.label}
+                >
+                  {leg(pair, pair.before, sideA.label)}
+                </TableCell>
+                <TableCell
+                  className={cn(JAINA_TABLE.td, 'text-right', NARROW.leg)}
+                  data-side={sideB.label}
+                >
+                  {leg(pair, pair.after, sideB.label)}
+                </TableCell>
+                {block.baseline_label ? (
+                  // The context floor's third leg: the longer baseline the pair is read
+                  // against. "—" when this pair has none.
+                  <TableCell
+                    className={cn(JAINA_TABLE.td, 'text-right text-muted-foreground', NARROW.leg)}
+                    data-side={block.baseline_label}
                   >
-                    {leg(pair, pair.before, sideA.label)}
-                  </td>
-                  <td
-                    className={cn(JAINA_TABLE.td, 'text-right', NARROW.leg)}
-                    data-side={sideB.label}
-                  >
-                    {leg(pair, pair.after, sideB.label)}
-                  </td>
-                  {block.baseline_label ? (
-                    // The context floor's third leg: the longer baseline the pair is read
-                    // against. "—" when this pair has none.
-                    <td
-                      className={cn(JAINA_TABLE.td, 'text-right text-muted-foreground', NARROW.leg)}
-                      data-side={block.baseline_label}
-                    >
-                      {pair.baseline == null ? '—' : leg(pair, pair.baseline, block.baseline_label)}
-                    </td>
-                  ) : null}
-                  <td
-                    className={cn(
-                      JAINA_TABLE.td,
-                      'text-right',
-                      hasChange ? JUDGEMENT_TEXT[judgement] : 'text-muted-foreground',
-                      NARROW.change,
-                    )}
-                    // The colour is the judgement, and a screen reader cannot see it.
-                    title={hasChange ? `${pair.label}: ${JUDGEMENT_LABEL[judgement]}` : undefined}
-                  >
-                    {/* A missing change used to print "0%" — a figure nobody measured,
+                    {pair.baseline == null ? '—' : leg(pair, pair.baseline, block.baseline_label)}
+                  </TableCell>
+                ) : null}
+                <TableCell
+                  className={cn(
+                    JAINA_TABLE.td,
+                    'text-right',
+                    hasChange ? JUDGEMENT_TEXT[judgement] : 'text-muted-foreground',
+                    NARROW.change,
+                  )}
+                  // The colour is the judgement, and a screen reader cannot see it.
+                  title={hasChange ? `${pair.label}: ${JUDGEMENT_LABEL[judgement]}` : undefined}
+                >
+                  {/* A missing change used to print "0%" — a figure nobody measured,
                         indistinguishable from a real flat period. */}
-                    {hasChange ? (
-                      <>
-                        {pair.change_direction === 'up' && (
-                          <ArrowUpIcon className="mr-0.5 inline-block h-3 w-3" />
-                        )}
-                        {pair.change_direction === 'down' && (
-                          <ArrowDownIcon className="mr-0.5 inline-block h-3 w-3" />
-                        )}
-                        {Math.abs(pair.change as number)}%
-                      </>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  {hasChange ? (
+                    <>
+                      {pair.change_direction === 'up' && (
+                        <ArrowUpIcon className="mr-0.5 inline-block h-3 w-3" />
+                      )}
+                      {pair.change_direction === 'down' && (
+                        <ArrowDownIcon className="mr-0.5 inline-block h-3 w-3" />
+                      )}
+                      {Math.abs(pair.change as number)}%
+                    </>
+                  ) : (
+                    '—'
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
       <BlockSourcesFooter citations={block.citations} />
     </div>
   );
