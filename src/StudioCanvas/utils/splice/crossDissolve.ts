@@ -13,7 +13,7 @@ import { drawActiveCaption } from './drawCaptions';
 import { drawFrameComposition } from './frameComposition';
 import { drawEffectFrame } from './frameDraw';
 import { drawCanvasBackground } from './letterbox';
-import { sourceSecAt } from './sourceClock';
+import { atDecodableTime, sourceSecAt } from './sourceClock';
 
 // Renders the overlap window of an OVERLAP transition (crossDissolve, slide, wipe,
 // zoom, spin, blur, whip, zoomBlur, glitch): the outgoing clip's tail and the incoming clip's head composited on
@@ -280,9 +280,10 @@ async function makeFrameProvider(
   const width = await track.getCodedWidth();
   const height = await track.getCodedHeight();
   const sink = new mb.CanvasSink(track);
+  const firstFrameSec = await track.getFirstTimestamp();
   return {
     frameAt: async (sourceSec) => {
-      const wrapped = await sink.getCanvas(sourceSec);
+      const wrapped = await sink.getCanvas(atDecodableTime(sourceSec, firstFrameSec));
       return wrapped ? { image: wrapped.canvas, width, height } : null;
     },
   };
