@@ -112,7 +112,7 @@ import {
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
-import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
+import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelineQueryKeys';
 import { PLATFORM_READ_TIMEOUT_MS, READ_TIMEOUT_MS, withTimeout } from '@/lib/api/timeout';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { isAdsManagerAccount } from '@/lib/paid-media/adsManager';
