@@ -157,3 +157,38 @@ export function reconcileDocuments(
 
   return { documents: next, dirty };
 }
+
+/** The fields that decide whether onboarding may continue, what the analysis reads, and the row's badge. */
+const LIVE_FIELDS = [
+  'status',
+  'progressStep',
+  'archivedAt',
+  'expiresAt',
+  'retention',
+  'version',
+  'errorMessage',
+] as const;
+
+/**
+ * The wizard's copy of its documents, brought up to what the document list last heard.
+ *
+ * An upload saves the document as `processing` and only Realtime says when it is ready, so
+ * without this the copy that holds Continue stays `processing` until the next server load.
+ * A changed document takes the live one whole: the list re-seeds from this copy, and a copy
+ * with a fresh status but a stale `progressStep` would show a ready file as still uploading.
+ * Returns `documents` itself when nothing changed, so a caller can skip the re-render.
+ */
+export function adoptLiveDocuments(
+  documents: OnboardingDocument[],
+  live: OnboardingDocument[],
+): OnboardingDocument[] {
+  const liveById = new Map(live.map((doc) => [doc.id, doc]));
+  let changed = false;
+  const next = documents.map((doc) => {
+    const current = liveById.get(doc.id);
+    if (!current || LIVE_FIELDS.every((field) => doc[field] === current[field])) return doc;
+    changed = true;
+    return { ...doc, ...current };
+  });
+  return changed ? next : documents;
+}

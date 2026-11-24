@@ -74,3 +74,47 @@ describe('OnboardingProvider.updateState', () => {
     expect(screen.getByTestId('step').textContent).toBe('3');
   });
 });
+
+describe('OnboardingProvider.adoptDocumentStatuses', () => {
+  // The Documents step's Continue reads `state.documents`; the uploader feeds it the live list.
+  it('updates the shared state without saving, and ignores an unchanged list', () => {
+    const auth = spyOn(client, 'createSupabaseBrowserClient').mockReturnValue({
+      auth: { getSession: async () => ({ data: { session: null } }) },
+    } as unknown as ReturnType<typeof client.createSupabaseBrowserClient>);
+    const save = spyOn(actions, 'mutateOnboardingStateAction');
+    restorers.push(
+      () => auth.mockRestore(),
+      () => save.mockRestore(),
+    );
+    const processing = {
+      id: 'doc-1',
+      name: 'brand-manual.pdf',
+      source: 'upload' as const,
+      createdAt: '2026-11-23T20:00:00.000Z',
+      status: 'processing' as const,
+    };
+    let onboarding: ReturnType<typeof useOnboarding>;
+    function Probe() {
+      onboarding = useOnboarding();
+      return <span data-testid="status">{onboarding.state.documents[0]?.status}</span>;
+    }
+    render(
+      <ToastProvider>
+        <OnboardingProvider
+          brandId="brand-1"
+          initialState={{ ...createDefaultOnboardingState(), documents: [processing] }}
+        >
+          <Probe />
+        </OnboardingProvider>
+      </ToastProvider>,
+    );
+
+    const before = onboarding!.state;
+    act(() => onboarding.adoptDocumentStatuses([processing]));
+    expect(onboarding!.state).toBe(before);
+
+    act(() => onboarding.adoptDocumentStatuses([{ ...processing, status: 'ready' }]));
+    expect(screen.getByTestId('status').textContent).toBe('ready');
+    expect(save).not.toHaveBeenCalled();
+  });
+});

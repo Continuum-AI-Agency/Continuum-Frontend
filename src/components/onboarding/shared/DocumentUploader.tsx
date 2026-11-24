@@ -10,7 +10,7 @@ export function DocumentUploader({
   initialFiles?: File[];
   onInitialFilesTaken?: () => void;
 }) {
-  const { brandId, state, reloadState } = useOnboarding();
+  const { brandId, state, reloadState, adoptDocumentStatuses } = useOnboarding();
   // Every document action returns the state the server just saved. Adopt it: re-saving it as a
   // patch cost a second full onboarding load per file and raced the next upload's write.
   return (
@@ -19,6 +19,8 @@ export function DocumentUploader({
       seed={state.documents ?? []}
       density="compact"
       onStateChange={reloadState}
+      // Continue waits on these statuses, and only the list hears a document finish.
+      onDocumentsChange={adoptDocumentStatuses}
       initialFiles={initialFiles}
       onInitialFilesTaken={onInitialFilesTaken}
     />
