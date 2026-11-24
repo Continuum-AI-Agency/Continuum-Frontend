@@ -58,7 +58,6 @@
   "m_0a33189eb8": "Escolha seu plano →",
   "m_d3e6a40b88": "Iniciar Continuum ✦",
   "m_1f0f384f88": "Começar configuração",
-  "m_98b5818045": "{v0}: {v1}",
   "m_51dd91dc98": "Começar de novo",
   "m_8b82a80f36": "Começar de novo?",
   "m_576d1135f0": "Limpa o DNA da marca e desconecta as contas vinculadas.",
@@ -443,5 +442,9 @@
   "brand_dna_didn_t_finish_f492b57": "O DNA da marca não terminou",
   "retry_the_analysis_above_then_continue_cf7a88c": "Tente a análise acima novamente e depois continue.",
   "couldn_t_save_your_progress_4d3fb08": "Não foi possível salvar seu progresso",
-  "saving_this_step_failed_twice_so_you_re_back__c9ad9e3": "Salvar esta etapa falhou duas vezes, então você voltou para a última etapa salva. Aguarde um momento e continue novamente."
+  "saving_this_step_failed_twice_so_you_re_back__c9ad9e3": "Salvar esta etapa falhou duas vezes, então você voltou para a última etapa salva. Aguarde um momento e continue novamente.",
+  "onboarding_progress_5c1e0a2": "Progresso da configuração",
+  "all_steps_complete_8b3d7f1": "Todas as etapas concluídas",
+  "not_started_2e9a4c6": "Não iniciado",
+  "step_of_count_label_7d4b1e3": "Etapa {number} de {count}: {label}"
 }
