@@ -593,3 +593,20 @@
     max-width: 85%;
   }
 }
+/* Gridlines (2026-11-24). The dots header centres its row, so the actions drop the shared frame's
+   4px lift; and the arrow's viewBox leaves 3px of air right of its ink, so the group pulls out that
+   much past its button padding to end "Open ↗" on the card's trailing line. */
+.frame > header > div:last-child > div {
+  margin-top: 0;
+  margin-right: calc(-0.5rem - 3px);
+}
+/* A ghost toggle at the trailing edge ends its label on the line, not its 44px hit area. */
+.viewToggle {
+  justify-content: flex-end;
+  margin-inline-end: -8px;
+}
+/* Verdict lanes are names, not numbers: they start on the card's text line. */
+.chart[data-plot-kind="category"] .yAxis span {
+  right: auto;
+  left: 0;
+}
