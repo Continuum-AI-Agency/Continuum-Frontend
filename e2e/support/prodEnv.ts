@@ -107,13 +107,13 @@ export function readBackendEnv(key: string): string | undefined {
  * project — a live bench that silently fell back to the local stack is the exact
  * failure mode this whole module is here to make impossible.
  */
-export function loadProdSupabaseEnv(): {
+export function loadProdSupabaseEnv(paths: { frontend?: string; backend?: string } = {}): {
   url: string;
   publishableKey: string;
   serviceRoleKey: string;
 } {
-  const frontend = parseEnvFile(FRONTEND_ENV);
-  const backend = parseEnvFile(BACKEND_ENV);
+  const frontend = parseEnvFile(paths.frontend ?? FRONTEND_ENV);
+  const backend = parseEnvFile(paths.backend ?? BACKEND_ENV);
 
   // The runner's own environment outranks both files, as it does for Next itself: a
   // checkout whose .env is the placeholder the build gate needs (or that has no Backend

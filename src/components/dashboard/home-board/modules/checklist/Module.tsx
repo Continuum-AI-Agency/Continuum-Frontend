@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { HomeAdAccount } from '@/lib/home/homeAccounts';
 import { bareAccountId } from '@/lib/paid-media/accountId';
+import { HOME_DRAFT_READ_ONLY, useHomeDraft } from '../../HomePresentationContext';
 import {
   type ChecklistItem,
   type ChecklistPortfolio,
@@ -126,6 +127,7 @@ export default function ChecklistModule({
   adAccounts: HomeAdAccount[];
 }) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [emailOpen, setEmailOpen] = useState(false);
   const onAnswer = useCallback((portfolioId: string, answer: Answer) => {
@@ -159,7 +161,16 @@ export default function ChecklistModule({
           <DownloadIcon aria-hidden="true" />
           {uiText('export_checklist_09e21c4')}
         </Button>
-        <Button onClick={() => setEmailOpen(true)} size="sm" type="button" variant="ghost">
+        <Button
+          disabled={draft}
+          title={draft ? uiText(HOME_DRAFT_READ_ONLY) : undefined}
+          onClick={() => {
+            if (!draft) setEmailOpen(true);
+          }}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
           <SendIcon aria-hidden="true" />
           {uiText('send_by_email_436a04a')}
         </Button>
@@ -175,7 +186,9 @@ export default function ChecklistModule({
           onAnswer={onAnswer}
         />
       ))}
-      <SendContinuumReportDialog brandId={brandId} onOpenChange={setEmailOpen} open={emailOpen} />
+      {!draft ? (
+        <SendContinuumReportDialog brandId={brandId} onOpenChange={setEmailOpen} open={emailOpen} />
+      ) : null}
     </div>
   );
 }

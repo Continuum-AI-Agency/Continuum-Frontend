@@ -24,7 +24,14 @@ import { BOARD_SIZE_CLASS } from '@/components/paid-media/optimizer/sections/boa
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { HomeBoardChromeContext } from './HomeBoardChrome';
+import {
+  HOME_DRAFT_READ_ONLY,
+  HomeInspectionProvider,
+  HomePresentationContext,
+} from './HomePresentationContext';
 import { HomeTileBoundary } from './HomeTileBoundary';
+import styles from './homeDots.module.css';
+import type { HomePresentation } from './homePresentation';
 import { HOME_TILES } from './registry';
 import type { HomeBoardContext } from './types';
 import { usePinnedTiles } from './usePinnedTiles';
@@ -57,7 +64,13 @@ const MODE_LABEL_KEYS = {
   recommend: 'continuum_recommends_c5742de',
 } as const satisfies Record<HomeMode, string>;
 
-export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
+export function HomeBoard({
+  ctx,
+  presentation = 'current',
+}: {
+  ctx: HomeBoardContext;
+  presentation?: HomePresentation;
+}) {
   const uiText = useTranslations('dashboard');
   const reduce = useReducedMotion();
   const [sort, setSort] = useState<HomeBoardSort>('impact');
@@ -73,77 +86,104 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
   );
 
   return (
-    <section
-      aria-label={uiText('home_3a78695')}
-      className={cn('space-y-3 px-[var(--card-pad)] py-4', boardPaletteClass)}
-      data-testid="home-board-root"
-    >
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-0.5">
-          <p className="flex flex-wrap items-center gap-2 text-sm">
-            <span
-              className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary text-xs"
-              data-testid="home-board-mode"
-            >
-              {uiText(MODE_LABEL_KEYS[ctx.reading.mode])}
-            </span>
-            <span className="text-muted-foreground text-xs">{ctx.reading.modeReason}</span>
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Suspense fallback={null}>
-            <StoryButton ctx={ctx} />
-          </Suspense>
-          <Tabs onValueChange={(value) => setSort(value as HomeBoardSort)} value={sort}>
-            <TabsList aria-label={uiText('order_tiles_by_63f5c5e')}>
-              {SORTS.map((option) => (
-                <TabsTrigger className="text-xs" key={option.id} value={option.id}>
-                  {uiText(option.label)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        </div>
-      </header>
-      <Suspense fallback={null}>
-        <AskBar ctx={ctx} />
-      </Suspense>
-      <HomeBoardChromeContext.Provider value={chrome}>
-        <motion.div
-          animate="shown"
-          className={HOME_BOARD_GRID}
-          data-board-order={tiles.map((tile) => tile.id).join(',')}
-          data-mode={ctx.board.mode}
-          data-testid="home-board"
-          initial={reduce ? false : 'hidden'}
-          variants={GRID}
+    <HomePresentationContext.Provider value={presentation}>
+      <HomeInspectionProvider>
+        <section
+          aria-label={uiText('home_3a78695')}
+          className={cn(
+            'space-y-3 px-[var(--card-pad)] py-4',
+            boardPaletteClass,
+            presentation === 'dots' && styles.board,
+          )}
+          data-home-presentation={presentation}
+          data-testid="home-board-root"
         >
-          {tiles.map((tile, index) => {
-            const Tile = HOME_TILES[tile.id];
-            const testId = `home-tile-${tile.id}`;
-            return (
-              <motion.div
-                className={cn('flex min-w-0', BOARD_SIZE_CLASS[tile.size])}
-                data-board-index={index}
-                data-board-slot={tile.id}
-                key={tile.id}
-                layout={reduce ? false : 'position'}
-                layoutId={reduce ? undefined : `home-slot-${tile.id}`}
-                variants={SLOT}
-              >
-                <HomeTileBoundary tile={tile}>
-                  <Suspense fallback={<ModuleFrameSkeleton size={tile.size} testId={testId} />}>
-                    <Tile ctx={ctx} tile={tile} />
-                  </Suspense>
-                </HomeTileBoundary>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-      </HomeBoardChromeContext.Provider>
-      <p className="text-muted-foreground text-xs">
-        {uiText('order_impact_on_the_goal_urgency_confidence_a_1592031')}
-      </p>
-    </section>
+          {presentation === 'dots' ? (
+            <p
+              className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground text-xs"
+              data-testid="home-draft-notice"
+            >
+              <span>
+                {uiText('brand_dot_dashboard_draft_4a608af', {
+                  brand: ctx.brandName ?? uiText('home_3a78695'),
+                })}
+              </span>
+              <span>{uiText(HOME_DRAFT_READ_ONLY)}</span>
+            </p>
+          ) : null}
+          <header className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 space-y-0.5">
+              <p className="flex flex-wrap items-center gap-2 text-sm">
+                <span
+                  className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary text-xs"
+                  data-testid="home-board-mode"
+                >
+                  {uiText(MODE_LABEL_KEYS[ctx.reading.mode])}
+                </span>
+                <span className="text-muted-foreground text-xs">{ctx.reading.modeReason}</span>
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Suspense fallback={null}>
+                <StoryButton ctx={ctx} />
+              </Suspense>
+              <Tabs onValueChange={(value) => setSort(value as HomeBoardSort)} value={sort}>
+                <TabsList aria-label={uiText('order_tiles_by_63f5c5e')}>
+                  {SORTS.map((option) => (
+                    <TabsTrigger className="text-xs" key={option.id} value={option.id}>
+                      {uiText(option.label)}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
+          </header>
+          <Suspense fallback={null}>
+            <AskBar ctx={ctx} />
+          </Suspense>
+          <HomeBoardChromeContext.Provider value={chrome}>
+            <motion.div
+              animate="shown"
+              className={HOME_BOARD_GRID}
+              data-board-order={tiles.map((tile) => tile.id).join(',')}
+              data-mode={ctx.board.mode}
+              data-testid="home-board"
+              initial={reduce ? false : 'hidden'}
+              variants={GRID}
+            >
+              {tiles.map((tile, index) => {
+                const Tile = HOME_TILES[tile.id];
+                const testId = `home-tile-${tile.id}`;
+                return (
+                  <motion.div
+                    className={cn('flex min-w-0', BOARD_SIZE_CLASS[tile.size])}
+                    data-board-index={index}
+                    data-board-slot={tile.id}
+                    key={tile.id}
+                    layout={reduce ? false : 'position'}
+                    layoutId={reduce ? undefined : `home-slot-${tile.id}`}
+                    variants={SLOT}
+                  >
+                    <HomeTileBoundary tile={tile}>
+                      <Suspense fallback={<ModuleFrameSkeleton size={tile.size} testId={testId} />}>
+                        <Tile ctx={ctx} tile={tile} />
+                      </Suspense>
+                    </HomeTileBoundary>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          </HomeBoardChromeContext.Provider>
+          <p className="text-muted-foreground text-xs">
+            {uiText('order_impact_on_the_goal_urgency_confidence_a_1592031')}
+          </p>
+          {presentation === 'dots' ? (
+            <p className="text-muted-foreground text-xs">
+              {uiText('hover_or_focus_to_inspect_click_to_hold_escap_be4a43e')}
+            </p>
+          ) : null}
+        </section>
+      </HomeInspectionProvider>
+    </HomePresentationContext.Provider>
   );
 }

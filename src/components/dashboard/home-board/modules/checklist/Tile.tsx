@@ -13,7 +13,10 @@ import { lazy, useMemo } from 'react';
 import { useOptimizerPortfolios } from '@/components/paid-media/optimizer/useOptimizerData';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { HomeDots } from '../../HomeDots';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
+import { checklistDotItems } from '../../homeDotItems';
 import type { HomeTileProps } from '../../types';
 import { OPTIMIZER_LINKS, portfolioDecisionsHref } from '../opps/oppsModel';
 import { ROW_LINK, ROW_LINK_LIST, TileReadError } from '../opps/tileParts';
@@ -25,6 +28,7 @@ const ROWS_AT_SIZE = { l: 4, m: 2, s: 0 } as const;
 
 export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const { hasAnswer, isError, refetch, brandPortfolios } = portfolios;
   const view = useMemo(
@@ -50,9 +54,11 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
     return (
       <HomeTileFrame state="missing" tile={tile}>
         <TileMissing>{uiText('no_portfolio_recommends_changes_for_the_clien_32df0ef')}</TileMissing>
-        <Link className={cn(ROW_LINK, 'mt-2 inline-block text-xs')} href={OPTIMIZER_LINKS.create}>
-          {uiText('create_a_portfolio_2283fad')}
-        </Link>
+        {!draft ? (
+          <Link className={cn(ROW_LINK, 'mt-2 inline-block text-xs')} href={OPTIMIZER_LINKS.create}>
+            {uiText('create_a_portfolio_2283fad')}
+          </Link>
+        ) : null}
       </HomeTileFrame>
     );
   }
@@ -88,11 +94,18 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
             {uiText('open_for_the_client_2aa6f2a')}
           </span>
         </p>
+        {draft ? (
+          <HomeDots
+            rows
+            label={uiText('client_checklist_by_portfolio_0ff7299')}
+            items={checklistDotItems(view.portfolios, uiText)}
+          />
+        ) : null}
         {view.open === 0 ? (
           <p className="text-muted-foreground text-xs">
             {uiText('nothing_is_open_for_the_client_right_now_1924fc9')}
           </p>
-        ) : rows.length > 0 ? (
+        ) : draft ? null : rows.length > 0 ? (
           <ul className={ROW_LINK_LIST} data-testid="home-tile-checklist-portfolios">
             {rows.map((portfolio) => (
               <li

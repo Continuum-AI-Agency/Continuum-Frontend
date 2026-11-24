@@ -21,7 +21,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
 import { formatFigure } from '@/lib/home/format';
 import { useGoogleRefusal } from '@/lib/home/homeAccounts';
+import { HomeDots } from '../../HomeDots';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
+import { goalDotItems } from '../../homeDotItems';
+import styles from '../../homeDots.module.css';
 import type { HomeTileProps } from '../../types';
 import {
   GoalProgressBar,
@@ -87,6 +91,7 @@ function TargetFooter({
 }) {
   const uiText = useTranslations('dashboard');
   const uiLocale = useLocale();
+  const draft = useHomeDraft();
   const hasTarget =
     target.kind === 'compared' || target.kind === 'mismatch' || target.kind === 'not-running';
   const note = goalTargetNote(target, uiText, uiLocale);
@@ -101,9 +106,11 @@ function TargetFooter({
         {target.kind === 'none' || target.kind === 'unavailable' ? (
           <span className="font-medium text-xs">{uiText('no_target_set_yet_354d24a')}</span>
         ) : null}
-        <Button className="ml-auto h-7 text-xs" onClick={onSetGoal} size="sm" variant="outline">
-          {hasTarget ? uiText('edit_target_1455e66') : uiText('set_a_goal_8e331a7')}
-        </Button>
+        {!draft ? (
+          <Button className="ml-auto h-7 text-xs" onClick={onSetGoal} size="sm" variant="outline">
+            {hasTarget ? uiText('edit_target_1455e66') : uiText('set_a_goal_8e331a7')}
+          </Button>
+        ) : null}
       </div>
       {target.kind === 'unavailable' && size !== 's' ? (
         <p className="text-2xs text-muted-foreground">
@@ -126,18 +133,25 @@ function ReadyBody({
   const uiText = useTranslations('dashboard');
   const uiLocale = useLocale();
   const { primary, headline, others, secondaries, target } = view;
+  const draft = useHomeDraft();
   const label = goalLabel(primary.objective.label, view.source, uiText);
   const compared = target.kind === 'compared' ? target : null;
   const period = figurePeriod(target);
   const othersText = new Intl.ListFormat(uiLocale, { type: 'conjunction' }).format(
     others.map((amount) => formatFigure(amount.value, primary.unit, amount.currency)),
   );
-  return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <p className="truncate text-2xs text-muted-foreground uppercase tracking-wide">
+  const heading = (
+    <>
+      <p
+        className={
+          draft
+            ? styles.goalLabel
+            : 'truncate text-2xs text-muted-foreground uppercase tracking-wide'
+        }
+      >
         {uiText('goal_period_select_week_this_week_month_this__df88b16', { goal: label, period })}
       </p>
-      <div className="flex min-w-0 items-end justify-between gap-3">
+      <div className={draft ? styles.goalValue : 'flex min-w-0 items-end justify-between gap-3'}>
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
           <span
             className="min-w-0 truncate font-semibold text-3xl tabular-nums tracking-tight"
@@ -158,7 +172,7 @@ function ReadyBody({
             </span>
           ) : null}
         </div>
-        {headline.series.length > 1 ? (
+        {!draft && headline.series.length > 1 ? (
           <Sparkline
             className="shrink-0"
             height={32}
@@ -171,6 +185,37 @@ function ReadyBody({
           />
         ) : null}
       </div>
+    </>
+  );
+  const windowLine = (
+    <p className={draft ? styles.goalMeta : 'text-muted-foreground text-xs'}>
+      {goalWindowLabel(view.figureWindow)} · {uiText(SOURCE_LABEL_KEYS[view.source])}
+    </p>
+  );
+  return (
+    <div className={draft ? styles.goalBody : 'flex min-w-0 flex-col gap-2'}>
+      {draft ? (
+        <div className={styles.goalSummary}>
+          {heading}
+          {windowLine}
+        </div>
+      ) : (
+        heading
+      )}
+      {draft ? (
+        <div className={styles.goalPlot}>
+          <HomeDots
+            empty={uiText('not_enough_reported_daily_history_to_plot_in__ee5ad6f')}
+            items={goalDotItems(view, uiText)}
+            label={uiText('goal_last_seven_reported_daily_observations_b85a242', { goal: label })}
+            title={uiText('goal_per_day_last_seven_reported_observations_77c283a', {
+              goal: label,
+            })}
+            valueLabel={(value) => formatFigure(value, primary.unit, headline.currency)}
+            trend
+          />
+        </div>
+      ) : null}
       {compared ? (
         <>
           <GoalProgressBar label={label} status={compared} />
@@ -179,9 +224,7 @@ function ReadyBody({
           </p>
         </>
       ) : null}
-      <p className="text-muted-foreground text-xs">
-        {goalWindowLabel(view.figureWindow)} · {uiText(SOURCE_LABEL_KEYS[view.source])}
-      </p>
+      {!draft ? windowLine : null}
       {others.length > 0 ? (
         <p className="text-muted-foreground text-xs" data-testid="home-tile-goals-currencies">
           {compared
@@ -200,7 +243,8 @@ function ReadyBody({
         </p>
       ) : null}
       {view.unanswered > 0 ? (
-        <p className="text-muted-foreground text-xs">
+        <p className={draft ? styles.partial : 'text-muted-foreground text-xs'}>
+          {draft ? `${uiText('partial_view_33e1aae')} ` : ''}
           {uiText('count_plural_one_ad_account_didn_t_answer_and_7f9907b', {
             count: view.unanswered,
           })}

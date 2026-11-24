@@ -452,7 +452,7 @@ export const OPTIMIZER_FEED_PAGE_SIZE = 50;
 const OptimizerActionFeedRowSchema = OptimizerActionRowSchema.extend({ op: z.string() });
 export type OptimizerActionFeedRow = z.infer<typeof OptimizerActionFeedRowSchema>;
 
-const OptimizerActionFeedPageSchema = z.object({
+export const OptimizerActionFeedPageSchema = z.object({
   actions: z.array(OptimizerActionFeedRowSchema),
   next_before: z.string().nullable().optional(),
 });

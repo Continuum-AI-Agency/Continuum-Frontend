@@ -18,6 +18,7 @@ import { render as renderInDom } from '@/i18n/__tests__/render';
 import { ApiError, markFetchFailure } from '@/lib/api/errors';
 import type { RequestOptions } from '@/lib/api/http.types';
 import type { HomeAdAccount } from '@/lib/home/homeAccounts';
+import { HomePresentationContext } from '../../HomePresentationContext';
 import type { HomeBoardContext } from '../../types';
 import {
   BRAND_ID,
@@ -842,5 +843,37 @@ describe('the Goal tile, with a target set', () => {
     targetsAnswer = deployedRoute([]);
     render(<GoalsTile ctx={contextFor({ accounts: [] })} tile={TILE} />);
     expect(targetCalls).toEqual([]);
+  });
+});
+
+describe('Goal dot draft', () => {
+  it('uses the same real read and disables target writes while keeping inspection open', async () => {
+    answer = answersEveryRead;
+    targetsAnswer = deployedRoute([]);
+    const home = render(
+      <HomePresentationContext.Provider value="dots">
+        <GoalsTile
+          ctx={contextFor({ accounts: [MXN_ACCOUNT], rows: brandGoals('purchase_value') })}
+          tile={TILE}
+        />
+      </HomePresentationContext.Provider>,
+    );
+    const headline = await home.findByTestId('home-tile-goals-headline');
+    expect(headline.getAttribute('data-value')).toBe('5400');
+    expect(headline.getAttribute('data-currency')).toBe('MXN');
+    const dots = home.container.querySelectorAll('[data-home-dot-id]');
+    expect(dots.length).toBeGreaterThan(0);
+    expect(dots[0]?.getAttribute('data-home-dot-id')).toMatch(/^2026-11-/);
+    fireEvent.click(dots[0] as HTMLElement);
+    expect(home.getByRole('status').textContent).toContain('MXN');
+    fireEvent.click(home.getByTestId('home-tile-goals-open'));
+    const form = await home.findByTestId('home-goals-target-form');
+    expect((home.getByRole('button', { name: 'Save target' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    fireEvent.submit(form);
+    expect(writes()).toHaveLength(0);
+    expect(saved).toHaveLength(0);
+    expect(home.queryByRole('button', { name: /Edit goal/ })).toBeNull();
   });
 });

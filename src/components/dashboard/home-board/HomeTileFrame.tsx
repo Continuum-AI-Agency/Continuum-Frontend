@@ -27,6 +27,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useHomeBoardChrome } from './HomeBoardChrome';
+import { HOME_DRAFT_READ_ONLY, useHomeDraft } from './HomePresentationContext';
+import styles from './homeDots.module.css';
 
 export type HomeTileFrameProps = {
   tile: HomeBoardTile;
@@ -84,6 +86,7 @@ export function HomeTileFrame({
   children,
 }: HomeTileFrameProps) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const { isPinned, togglePin } = useHomeBoardChrome();
   const [ownOpen, setOwnOpen] = useState(false);
   const open = controlledOpen ?? ownOpen;
@@ -133,13 +136,18 @@ export function HomeTileFrame({
             ) : null}
           </div>
         }
-        className={cn(pinned && 'ring-1 ring-primary/30', className)}
-        reason={reason}
+        className={cn(draft && styles.frame, pinned && 'ring-1 ring-primary/30', className)}
+        reason={draft ? undefined : reason}
         size={tile.size}
         state={state}
         testId={homeTileTestId(tile)}
         title={title}
       >
+        {draft && reason ? (
+          <p className="sr-only" data-testid={`${homeTileTestId(tile)}-reason`}>
+            {reason}
+          </p>
+        ) : null}
         {children}
       </ModuleFrame>
       {expanded ? (
@@ -156,6 +164,11 @@ export function HomeTileFrame({
               ) : null}
             </SheetHeader>
             <div className="min-w-0 px-4 pb-6" data-testid="home-tile-sheet-body">
+              {draft ? (
+                <p className="mb-3 text-muted-foreground text-xs" role="note">
+                  {uiText(HOME_DRAFT_READ_ONLY)}
+                </p>
+              ) : null}
               {open ? (
                 <Suspense fallback={<Skeleton className="h-48 w-full" />}>{expanded}</Suspense>
               ) : null}
