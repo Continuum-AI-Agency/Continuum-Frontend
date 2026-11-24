@@ -528,10 +528,12 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
           </SidebarHeader>
 
           <SidebarContent className="px-3 py-4">
+            {/* The server cannot read the reduced-motion preference, so the first render must not
+                depend on it (a hydration mismatch otherwise); reduced motion makes the fade instant. */}
             <motion.div
-              initial={reduce ? false : { opacity: 0 }}
+              initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
+              transition={reduce ? { duration: 0 } : { duration: 0.2, ease: [0, 0, 0.2, 1] }}
             >
               {APP_NAVIGATION_GROUPS.map((group, index) => (
                 <SidebarGroup
