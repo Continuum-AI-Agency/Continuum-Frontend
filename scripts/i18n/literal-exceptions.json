@@ -502,5 +502,11 @@
     "kind": "text",
     "text": "HEVC",
     "reason": "Codec name; its tooltip is translated."
+  },
+  {
+    "file": "src/components/brand/FontSpecimen.tsx",
+    "kind": "dynamic text",
+    "text": "Aa Bb Cc Gg Rr 0123 &?!",
+    "reason": "Type specimen: the same Latin glyph sample in every locale, so faces compare letter for letter."
   }
 ]
