@@ -955,19 +955,13 @@ export function resolvePublishPlan(input: PublishPlanInput): PublishPlan {
       });
     }
     if (!pick.media && ctx.generating) mediaPending = 'generating';
-    // Text only when there is truly nothing to post: a video on a POST is a format to fix,
-    // not a caption to send alone.
+    // Text only when the draft never had media. A video on a POST is a format to fix; an image
+    // that failed to generate, or a selected item that lost its file, is a post missing its
+    // image. Each is refused as `media_missing`, never sent as the caption alone.
     const nothingAttached =
-      !pick.media && ctx.slides.length === 0 && !pickVideo(ctx, isHyperframe).media;
-    verb = nothingAttached && !mediaPending && capability.textPost ? 'text' : 'post';
-    if (verb === 'text' && ms?.mediaStatus === 'failed') {
-      notices.push({
-        code: 'media_not_sent',
-        message:
-          'The image could not be generated, so this posts as text only. Attach an image to post one',
-        target: 'media',
-      });
-    }
+      !pick.media && ctx.selection.length === 0 && !pickVideo(ctx, isHyperframe).media;
+    const mediaLost = ms?.mediaStatus === 'failed';
+    verb = nothingAttached && !mediaLost && !mediaPending && capability.textPost ? 'text' : 'post';
   }
 
   if (
@@ -1217,13 +1211,13 @@ export function checkPublishability(plan: PublishPlan): PublishPlanVerdict {
   } else if (plan.verb === 'story' && count === 0) {
     blockers.push({
       reason: 'media_missing',
-      message: 'This story has no image or video yet',
+      message: `${platform}: no image or video attached to this story`,
       fix: 'media',
     });
   } else if (plan.verb === 'post' && count === 0) {
     blockers.push({
       reason: 'media_missing',
-      message: 'A post needs an image — attach one, or switch the format to Reel for a video',
+      message: `${platform}: no image attached — attach one, or switch the format to Reel for a video`,
       fix: 'media',
     });
   } else if (plan.verb === 'carousel') {
@@ -1248,7 +1242,7 @@ export function checkPublishability(plan: PublishPlan): PublishPlanVerdict {
     if (count < min) {
       blockers.push({
         reason: 'media_missing',
-        message: `Carousel needs at least ${min} slides before it can be published — this draft has ${count}`,
+        message: `${platform}: a carousel needs at least ${min} slides before it can be published — this draft has ${count}`,
         fix: 'media',
       });
     }
