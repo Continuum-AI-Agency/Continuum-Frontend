@@ -35,6 +35,7 @@ import {
   GalleryHorizontalEnd,
   LayoutGrid,
   List,
+  Menu,
   ScanSearch,
   Trash2,
   Upload,
@@ -68,6 +69,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { toast } from '@/components/ui/toast-imperative';
 import { useRouter } from '@/i18n/navigation';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
@@ -283,8 +285,11 @@ export function LibraryViewer({
   // custom-state setter and the filter push each build on it, so neither drops the other.
   const pendingPathRef = useRef<string | null>(null);
   const reviewStateIdsRef = useRef(reviewStateIds);
+  // Below md the browse rail lives in a sheet; any pick navigates, so a new query closes it.
+  const [browseOpen, setBrowseOpen] = useState(false);
   useEffect(() => {
     pendingPathRef.current = null;
+    setBrowseOpen(false);
   }, [initialBrowseQuery]);
   const { assets, hasMore, loadingMore, loadMore } = useMediaLibrary({
     query: initialBrowseQuery,
@@ -952,10 +957,29 @@ export function LibraryViewer({
     );
   };
 
+  const browseRail = (
+    <LibrarySidebar
+      brandId={brandId}
+      collections={initialCollections}
+      savedViews={initialSavedViews}
+      currentQuery={initialBrowseQuery}
+      onSelectSavedView={onSelectSavedView}
+      selectedCollectionId={selectedCollectionId}
+      onSelectCollection={onSelectCollection}
+      selectedMediaType={optimisticMediaType}
+      selectedSort={optimisticSort}
+      selectedReviewStatuses={optimisticReviewStatuses}
+      selectedTemplateOnly={showTemplates}
+      section={section}
+      onSelectDestination={onSelectDestination}
+    />
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div
-        className="flex shrink-0 items-center gap-1 border-b border-border px-4 pt-2"
+        // Tabs carry px-3 of their own, so tab text starts on the page gutter line, above the rail's rows.
+        className="flex shrink-0 items-center gap-1 border-b border-border px-[calc(var(--page-pad-inline)-0.75rem)] pt-2"
         role="tablist"
         aria-label={translateUi('library_sections_47f7820e')}
       >
@@ -985,26 +1009,12 @@ export function LibraryViewer({
               accepts dragged assets (useCollectionAssetDrop finds the row). */}
           {/* biome-ignore lint/a11y/noStaticElementInteractions: drop delegation only; the sidebar rows stay the interactive controls */}
           <div
-            className="flex min-h-0"
+            className="hidden min-h-0 md:flex"
             onDragOver={collectionDrop.onDragOver}
             onDragLeave={collectionDrop.onDragLeave}
             onDrop={collectionDrop.onDrop}
           >
-            <LibrarySidebar
-              brandId={brandId}
-              collections={initialCollections}
-              savedViews={initialSavedViews}
-              currentQuery={initialBrowseQuery}
-              onSelectSavedView={onSelectSavedView}
-              selectedCollectionId={selectedCollectionId}
-              onSelectCollection={onSelectCollection}
-              selectedMediaType={optimisticMediaType}
-              selectedSort={optimisticSort}
-              selectedReviewStatuses={optimisticReviewStatuses}
-              selectedTemplateOnly={showTemplates}
-              section={section}
-              onSelectDestination={onSelectDestination}
-            />
+            {browseRail}
           </div>
 
           {/* biome-ignore lint/a11y/noStaticElementInteractions: full-area drag-and-drop upload surface; the keyboard-accessible path is the Upload button above */}
@@ -1021,6 +1031,20 @@ export function LibraryViewer({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
+            <Sheet open={browseOpen} onOpenChange={setBrowseOpen}>
+              <SheetTrigger
+                render={
+                  <Button variant="outline" size="sm" className="gap-2 self-start md:hidden">
+                    <Menu className="size-4" />
+                    {translateUi('browse_3227aa96')}
+                  </Button>
+                }
+              />
+              <SheetContent side="left" className="p-0 data-[side=left]:w-auto">
+                <SheetTitle className="sr-only">{translateUi('browse_3227aa96')}</SheetTitle>
+                {browseRail}
+              </SheetContent>
+            </Sheet>
             <PageHeader
               title={
                 showTypography

@@ -60,7 +60,7 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
   );
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4 md:p-6">
+    <div className="flex h-full flex-col gap-4 px-[var(--page-pad-inline)] py-4 md:py-6">
       <PageHeader
         title={uiText('brand_spy_12a1578')}
         description={uiText('track_competitor_instagram_posts_and_paid_ad__a7755c7')}
@@ -79,7 +79,7 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
       <div
         role="tablist"
         aria-label={uiText('competitor_spy_sections_4b65a5b')}
-        className="flex gap-1 border-b border-border"
+        className="flex gap-1 border-b border-border [&>[role=tab]:first-child]:pl-0"
       >
         {TABS.map((t) => (
           <button

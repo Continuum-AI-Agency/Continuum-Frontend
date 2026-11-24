@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export function GoalsIndexSkeleton() {
   return (
-    <div className="flex h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] flex-col gap-[var(--app-shell-gap)] py-[var(--page-pad-block)]">
+    <div className="flex h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] flex-col gap-[var(--app-shell-gap)] px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
           <Skeleton className="h-4 w-28 bg-muted/70" />

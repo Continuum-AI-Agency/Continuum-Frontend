@@ -557,7 +557,7 @@ export function OrganicMonthlyCalendar({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-card/50 p-2">
-      <header className="mb-2 flex shrink-0 items-center justify-between">
+      <header className="mb-2 flex shrink-0 items-center justify-between ps-1.5 pe-0.5">
         <h2 translate="no" className="text-lg font-semibold tracking-tight text-foreground">
           {monthLabel}
         </h2>

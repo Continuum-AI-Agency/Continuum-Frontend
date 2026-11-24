@@ -34,7 +34,10 @@ export function BillingInvoices({ invoices }: { invoices: InvoiceRowView[] }) {
   }
 
   return (
-    <Table aria-label={tUi('m_35f8f37b92')}>
+    <Table
+      aria-label={tUi('m_35f8f37b92')}
+      className="[&_tr>*:first-child]:pl-0 [&_tr>*:last-child]:pr-0"
+    >
       <TableHeader>
         <TableRow>
           <TableHead className="pl-0">{tUi('m_eb9a4bc1c0')}</TableHead>

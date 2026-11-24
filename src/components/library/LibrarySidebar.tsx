@@ -554,7 +554,8 @@ export function LibrarySidebar({
 
   return (
     <aside className="flex h-full w-56 shrink-0 flex-col border-r border-border/50 bg-muted/30">
-      <ScrollArea className="min-h-0 flex-1 px-1.5 pt-2">
+      {/* Rows carry px-2 of their own, so the rail gives the rest: row text starts on the page gutter line. */}
+      <ScrollArea className="min-h-0 flex-1 px-[calc(var(--page-pad-inline)-0.5rem)] pt-2">
         <div className="px-2 pb-1 pt-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {translateUi('browse_3227aa96')}
@@ -776,7 +777,7 @@ export function LibrarySidebar({
       <Separator />
 
       {/* The one storage number: the billing quota (F's meter), live. */}
-      <div className="px-3 py-2.5">
+      <div className="px-[var(--page-pad-inline)] py-2.5">
         <StorageQuotaMeter brandId={brandId} />
       </div>
       {reviewTarget ? (

@@ -141,6 +141,17 @@ The jump from 8px to 16px is too coarse for fine-grained UI work. All spacing us
 | `4xl` | 64px | Major layout regions |
 | `5xl` | 96px | Hero breathing room |
 
+### Edge lines
+
+Recorded 2026-11-23 from a gridlines pass (the `gridlines` skill), pending owner review. Measure ink, not boxes; every item sits within 1px of its line.
+
+- **Page text line:** `--page-pad-inline` from the main area's edge. The top bar's first item (module pill) and every page header start on it, and the top bar's last glyph ends on the matching trailing line. Never hand-roll `p-4 md:p-6` or `px-6` for a page gutter.
+- **Dense data areas** (Home dashboard, Organic) use `--card-pad` as their gutter instead. Everything inside one of these areas shares that line, including footnotes and section headers.
+- **App sidebar:** icon rows share one icon column and one text line, including the footer rows (Settings, Admin, Sign out, theme). Group labels start on the icon column's leading edge. The brand switcher and the identity row carry 32px media wider than the column, so they share their own line instead.
+- **Ghost controls at an edge** (icon buttons, "Open ↗"): pull their group out by the control's own padding so the glyph sits on the line, not the hit area.
+- **Tables inside a section:** when the table has no border of its own, the first and last cells drop their inline padding so the column text continues the section's text line.
+- **Tabs:** the first tab's label sits on the text line of the panel below; the tab strip gives up its padding instead.
+
 ---
 
 ## Border Radius
