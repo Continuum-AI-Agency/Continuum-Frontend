@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';
+import { splitVisualAssets } from '@/lib/documents/visualAssets';
 import type { OnboardingState } from '@/lib/onboarding/state';
 import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
@@ -37,6 +38,7 @@ import {
 import { useDocumentActions } from './useDocumentActions';
 import { useDocumentMutations } from './useDocumentMutations';
 import { useDocuments } from './useDocuments';
+import { VisualAssetNotice } from './VisualAssetNotice';
 
 const EXPIRY_TICK_MS = 60_000;
 
@@ -130,7 +132,16 @@ export function DocumentManager({
     mutations.uploads.filter((u) => u.status === 'uploading').length;
   const errorCount = scopedDocuments.filter((d) => (d.progressStep ?? d.status) === 'error').length;
 
-  const handleFiles = async (files: File[]) => {
+  // Logos, fonts and reference images wait here for the person to choose; see VisualAssetNotice.
+  const [heldVisual, setHeldVisual] = useState<File[]>([]);
+
+  const handleFiles = async (dropped: File[]) => {
+    const { documents: files, visual } = splitVisualAssets(dropped);
+    if (visual.length > 0) setHeldVisual((held) => [...held, ...visual]);
+    await uploadDocuments(files);
+  };
+
+  const uploadDocuments = async (files: File[]) => {
     if (files.length === 0) return;
     const result = await mutations.uploadFiles(files, onStateChange, uploadCategory);
     if (result.succeeded > 0) {
@@ -270,6 +281,14 @@ export function DocumentManager({
         )}
       >
         <CardContent className="space-y-3 p-0">
+          <VisualAssetNotice
+            brandId={brandId}
+            files={heldVisual}
+            onKeepInKnowledge={(files) => void uploadDocuments(files)}
+            onSettled={(settled) =>
+              setHeldVisual((held) => held.filter((file) => !settled.includes(file)))
+            }
+          />
           <SyncBar
             onUploadClick={() => inputRef.current?.click()}
             uploading={anyUploading}
