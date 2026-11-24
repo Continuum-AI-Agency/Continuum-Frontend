@@ -1111,6 +1111,7 @@
   "brand_dot_dashboard_draft_4a608af": "{brand} · Dot dashboard draft",
   "hover_or_focus_to_inspect_click_to_hold_escap_be4a43e": "Hover or focus to inspect. Click to hold; Escape to clear. Lilac: recorded · Coral: needs attention · Hollow: unconfirmed or not read.",
   "through_day_9e48c64": "Through {day}",
+  "through_day_days_old_5f1c2a7": "Through {day} · {count, plural, one {# day} other {# days}} old",
   "date_not_reported_ac99f24": "Date not reported",
   "currency_not_recorded_b6f3038": "Currency not recorded",
   "recorded_actions_in_the_last_24_hours_0461825": "Recorded actions in the last 24 hours",

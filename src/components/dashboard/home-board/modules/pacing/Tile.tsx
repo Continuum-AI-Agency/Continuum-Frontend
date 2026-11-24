@@ -8,6 +8,7 @@
 // Headline: `data-value` = spend to date of the lead currency's running flights (the engine's
 // figure, cents); the direct read is in pacingModel.ts's header (the bench anchor).
 
+import { daysBetween } from '@continuum/contracts';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { lazy } from 'react';
@@ -29,14 +30,17 @@ function ReadyBody({
   headline,
   others,
   size,
+  today,
 }: {
   headline: PacingCurrencyGroup;
   others: PacingCurrencyGroup[];
   size: HomeTileProps['tile']['size'];
+  today: string;
 }) {
   const uiText = useTranslations('dashboard');
   const draft = useHomeDraft();
   const { currency } = headline;
+  const daysOld = headline.through ? daysBetween(headline.through, today) : 0;
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <p
@@ -51,9 +55,14 @@ function ReadyBody({
       <PlanBar group={headline} />
       {draft ? (
         <p className="text-muted-foreground text-xs">
-          {headline.through
-            ? uiText('through_day_9e48c64', { day: dayLabel(headline.through) })
-            : uiText('date_not_reported_ac99f24')}{' '}
+          {!headline.through
+            ? uiText('date_not_reported_ac99f24')
+            : daysOld > 1
+              ? uiText('through_day_days_old_5f1c2a7', {
+                  day: dayLabel(headline.through),
+                  count: daysOld,
+                })
+              : uiText('through_day_9e48c64', { day: dayLabel(headline.through) })}{' '}
           · {currency ?? uiText('currency_not_recorded_b6f3038')}
         </p>
       ) : null}
@@ -147,7 +156,7 @@ export default function PacingTile({ ctx, tile }: HomeTileProps) {
       state="ready"
       tile={tile}
     >
-      <ReadyBody headline={view.headline} others={others} size={tile.size} />
+      <ReadyBody headline={view.headline} others={others} size={tile.size} today={reads.today} />
     </HomeTileFrame>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import { useContext, useEffect, useId, useRef, useState } from 'react';
+import { type CSSProperties, useContext, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -276,9 +276,20 @@ export function HomeDots({
           </div>
         ) : null}
         {isPlot ? (
-          <div className={styles.chart} data-plot-kind={xAxis ? 'category' : 'trend'}>
+          <div
+            className={styles.chart}
+            data-plot-kind={xAxis ? 'category' : 'trend'}
+            style={xAxis ? ({ '--lanes': ticks.length } as CSSProperties) : undefined}
+          >
             <div className={styles.plotGrid}>
               <div aria-hidden="true" className={styles.yAxis}>
+                <span
+                  className={styles.axisSizer}
+                  data-label={ticks.reduce(
+                    (wide, tick) => (tick.label.length > wide.length ? tick.label : wide),
+                    '',
+                  )}
+                />
                 {ticks.map((tick) => (
                   <span key={tick.label} style={{ top: `${tick.position}%` }}>
                     {tick.label}

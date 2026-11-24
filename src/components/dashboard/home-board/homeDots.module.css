@@ -489,10 +489,6 @@
   opacity: 1;
   filter: saturate(0.15);
 }
-.chart[data-plot-kind="category"] .plot,
-.chart[data-plot-kind="category"] .yAxis {
-  height: 108px;
-}
 .goalBody {
   display: grid;
   grid-template-columns: minmax(10rem, 0.9fr) minmax(0, 2fr);
@@ -552,4 +548,20 @@
   .goalPlot {
     width: 100%;
   }
+}
+/* The ticks are positioned absolutely, so an invisible copy of the widest one sizes the axis column. */
+.yAxis .axisSizer {
+  position: static;
+  display: block;
+  height: 0;
+  visibility: hidden;
+  transform: none;
+}
+.yAxis .axisSizer::before {
+  content: attr(data-label);
+}
+/* A verdict plot is as tall as its lanes, not a fixed trend height. */
+.chart[data-plot-kind="category"] .plot,
+.chart[data-plot-kind="category"] .yAxis {
+  height: calc(var(--lanes, 3) * 36px);
 }
