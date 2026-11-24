@@ -13,7 +13,7 @@ import { OrganicCalendarWorkspace } from '@/components/organic/primitives/Organi
 import { PlannerViewSkeleton } from '@/components/organic/primitives/PlannerViewSkeletons';
 import type { OrganicTrendGroup, OrganicTrendType } from '@/components/organic/primitives/types';
 import { ReviewQueueLazy } from '@/components/organic/review/ReviewQueueLazy';
-import { CommentRulesWorkspace } from '@/components/organic/rules/CommentRulesWorkspace';
+import { CommentRulesWorkspaceLazy } from '@/components/organic/rules/CommentRulesWorkspaceLazy';
 import { StylesShelfLazy } from '@/components/styles/StylesShelfLazy';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchBrandInsights } from '@/lib/api/brandInsights.server.ts';
@@ -369,7 +369,7 @@ async function OrganicContent({
       <OrganicWorkspaceTabs
         brandId={brandProfileId}
         rulesSlot={
-          <CommentRulesWorkspace
+          <CommentRulesWorkspaceLazy
             brandId={brandProfileId}
             instagramAccountId={metricAccountsByPlatform.instagram[0]?.integrationAccountId ?? null}
           />

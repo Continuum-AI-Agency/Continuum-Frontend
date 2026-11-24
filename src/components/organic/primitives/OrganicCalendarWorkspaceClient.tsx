@@ -90,7 +90,6 @@ import {
   useDraftDeletionConfirmation,
 } from './DraftDeletionConfirmation';
 import { MissingDraftPanel } from './MissingDraftPanel';
-import { OrganicCreativesPicker } from './OrganicCreativesPicker';
 import { PlannerAttentionDock } from './PlannerAttentionDock';
 import { ListViewSkeleton, MonthGridSkeleton, PlannerViewSkeleton } from './PlannerViewSkeletons';
 import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail';
@@ -138,6 +137,13 @@ const OrganicDraftPreview = dynamic(
 );
 const PostedContentPreview = dynamic(
   () => import('./PostedContentQuickLook').then((m) => m.PostedContentPreview),
+  { ssr: false },
+);
+
+// Gesture-gated: the picker renders only inside an open dialog or the expanded "Browse all"
+// grid, yet a static import put its library grid stack (~160 KiB) into the planner's first load.
+const OrganicCreativesPicker = dynamic(
+  () => import('./OrganicCreativesPicker').then((m) => m.OrganicCreativesPicker),
   { ssr: false },
 );
 
