@@ -29,6 +29,8 @@ const SIDEBAR_WIDTH_ICON = 'var(--shell-sidebar-w-icon)';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 // How long the pointer rests on the rail before it opens: longer than a pass on the way elsewhere.
 const HOVER_OPEN_DELAY_MS = 150;
+// A menu, popover or dialog opened from inside the panel: its trigger stays marked while it is open.
+const OPEN_MENU_TRIGGER = '[aria-haspopup][aria-expanded="true"]';
 // One spring for the panel and for the room the page makes for it, so a pin moves both edges together.
 const SIDEBAR_SPRING = { type: 'spring', bounce: 0, duration: 0.3 } as const;
 
@@ -253,8 +255,15 @@ const Sidebar = React.forwardRef<
   ) => {
     const tUi = useTranslations('common');
 
-    const { isMobile, state, pinnedOpen, openMobile, setOpenMobile, setHoverExpanded } =
-      useSidebar();
+    const {
+      isMobile,
+      state,
+      pinnedOpen,
+      openMobile,
+      setOpenMobile,
+      hoverExpanded,
+      setHoverExpanded,
+    } = useSidebar();
     const reduce = useReducedMotion();
     const isIconCollapsible = collapsible === 'icon';
     // Hover-expand rail: a fixed icon-width footprint with an overlay panel
@@ -266,7 +275,10 @@ const Sidebar = React.forwardRef<
     // left-0, so mouseenter/leave fire reliably. Entering opens only once the
     // pointer has rested on the rail, so passing over it on the way to the top bar
     // does not throw the panel over the page; leave starts a short grace timer so a
-    // quick re-entry cancels the collapse without flicker.
+    // quick re-entry cancels the collapse without flicker. A menu opened from the panel
+    // renders outside it, so while one is open the panel stays open under it, and closes
+    // when that menu does if the pointer is no longer on the panel.
+    const panelRef = React.useRef<HTMLDivElement | null>(null);
     const openTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const collapseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const cancelTimers = React.useCallback(() => {
@@ -281,6 +293,7 @@ const Sidebar = React.forwardRef<
       (event: React.MouseEvent<HTMLDivElement>) => {
         cancelTimers();
         const panel = event.currentTarget;
+        panelRef.current = panel;
         openTimerRef.current = setTimeout(() => {
           openTimerRef.current = null;
           if (panel.matches(':hover')) setHoverExpanded(true);
@@ -288,13 +301,29 @@ const Sidebar = React.forwardRef<
       },
       [cancelTimers, setHoverExpanded],
     );
-    const handleHoverLeave = React.useCallback(() => {
+    const scheduleCollapse = React.useCallback(() => {
       cancelTimers();
       collapseTimerRef.current = setTimeout(() => {
         collapseTimerRef.current = null;
         setHoverExpanded(false);
       }, 180);
     }, [cancelTimers, setHoverExpanded]);
+    const handleHoverLeave = React.useCallback(
+      (event: React.MouseEvent<HTMLDivElement>) => {
+        cancelTimers();
+        if (!event.currentTarget.querySelector(OPEN_MENU_TRIGGER)) scheduleCollapse();
+      },
+      [cancelTimers, scheduleCollapse],
+    );
+    React.useEffect(() => {
+      const panel = panelRef.current;
+      if (!hoverExpanded || !panel) return;
+      const watch = new MutationObserver(() => {
+        if (!panel.querySelector(OPEN_MENU_TRIGGER) && !panel.matches(':hover')) scheduleCollapse();
+      });
+      watch.observe(panel, { subtree: true, attributeFilter: ['aria-expanded'] });
+      return () => watch.disconnect();
+    }, [hoverExpanded, scheduleCollapse]);
     React.useEffect(() => cancelTimers, [cancelTimers]);
     const hoverHandlers =
       useHoverWidth && !isMobile
