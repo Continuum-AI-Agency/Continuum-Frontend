@@ -251,9 +251,11 @@
 :where([class~="dark"]) .held {
   color: #b5b9ad;
 }
+/* Wide cards give each group room in proportion to its dots, so no group wraps while another
+   sits half empty; narrow cards fall back to equal thirds below. */
 .checkGroups {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: var(--check-columns, repeat(3, minmax(0, 1fr)));
   gap: 12px;
   align-content: start;
 }
@@ -564,4 +566,27 @@
 .chart[data-plot-kind="category"] .plot,
 .chart[data-plot-kind="category"] .yAxis {
   height: calc(var(--lanes, 3) * 36px);
+}
+/* The legend is a quiet cell inside the board: no frame, its text on the cards' text line. */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: start;
+  padding: 12px 17px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--home-dot-muted);
+}
+@media (max-width: 767px) {
+  /* One scrolling row of suggestions instead of four wrapped rows ahead of the first tile. */
+  .board [data-ask-suggestions] {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .board [data-ask-suggestions] > li {
+    flex: none;
+    max-width: 85%;
+  }
 }

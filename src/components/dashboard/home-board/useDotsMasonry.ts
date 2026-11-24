@@ -4,8 +4,9 @@ import { type RefObject, useLayoutEffect } from 'react';
  * Packs the dots board like masonry. With 1px grid rows, each slot spans its card's own height
  * plus the board gap, so the board's dense placement fills the space a tall neighbour leaves
  * instead of stretching every row to its tallest card. Column spans (the tiles' logical sizes)
- * and DOM order are untouched. `data-masonry` switches the 1px rows on only once every slot
- * has a span, so server HTML never renders collapsed rows.
+ * and DOM order are untouched. Every grid child is fitted, so the board legend settles into the
+ * first hole the tiles leave. `data-masonry` switches the 1px rows on only once every child has
+ * a span, so server HTML never renders collapsed rows.
  */
 export function useDotsMasonry(
   grid: RefObject<HTMLElement | null>,
@@ -16,7 +17,7 @@ export function useDotsMasonry(
   useLayoutEffect(() => {
     const board = grid.current;
     if (!enabled || !board) return;
-    const slots = [...board.querySelectorAll<HTMLElement>(':scope > [data-board-slot]')];
+    const slots = [...board.querySelectorAll<HTMLElement>(':scope > *')];
     const fit = (slot: HTMLElement) => {
       const gap = Number.parseFloat(getComputedStyle(board).columnGap) || 0;
       slot.style.gridRow = `span ${Math.ceil(slot.getBoundingClientRect().height + gap)}`;

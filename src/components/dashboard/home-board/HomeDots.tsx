@@ -120,6 +120,9 @@ export function HomeDots({
       : high === low
         ? 50
         : 12 + ((high - (item.number ?? 0)) / (high - low)) * 76;
+  const checkGroups = [...new Set(shown.map((item) => item.group ?? item.value))];
+  const groupSize = (group: string) =>
+    shown.filter((item) => (item.group ?? item.value) === group).length;
   const isPlot = !listView && (trend || Boolean(xAxis)) && plotted.length > 0;
   const detail = (item: HomeDot) =>
     [item.detail, item.period, item.freshness ?? uiText('source_freshness_not_reported_60993e2')]
@@ -356,14 +359,21 @@ export function HomeDots({
           </fieldset>
         ) : named ? (
           <>
-            <div className={styles.checkGroups}>
-              {[...new Set(shown.map((item) => item.group ?? item.value))].map((group) => (
+            <div
+              className={styles.checkGroups}
+              style={
+                {
+                  '--check-columns': checkGroups
+                    .map((group) => `minmax(7rem, ${groupSize(group)}fr)`)
+                    .join(' '),
+                } as CSSProperties
+              }
+            >
+              {checkGroups.map((group) => (
                 <section className={styles.checkGroup} key={group} aria-label={group}>
                   <h4>
                     {group}
-                    <span>
-                      {shown.filter((item) => (item.group ?? item.value) === group).length}
-                    </span>
+                    <span>{groupSize(group)}</span>
                   </h4>
                   <div className={styles.checkList}>
                     {shown

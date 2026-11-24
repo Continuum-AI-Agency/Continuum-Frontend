@@ -177,16 +177,19 @@ export function HomeBoard({
                   </motion.div>
                 );
               })}
+              {presentation === 'dots' ? (
+                <div className={styles.legend} data-testid="home-board-legend">
+                  <p>{uiText('order_impact_on_the_goal_urgency_confidence_a_1592031')}</p>
+                  <p>{uiText('hover_or_focus_to_inspect_click_to_hold_escap_be4a43e')}</p>
+                </div>
+              ) : null}
             </motion.div>
           </HomeBoardChromeContext.Provider>
-          <p className="text-muted-foreground text-xs">
-            {uiText('order_impact_on_the_goal_urgency_confidence_a_1592031')}
-          </p>
-          {presentation === 'dots' ? (
+          {presentation === 'dots' ? null : (
             <p className="text-muted-foreground text-xs">
-              {uiText('hover_or_focus_to_inspect_click_to_hold_escap_be4a43e')}
+              {uiText('order_impact_on_the_goal_urgency_confidence_a_1592031')}
             </p>
-          ) : null}
+          )}
         </section>
       </HomeInspectionProvider>
     </HomePresentationContext.Provider>
