@@ -2,12 +2,23 @@
 
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
 import { Archive, X } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
-import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetClose, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+
+// The panel renders only while the sheet is open, but a static import put its ~700 KiB (the
+// whole library grid stack) into AI Studio's first load. `ssr: false` is what gives it its own
+// Suspense boundary: without one, opening the sheet would suspend the whole route.
+const StudioMediaLibraryPanel = dynamic(
+  () =>
+    import('@/components/creative-assets/StudioMediaLibraryPanel').then(
+      (m) => m.StudioMediaLibraryPanel,
+    ),
+  { ssr: false },
+);
 
 type CreativeLibrarySidebarProps = {
   brandProfileId: string;
