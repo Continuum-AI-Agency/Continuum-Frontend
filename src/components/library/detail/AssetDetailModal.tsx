@@ -38,6 +38,7 @@ import { useLibraryPlayback } from '@/lib/library/libraryPlayback';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
 import { AssetDownloadButton } from '../AssetDownloadButton';
+import { BrandIdentityTagMenu } from '../BrandIdentityTagMenu';
 import { EditTimelineButton } from '../editor/EditTimelineButton';
 import { LibraryMediaPickerDialog } from '../editor/LibraryMediaPickerDialog';
 import { AssetFieldsPanel } from '../fields/AssetFieldsPanel';
@@ -735,6 +736,15 @@ function AssetDetailDialog({
                       onAssetChanged={onAssetChanged}
                     />
                     <SetBrandLogoButton brandId={brandId} asset={asset} />
+                    {asset.kind === 'image' ? (
+                      <BrandIdentityTagMenu
+                        key={asset.id}
+                        brandId={brandId}
+                        assetId={asset.id}
+                        tags={asset.tags}
+                        onTagsChange={() => onAssetChanged?.()}
+                      />
+                    ) : null}
                     <OpenInCanvasButton
                       brandId={brandId}
                       asset={asset}

@@ -18,6 +18,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FontSpecimen } from '@/components/brand/FontSpecimen';
+import { BrandIdentityTagMenu } from '@/components/library/BrandIdentityTagMenu';
 import {
   FontUploadReviewDialog,
   type StoredFontFace,
@@ -367,6 +368,14 @@ function TaggedImageUploader({
                 >
                   {tUi('brandLibraryMakeBrandLogo')}
                 </button>
+              ) : null}
+              {tag === 'logo' && tile.assetId && tile.status === 'done' ? (
+                <BrandIdentityTagMenu
+                  brandId={brandId}
+                  assetId={tile.assetId}
+                  tags={[tag]}
+                  variantsOnly
+                />
               ) : null}
             </li>
           ))}

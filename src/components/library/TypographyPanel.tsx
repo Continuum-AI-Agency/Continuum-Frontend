@@ -7,6 +7,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { NoSpecimenText, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { expandFontArchives } from '@/lib/library/fontArchive';
 import { type BrandFontSummary, fetchBrandFonts } from '@/lib/library/templateSources';
 import { partitionLibraryUploadFiles } from './libraryUploadRouting';
 
@@ -18,7 +19,7 @@ import { partitionLibraryUploadFiles } from './libraryUploadRouting';
 //
 // No specimen is drawn. See typefaceHonesty.tsx for why that is the honest output.
 
-const FONT_ACCEPT = '.ttf,.otf,.woff,.woff2';
+const FONT_ACCEPT = '.ttf,.otf,.woff,.woff2,.zip';
 
 /** Plain-language wording for a surface outside the Library, such as onboarding. */
 export type TypographyPanelCopy = { title: string; intro: string; empty: string; held: string };
@@ -66,7 +67,9 @@ export function TypographyPanel({
     <div className="flex flex-col gap-4 p-1">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold">{copy?.title ?? translateUi('typography_cab94aba')}</h2>
+          <h2 className="text-lg font-semibold">
+            {copy?.title ?? translateUi('typography_cab94aba')}
+          </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             {copy?.intro ?? <NoSpecimenText />}
           </p>
@@ -81,9 +84,12 @@ export function TypographyPanel({
           accept={FONT_ACCEPT}
           className="hidden"
           onChange={(event) => {
-            const { fonts } = partitionLibraryUploadFiles(Array.from(event.target.files ?? []));
-            if (fonts.length > 0) onReviewFiles(fonts);
+            const picked = Array.from(event.target.files ?? []);
             event.target.value = '';
+            void expandFontArchives(picked).then((files) => {
+              const { fonts } = partitionLibraryUploadFiles(files);
+              if (fonts.length > 0) onReviewFiles(fonts);
+            });
           }}
         />
       </div>
