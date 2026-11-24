@@ -5,6 +5,9 @@ import { claimsIdentityOf } from '@/lib/auth/claims';
 import { isStaffUser } from '@/lib/auth/staff';
 import { readBrandAccess } from '@/lib/billing/brandAccess.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { log } from '@/lib/observability/logger';
+import { completeOnboarding } from '@/lib/onboarding/complete.server';
+import { completesOnLoad } from '@/lib/onboarding/resumeScreen';
 import { isOnboardingComplete } from '@/lib/onboarding/state';
 import { ensureOnboardingState } from '@/lib/onboarding/storage';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -32,9 +35,22 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   if (isOnboardingComplete(state)) {
     redirect('/dashboard');
   }
-  // Whether billing is live does not depend on the brand, so the read the brand context already
-  // made answers it; only a user with no active brand yet needs one of its own.
-  const { billingLive } = activeBrandId ? brandAccess : await readBrandAccess(brandId);
+  // The brand context already read the active brand's access; any other brand reads its own.
+  const access = activeBrandId === brandId ? brandAccess : await readBrandAccess(brandId);
+  if (completesOnLoad(state, access)) {
+    // On failure the plan screen renders and its Continue button retries.
+    const completed = await completeOnboarding(brandId).then(
+      () => true,
+      (error: unknown) => {
+        log.warn('[onboarding] completing an entitled brand on load failed', {
+          brandId,
+          error: String(error),
+        });
+        return false;
+      },
+    );
+    if (completed) redirect('/dashboard');
+  }
 
   const defaultUrl = inferDomainFromEmail(user.email);
 
@@ -49,7 +65,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
         brandId={brandId}
         initialState={state}
         defaultUrl={defaultUrl}
-        planRequired={billingLive}
+        planRequired={access.billingLive}
         staff={isStaffUser(user)}
       />
     </ActiveBrandProvider>

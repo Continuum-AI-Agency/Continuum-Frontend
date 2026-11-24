@@ -99,7 +99,9 @@ export function HomeTileFrame({
     <>
       <ModuleFrame
         action={
-          <div className="flex items-center gap-0.5">
+          // Ghost buttons: pull out by their padding so the arrow ends on the tile's trailing line,
+          // and up so the 28px buttons centre on the 18px title line.
+          <div className="-mt-1 -mr-2 flex items-center gap-0.5">
             {action}
             <Button
               aria-label={

@@ -6,6 +6,7 @@ import {
   type BillingOverview,
   type CreditPackOffer,
   PLAN_CODES,
+  type PlanCatalogEntry,
   type PlanCode,
   PRODUCT_CODES,
   type ProductCode,
@@ -32,8 +33,9 @@ export type PlanStatus = 'active' | 'activating' | 'payment_failed' | 'available
 /**
  * `none` when the plan is the subscription's only one: cancelling lives in the Stripe portal.
  * `requires_organic`: Trends+ is an add-on to Organic and the brand has no Organic access.
+ * `granted`: Continuum activated the plan's products off Stripe (admin or grandfathered grant).
  */
-export type PlanAction = 'checkout' | 'add' | 'remove' | 'none' | 'requires_organic';
+export type PlanAction = 'checkout' | 'add' | 'remove' | 'none' | 'requires_organic' | 'granted';
 
 export type PlanCardView = {
   planCode: PlanCode;
@@ -82,6 +84,8 @@ export type AutoBillingView = {
 
 export const AUTO_BILLING_NEEDS_PLAN =
   'Choose a plan first — auto-billing charges overage to the card on your subscription.';
+export const AUTO_BILLING_PLAN_GRANTED =
+  'Continuum activated your plan, so there is no card subscription to bill overage to. Buy credit packs to keep generating.';
 export const AUTO_BILLING_CONTRACT =
   'Contract brands are billed through their agreement and never metered.';
 
@@ -252,6 +256,14 @@ export function toBillingView(
   const livePlans = liveSubscription?.plans ?? null;
   const paymentFailed = liveSubscription?.status === 'past_due';
   const catalogOrder = (plan: PlanCode) => PLAN_CODES.indexOf(plan);
+  // entitlements.plans lists only Stripe-billed plans; an admin grant shows up as products alone.
+  const grantedOffStripe = (plan: PlanCatalogEntry) =>
+    !livePlans?.includes(plan.planCode) &&
+    plan.products.every((product) => entitlements.products.includes(product));
+  const hasGrantedPlan = overview.catalog.plans.some(grantedOffStripe);
+  const noSubscriptionReason = hasGrantedPlan
+    ? t('billingPlanGrantedReason')
+    : t('billingNeedsPlanReason');
 
   const plans = [...overview.catalog.plans]
     .sort((a, b) => catalogOrder(a.planCode) - catalogOrder(b.planCode))
@@ -262,7 +274,7 @@ export function toBillingView(
       priceLabel: formatUsd(plan.monthlyPriceUsd, 'usd', locale),
       features: featuresFor(plan.products, plan.includedCanvasCredits, t),
       status: !livePlans?.includes(plan.planCode)
-        ? entitlements.plans.includes(plan.planCode)
+        ? entitlements.plans.includes(plan.planCode) || grantedOffStripe(plan)
           ? 'active'
           : 'available'
         : paymentFailed
@@ -270,12 +282,14 @@ export function toBillingView(
           : entitlements.plans.includes(plan.planCode)
             ? 'active'
             : 'activating',
-      action: planAction(
-        plan.planCode,
-        livePlans,
-        entitlements.products.includes('organic_agent') ||
-          Boolean(livePlans?.includes('organic_studio')),
-      ),
+      action: grantedOffStripe(plan)
+        ? 'granted'
+        : planAction(
+            plan.planCode,
+            livePlans,
+            entitlements.products.includes('organic_agent') ||
+              Boolean(livePlans?.includes('organic_studio')),
+          ),
       highlighted: need !== null && plan.products.includes(need),
     }));
 
@@ -295,7 +309,7 @@ export function toBillingView(
     autoBilling: {
       enabled: overview.overageEnabled,
       capUsd: overview.overageCapUsd,
-      disabledReason: liveSubscription ? null : t('billingNeedsPlanReason'),
+      disabledReason: liveSubscription ? null : noSubscriptionReason,
     },
     creditPack: overview.catalog.creditPack,
     // X credits pay for X publishing, so they are sold where the brand can publish organically
@@ -311,7 +325,7 @@ export function toBillingView(
             autoBilling: {
               enabled: overview.x.overageEnabled,
               capUsd: overview.x.overageCapUsd,
-              disabledReason: liveSubscription ? null : t('billingNeedsPlanReason'),
+              disabledReason: liveSubscription ? null : noSubscriptionReason,
             },
             creditPack: overview.catalog.xCreditPack ?? overview.catalog.creditPack,
           }

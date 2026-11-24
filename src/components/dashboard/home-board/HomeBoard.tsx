@@ -141,7 +141,7 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
           })}
         </motion.div>
       </HomeBoardChromeContext.Provider>
-      <p className="px-1 text-muted-foreground text-xs">
+      <p className="text-muted-foreground text-xs">
         {uiText('order_impact_on_the_goal_urgency_confidence_a_1592031')}
       </p>
     </section>

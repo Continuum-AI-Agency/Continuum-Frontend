@@ -51,15 +51,6 @@ export async function updateBrandContentLanguageAction(
   revalidatePath('/settings', 'page');
 }
 
-export async function updateBrandLogoAction(
-  brandId: string,
-  logoPath: string | null,
-): Promise<void> {
-  const repo = createBrandProfileRepository();
-  await repo.updateLogo(brandId, logoPath);
-  revalidatePath('/', 'layout');
-}
-
 export async function createBrandProfileAction(name?: string): Promise<void> {
   const user = await getClaimsIdentity();
   const repo = createBrandProfileRepository();

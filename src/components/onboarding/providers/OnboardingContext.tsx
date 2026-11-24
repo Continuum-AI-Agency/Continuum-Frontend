@@ -8,8 +8,9 @@ import {
   resetOnboardingStateAction,
 } from '@/app/[locale]/onboarding/actions';
 import { useToast } from '@/components/ui/ToastProvider';
+import { adoptLiveDocuments } from '@/lib/onboarding/documentRows';
 import { createSerializedMutationQueue } from '@/lib/onboarding/mutationQueue';
-import type { OnboardingPatch, OnboardingState } from '@/lib/onboarding/state';
+import type { OnboardingDocument, OnboardingPatch, OnboardingState } from '@/lib/onboarding/state';
 import { mergeOnboardingState } from '@/lib/onboarding/state';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -24,6 +25,8 @@ type OnboardingContextValue = {
   updateState: (patch: OnboardingPatch, options?: { notify?: boolean }) => Promise<void>;
   resetState: () => Promise<void>;
   reloadState: (next: OnboardingState) => void;
+  /** Local only: the server reconciles documents from their rows on every load and save. */
+  adoptDocumentStatuses: (live: OnboardingDocument[]) => void;
 };
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
@@ -133,11 +136,27 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
     setState(next);
   }, []);
 
+  const adoptDocumentStatuses = useCallback((live: OnboardingDocument[]) => {
+    const documents = adoptLiveDocuments(stateRef.current.documents, live);
+    if (documents === stateRef.current.documents) return;
+    stateRef.current = { ...stateRef.current, documents };
+    setState(stateRef.current);
+  }, []);
+
   const isPending = pendingCount > 0 || isTransitionPending;
 
   return (
     <OnboardingContext.Provider
-      value={{ brandId, state, userId, isPending, updateState, resetState, reloadState }}
+      value={{
+        brandId,
+        state,
+        userId,
+        isPending,
+        updateState,
+        resetState,
+        reloadState,
+        adoptDocumentStatuses,
+      }}
     >
       {children}
     </OnboardingContext.Provider>

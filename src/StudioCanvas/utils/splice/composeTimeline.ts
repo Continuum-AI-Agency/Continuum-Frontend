@@ -27,7 +27,7 @@ import { type CaptionCue, type CaptionWord, groupWordsIntoCues } from './caption
 import { appendOverlapTransition, type CrossDissolveClip } from './crossDissolve';
 import { drawActiveCaption } from './drawCaptions';
 import { drawEffectFrame } from './frameDraw';
-import { isRetimed, retimedClock } from './sourceClock';
+import { atDecodableTime, isRetimed, retimedClock } from './sourceClock';
 import type { SpliceProgress, SpliceResult } from './spliceClips';
 import { resolveTimelineAudioEnvelope } from './timelineAudioEnvelope';
 
@@ -317,10 +317,11 @@ async function prepareOverlays(
     // for an opaque overlay, whose every pixel is already alpha 255.
     // Pinned by `matte:alpha:bench`, which decodes the same clip both ways.
     const sink = new mb.CanvasSink(track, { alpha: true });
+    const firstFrameSec = await track.getFirstTimestamp();
     prepared.push({
       kind: 'video',
       frameAt: async (sourceSec) => {
-        const wrapped = await sink.getCanvas(sourceSec);
+        const wrapped = await sink.getCanvas(atDecodableTime(sourceSec, firstFrameSec));
         return wrapped ? { image: wrapped.canvas, width, height } : null;
       },
       startSec: overlay.startSec,

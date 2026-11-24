@@ -1178,5 +1178,11 @@
   "commentsWord": "{count, plural, one {comentário} other {comentários}}",
   "below_average_35_d9769d8": "abaixo da média 35",
   "below_average_20_b098009": "abaixo da média 20",
-  "below_average_10_ca06a68": "abaixo da média 10"
+  "below_average_10_ca06a68": "abaixo da média 10",
+  "setAsBrandLogo": "Usar como logo da marca",
+  "setAsBrandLogoHint": "Usar esta imagem como logo da marca em todo lugar, inclusive no conteúdo gerado",
+  "brandLogoSetTitle": "Logo da marca atualizado",
+  "brandLogoSetDescription": "O conteúdo novo usará este logo.",
+  "brandLogoSetFailedTitle": "Não foi possível definir o logo da marca",
+  "brandLogoSetFailedDescription": "Tente novamente."
 }

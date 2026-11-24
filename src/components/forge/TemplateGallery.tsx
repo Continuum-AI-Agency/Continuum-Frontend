@@ -705,7 +705,7 @@ export function TemplateGallery({
         <Table aria-label={translateUi('templates_56b564b7')} className="text-xs">
           <TableHeader>
             <TableRow>
-              <SortHead column="name" sort={sort} onSort={sortBy} className="min-w-64" />
+              <SortHead column="name" sort={sort} onSort={sortBy} className="min-w-64 pl-9" />
               <SortHead column="type" sort={sort} onSort={sortBy} />
               <TableHead>{translateUi('formats_9f01769a')}</TableHead>
               <SortHead column="status" sort={sort} onSort={sortBy} />

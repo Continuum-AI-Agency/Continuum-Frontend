@@ -9,9 +9,13 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database, Json } from '@/lib/supabase/types';
 import {
   adoptBrandRecord,
+  adoptRowCompletion,
+  adoptRowLogo,
   type BrandRecordFields,
   canPersistBrandRecord,
+  completedAtToPersist,
 } from './brandRecordGuard';
+import { type BrandDocumentRow, reconcileDocuments } from './documentRows';
 import {
   findMatchingActiveBrandId,
   findPendingInviteBrandId,
@@ -123,7 +127,12 @@ async function ensureBrandProfileRecord(
   brandId: string,
   owner: BrandMember,
   state?: OnboardingState,
-  options: { reuseMatchingBrand?: boolean; onlyEmptyShell?: boolean } = {},
+  options: {
+    reuseMatchingBrand?: boolean;
+    onlyEmptyShell?: boolean;
+    /** Set on a load: an existing row is reported here; its logo is never overwritten (adoptRowLogo). */
+    onExistingRow?: (row: Pick<BrandRecordFields, 'logo_path' | 'completed_at'>) => void;
+  } = {},
 ): Promise<string> {
   const { data: rawData, error } = await supabase
     .schema('brand_profiles')
@@ -144,6 +153,8 @@ async function ensureBrandProfileRecord(
   if (error && error.code !== 'PGRST116') {
     throw error;
   }
+  const rowOwnsLogo = Boolean(data && options.onExistingRow);
+  if (data && options.onExistingRow) options.onExistingRow(data);
 
   // Only the brand's creator may persist global fields from their onboarding
   // state. An invited member's state name is defaulted to "<their-name>'s Brand";
@@ -151,12 +162,28 @@ async function ensureBrandProfileRecord(
   // shell, the switcher). Invited members are read-only on the brand row. Their invite
   // is redeemed earlier, by getActiveBrandContext: until it is, RLS hides this row.
   if (!canPersistBrandRecord(data, owner.id)) {
+    // A teammate who finishes onboarding completes the brand: completed_at only, and only once.
+    // RLS lets brand admins write it; for anyone else the update matches no row.
+    if (data && !data.completed_at && state?.completedAt) {
+      const { error: completeError } = await supabase
+        .schema('brand_profiles')
+        .from('brand_profiles')
+        .update({ completed_at: state.completedAt, updated_at: new Date().toISOString() })
+        .eq('id', brandId)
+        .is('completed_at', null);
+      if (completeError) {
+        console.warn(
+          `[ensureBrandExists] member ${owner.id} could not complete brand ${brandId}`,
+          completeError,
+        );
+      }
+    }
     return brandId;
   }
 
   const brandName = resolveBrandProfileName(state);
-  const logoPath = state?.brand?.logoPath ?? null;
-  const completedAt = state?.completedAt ?? null;
+  const logoPath = rowOwnsLogo && data ? data.logo_path : (state?.brand?.logoPath ?? null);
+  const completedAt = completedAtToPersist(state?.completedAt, data?.completed_at ?? null);
   // The end-of-onboarding toggle. Persisted on the same row whose completed_at
   // fires the first-value report enqueue trigger, so the trigger reads the
   // user's choice at completion. Defaults to opt-in.
@@ -247,112 +274,6 @@ async function ensureBrandProfileRecord(
   return brandId;
 }
 
-const DOCUMENT_SOURCE_VALUES = new Set<OnboardingDocument['source']>([
-  'upload',
-  'canva',
-  'figma',
-  'google-drive',
-  'sharepoint',
-  'notion',
-  'website',
-]);
-
-type BrandDocumentRow = {
-  id: string;
-  brand_id: string;
-  name: string;
-  status: string | null;
-  error_message: string | null;
-  type: string | null;
-  source: string | null;
-  created_at: string;
-  updated_at: string | null;
-  size?: number | null;
-  storage_path?: string | null;
-  external_url?: string | null;
-};
-
-function normalizeDocumentStatus(status: string | null): OnboardingDocument['status'] {
-  if (status === 'ready' || status === 'error') {
-    return status;
-  }
-  return 'processing';
-}
-
-function normalizeDocumentSource(
-  source: string | null,
-  fallback: OnboardingDocument['source'],
-): OnboardingDocument['source'] {
-  if (source && DOCUMENT_SOURCE_VALUES.has(source as OnboardingDocument['source'])) {
-    return source as OnboardingDocument['source'];
-  }
-  return fallback;
-}
-
-function documentsEqual(a: OnboardingDocument, b: OnboardingDocument): boolean {
-  return (
-    a.id === b.id &&
-    a.name === b.name &&
-    a.source === b.source &&
-    a.createdAt === b.createdAt &&
-    a.status === b.status &&
-    (a.size ?? null) === (b.size ?? null) &&
-    (a.externalUrl ?? null) === (b.externalUrl ?? null) &&
-    (a.storagePath ?? null) === (b.storagePath ?? null) &&
-    (a.jobId ?? null) === (b.jobId ?? null) &&
-    (a.errorMessage ?? null) === (b.errorMessage ?? null)
-  );
-}
-
-function mergeDocumentFromRow(
-  existing: OnboardingDocument | undefined,
-  row: BrandDocumentRow,
-): OnboardingDocument {
-  const sourceFallback = existing?.source ?? 'upload';
-  const status = normalizeDocumentStatus(row.status);
-  const createdAt =
-    existing?.createdAt ?? row.created_at ?? row.updated_at ?? new Date().toISOString();
-
-  const merged: OnboardingDocument = {
-    id: row.id,
-    name:
-      typeof row.name === 'string' && row.name.trim().length > 0
-        ? row.name
-        : (existing?.name ?? 'Document'),
-    source: normalizeDocumentSource(row.source, sourceFallback),
-    createdAt,
-    status,
-  };
-
-  const size = typeof row.size === 'number' ? row.size : existing?.size;
-  if (typeof size === 'number' && Number.isFinite(size) && size >= 0) {
-    merged.size = size;
-  }
-
-  const externalUrl = row.external_url ?? existing?.externalUrl;
-  if (typeof externalUrl === 'string' && externalUrl.length > 0) {
-    merged.externalUrl = externalUrl;
-  }
-
-  const storagePath = row.storage_path ?? existing?.storagePath;
-  if (typeof storagePath === 'string' && storagePath.length > 0) {
-    merged.storagePath = storagePath;
-  }
-
-  if (existing?.jobId) {
-    merged.jobId = existing.jobId;
-  }
-
-  if (status === 'error') {
-    const errorMessage = row.error_message?.trim() || existing?.errorMessage;
-    if (errorMessage) {
-      merged.errorMessage = errorMessage;
-    }
-  }
-
-  return merged;
-}
-
 async function syncBrandDocuments(
   supabase: SupabaseOnboardingClient,
   metadata: OnboardingMetadata,
@@ -367,7 +288,7 @@ async function syncBrandDocuments(
     .schema('brand_profiles')
     .from('brand_documents')
     .select(
-      'id, name, source, status, size, storage_path, external_url, error_message, created_at, updated_at',
+      'id, name, source, status, size, storage_path, external_url, error_message, created_at, updated_at, retention, expires_at, archived_at',
     )
     .eq('brand_id', brandId)
     .order('created_at', { ascending: true })) as {
@@ -381,34 +302,9 @@ async function syncBrandDocuments(
     return false;
   }
 
-  const rows = data ?? [];
-  const rowsById = new Map(rows.map((row) => [row.id, row]));
-  const updatedDocuments: OnboardingDocument[] = [];
-  let dirty = false;
-
-  for (const document of state.documents) {
-    const row = rowsById.get(document.id);
-    if (!row) {
-      updatedDocuments.push(document);
-      continue;
-    }
-
-    const merged = mergeDocumentFromRow(document, row);
-    if (!documentsEqual(document, merged)) {
-      dirty = true;
-    }
-    updatedDocuments.push(merged);
-    rowsById.delete(document.id);
-  }
-
-  for (const row of rowsById.values()) {
-    const merged = mergeDocumentFromRow(undefined, row);
-    updatedDocuments.push(merged);
-    dirty = true;
-  }
-
+  const { documents, dirty } = reconcileDocuments(state.documents, data ?? []);
   if (dirty) {
-    metadata.brands[brandId] = mergeOnboardingState(state, { documents: updatedDocuments });
+    metadata.brands[brandId] = mergeOnboardingState(state, { documents });
   }
 
   return dirty;
@@ -830,14 +726,29 @@ async function loadOnboardingContext(requestedBrandId?: string): Promise<Onboard
 
   // Independent reads: the brand row check only reads the state's name, logo, completion and
   // email opt-in, none of which the documents sync touches.
+  // Typed by assertion: TS does not see the callback's assignment and would narrow it to never.
+  let existingRow = undefined as Pick<BrandRecordFields, 'logo_path' | 'completed_at'> | undefined;
   const [documentsDirty, resolvedBrandId] = await Promise.all([
     syncBrandDocuments(supabase, normalizedMetadata, brandId),
-    ensureBrandProfileRecord(supabase, brandId, owner, normalizedMetadata.brands[brandId]),
+    ensureBrandProfileRecord(supabase, brandId, owner, normalizedMetadata.brands[brandId], {
+      onExistingRow: (row) => {
+        existingRow = row;
+      },
+    }),
   ]);
+  // Adopted after the documents sync, which replaces this brand's state object.
+  const loadedState = normalizedMetadata.brands[brandId];
+  if (existingRow !== undefined) {
+    normalizedMetadata.brands[brandId] = adoptRowCompletion(
+      adoptRowLogo(loadedState, existingRow.logo_path),
+      existingRow.completed_at,
+    );
+  }
+  const rowAdopted = normalizedMetadata.brands[brandId] !== loadedState;
 
   // A documents sync changes this brand's state only. It is dirty on most loads while uploads
   // finish processing, so it writes that one row rather than re-persisting every brand.
-  if (documentsDirty) {
+  if (documentsDirty || rowAdopted) {
     await persistBrandState(supabase, user.id, brandId, normalizedMetadata.brands[brandId]);
   }
 
@@ -1251,17 +1162,6 @@ export async function renameBrandProfile(brandId: string, name: string): Promise
   return updateBrandState(brandId, (state) =>
     mergeOnboardingState(state, {
       brand: { name },
-    }),
-  );
-}
-
-export async function updateBrandLogo(
-  brandId: string,
-  logoPath: string | null,
-): Promise<OnboardingState> {
-  return updateBrandState(brandId, (state) =>
-    mergeOnboardingState(state, {
-      brand: { logoPath },
     }),
   );
 }

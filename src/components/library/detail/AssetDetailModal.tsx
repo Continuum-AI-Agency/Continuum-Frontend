@@ -64,6 +64,7 @@ import { createPlaybackClock } from './playbackClock';
 import { QuickLookButton } from './QuickLookButton';
 import { RequestReviewButton } from './RequestReviewButton';
 import { ReviewStatusControl } from './ReviewStatusControl';
+import { SetBrandLogoButton } from './SetBrandLogoButton';
 import { ShareLinkMenu } from './ShareLinkMenu';
 import { SmartResizeMenu } from './SmartResizeMenu';
 import { buildStageAnnotations } from './stageAnnotations';
@@ -733,6 +734,7 @@ function AssetDetailDialog({
                       asset={asset}
                       onAssetChanged={onAssetChanged}
                     />
+                    <SetBrandLogoButton brandId={brandId} asset={asset} />
                     <OpenInCanvasButton
                       brandId={brandId}
                       asset={asset}

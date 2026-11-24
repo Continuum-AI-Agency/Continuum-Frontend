@@ -948,6 +948,7 @@
     "billingNeedsPlanReason": "Choose a plan first — auto-billing charges overage to the card on your subscription.",
     "billingOrganic": "Organic agent, calendar and posting",
     "billingPaidMedia": "Jaina, Forge ad creation, approvals and optimizer",
+    "billingPlanGrantedReason": "Continuum activated your plan, so there is no card subscription to bill overage to. Buy credit packs to keep generating.",
     "billingStudio": "AI Canvas",
     "billingTrends": "Trends"
   },

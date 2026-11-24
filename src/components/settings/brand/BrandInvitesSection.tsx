@@ -275,7 +275,7 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
               ))}
             </div>
             <div className="hidden overflow-x-auto md:block">
-              <Table className="min-w-[48rem]">
+              <Table className="min-w-[48rem] [&_tr>*:first-child]:pl-0 [&_tr>*:last-child]:pr-0">
                 <TableHeader>
                   <TableRow>
                     <TableHead>{tUi('m_84add5b295')}</TableHead>

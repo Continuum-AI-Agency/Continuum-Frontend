@@ -54,6 +54,6 @@
   "m_e40123b4e7": "Ocultar contraseña",
   "m_044b852f30": "Mostrar contraseña",
   "legalAgreement": "Al continuar, aceptas nuestros <terms>Términos del servicio</terms> y nuestra <privacy>Política de privacidad</privacy>.",
-  "emailSendFailed": "No pudimos enviar el correo de inicio de sesión en este momento. Inténtalo de nuevo en unos minutos.",
+  "emailSendFailed": "No pudimos enviar el correo de inicio de sesión. Continúa con Google o inténtalo de nuevo más tarde.",
   "signOutEverywhereRefused": "Esta sesión proviene de un enlace de suplantación, así que no puede cerrar la sesión de la cuenta en otros dispositivos. Cerrar sesión solo afecta a este navegador."
 }

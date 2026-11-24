@@ -180,7 +180,7 @@ export function ForgeProjectDrop({
   };
 
   return (
-    <div className={cn('flex h-full gap-2', compact ? 'flex-row' : 'flex-col')}>
+    <div className={cn('flex h-full gap-2', compact ? 'flex-row flex-wrap' : 'flex-col')}>
       <input
         ref={input}
         type="file"
@@ -214,8 +214,11 @@ export function ForgeProjectDrop({
         type="button"
         variant="outline"
         className={cn(
-          'min-h-40 w-full flex-1 flex-col items-center justify-center gap-2 whitespace-normal rounded-xl border-dashed px-[var(--card-pad)] py-6 text-center',
-          compact && 'min-h-0 flex-row justify-start py-3 text-left [&>span:last-child]:max-w-none',
+          'h-auto min-h-40 w-full flex-1 flex-col items-center justify-center gap-2 whitespace-normal rounded-xl border-dashed px-[var(--card-pad)] py-6 text-center',
+          // Compact sits in a wrapping row: a basis, not w-full, keeps the buttons beside it on wide
+          // screens and lets them drop to the next line on a phone instead of clipping.
+          compact &&
+            'min-h-0 w-auto basis-72 flex-row justify-start py-3 text-left [&>span:last-child]:max-w-none',
           dragDepth > 0 && 'border-primary bg-primary/5',
         )}
         onClick={choose}

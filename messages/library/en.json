@@ -1178,5 +1178,11 @@
   "commentsWord": "{count, plural, one {comment} other {comments}}",
   "below_average_35_d9769d8": "below average 35",
   "below_average_20_b098009": "below average 20",
-  "below_average_10_ca06a68": "below average 10"
+  "below_average_10_ca06a68": "below average 10",
+  "setAsBrandLogo": "Set as brand logo",
+  "setAsBrandLogoHint": "Use this image as the brand logo everywhere, including generated content",
+  "brandLogoSetTitle": "Brand logo updated",
+  "brandLogoSetDescription": "New content will use this logo.",
+  "brandLogoSetFailedTitle": "Couldn't set the brand logo",
+  "brandLogoSetFailedDescription": "Please try again."
 }

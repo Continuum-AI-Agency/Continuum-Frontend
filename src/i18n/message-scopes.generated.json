@@ -717,6 +717,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -1080,6 +1081,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ],
@@ -2246,6 +2248,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -2620,6 +2623,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends",
         "m_01b8326d2d",
@@ -3483,6 +3487,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -6717,6 +6722,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends",
         "providerFacebook",
@@ -9867,6 +9873,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ],
@@ -10735,6 +10742,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends",
         "m_a1bf92eff4"
@@ -11096,6 +11104,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends",
         "m_099de33d79",
@@ -11466,6 +11475,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -12962,6 +12972,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ],
@@ -16312,6 +16323,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ],
@@ -16941,6 +16953,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -22849,6 +22862,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends",
         "m_a1bf92eff4",
@@ -23987,6 +24001,8 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedNote",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends",
         "brandColorFallback",
@@ -25405,6 +25421,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ],
@@ -26489,6 +26506,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ],
@@ -26619,6 +26637,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -26695,6 +26714,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -27412,6 +27432,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends",
         "m_042c862e44",
@@ -27768,6 +27789,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -27819,6 +27841,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -28793,6 +28816,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ],
@@ -30996,6 +31020,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ]
@@ -31117,6 +31142,10 @@
         "bottom_left_f5a57b96",
         "bottom_of_funnel_67beb068",
         "bottom_right_b4b7cb63",
+        "brandLogoSetDescription",
+        "brandLogoSetFailedDescription",
+        "brandLogoSetFailedTitle",
+        "brandLogoSetTitle",
         "brand_align_6769804d",
         "brand_aligned_result_95103b2e",
         "brand_kit_52fe7719",
@@ -31592,6 +31621,8 @@
         "seen_by_7fb44fd2",
         "send_ping_d9e6bc8b",
         "sending_b8ed5279",
+        "setAsBrandLogo",
+        "setAsBrandLogoHint",
         "set_poster_b258b95c",
         "set_to_rotate_8857c6bc",
         "shareCommented",
@@ -31749,6 +31780,7 @@
         "billingNeedsPlanReason",
         "billingOrganic",
         "billingPaidMedia",
+        "billingPlanGrantedReason",
         "billingStudio",
         "billingTrends"
       ],
