@@ -64,6 +64,8 @@ type DocumentManagerProps = {
   seed: DocumentView[];
   density: DocumentDensity;
   onStateChange?: (state: OnboardingState) => void;
+  /** Every change to the live list: Realtime, the table read, the stuck-processing watchdog. */
+  onDocumentsChange?: (documents: DocumentView[]) => void;
   emptyHint?: string;
   /** Files picked before this list mounted (onboarding's first screen); uploaded once on mount. */
   initialFiles?: File[];
@@ -75,6 +77,7 @@ export function DocumentManager({
   seed,
   density,
   onStateChange,
+  onDocumentsChange,
   emptyHint: providedEmptyHint,
   initialFiles,
   onInitialFilesTaken,
@@ -86,6 +89,9 @@ export function DocumentManager({
   const { show } = useToast();
   const reduceMotion = useReducedMotion();
   const { documents } = useDocuments(brandId, seed);
+  useEffect(() => {
+    onDocumentsChange?.(documents);
+  }, [documents, onDocumentsChange]);
   const mutations = useDocumentMutations(brandId);
   const inputRef = useRef<HTMLInputElement>(null);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
