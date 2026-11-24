@@ -11,6 +11,7 @@ import { FileText, Loader2, Plus, Upload } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FontUploadReviewDialog } from '@/components/library/FontUploadReviewDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -22,7 +23,6 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';
-import { splitVisualAssets } from '@/lib/documents/visualAssets';
 import type { OnboardingState } from '@/lib/onboarding/state';
 import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
@@ -35,10 +35,10 @@ import {
   filterDocumentsByScope,
   isEphemeral,
 } from './types';
+import { useBrandUploadRouting } from './useBrandUploadRouting';
 import { useDocumentActions } from './useDocumentActions';
 import { useDocumentMutations } from './useDocumentMutations';
 import { useDocuments } from './useDocuments';
-import { VisualAssetNotice } from './VisualAssetNotice';
 
 const EXPIRY_TICK_MS = 60_000;
 
@@ -57,7 +57,9 @@ function useNowTicker(enabled: boolean): number {
   return now;
 }
 
-const ACCEPT = '.pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif';
+// Anything brand material can be: useBrandUploadRouting sends each file where it is used.
+const ACCEPT =
+  '.pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif,.svg,.ttf,.otf,.woff,.woff2,.zip';
 
 const PANEL_TRANSITION = { duration: 0.24, ease: ROW_EASE };
 
@@ -132,15 +134,6 @@ export function DocumentManager({
     mutations.uploads.filter((u) => u.status === 'uploading').length;
   const errorCount = scopedDocuments.filter((d) => (d.progressStep ?? d.status) === 'error').length;
 
-  // Logos, fonts and reference images wait here for the person to choose; see VisualAssetNotice.
-  const [heldVisual, setHeldVisual] = useState<File[]>([]);
-
-  const handleFiles = async (dropped: File[]) => {
-    const { documents: files, visual } = splitVisualAssets(dropped);
-    if (visual.length > 0) setHeldVisual((held) => [...held, ...visual]);
-    await uploadDocuments(files);
-  };
-
   const uploadDocuments = async (files: File[]) => {
     if (files.length === 0) return;
     const result = await mutations.uploadFiles(files, onStateChange, uploadCategory);
@@ -162,6 +155,10 @@ export function DocumentManager({
       });
     }
   };
+
+  // Logos, images, SVGs and fonts go where they are used; see useBrandUploadRouting.
+  const routing = useBrandUploadRouting({ brandId, uploadDocuments });
+  const handleFiles = routing.route;
 
   const initialFilesTakenRef = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: upload the handed-over files once, on mount.
@@ -281,14 +278,6 @@ export function DocumentManager({
         )}
       >
         <CardContent className="space-y-3 p-0">
-          <VisualAssetNotice
-            brandId={brandId}
-            files={heldVisual}
-            onKeepInKnowledge={(files) => void uploadDocuments(files)}
-            onSettled={(settled) =>
-              setHeldVisual((held) => held.filter((file) => !settled.includes(file)))
-            }
-          />
           <SyncBar
             onUploadClick={() => inputRef.current?.click()}
             uploading={anyUploading}
@@ -345,6 +334,15 @@ export function DocumentManager({
           </ItemPanel>
         </CardContent>
       </Card>
+      {routing.fontFiles.length > 0 ? (
+        <FontUploadReviewDialog
+          key={routing.fontFiles.map((file) => `${file.name}:${file.size}`).join('|')}
+          brandId={brandId}
+          files={routing.fontFiles}
+          onClose={routing.clearFontFiles}
+          onUploaded={routing.clearFontFiles}
+        />
+      ) : null}
     </section>
   );
 }

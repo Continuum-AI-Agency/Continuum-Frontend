@@ -1418,9 +1418,8 @@
   "a_project_already_has_that_name_5e57cb0": "Já existe um projeto com esse nome",
   "create_failed_3e05ffc": "Falha ao criar",
   "fontSpecimenUnreadable": "Não é possível visualizar este arquivo. Verifique se é uma fonte .ttf, .otf ou .woff.",
-  "visualAssetNoticeTitle": "{count, plural, one {Este arquivo vai em Identidade visual} other {Estes # arquivos vão em Identidade visual}}",
-  "visualAssetNoticeBody": "Logos, fontes e imagens de referência vão para sua Biblioteca, onde o Studio e seus agentes os usam. Aqui só o texto deles seria lido.",
-  "visualAssetSendToLibrary": "Enviar para a Biblioteca",
-  "visualAssetKeepInKnowledge": "{count, plural, one {Manter a imagem em Conhecimento} other {Manter as # imagens em Conhecimento}}",
-  "visualAssetSendFailed": "Não foram enviados para sua Biblioteca: {files}. Tente de novo pela Biblioteca."
+  "routedToLibraryTitle": "{count, plural, one {# arquivo foi para sua Biblioteca} other {# arquivos foram para sua Biblioteca}}",
+  "routedToLibraryBody": "Imagens, logos e SVGs ficam na Biblioteca, onde o Studio e seus agentes os usam.",
+  "routedReadAsText": "{count, plural, one {Ler o texto em vez disso} other {Ler o texto em vez disso}}",
+  "routedToLibraryFailed": "Não salvo na sua Biblioteca: {files}. Tente de novo pela Biblioteca."
 }

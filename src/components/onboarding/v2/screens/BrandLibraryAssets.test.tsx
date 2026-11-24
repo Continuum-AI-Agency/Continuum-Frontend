@@ -42,6 +42,16 @@ mock.module('@/lib/library/templateSources', () => ({
   },
 }));
 
+const uploadBrandDocument = mock(async ({ file }: { file: File }) => ({
+  documentId: 'doc-1',
+  storagePath: `brand-1/${file.name}`,
+  document: {},
+  state: { documents: [{ name: file.name }] },
+}));
+mock.module('@/lib/documents/uploadBrandDocument', () => ({ uploadBrandDocument }));
+const uploadMediaAsset = mock(async () => ({ assetId: 'asset-1' }));
+mock.module('@/lib/library/uploadMediaAsset', () => ({ uploadMediaAsset }));
+
 // happy-dom has no font loading. The stub records what was registered so the test can see a
 // specimen was drawn from the picked file, under a private family name.
 const addedFaces: string[] = [];
@@ -96,13 +106,6 @@ test('reference images are tagged reference', async () => {
   pick('reference', [png('moodboard.png')]);
   await waitFor(() => expect(uploadTaggedLibraryImages).toHaveBeenCalledTimes(1));
   expect(uploadTaggedLibraryImages.mock.calls[0][0].tag).toBe('reference');
-});
-
-test('a font dropped on an image zone is refused with where it belongs, never uploaded', async () => {
-  render(<BrandLibraryAssets brandId="brand-1" brandLogo={noLogo} onBusyChange={() => {}} />);
-  pick('logo', [new File(['x'], 'AcmeSans-Bold.otf', { type: 'font/otf' })]);
-  expect(await screen.findByText(/Font files go in Fonts below/)).toBeTruthy();
-  expect(uploadTaggedLibraryImages).not.toHaveBeenCalled();
 });
 
 test('uploads that landed untagged say so instead of claiming success', async () => {
@@ -215,4 +218,32 @@ test('reference images never offer to become the brand logo', async () => {
   await within(zone).findByText('In your Library');
   expect(within(zone).queryByRole('button', { name: 'Use as brand logo' })).toBeNull();
   expect(setBrandLogoFromLibrary).not.toHaveBeenCalled();
+});
+
+test('a document or a font dropped on an image zone goes where it is used, not refused', async () => {
+  const onDocumentsChange = mock(() => undefined);
+  render(
+    <BrandLibraryAssets
+      brandId="brand-1"
+      brandLogo={noLogo}
+      onBusyChange={() => {}}
+      onDocumentsChange={onDocumentsChange}
+    />,
+  );
+  const guide = new File(['%PDF'], 'brand-guide.pdf', { type: 'application/pdf' });
+  const face = new File([new Uint8Array([0, 1, 0, 0])], 'Acme-Bold.ttf', { type: 'font/ttf' });
+  pick('logo', [guide, face]);
+
+  const zone = within(screen.getByTestId('brand-library-logo'));
+  expect(await zone.findByText('Moved to Brand documents')).toBeTruthy();
+  expect(await zone.findByText('Moved to Fonts')).toBeTruthy();
+  expect(uploadBrandDocument).toHaveBeenCalledWith({
+    brandId: 'brand-1',
+    file: guide,
+    syncOnboardingState: true,
+  });
+  expect(onDocumentsChange).toHaveBeenCalledWith({ documents: [{ name: 'brand-guide.pdf' }] });
+  expect(uploadTaggedLibraryImages).not.toHaveBeenCalled();
+  // The font goes to the review, prefilled from the file.
+  expect(await screen.findByLabelText('Font family')).toBeTruthy();
 });

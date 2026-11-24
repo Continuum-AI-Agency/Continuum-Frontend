@@ -12,7 +12,7 @@
 // saved this session gets a specimen drawn from its local bytes.
 
 import { normalizeTemplateFontFamily } from '@continuum/contracts';
-import { UploadSimple, Warning } from '@phosphor-icons/react';
+import { ArrowBendUpRight, UploadSimple, Warning } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -27,24 +27,39 @@ import { TypographyPanel } from '@/components/library/TypographyPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useUiErrorMessage } from '@/i18n/errors';
+import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
 import type { BrandFontSummary } from '@/lib/library/templateSources';
+import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import {
   type BrandLibraryTag,
   isChosenBrandLogo,
   setBrandLogoFromLibrary,
   uploadTaggedLibraryImages,
 } from '@/lib/onboarding/libraryAssets';
+import type { OnboardingState } from '@/lib/onboarding/state';
+import {
+  type BrandUploadHome,
+  routeBrandUploads,
+  withFontArchivesExpanded,
+} from '@/lib/uploads/brandUploadRouting';
 import { cn } from '@/lib/utils';
 
 type UploadTile = {
   key: string;
   name: string;
-  status: 'uploading' | 'done' | 'untagged' | 'error';
+  status: 'uploading' | 'done' | 'untagged' | 'moved' | 'error';
+  movedTo?: BrandUploadHome;
   localUrl?: string;
   error?: string;
   assetId?: string;
   brandLogo?: 'saving' | 'set' | 'failed';
 };
+
+const MOVED_TO = {
+  knowledge: 'brandLibraryMovedKnowledge',
+  fonts: 'brandLibraryMovedFonts',
+  library: 'brandLibraryMovedLibrary',
+} as const satisfies Record<BrandUploadHome, string>;
 
 type BrandLogo = { path: string | null; onChange: (path: string) => Promise<void> };
 
@@ -61,10 +76,13 @@ export function BrandLibraryAssets({
   brandId,
   brandLogo,
   onBusyChange,
+  onDocumentsChange,
 }: {
   brandId: string;
   brandLogo: BrandLogo;
   onBusyChange: (busy: boolean) => void;
+  /** Onboarding adopts the state a document upload saved, as the documents step does. */
+  onDocumentsChange?: (state: OnboardingState) => void;
 }) {
   const tUi = useTranslations('onboarding');
   const [pending, setPending] = useState(0);
@@ -85,6 +103,22 @@ export function BrandLibraryAssets({
       return next;
     });
     setFontRevision((revision) => revision + 1);
+  };
+
+  // A file dropped in the wrong zone goes where it is used instead of being refused.
+  const routeElsewhere = async (file: File): Promise<BrandUploadHome> => {
+    const { knowledge, library, fonts } = routeBrandUploads(await withFontArchivesExpanded([file]));
+    if (fonts.length > 0) setFontFiles((held) => [...held, ...fonts]);
+    for (const document of knowledge) {
+      const { state } = await uploadBrandDocument({
+        brandId,
+        file: document,
+        syncOnboardingState: true,
+      });
+      if (state) onDocumentsChange?.(state);
+    }
+    await Promise.all(library.map((asset) => uploadMediaAsset({ file: asset, brandId })));
+    return fonts.length > 0 ? 'fonts' : knowledge.length > 0 ? 'knowledge' : 'library';
   };
 
   const specimenFor = (font: BrandFontSummary) => {
@@ -114,6 +148,7 @@ export function BrandLibraryAssets({
           hint={tUi('brandLibraryLogosHint')}
           brandLogo={brandLogo}
           onPendingChange={track}
+          routeElsewhere={routeElsewhere}
         />
         <TaggedImageUploader
           brandId={brandId}
@@ -121,6 +156,7 @@ export function BrandLibraryAssets({
           title={tUi('brandLibraryReferencesTitle')}
           hint={tUi('brandLibraryReferencesHint')}
           onPendingChange={track}
+          routeElsewhere={routeElsewhere}
         />
       </div>
 
@@ -159,6 +195,7 @@ function TaggedImageUploader({
   hint,
   brandLogo,
   onPendingChange,
+  routeElsewhere,
 }: {
   brandId: string;
   tag: BrandLibraryTag;
@@ -166,6 +203,7 @@ function TaggedImageUploader({
   hint: string;
   brandLogo?: BrandLogo;
   onPendingChange: (delta: number) => void;
+  routeElsewhere: (file: File) => Promise<BrandUploadHome>;
 }) {
   const tUi = useTranslations('onboarding');
   const uiErrorMessage = useUiErrorMessage();
@@ -200,7 +238,9 @@ function TaggedImageUploader({
 
   const handleFiles = async (files: File[]) => {
     const images = files.filter((file) => file.type.startsWith('image/'));
-    const refused = files.filter((file) => !file.type.startsWith('image/'));
+    const elsewhere = files
+      .filter((file) => !file.type.startsWith('image/'))
+      .map((file) => ({ file, key: crypto.randomUUID() }));
     const keys = images.map(() => crypto.randomUUID());
     const added: UploadTile[] = [
       ...images.map((file, index) => {
@@ -208,14 +248,16 @@ function TaggedImageUploader({
         objectUrls.current.push(localUrl);
         return { key: keys[index], name: file.name, status: 'uploading' as const, localUrl };
       }),
-      ...refused.map((file) => ({
-        key: crypto.randomUUID(),
-        name: file.name,
-        status: 'error' as const,
-        error: tUi('brandLibraryNotImage'),
-      })),
+      ...elsewhere.map(({ file, key }) => ({ key, name: file.name, status: 'uploading' as const })),
     ];
     setTiles((prev) => [...prev, ...added]);
+    for (const { file, key } of elsewhere) {
+      onPendingChange(1);
+      void routeElsewhere(file)
+        .then((movedTo) => patchTile(key, { status: 'moved', movedTo }))
+        .catch((error) => patchTile(key, { status: 'error', error: uiErrorMessage(error) }))
+        .finally(() => onPendingChange(-1));
+    }
     if (images.length === 0) return;
 
     const uploaded = new Map<string, string>();
@@ -328,6 +370,8 @@ function TaggedImageUploader({
                       tile.status === 'uploading' && 'opacity-60',
                     )}
                   />
+                ) : tile.status === 'moved' ? (
+                  <ArrowBendUpRight className="h-5 w-5 text-muted-foreground" />
                 ) : (
                   <Warning className="h-5 w-5 text-amber-600" />
                 )}
@@ -352,7 +396,9 @@ function TaggedImageUploader({
                     ? tUi('brandLibraryBrandLogoFailed')
                     : tile.status === 'done'
                       ? tUi('brandLibrarySaved')
-                      : tile.error}
+                      : tile.status === 'moved' && tile.movedTo
+                        ? tUi(MOVED_TO[tile.movedTo])
+                        : tile.error}
               </p>
               {brandLogo && tile.assetId && tile.brandLogo !== 'set' ? (
                 <button

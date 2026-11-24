@@ -455,7 +455,6 @@
   "brandLibraryUploadingOne": "Uploading…",
   "brandLibrarySaved": "In your Library",
   "brandLibraryTagFailed": "Saved to your Library, but not tagged “{tag}”. Add the tag there.",
-  "brandLibraryNotImage": "Not an image. Font files go in Fonts below; documents go in Brand documents.",
   "brandLibraryViewInLibrary": "View in Library",
   "brandLibraryFontsTitle": "Fonts",
   "brandLibraryFontsIntro": "Upload your font files (.ttf, .otf, .woff, or the .zip your foundry sent). We’ll use them in everything we make for you. They stay private to your brand.",
@@ -463,5 +462,8 @@
   "brandLibraryFontSaved": "Saved",
   "brandLibraryBrandLogo": "Brand logo",
   "brandLibraryMakeBrandLogo": "Use as brand logo",
-  "brandLibraryBrandLogoFailed": "In your Library, but not set as your brand logo. Try again."
+  "brandLibraryBrandLogoFailed": "In your Library, but not set as your brand logo. Try again.",
+  "brandLibraryMovedKnowledge": "Moved to Brand documents",
+  "brandLibraryMovedFonts": "Moved to Fonts",
+  "brandLibraryMovedLibrary": "Saved to your Library"
 }

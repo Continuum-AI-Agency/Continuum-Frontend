@@ -1418,9 +1418,8 @@
   "a_project_already_has_that_name_5e57cb0": "A project already has that name",
   "create_failed_3e05ffc": "Create failed",
   "fontSpecimenUnreadable": "Can’t preview this file. Check that it’s a .ttf, .otf or .woff font.",
-  "visualAssetNoticeTitle": "{count, plural, one {This file belongs in Visual identity} other {These # files belong in Visual identity}}",
-  "visualAssetNoticeBody": "Logos, fonts and reference images go to your Library, where Studio and your agents use them. Here they would only be read as text.",
-  "visualAssetSendToLibrary": "Send to Library instead",
-  "visualAssetKeepInKnowledge": "{count, plural, one {Keep the image in Knowledge} other {Keep the # images in Knowledge}}",
-  "visualAssetSendFailed": "Not sent to your Library: {files}. Try again from the Library."
+  "routedToLibraryTitle": "{count, plural, one {# file went to your Library} other {# files went to your Library}}",
+  "routedToLibraryBody": "Images, logos and SVGs live in the Library, where Studio and your agents use them.",
+  "routedReadAsText": "{count, plural, one {Read its text instead} other {Read their text instead}}",
+  "routedToLibraryFailed": "Not saved to your Library: {files}. Try again from the Library."
 }

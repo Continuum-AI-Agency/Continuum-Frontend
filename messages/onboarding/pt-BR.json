@@ -455,7 +455,6 @@
   "brandLibraryUploadingOne": "Enviando…",
   "brandLibrarySaved": "Na sua Biblioteca",
   "brandLibraryTagFailed": "Salvo na sua Biblioteca, mas sem a tag “{tag}”. Adicione a tag lá.",
-  "brandLibraryNotImage": "Não é uma imagem. Arquivos de fontes vão em Fontes, abaixo; documentos, em Documentos da marca.",
   "brandLibraryViewInLibrary": "Ver na Biblioteca",
   "brandLibraryFontsTitle": "Fontes",
   "brandLibraryFontsIntro": "Envie os arquivos das suas fontes (.ttf, .otf, .woff ou o .zip enviado pela sua fundidora). Vamos usá-las em tudo o que criarmos para você. Elas ficam privadas da sua marca.",
@@ -463,5 +462,8 @@
   "brandLibraryFontSaved": "Salva",
   "brandLibraryBrandLogo": "Logo da marca",
   "brandLibraryMakeBrandLogo": "Usar como logo da marca",
-  "brandLibraryBrandLogoFailed": "Na sua Biblioteca, mas não ficou como logo da marca. Tente de novo."
+  "brandLibraryBrandLogoFailed": "Na sua Biblioteca, mas não ficou como logo da marca. Tente de novo.",
+  "brandLibraryMovedKnowledge": "Movido para Documentos da marca",
+  "brandLibraryMovedFonts": "Movido para Fontes",
+  "brandLibraryMovedLibrary": "Salvo na sua Biblioteca"
 }

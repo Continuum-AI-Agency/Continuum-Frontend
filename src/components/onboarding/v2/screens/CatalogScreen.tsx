@@ -78,7 +78,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
   const tUi = useTranslations('onboarding');
   const uiLocale = useLocale();
 
-  const { brandId, state, updateState } = useOnboarding();
+  const { brandId, state, updateState, reloadState } = useOnboarding();
   const { show } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -365,6 +365,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
 
         <BrandLibraryAssets
           brandId={brandId}
+          onDocumentsChange={reloadState}
           brandLogo={{
             path: state.brand.logoPath,
             // Kept in onboarding state too, or the launch kit would put a scraped logo back.

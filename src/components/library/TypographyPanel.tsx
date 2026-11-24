@@ -7,8 +7,8 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { NoSpecimenText, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { expandFontArchives } from '@/lib/library/fontArchive';
 import { type BrandFontSummary, fetchBrandFonts } from '@/lib/library/templateSources';
+import { withFontArchivesExpanded } from '@/lib/uploads/brandUploadRouting';
 import { partitionLibraryUploadFiles } from './libraryUploadRouting';
 
 // Typography is a panel, not a browse filter, and that is a licensing decision rather than a
@@ -86,7 +86,7 @@ export function TypographyPanel({
           onChange={(event) => {
             const picked = Array.from(event.target.files ?? []);
             event.target.value = '';
-            void expandFontArchives(picked).then((files) => {
+            void withFontArchivesExpanded(picked).then((files) => {
               const { fonts } = partitionLibraryUploadFiles(files);
               if (fonts.length > 0) onReviewFiles(fonts);
             });
