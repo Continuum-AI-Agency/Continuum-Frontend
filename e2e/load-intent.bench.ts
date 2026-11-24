@@ -12,7 +12,8 @@
  *
  * Reads only. Needs a production server at LOAD_INTENT_URL (default http://localhost:3110, a
  * Backend CORS origin) and NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY. Signs in as
- * BENCH_EMAIL (default bench@trycontinuum.ai, the shared bench account).
+ * BENCH_EMAIL (default bench@trycontinuum.ai, the shared bench account). LOAD_INTENT_ONLY (comma
+ * list of metric names) runs a subset, to keep one run inside a strobe case's timeout.
  */
 import { chromium, type Page } from 'playwright';
 import { mintSessionForEmail } from './support/auth';
@@ -20,6 +21,7 @@ import { createBenchRecorder } from './support/benchRecorder';
 
 const BASE = new URL(process.env.LOAD_INTENT_URL ?? 'http://localhost:3110');
 const EMAIL = process.env.BENCH_EMAIL ?? 'bench@trycontinuum.ai';
+const ONLY = process.env.LOAD_INTENT_ONLY ? process.env.LOAD_INTENT_ONLY.split(',') : undefined;
 const HOVER_MS = 150;
 const TIMEOUT_MS = 30_000;
 
@@ -84,6 +86,15 @@ async function coldLcp(page: Page, route: string) {
   );
 }
 
+// Open a start page and let it settle. Not 'networkidle': pages with polling or realtime
+// connections never reach it and hung runs for minutes. One fixed second covers hydration, so
+// the target has its handlers before the pointer arrives; both arms wait the same.
+async function open(page: Page, route: string, ready: string) {
+  await page.goto(new URL(`/en${route}`, BASE).href, { waitUntil: 'load', timeout: 60_000 });
+  await page.locator(ready).first().waitFor({ timeout: TIMEOUT_MS });
+  await page.waitForTimeout(1_000);
+}
+
 const state = await mintSessionForEmail(EMAIL);
 const cookies = state.cookies.map((cookie) => ({
   ...cookie,
@@ -97,6 +108,7 @@ const browser = await chromium.launch({
 });
 
 async function journey(name: string, run: (page: Page) => Promise<number | null>) {
+  if (ONLY && !ONLY.includes(name)) return;
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     storageState: { cookies, origins: [] },
@@ -123,10 +135,7 @@ for (const [name, path] of [
   ['nav_forge_ms', '/forge'],
 ] as const) {
   await journey(name, async (page) => {
-    await page.goto(new URL('/en/dashboard', BASE).href, {
-      waitUntil: 'networkidle',
-      timeout: 120_000,
-    });
+    await open(page, '/dashboard', '[data-sidebar=sidebar] a');
     const link = `[data-sidebar=sidebar] a[href$="${path}"]:not([data-locked])`;
     if ((await page.locator(link).count()) === 0) return null;
     return clickAndTime(page, link, path);
@@ -135,26 +144,18 @@ for (const [name, path] of [
 
 // A Settings section switch to the heaviest section (Brand Book, markdown, diagrams, maths).
 await journey('section_switch_ms', async (page) => {
-  await page.goto(new URL('/en/settings', BASE).href, {
-    waitUntil: 'networkidle',
-    timeout: 120_000,
-  });
-  return clickAndTime(
-    page,
-    '[role=tab]:has-text("Brand Intelligence")',
-    'section=brand-intelligence',
-  );
+  const tab = '[role=tab]:has-text("Brand Intelligence")';
+  await open(page, '/settings', tab);
+  return clickAndTime(page, tab, 'section=brand-intelligence');
 });
 
 // AI Studio's creative library sheet, from its launcher.
 await journey('sheet_open_ms', async (page) => {
-  await page.goto(new URL('/en/ai-studio', BASE).href, {
-    waitUntil: 'networkidle',
-    timeout: 120_000,
-  });
+  const launcher = 'button[aria-label="Open creative library"]';
+  await open(page, '/ai-studio', launcher);
   return clickAndTime(
     page,
-    'button[aria-label="Open creative library"]',
+    launcher,
     '/ai-studio',
     '[role=dialog] input[type=search], [role=dialog] input[placeholder]',
   );
