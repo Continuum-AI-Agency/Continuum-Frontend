@@ -27481,6 +27481,12 @@
         "what_does_your_business_do_and_who_is_it_for_898c042",
         "you_ll_add_a_brand_guide_deck_or_product_doc__a33e3d1"
       ],
+      "organic": [
+        "retention"
+      ],
+      "public": [
+        "expiresAt"
+      ],
       "scale": [
         "copied_label",
         "copy_failed_label",
