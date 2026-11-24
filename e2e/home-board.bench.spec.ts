@@ -2406,10 +2406,12 @@ async function benchBrand(
         expect(stored ?? '').toContain(last);
         await page.reload({ waitUntil: 'domcontentloaded' });
         await expect(page.getByTestId('home-board')).toBeVisible({ timeout: 120_000 });
+        // Server HTML has no pins; the stored pin applies once the client hydrates, which a dev
+        // server still compiling another route can hold past 30 s (measured: 5-15 s idle).
         await expect(page.getByTestId('home-board')).toHaveAttribute(
           'data-board-order',
           new RegExp(`^${last}(,|$)`),
-          { timeout: 30_000 },
+          { timeout: 120_000 },
         );
         await page.getByTestId(`home-tile-${last}-pin`).click();
         await expect(page.getByTestId('home-board')).toHaveAttribute(
@@ -2540,6 +2542,11 @@ async function benchBrand(
     // 3b. The Ask bar: a suggestion opens Jaina with the question written in; nothing is sent.
     await check(scope, 'an Ask suggestion opens Jaina with the question pre-filled', async () => {
       const suggestions = page.getByTestId('home-ask-suggestion');
+      // The Ask bar is lazy; after the pin step's reload it may not have mounted yet.
+      await suggestions
+        .first()
+        .waitFor({ state: 'visible', timeout: 60_000 })
+        .catch(() => {});
       const count = await suggestions.count();
       if (count === 0) throw new Error('the Ask bar offers no suggestion');
       const question = (await suggestions.first().getAttribute('title')) ?? '';
