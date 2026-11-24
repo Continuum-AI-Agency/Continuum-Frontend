@@ -1,4 +1,6 @@
-import type { QueryClient } from '@tanstack/react-query';
+import type { TemplateSourceSummary } from '@continuum/contracts';
+import { experimental_streamedQuery, type QueryClient, queryOptions } from '@tanstack/react-query';
+import { discoverWorkspaceTemplates, streamTemplateSources } from '@/lib/library/templateSources';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 export const FORGE_STALE_MS = {
@@ -146,6 +148,39 @@ export const templateListQuery = (brandId: string) => ({
   queryFn: () => apiRendersApi.listTemplates(brandId, null),
   staleTime: FORGE_STALE_MS.lists,
 });
+
+/** The Templates tab's cards. They roll in a page at a time as the stream reads. */
+export const templateSourcesQuery = (brandId: string) =>
+  queryOptions({
+    queryKey: forgeQueryKeys.templateSources(brandId),
+    queryFn: experimental_streamedQuery({
+      streamFn: () => streamTemplateSources(brandId),
+      reducer: (sources: TemplateSourceSummary[], page: TemplateSourceSummary[]) => [
+        ...sources,
+        ...page,
+      ],
+      initialValue: [],
+      refetchMode: 'replace',
+    }),
+    staleTime: FORGE_STALE_MS.lists,
+  });
+
+export const workspaceTemplatesQuery = (brandId: string) =>
+  queryOptions({
+    queryKey: forgeQueryKeys.workspaceTemplates(brandId),
+    queryFn: () => discoverWorkspaceTemplates(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+  });
+
+/** Forge's route loader, run from the sidebar on intent: the default tab's two reads and the
+ * Render picker's list, which the page otherwise starts on mount. */
+export function prefetchForgeEntry(queryClient: QueryClient, brandId: string) {
+  return Promise.all([
+    queryClient.prefetchQuery(templateSourcesQuery(brandId)),
+    queryClient.prefetchQuery(workspaceTemplatesQuery(brandId)),
+    queryClient.prefetchQuery(templateListQuery(brandId)),
+  ]);
+}
 
 /** The three reads a chosen template's grid waits for. The picker starts them on highlight, so a
  * click usually lands on all three already cached. */

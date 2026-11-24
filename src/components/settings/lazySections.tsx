@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import type { SectionKey } from '@/components/settings/shell/sections';
 
 // Settings renders ONE section per request, yet every client component the page imports joins
 // the route's single client chunk group, so any section paid for all of them. `dynamic` only
@@ -10,108 +11,148 @@ import dynamic from 'next/dynamic';
 // No `loading` on purpose: a section only mounts through a router transition (SettingsShell's
 // router.replace), so a pending chunk suspends to the page's already-revealed boundary and the
 // section skeleton simply stays up a moment longer instead of flashing a blank placeholder.
+// The nav warms a section's imports on intent (warmSection), so its code is usually loaded
+// before the server answers the switch.
+
+const load = {
+  BrandAdNamingSection: () => import('@/components/settings/brand/BrandAdNamingSection'),
+  BrandBookView: () => import('@/components/settings/brand/BrandBookView'),
+  BrandBillingPanel: () => import('@/components/settings/brand/BrandBillingPanel'),
+  BrandDangerZone: () => import('@/components/settings/brand/BrandDangerZone'),
+  BrandDocumentsSection: () => import('@/components/settings/BrandDocumentsSection'),
+  BrandIdentitySection: () => import('@/components/settings/brand/BrandIdentitySection'),
+  BrandIntelligenceWorkspace: () =>
+    import('@/components/settings/brand/BrandIntelligenceWorkspace'),
+  BrandInvitesSection: () => import('@/components/settings/brand/BrandInvitesSection'),
+  BrandMembersSection: () => import('@/components/settings/BrandMembersSection'),
+  BrandPulseSection: () => import('@/components/settings/brand/BrandPulseSection'),
+  BrandSlackRoomsSection: () => import('@/components/settings/brand/BrandSlackRoomsSection'),
+  BrandSlackWorkspacesSection: () =>
+    import('@/components/settings/brand/BrandSlackWorkspacesSection'),
+  ChatConnectionsSection: () => import('@/components/settings/account/ChatConnectionsSection'),
+  DesignSystemSection: () => import('@/components/settings/brand/DesignSystemSection'),
+  McpActivityTable: () => import('@/components/settings/account/McpActivityTable'),
+  McpConnectionsSection: () => import('@/components/settings/account/McpConnectionsSection'),
+  NotificationPreferences: () => import('@/components/notifications/NotificationPreferences'),
+  OptimizerNotificationsSection: () =>
+    import('@/components/settings/account/OptimizerNotificationsSection'),
+  ProjectsSettingsSection: () => import('@/components/settings/projects/ProjectsSettingsSection'),
+  PromptsSettingsSection: () => import('@/components/settings/brand/PromptsSettingsSection'),
+  RoleCapabilityLegend: () => import('@/components/settings/RoleCapabilityLegend'),
+  RunStrategicAnalysisButton: () =>
+    import('@/components/strategic-analyses/RunStrategicAnalysisButton'),
+  SignOutEverywhereSection: () => import('@/components/settings/account/SignOutEverywhereSection'),
+  SkillsSettingsSection: () => import('@/components/settings/brand/SkillsSettingsSection'),
+  UserBrandsPanel: () => import('@/components/settings/account/UserBrandsPanel'),
+  UserConnectionsSwitcher: () => import('@/components/settings/account/UserConnectionsSwitcher'),
+  UserProfileSection: () => import('@/components/settings/account/UserProfileSection'),
+};
+
 export const BrandAdNamingSection = dynamic(() =>
-  import('@/components/settings/brand/BrandAdNamingSection').then((m) => m.BrandAdNamingSection),
+  load.BrandAdNamingSection().then((m) => m.BrandAdNamingSection),
 );
-export const BrandBookView = dynamic(() =>
-  import('@/components/settings/brand/BrandBookView').then((m) => m.BrandBookView),
-);
+export const BrandBookView = dynamic(() => load.BrandBookView().then((m) => m.BrandBookView));
 export const BrandBillingPanel = dynamic(() =>
-  import('@/components/settings/brand/BrandBillingPanel').then((m) => m.BrandBillingPanel),
+  load.BrandBillingPanel().then((m) => m.BrandBillingPanel),
 );
-export const BrandDangerZone = dynamic(() =>
-  import('@/components/settings/brand/BrandDangerZone').then((m) => m.BrandDangerZone),
-);
+export const BrandDangerZone = dynamic(() => load.BrandDangerZone().then((m) => m.BrandDangerZone));
 export const BrandDocumentsSection = dynamic(() =>
-  import('@/components/settings/BrandDocumentsSection').then((m) => m.BrandDocumentsSection),
+  load.BrandDocumentsSection().then((m) => m.BrandDocumentsSection),
 );
 export const BrandIdentitySection = dynamic(() =>
-  import('@/components/settings/brand/BrandIdentitySection').then((m) => m.BrandIdentitySection),
+  load.BrandIdentitySection().then((m) => m.BrandIdentitySection),
 );
 export const BrandIntelligenceWorkspace = dynamic(() =>
-  import('@/components/settings/brand/BrandIntelligenceWorkspace').then(
-    (m) => m.BrandIntelligenceWorkspace,
-  ),
+  load.BrandIntelligenceWorkspace().then((m) => m.BrandIntelligenceWorkspace),
 );
 export const BrandInvitesSection = dynamic(() =>
-  import('@/components/settings/brand/BrandInvitesSection').then((m) => m.BrandInvitesSection),
+  load.BrandInvitesSection().then((m) => m.BrandInvitesSection),
 );
 export const BrandMembersSection = dynamic(() =>
-  import('@/components/settings/BrandMembersSection').then((m) => m.BrandMembersSection),
+  load.BrandMembersSection().then((m) => m.BrandMembersSection),
 );
 export const BrandPulseSection = dynamic(() =>
-  import('@/components/settings/brand/BrandPulseSection').then((m) => m.BrandPulseSection),
+  load.BrandPulseSection().then((m) => m.BrandPulseSection),
 );
 export const BrandSlackRoomsSection = dynamic(() =>
-  import('@/components/settings/brand/BrandSlackRoomsSection').then(
-    (m) => m.BrandSlackRoomsSection,
-  ),
+  load.BrandSlackRoomsSection().then((m) => m.BrandSlackRoomsSection),
 );
 export const BrandSlackWorkspacesSection = dynamic(() =>
-  import('@/components/settings/brand/BrandSlackWorkspacesSection').then(
-    (m) => m.BrandSlackWorkspacesSection,
-  ),
+  load.BrandSlackWorkspacesSection().then((m) => m.BrandSlackWorkspacesSection),
 );
 export const ChatConnectionsSection = dynamic(() =>
-  import('@/components/settings/account/ChatConnectionsSection').then(
-    (m) => m.ChatConnectionsSection,
-  ),
+  load.ChatConnectionsSection().then((m) => m.ChatConnectionsSection),
 );
 export const DesignSystemSection = dynamic(() =>
-  import('@/components/settings/brand/DesignSystemSection').then((m) => m.DesignSystemSection),
+  load.DesignSystemSection().then((m) => m.DesignSystemSection),
 );
 export const McpActivityTable = dynamic(() =>
-  import('@/components/settings/account/McpActivityTable').then((m) => m.McpActivityTable),
+  load.McpActivityTable().then((m) => m.McpActivityTable),
 );
 export const McpConnectionsSection = dynamic(() =>
-  import('@/components/settings/account/McpConnectionsSection').then(
-    (m) => m.McpConnectionsSection,
-  ),
+  load.McpConnectionsSection().then((m) => m.McpConnectionsSection),
 );
 export const NotificationPreferences = dynamic(() =>
-  import('@/components/notifications/NotificationPreferences').then(
-    (m) => m.NotificationPreferences,
-  ),
+  load.NotificationPreferences().then((m) => m.NotificationPreferences),
 );
 export const OptimizerNotificationsSection = dynamic(() =>
-  import('@/components/settings/account/OptimizerNotificationsSection').then(
-    (m) => m.OptimizerNotificationsSection,
-  ),
+  load.OptimizerNotificationsSection().then((m) => m.OptimizerNotificationsSection),
 );
 export const ProjectsSettingsSection = dynamic(() =>
-  import('@/components/settings/projects/ProjectsSettingsSection').then(
-    (m) => m.ProjectsSettingsSection,
-  ),
+  load.ProjectsSettingsSection().then((m) => m.ProjectsSettingsSection),
 );
 export const PromptsSettingsSection = dynamic(() =>
-  import('@/components/settings/brand/PromptsSettingsSection').then(
-    (m) => m.PromptsSettingsSection,
-  ),
+  load.PromptsSettingsSection().then((m) => m.PromptsSettingsSection),
 );
 export const RoleCapabilityLegend = dynamic(() =>
-  import('@/components/settings/RoleCapabilityLegend').then((m) => m.RoleCapabilityLegend),
+  load.RoleCapabilityLegend().then((m) => m.RoleCapabilityLegend),
 );
 export const RunStrategicAnalysisButton = dynamic(() =>
-  import('@/components/strategic-analyses/RunStrategicAnalysisButton').then(
-    (m) => m.RunStrategicAnalysisButton,
-  ),
+  load.RunStrategicAnalysisButton().then((m) => m.RunStrategicAnalysisButton),
 );
 export const SignOutEverywhereSection = dynamic(() =>
-  import('@/components/settings/account/SignOutEverywhereSection').then(
-    (m) => m.SignOutEverywhereSection,
-  ),
+  load.SignOutEverywhereSection().then((m) => m.SignOutEverywhereSection),
 );
 export const SkillsSettingsSection = dynamic(() =>
-  import('@/components/settings/brand/SkillsSettingsSection').then((m) => m.SkillsSettingsSection),
+  load.SkillsSettingsSection().then((m) => m.SkillsSettingsSection),
 );
-export const UserBrandsPanel = dynamic(() =>
-  import('@/components/settings/account/UserBrandsPanel').then((m) => m.UserBrandsPanel),
-);
+export const UserBrandsPanel = dynamic(() => load.UserBrandsPanel().then((m) => m.UserBrandsPanel));
 export const UserConnectionsSwitcher = dynamic(() =>
-  import('@/components/settings/account/UserConnectionsSwitcher').then(
-    (m) => m.UserConnectionsSwitcher,
-  ),
+  load.UserConnectionsSwitcher().then((m) => m.UserConnectionsSwitcher),
 );
 export const UserProfileSection = dynamic(() =>
-  import('@/components/settings/account/UserProfileSection').then((m) => m.UserProfileSection),
+  load.UserProfileSection().then((m) => m.UserProfileSection),
 );
+
+// Activation and Drive render only server components: nothing to warm.
+const sectionImports: Partial<Record<SectionKey, Array<keyof typeof load>>> = {
+  general: [
+    'BrandIdentitySection',
+    'BrandMembersSection',
+    'RoleCapabilityLegend',
+    'BrandPulseSection',
+    'BrandInvitesSection',
+    'BrandDangerZone',
+  ],
+  projects: ['ProjectsSettingsSection'],
+  skills: ['SkillsSettingsSection'],
+  prompts: ['PromptsSettingsSection'],
+  'brand-intelligence': ['BrandIntelligenceWorkspace', 'BrandBookView', 'DesignSystemSection'],
+  integrations: ['BrandSlackWorkspacesSection', 'BrandSlackRoomsSection', 'BrandAdNamingSection'],
+  knowledge: ['RunStrategicAnalysisButton', 'BrandDocumentsSection'],
+  billing: ['BrandBillingPanel'],
+  profile: ['UserProfileSection', 'SignOutEverywhereSection'],
+  connections: [
+    'UserConnectionsSwitcher',
+    'ChatConnectionsSection',
+    'OptimizerNotificationsSection',
+    'McpConnectionsSection',
+  ],
+  notifications: ['NotificationPreferences'],
+  activity: ['McpActivityTable'],
+  brands: ['UserBrandsPanel'],
+};
+
+export function warmSection(section: SectionKey) {
+  return Promise.all((sectionImports[section] ?? []).map((name) => load[name]()));
+}

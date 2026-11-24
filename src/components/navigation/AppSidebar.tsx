@@ -1,6 +1,7 @@
 'use client';
 
 import type { ProductCode } from '@continuum/contracts';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Lock, LogOut, Search } from 'lucide-react';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { useSearchParams } from 'next/navigation';
@@ -46,9 +47,11 @@ import { PLAN_NAME_FOR_PRODUCT } from '@/lib/billing/productAccess';
 import type { SidebarBillingView } from '@/lib/billing/sidebarBilling';
 import { openTopUp } from '@/lib/billing/topUp';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
+import { intentProps } from '@/lib/intent';
 import { cn } from '@/lib/utils';
 import { BrandSwitcher } from './BrandSwitcher';
 import { useCommandPalette } from './CommandPaletteProvider';
+import { runRouteLoader } from './routeLoaders';
 import { type AppNavigationItem, isRouteActive } from './routes';
 import { SidebarBillingWidget, sidebarOpensTopUp } from './SidebarBillingWidget';
 import { ThemeToggleGlyph, ThemeToggleText } from './ThemeToggleGlyph';
@@ -152,6 +155,13 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
   const { isMobile, state, collapseHover } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user, activeBrandId, permissions } = useActiveBrandContext();
+  const queryClient = useQueryClient();
+  // Navigation intent: the destination's App Shell plus, for client-fetched pages, the reads it
+  // renders first (routeLoaders.ts). A locked product's page only redirects, so skip its reads.
+  const warmRoute = (href: string, locked = false) => {
+    router.prefetch(href);
+    return locked ? undefined : runRouteLoader(href, queryClient, activeBrandId);
+  };
   const owner = isBrandOwner(permissions, activeBrandId);
   useLowCreditsNudge({
     view: billing,
@@ -245,10 +255,8 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
         <SidebarMenuItem key={item.href}>
           {/* biome-ignore lint/a11y/noStaticElementInteractions: hover/focus reveal is progressive enhancement only; keyboard users reach the sub-routes through the collapsible nav path, so no role is warranted on this wrapper. */}
           <div
-            onMouseEnter={() => {
-              router.prefetch(item.href);
-              setHoveredQuickTabs(item.href);
-            }}
+            {...intentProps(() => warmRoute(item.href))}
+            onMouseEnter={() => setHoveredQuickTabs(item.href)}
             onMouseLeave={() =>
               setHoveredQuickTabs((current) => (current === item.href ? null : current))
             }
@@ -304,7 +312,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                       <Link
                         key={subItem.href}
                         href={subItem.href}
-                        onMouseEnter={() => router.prefetch(subItem.href)}
+                        {...intentProps(() => warmRoute(subItem.href))}
                         className={cn(
                           buttonVariants({
                             size: 'sm',
@@ -351,7 +359,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                         <SidebarMenuButton
                           size="default"
                           isActive={active || isSubActive}
-                          onMouseEnter={() => router.prefetch(item.href)}
+                          {...intentProps(() => warmRoute(item.href))}
                           className={cn(
                             'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
                             active || isSubActive
@@ -403,7 +411,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                           asChild
                           isActive={subActive}
                           size="md"
-                          onMouseEnter={() => router.prefetch(subItem.href)}
+                          {...intentProps(() => warmRoute(subItem.href))}
                           className={cn(
                             'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[var(--sidebar-active-bg)]',
                             'group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0',
@@ -451,7 +459,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
           isActive={active}
           tooltip={lockedLabel ?? item.label}
           size="default"
-          onMouseEnter={() => router.prefetch(item.href)}
+          {...intentProps(() => warmRoute(item.href, Boolean(lockedBy)))}
           className={cn(
             'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
             active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',
@@ -587,7 +595,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                       isActive={active}
                       tooltip={item.label}
                       size="default"
-                      onMouseEnter={() => router.prefetch(item.href)}
+                      {...intentProps(() => warmRoute(item.href))}
                       className={cn(
                         'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
                         active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',

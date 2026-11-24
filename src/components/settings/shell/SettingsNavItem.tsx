@@ -2,10 +2,13 @@
 
 import { Tabs } from '@base-ui/react/tabs';
 import type { LucideIcon } from 'lucide-react';
+import { warmSection } from '@/components/settings/lazySections';
+import { intentProps } from '@/lib/intent';
 import { cn } from '@/lib/utils';
+import type { SectionKey } from './sections';
 
 type SettingsNavItemProps = {
-  value: string;
+  value: SectionKey;
   label: string;
   icon: LucideIcon;
 };
@@ -14,6 +17,7 @@ export function SettingsNavItem({ value, label, icon: Icon }: SettingsNavItemPro
   return (
     <Tabs.Tab
       value={value}
+      {...intentProps(() => warmSection(value))}
       className={cn(
         'group relative flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium',
         'text-muted-foreground transition-colors duration-150',

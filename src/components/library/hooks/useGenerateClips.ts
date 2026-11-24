@@ -117,17 +117,18 @@ export function useGenerateClips(): UseGenerateClipsResult {
             : p,
         );
 
+      // The cutting pipeline (splice, captions, audio extraction) is ~635 KiB that every media
+      // card used to pull into /library's first load. It loads on the first generation instead,
+      // alongside the source download, so it never adds to the wait.
+      const pipeline = import('@/lib/clips/clipClientCut');
+      pipeline.catch(() => {});
       try {
         const sourceBlob = await fetch(asset.signedUrl, { signal: controller.signal }).then((r) => {
           if (!r.ok) throw new Error(`Could not download the source video (${r.status})`);
           return r.blob();
         });
 
-        // The cutting pipeline (splice, captions, audio extraction) is ~635 KiB that every media
-        // card used to pull into /library's first load; it loads on the first generation instead.
-        const { cutAndPersistSection, extractAndUploadAudio } = await import(
-          '@/lib/clips/clipClientCut'
-        );
+        const { cutAndPersistSection, extractAndUploadAudio } = await pipeline;
         setStage('Extracting audio…');
         const { audioBucket, audioStoragePath } = await extractAndUploadAudio({
           brandId: asset.brandId,

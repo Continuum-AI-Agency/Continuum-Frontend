@@ -142,8 +142,9 @@ const PostedContentPreview = dynamic(
 
 // Gesture-gated: the picker renders only inside an open dialog or the expanded "Browse all"
 // grid, yet a static import put its library grid stack (~160 KiB) into the planner's first load.
+const loadCreativesPicker = () => import('./OrganicCreativesPicker');
 const OrganicCreativesPicker = dynamic(
-  () => import('./OrganicCreativesPicker').then((m) => m.OrganicCreativesPicker),
+  () => loadCreativesPicker().then((m) => m.OrganicCreativesPicker),
   { ssr: false },
 );
 
@@ -1457,6 +1458,12 @@ function OrganicCalendarWorkspaceInner({
   const attachTargetDraftIds = React.useMemo(() => {
     return selectedIds.filter((id) => drafts.some((d) => d.id === id && Boolean(d.backendDraftId)));
   }, [drafts, selectedIds]);
+
+  // Selecting drafts is the intent behind bulk attach: warm the picker before the dialog opens.
+  const hasAttachTargets = attachTargetDraftIds.length > 0;
+  React.useEffect(() => {
+    if (hasAttachTargets) void loadCreativesPicker().catch(() => {});
+  }, [hasAttachTargets]);
 
   const attachCreative = useAttachCreative();
 

@@ -7,7 +7,7 @@ import {
   templateDisplayName,
   type WorkspaceTemplate,
 } from '@continuum/contracts';
-import { experimental_streamedQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -18,7 +18,11 @@ import {
   uploadRefusal,
 } from '@/components/forge/ForgeProjectDrop';
 import { type ForgeDeepLink, readForgeDeepLink } from '@/components/forge/forgeDeepLink';
-import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import {
+  forgeQueryKeys,
+  templateSourcesQuery,
+  workspaceTemplatesQuery,
+} from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
 import { SceneTemplateDetail } from '@/components/forge/SceneTemplateDetail';
 import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
@@ -52,7 +56,6 @@ import {
   discoverWorkspaceTemplates,
   renameTemplateSource,
   setTemplateAdoption,
-  streamTemplateSources,
   uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -157,17 +160,7 @@ export function ForgeWorkbench({
   const sourceKey = useMemo(() => forgeQueryKeys.templateSources(brandId), [brandId]);
   // Cards roll in a page at a time; a refetch keeps the cards on screen until its list is whole.
   const sourceQuery = useQuery({
-    queryKey: sourceKey,
-    queryFn: experimental_streamedQuery({
-      streamFn: () => streamTemplateSources(brandId),
-      reducer: (sources: TemplateSourceSummary[], page: TemplateSourceSummary[]) => [
-        ...sources,
-        ...page,
-      ],
-      initialValue: [],
-      refetchMode: 'replace',
-    }),
-    staleTime: FORGE_STALE_MS.lists,
+    ...templateSourcesQuery(brandId),
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
@@ -178,9 +171,7 @@ export function ForgeWorkbench({
   const loadingMoreSources =
     !firstReadDone.current && sourceQuery.data !== undefined && sourceQuery.isFetching;
   const workspaceQuery = useQuery({
-    queryKey: forgeQueryKeys.workspaceTemplates(brandId),
-    queryFn: () => discoverWorkspaceTemplates(brandId),
-    staleTime: FORGE_STALE_MS.lists,
+    ...workspaceTemplatesQuery(brandId),
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });

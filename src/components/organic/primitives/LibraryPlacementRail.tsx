@@ -17,13 +17,15 @@ import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { AssetStill } from '@/components/media/AssetStill';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
+import { intentProps } from '@/lib/intent';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarDraft } from './types';
 
 // Gesture-gated: the picker renders only inside an open dialog or the expanded "Browse all"
 // grid, yet a static import put its library grid stack (~160 KiB) into the planner's first load.
+const loadCreativesPicker = () => import('./OrganicCreativesPicker');
 const OrganicCreativesPicker = dynamic(
-  () => import('./OrganicCreativesPicker').then((m) => m.OrganicCreativesPicker),
+  () => loadCreativesPicker().then((m) => m.OrganicCreativesPicker),
   { ssr: false },
 );
 
@@ -252,6 +254,7 @@ export function LibraryPlacementRail({
           <div className="flex items-center justify-end gap-2 border-t border-border/50 px-3 py-1.5">
             <button
               type="button"
+              {...intentProps(loadCreativesPicker)}
               onClick={() => setBrowseAllOpen((v) => !v)}
               className="text-xs font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
             >

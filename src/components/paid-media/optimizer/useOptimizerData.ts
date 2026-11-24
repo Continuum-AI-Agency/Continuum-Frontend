@@ -2676,18 +2676,22 @@ export function usePrefetchOptimizerOverview(brandId: string, _adAccountId: stri
   const queryClient = useQueryClient();
 
   return useCallback(() => {
-    if (!brandId) return;
-    void queryClient.prefetchQuery({
-      queryKey: optimizerQueryKeys.portfolios(brandId),
-      queryFn: () => withReadTimeout(fetchPortfolios(brandId)),
-      staleTime: FIVE_MINUTES,
-    });
-    void queryClient.prefetchQuery({
+    void prefetchOptimizerOverview(queryClient, brandId);
+  }, [brandId, queryClient]);
+}
+
+/** The Optimizer's route loader: also run from the sidebar on intent, before /scale mounts.
+ *  The portfolio read uses the exact options its hook reads with, so both share one entry. */
+export function prefetchOptimizerOverview(queryClient: QueryClient, brandId: string) {
+  if (!brandId) return Promise.resolve();
+  return Promise.all([
+    queryClient.prefetchQuery(brandPortfoliosQuery(brandId)),
+    queryClient.prefetchQuery({
       queryKey: optimizerQueryKeys.renewals(brandId),
       queryFn: () => withReadTimeout(fetchRenewals(brandId)),
       staleTime: FIVE_MINUTES,
-    });
-  }, [brandId, queryClient]);
+    }),
+  ]);
 }
 
 /** Warm a portfolio's detail-workspace reads before it opens — fired from a card's

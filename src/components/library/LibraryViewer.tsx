@@ -73,6 +73,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { toast } from '@/components/ui/toast-imperative';
 import { useRouter } from '@/i18n/navigation';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { intentProps } from '@/lib/intent';
 import {
   createLibraryCollectionOperation,
   mutateCollectionMembershipOperation,
@@ -135,14 +136,11 @@ import { useLibraryViewPreferences } from './views/useLibraryViewPreferences';
 // Views a URL section, filter or tab opens: none is on screen for the default media grid, yet
 // static imports put all of them (~380 KiB) into /library's first load. `loading` gives each its
 // own Suspense boundary, so a pending chunk blanks only that panel, never the whole route.
+// The in-page triggers (Inspiration tab, trash) warm the same import on intent.
+const loadInspiration = () => import('@/components/competitor-spy/CompetitorInspirationPanel');
 const CompetitorInspirationPanel = dynamic(
-  () =>
-    import('@/components/competitor-spy/CompetitorInspirationPanel').then(
-      (m) => m.CompetitorInspirationPanel,
-    ),
-  {
-    loading: () => null,
-  },
+  () => loadInspiration().then((m) => m.CompetitorInspirationPanel),
+  { loading: () => null },
 );
 const LibraryElementsGrid = dynamic(
   () => import('./LibraryElementsGrid').then((m) => m.LibraryElementsGrid),
@@ -159,7 +157,8 @@ const TemplateGrid = dynamic(() => import('./TemplateGrid').then((m) => m.Templa
 const TypographyPanel = dynamic(() => import('./TypographyPanel').then((m) => m.TypographyPanel), {
   loading: () => null,
 });
-const TrashView = dynamic(() => import('./trash/TrashView').then((m) => m.TrashView), {
+const loadTrash = () => import('./trash/TrashView');
+const TrashView = dynamic(() => loadTrash().then((m) => m.TrashView), {
   loading: () => null,
 });
 
@@ -989,6 +988,7 @@ export function LibraryViewer({
             type="button"
             role="tab"
             aria-selected={view === id}
+            {...(id === 'inspiration' ? intentProps(loadInspiration) : {})}
             onClick={() => setView(id)}
             className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium capitalize ${
               view === id
@@ -1091,6 +1091,7 @@ export function LibraryViewer({
                         size="sm"
                         data-testid="library-trash-open"
                         aria-pressed={trashOpen}
+                        {...intentProps(loadTrash)}
                         onClick={() => {
                           setTrashOpen(!trashOpen);
                           setTrashUrl(!trashOpen);
