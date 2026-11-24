@@ -2027,12 +2027,6 @@ async function benchBrand(
         edgeRefusals.set(`${fn} ${account}`, `${response.status()} ${body.slice(0, 160)}`);
       });
   });
-  // The Ask check navigates to Jaina's /scale. On a dev server that route compiles on first
-  // request, which took over 180 s under load; start it now so it compiles alongside the checks.
-  // A read-only GET with the bench session; its result is not graded.
-  void context.request
-    .get(`${baseURL}/scale?tab=jaina`, { timeout: 900_000 })
-    .catch(() => undefined);
   const navigations: string[] = [];
   page.on('framenavigated', (frame) => {
     if (frame === page.mainFrame()) navigations.push(frame.url());
@@ -2556,6 +2550,12 @@ async function benchBrand(
       const count = await suggestions.count();
       if (count === 0) throw new Error('the Ask bar offers no suggestion');
       const question = (await suggestions.first().getAttribute('title')) ?? '';
+      // The click navigates to Jaina's /scale, which a dev server compiles on request (2.9 min
+      // under load) and unloads again after about a minute idle, so a warm-up at the start of the
+      // run is gone by now. Compile it here, just before the click; a read-only GET, not graded.
+      await context.request
+        .get(new URL('/scale?tab=jaina', page.url()).href, { timeout: 300_000 })
+        .catch(() => undefined);
       capture = false;
       guard.outsideBoard = true;
       const start = navigations.length;
@@ -2720,7 +2720,9 @@ test('the adaptive Home on one brand per mode: order, figures, sheets, pins, the
   browser,
   baseURL,
 }) => {
-  test.setTimeout(DRAFT_BENCH ? 2 * 600_000 : 6 * 600_000);
+  // The draft run compiles every route it touches on a dev server; /scale alone took 2.9 min
+  // under load, so its budget carries that on top of the ~5 min a quiet run takes.
+  test.setTimeout(DRAFT_BENCH ? 3 * 600_000 : 6 * 600_000);
   const brands = await chooseBrands(session.userId);
   let first = true;
   for (const facts of brands) {
