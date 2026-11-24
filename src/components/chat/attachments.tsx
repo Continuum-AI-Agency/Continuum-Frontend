@@ -1,9 +1,11 @@
 'use client';
 
+import { isDocumentLayoutMimeType } from '@continuum/contracts';
 import { AlertCircle, Check, FileText, Loader2, RefreshCw, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromAttachment } from '@/components/chat/media/media';
+import { useOpenDocumentInspector } from '@/components/documents/inspector/DocumentInspectorProvider';
 import {
   AttachmentAction,
   AttachmentActions,
@@ -13,6 +15,7 @@ import {
   AttachmentGroup,
   AttachmentMedia,
   AttachmentTitle,
+  AttachmentTrigger,
 } from '@/components/ui/attachment';
 import type { AgentDocumentAttachment } from '@/lib/agent-references';
 import { translateControlLabel } from '@/lib/ui/controlLabels';
@@ -163,6 +166,7 @@ export function SentDocumentAttachments({
 }) {
   const uiText = useTranslations('common');
   const uiLocale = useLocale();
+  const openInspector = useOpenDocumentInspector();
   if (!documents?.length) return null;
 
   return (
@@ -172,6 +176,18 @@ export function SentDocumentAttachments({
           <AttachmentMedia>
             <FileText aria-hidden="true" />
           </AttachmentMedia>
+          {openInspector && isDocumentLayoutMimeType(document.mediaType) ? (
+            <AttachmentTrigger
+              aria-label={uiText('inspectorOpenNamed', { name: document.name ?? '' })}
+              className="rounded-[inherit] focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() =>
+                openInspector({
+                  documentId: document.documentId,
+                  name: document.name ?? uiText('document_d6bd8c0'),
+                })
+              }
+            />
+          ) : null}
           <AttachmentContent>
             <AttachmentTitle>{document.name ?? uiText('document_d6bd8c0')}</AttachmentTitle>
             <AttachmentDescription>

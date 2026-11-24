@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
 import { DocumentRow, PendingRow, ROW_EASE } from './DocumentRow';
 import { DocumentScopeSelect } from './DocumentScopeSelect';
+import { DocumentInspectorProvider } from './inspector/DocumentInspectorProvider';
 import type { CategoryFilter, DocumentDensity, DocumentView } from './types';
 import {
   categoryLabel,
@@ -253,97 +254,99 @@ export function DocumentManager({
   };
 
   return (
-    // A labelled section rather than a bare div: drag-and-drop is a pointer-only
-    // convenience here, and the keyboard-accessible path is the Upload button inside.
-    <section
-      aria-label={uiText('brand_documents_7bc955e')}
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept={ACCEPT}
-        className="hidden"
-        onChange={handleInputChange}
-      />
-      <Card
-        className={cn(
-          'w-full gap-4 rounded-lg bg-card p-3 shadow-sm motion-safe:transition-colors',
-          compact ? 'max-w-[560px]' : 'max-w-none',
-          dragActive && 'ring-2 ring-emerald-500/30',
-        )}
+    <DocumentInspectorProvider brandId={brandId}>
+      {/* A labelled section rather than a bare div: drag-and-drop is a pointer-only
+        convenience here, and the keyboard-accessible path is the Upload button inside. */}
+      <section
+        aria-label={uiText('brand_documents_7bc955e')}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
       >
-        <CardContent className="space-y-3 p-0">
-          <SyncBar
-            onUploadClick={() => inputRef.current?.click()}
-            uploading={anyUploading}
-            ready={readyCount}
-            processing={processingCount}
-            errors={errorCount}
-            categoryFilter={categoryFilter}
-            onCategoryFilterChange={setCategoryFilter}
-            uploadCategory={uploadCategory}
-            onUploadCategoryChange={setUploadCategory}
-            scope={scope}
-            onScopeChange={setScope}
-            showScope={!compact}
-          />
-          <ItemPanel
-            hasItems={hasItems}
-            maxHeight={compact ? 280 : 480}
-            reduceMotion={reduceMotion ?? false}
-            emptyState={
-              <EmptyState
-                hint={emptyHint}
-                dragActive={dragActive}
-                onBrowse={() => inputRef.current?.click()}
-              />
-            }
-          >
-            <ul className="flex flex-col">
-              <AnimatePresence initial={false}>
-                {mutations.uploads.map((entry) => (
-                  <PendingRow
-                    key={entry.key}
-                    entry={entry}
-                    onRetry={(key) => void mutations.retryUpload(key, onStateChange)}
-                    onDiscard={mutations.discardUpload}
-                  />
-                ))}
-                {visibleDocuments.map((doc) => (
-                  <DocumentRow
-                    key={doc.id}
-                    doc={doc}
-                    isPinned={pinnedId === doc.id}
-                    now={now}
-                    actions={actions}
-                    onPinnedChange={(pinned) => setPinnedId(pinned ? doc.id : null)}
-                    onOpenInline={(storagePath) => void handleOpenInline(storagePath)}
-                    onDownload={handleDownload}
-                    brandId={brandId}
-                    onRemove={(id) => void handleRemove(id)}
-                    onCategoryChange={(id, category) => void handleCategoryChange(id, category)}
-                  />
-                ))}
-              </AnimatePresence>
-            </ul>
-          </ItemPanel>
-        </CardContent>
-      </Card>
-      {routing.fontFiles.length > 0 ? (
-        <FontUploadReviewDialog
-          key={routing.fontFiles.map((file) => `${file.name}:${file.size}`).join('|')}
-          brandId={brandId}
-          files={routing.fontFiles}
-          onClose={routing.clearFontFiles}
-          onUploaded={routing.clearFontFiles}
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept={ACCEPT}
+          className="hidden"
+          onChange={handleInputChange}
         />
-      ) : null}
-    </section>
+        <Card
+          className={cn(
+            'w-full gap-4 rounded-lg bg-card p-3 shadow-sm motion-safe:transition-colors',
+            compact ? 'max-w-[560px]' : 'max-w-none',
+            dragActive && 'ring-2 ring-emerald-500/30',
+          )}
+        >
+          <CardContent className="space-y-3 p-0">
+            <SyncBar
+              onUploadClick={() => inputRef.current?.click()}
+              uploading={anyUploading}
+              ready={readyCount}
+              processing={processingCount}
+              errors={errorCount}
+              categoryFilter={categoryFilter}
+              onCategoryFilterChange={setCategoryFilter}
+              uploadCategory={uploadCategory}
+              onUploadCategoryChange={setUploadCategory}
+              scope={scope}
+              onScopeChange={setScope}
+              showScope={!compact}
+            />
+            <ItemPanel
+              hasItems={hasItems}
+              maxHeight={compact ? 280 : 480}
+              reduceMotion={reduceMotion ?? false}
+              emptyState={
+                <EmptyState
+                  hint={emptyHint}
+                  dragActive={dragActive}
+                  onBrowse={() => inputRef.current?.click()}
+                />
+              }
+            >
+              <ul className="flex flex-col">
+                <AnimatePresence initial={false}>
+                  {mutations.uploads.map((entry) => (
+                    <PendingRow
+                      key={entry.key}
+                      entry={entry}
+                      onRetry={(key) => void mutations.retryUpload(key, onStateChange)}
+                      onDiscard={mutations.discardUpload}
+                    />
+                  ))}
+                  {visibleDocuments.map((doc) => (
+                    <DocumentRow
+                      key={doc.id}
+                      doc={doc}
+                      isPinned={pinnedId === doc.id}
+                      now={now}
+                      actions={actions}
+                      onPinnedChange={(pinned) => setPinnedId(pinned ? doc.id : null)}
+                      onOpenInline={(storagePath) => void handleOpenInline(storagePath)}
+                      onDownload={handleDownload}
+                      brandId={brandId}
+                      onRemove={(id) => void handleRemove(id)}
+                      onCategoryChange={(id, category) => void handleCategoryChange(id, category)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </ul>
+            </ItemPanel>
+          </CardContent>
+        </Card>
+        {routing.fontFiles.length > 0 ? (
+          <FontUploadReviewDialog
+            key={routing.fontFiles.map((file) => `${file.name}:${file.size}`).join('|')}
+            brandId={brandId}
+            files={routing.fontFiles}
+            onClose={routing.clearFontFiles}
+            onUploaded={routing.clearFontFiles}
+          />
+        ) : null}
+      </section>
+    </DocumentInspectorProvider>
   );
 }
 
