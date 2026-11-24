@@ -19,7 +19,7 @@ export function useDotsMasonry(
     const slots = [...board.querySelectorAll<HTMLElement>(':scope > [data-board-slot]')];
     const fit = (slot: HTMLElement) => {
       const gap = Number.parseFloat(getComputedStyle(board).columnGap) || 0;
-      slot.style.gridRowEnd = `span ${Math.ceil(slot.getBoundingClientRect().height + gap)}`;
+      slot.style.gridRow = `span ${Math.ceil(slot.getBoundingClientRect().height + gap)}`;
     };
     for (const slot of slots) fit(slot);
     board.dataset.masonry = '';
@@ -30,7 +30,7 @@ export function useDotsMasonry(
     return () => {
       observer.disconnect();
       delete board.dataset.masonry;
-      for (const slot of slots) slot.style.gridRowEnd = '';
+      for (const slot of slots) slot.style.gridRow = '';
     };
   }, [grid, enabled, layoutKey]);
 }
