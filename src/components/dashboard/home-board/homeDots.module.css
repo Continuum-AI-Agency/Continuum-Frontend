@@ -352,6 +352,9 @@
   .frame {
     padding: 12px 14px;
   }
+  .legend {
+    padding-inline: 15px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .pixel {
