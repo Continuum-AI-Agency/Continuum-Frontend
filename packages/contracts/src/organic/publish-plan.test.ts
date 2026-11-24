@@ -447,7 +447,8 @@ describe('resolvePublishPlan — caption', () => {
     expect(instagram.caption.truncatedAt ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(2200);
     expect(checkPublishability(instagram).blockers).toContainEqual({
       reason: 'caption_too_long',
-      message: 'Instagram captions are at most 2200 characters, hashtags included — this one is 2299',
+      message:
+        'Instagram captions are at most 2200 characters, hashtags included — this one is 2299',
       fix: 'caption',
     });
 
@@ -464,7 +465,8 @@ describe('resolvePublishPlan — caption', () => {
     const tagged = plan(draft({ caption: body, hashtags: { high: tags.slice(0, 15) } }));
     expect(checkPublishability(tagged).blockers).toContainEqual({
       reason: 'caption_too_long',
-      message: 'Instagram captions are at most 2200 characters, hashtags included — this one is 2245',
+      message:
+        'Instagram captions are at most 2200 characters, hashtags included — this one is 2245',
       fix: 'caption',
     });
   });
@@ -527,14 +529,18 @@ describe('resolvePublishPlan — account', () => {
 
   // P1/P4: the list shows a twice-linked account once; a draft stamped with the other link's id
   // read as "not one of this brand's accounts" and offered the very same @handle as the choice.
-  it('resolves a stamp on a twin to its account, judged by that link\'s own connection', () => {
+  it("resolves a stamp on a twin to its account, judged by that link's own connection", () => {
     const twinned = {
       ...candidate(ACCOUNT_B, 'brand_b'),
       needsReauth: false,
       aliases: [{ id: ACCOUNT_STALE, needsReauth: false }],
     };
     const live = resolveFor({ boundAccountId: ACCOUNT_STALE, accounts: [twinned] });
-    expect(live.account).toMatchObject({ status: 'resolved', id: ACCOUNT_STALE, handle: 'brand_b' });
+    expect(live.account).toMatchObject({
+      status: 'resolved',
+      id: ACCOUNT_STALE,
+      handle: 'brand_b',
+    });
 
     const dead = resolveFor({
       boundAccountId: ACCOUNT_STALE,
@@ -1042,7 +1048,7 @@ describe('retargetDraftPlatformRow', () => {
 });
 
 describe('a post whose image failed to generate', () => {
-  it('posts as text on a platform with text posts, and says so', () => {
+  it('never falls back to text: blocks as Facebook with no image attached', () => {
     const plan = resolvePublishPlan({
       draft: publishPlanDraftFromRow({
         id: 'd-failed',
@@ -1058,8 +1064,23 @@ describe('a post whose image failed to generate', () => {
       publishOptions: null,
       mediaGenerated: null,
     });
-    expect(plan.verb).toBe('text');
-    expect(plan.notices.map((notice) => notice.code)).toContain('media_not_sent');
+    expect(plan.verb).toBe('post');
+    const missing = checkPublishability(plan).blockers.find((b) => b.reason === 'media_missing');
+    expect(missing?.message).toStartWith('Facebook: no image attached');
+  });
+});
+
+describe('a post whose selected media lost its file', () => {
+  it('blocks on Facebook instead of posting the caption alone', () => {
+    const p = plan(
+      draft({
+        formats: ['post'],
+        publishingAssets: [asset('gone.png', { storagePath: null, storageUrl: null })],
+      }),
+      'facebook',
+    );
+    expect(p.verb).toBe('post');
+    expect(blockerReasons(p)).toContain('media_missing');
   });
 });
 
