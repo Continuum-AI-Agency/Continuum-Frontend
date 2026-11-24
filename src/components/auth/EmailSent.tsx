@@ -15,11 +15,19 @@ interface EmailSentProps {
   email: string;
   onVerifyCode: (code: string) => void;
   onResend?: () => void;
+  isResendHeld?: boolean;
   isPending?: boolean;
   error?: string | null;
 }
 
-export function EmailSent({ email, onVerifyCode, onResend, isPending, error }: EmailSentProps) {
+export function EmailSent({
+  email,
+  onVerifyCode,
+  onResend,
+  isResendHeld,
+  isPending,
+  error,
+}: EmailSentProps) {
   const tUi = useTranslations('auth');
   const validationErrorMap = useValidationErrorMap();
 
@@ -101,7 +109,7 @@ export function EmailSent({ email, onVerifyCode, onResend, isPending, error }: E
       </form>
 
       {onResend && (
-        <Button onClick={onResend} disabled={isPending} variant="ghost">
+        <Button onClick={onResend} disabled={isPending || isResendHeld} variant="ghost">
           {tUi('m_55ea7b3eba')}
         </Button>
       )}

@@ -54,6 +54,6 @@
   "m_e40123b4e7": "Ocultar senha",
   "m_044b852f30": "Mostrar senha",
   "legalAgreement": "Ao continuar, você concorda com os <terms>Termos de Uso</terms> e a <privacy>Política de Privacidade</privacy>.",
-  "emailSendFailed": "Não conseguimos enviar o e-mail de acesso agora. Tente novamente em alguns minutos.",
+  "emailSendFailed": "Não conseguimos enviar o e-mail de acesso. Continue com o Google ou tente novamente mais tarde.",
   "signOutEverywhereRefused": "Esta sessão veio de um link de representação, então não pode encerrar a sessão da conta em outros dispositivos. Sair encerra apenas este navegador."
 }

@@ -54,6 +54,6 @@
   "m_e40123b4e7": "Hide password",
   "m_044b852f30": "Show password",
   "legalAgreement": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
-  "emailSendFailed": "We couldn't send the sign-in email right now. Please try again in a few minutes.",
+  "emailSendFailed": "We couldn't send the sign-in email. Continue with Google instead, or try again later.",
   "signOutEverywhereRefused": "This session came from an impersonation link, so it can't sign the account out of other devices. Sign out ends only this browser."
 }
