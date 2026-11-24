@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { createTranslator } from 'next-intl';
 import { englishMessages } from '@/i18n/__tests__/render';
-import {
-  checkedPortfolioDotItems,
-  goalDotItems,
-  healthDotItems,
-  organicDotItems,
-} from './homeDotItems';
+import { goalDotItems, healthDotItems, organicDotItems } from './homeDotItems';
 import { DRAFT_ROWS, NOW, POSTS } from './modules/organic/__fixtures__/organicWeek';
 import { buildOrganicWeek } from './modules/organic/organicWeekModel';
 
@@ -111,25 +106,5 @@ describe('Source-to-dot fidelity', () => {
     ).toBe(true);
     expect(items.some((item) => item.id.includes('published:p-ig'))).toBe(true);
     expect(items.some((item) => item.id.includes('published:p-li'))).toBe(true);
-  });
-
-  it('shows a quiet answer as the portfolios it checked, with no figure of its own', () => {
-    const items = checkedPortfolioDotItems(
-      [
-        { id: 'p-1', name: 'Conversaciones Whatsapp', detail: 'Autopilot' },
-        { id: 'p-2', name: 'Easy Fit 2026', detail: 'Recommend · Paused' },
-      ],
-      'No action recorded',
-      'Last 24 hours',
-    );
-    expect(items.map((item) => [item.id, item.label, item.detail])).toEqual([
-      ['p-1', 'Conversaciones Whatsapp', 'Autopilot'],
-      ['p-2', 'Easy Fit 2026', 'Recommend · Paused'],
-    ]);
-    expect(items.every((item) => item.value === 'No action recorded')).toBe(true);
-    expect(items.every((item) => item.period === 'Last 24 hours' && item.tone === 'neutral')).toBe(
-      true,
-    );
-    expect(items.every((item) => item.number === undefined)).toBe(true);
   });
 });

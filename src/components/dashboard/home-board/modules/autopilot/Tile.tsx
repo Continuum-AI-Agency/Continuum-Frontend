@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { HomeDots } from '../../HomeDots';
 import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
-import { checkedPortfolioDotItems, overnightDotItems } from '../../homeDotItems';
+import { overnightDotItems } from '../../homeDotItems';
 import type { HomeTileProps } from '../../types';
 import { useHomeRead } from '../../useHomeRead';
 import { TileReadError } from '../opps/tileParts';
@@ -162,20 +162,6 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
             rows
             label={uiText('recorded_actions_in_the_last_24_hours_0461825')}
             items={overnightDotItems(allRows, uiText)}
-          />
-        ) : draft && runs.length > 0 ? (
-          <HomeDots
-            rows
-            label={uiText('portfolios_watched_in_the_last_24_hours_a1c3e90')}
-            items={checkedPortfolioDotItems(
-              runs.map((run) => ({
-                id: run.id,
-                name: run.name,
-                detail: run.paused ? `${run.mode} · ${uiText('m_c7dfb6f1d9')}` : run.mode,
-              })),
-              uiText('no_action_recorded_b72d4f1'),
-              uiText('last_24_hours_5c37cf8'),
-            )}
           />
         ) : shown.length > 0 ? (
           <ul className="flex min-w-0 flex-col gap-2">
