@@ -56,6 +56,7 @@
     "optimizer:reading:bench": "bun run e2e/optimizer-reading.bench.ts",
     "optimizer:board:e2e:bench": "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.trycontinuum.ai} playwright test --config playwright.optimizer-board.config.ts --workers=1",
     "home:reading:bench": "bun run e2e/home-reading.bench.ts",
+    "home:draft:e2e:bench": "bun scripts/home-draft-bench.ts",
     "home:board:e2e:bench": "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.trycontinuum.ai} playwright test --config playwright.home-board.config.ts --workers=1",
     "canvas:e2e:bench": "bun scripts/canvas-c/canvas-e2e.bench.ts",
     "jaina:canvas:e2e:bench": "playwright test --config playwright.jaina-canvas.config.ts --workers=1",

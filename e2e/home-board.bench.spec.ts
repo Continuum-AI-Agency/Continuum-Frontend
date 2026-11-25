@@ -1,4 +1,5 @@
-import { mkdirSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   arrangeHomeTiles,
@@ -58,6 +59,7 @@ import {
   sessionClaimsOf,
 } from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
+import { expectedHomeDraftDots } from './support/homeDraftDots';
 import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
@@ -139,6 +141,8 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 // ---------------------------------------------------------------------------
 
 const { serviceRoleKey, publishableKey } = loadProdSupabaseEnv();
+// Runner-only configuration; the app's gate is NODE_ENV plus its URL parameter.
+const DRAFT_BENCH = process.env.HOME_DRAFT_BENCH === '1';
 const MEMBER_EMAIL = 'ramibuisel@gmail.com';
 const EASYFIT_META_BRAND_ID = '148583e0-5538-462b-8d3a-acd25b80344e';
 const EASYFIT_BRAND_ID = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
@@ -147,6 +151,7 @@ const MODES: HomeMode[] = ['operate', 'fix', 'recommend', 'approve', 'setup'];
 /** The viewer's zone, pinned so the browser and the bench agree on "this month" and "this week". */
 const VIEWER_TIME_ZONE = 'America/Mexico_City';
 const SHOTS_DIR = resolve(__dirname, '../test-results/home-board');
+const HOME_PATH = DRAFT_BENCH ? '/dashboard?homeDraft=dots' : '/dashboard';
 const SETTLE_MS = 150_000;
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'https://api.trycontinuum.ai').replace(
   /\/$/,
@@ -178,7 +183,10 @@ const admin: SupabaseClient = createClient(PROD_SUPABASE_URL, serviceRoleKey, {
 });
 
 const notes: string[] = [];
-const recorder = createBenchRecorder('home:board:e2e:bench', notes);
+const recorder = createBenchRecorder(
+  DRAFT_BENCH ? 'home:draft:e2e:bench' : 'home:board:e2e:bench',
+  notes,
+);
 type Grade = 'PASS' | 'WARN' | 'FAIL' | 'SKIP';
 const tally = new Map<string, Record<Grade, number>>();
 const phaseBWired = new Map<HomeReadName, string[]>();
@@ -468,13 +476,21 @@ async function chooseBrands(userId: string): Promise<BrandFacts[]> {
     .eq('user_id', userId);
   if (error) throw new Error(`permissions: ${error.message}`);
   const ids = [...new Set((perms ?? []).map((row) => row.brand_profile_id as string))];
+  if (DRAFT_BENCH && !ids.includes(EASYFIT_META_BRAND_ID)) {
+    throw new Error('Bench member does not have access to Easy Fit Meta');
+  }
   const { data: brands, error: brandsError } = await admin
     .schema('brand_profiles')
     .from('brand_profiles')
     .select('id, brand_name')
-    .in('id', ids)
+    .in('id', DRAFT_BENCH ? [EASYFIT_META_BRAND_ID] : ids)
     .eq('active', true);
   if (brandsError) throw new Error(`brands: ${brandsError.message}`);
+  if (DRAFT_BENCH) {
+    const brand = (brands ?? []).find((row) => row.id === EASYFIT_META_BRAND_ID);
+    if (!brand) throw new Error('Easy Fit Meta is not an active member brand');
+    return [await readBrandFacts(brand.id, brand.brand_name ?? 'Easy Fit Meta')];
+  }
   const all: BrandFacts[] = [];
   for (const brand of (brands ?? []) as { id: string; brand_name: string | null }[]) {
     try {
@@ -540,7 +556,14 @@ async function chooseBrands(userId: string): Promise<BrandFacts[]> {
   const holdsFigure = async (facts: BrandFacts, id: HomeTileId): Promise<boolean> => {
     if (!facts.board.tiles.some((tile) => tile.id === id)) return false;
     if (id === 'goals' || id === 'organic') return true;
-    const expected = await expectedFor(id, facts, null, '', Date.now()).catch(() => null);
+    const expected = await expectedFor(
+      id,
+      facts,
+      null,
+      '',
+      Date.now(),
+      new Map<HomeReadName, SeenRead>(),
+    ).catch(() => null);
     return expected !== null && expected.kind !== 'missing' && expected.kind !== 'warn';
   };
   for (const id of homeTileIdSchema.options) {
@@ -950,7 +973,14 @@ async function expectOrganic(facts: BrandFacts, context: BrowserContext | null, 
     });
   }
   const response = await context.request.post(`${baseURL}/api/organic/calendar-posts`, {
-    data: { brandId: facts.brandId, start: week[0], end: week[6], accountsByPlatform },
+    data: {
+      brandId: facts.brandId,
+      start: week[0],
+      end: week[6],
+      accountsByPlatform,
+      includeExternal: false,
+      forceRefreshExternal: false,
+    },
   });
   if (!response.ok()) {
     throw new Error(
@@ -1271,8 +1301,32 @@ async function sidewaysScroll(page: Page): Promise<string[]> {
   });
 }
 
-/** A full screenshot with every clipping ancestor of the board let out, then put back. */
+async function captureScreenshot(
+  name: string,
+  write: (path: string) => Promise<unknown>,
+): Promise<void> {
+  if (!DRAFT_BENCH) {
+    mkdirSync(SHOTS_DIR, { recursive: true });
+    await write(resolve(SHOTS_DIR, `${name}.png`));
+    return;
+  }
+  const staging = process.env.ARTIFACT_RUN_DIR;
+  const ready = process.env.ARTIFACT_READY_DIR;
+  if (!staging || !ready) throw new Error('Draft captures require artifact-run.py supervision');
+  const batchName = `capture-${name.replace(/[^a-zA-Z0-9_.-]/g, '_')}-${randomUUID().slice(0, 8)}`;
+  const batch = resolve(staging, batchName);
+  mkdirSync(batch);
+  writeFileSync(resolve(batch, '.artifact-staging'), 'sealed after screenshot writer closes\n');
+  await write(resolve(batch, 'capture.png'));
+  renameSync(batch, resolve(ready, batchName));
+}
+
+/** The draft captures the actual frame; the legacy bench keeps its existing unclipped capture. */
 async function shoot(page: Page, name: string): Promise<void> {
+  if (DRAFT_BENCH) {
+    await captureScreenshot(name, (path) => page.screenshot({ path, fullPage: true }));
+    return;
+  }
   mkdirSync(SHOTS_DIR, { recursive: true });
   await page.evaluate(() => {
     const root = document.querySelector('[data-testid="home-board-root"]');
@@ -1387,7 +1441,7 @@ async function guardWrites(context: BrowserContext, guard: Guard): Promise<void>
     const path = new URL(request.url()).pathname;
     const table = /^\/rest\/v1\/(?!rpc\/)([^/?]+)/.exec(path)?.[1] ?? null;
     if (table) {
-      if (PLUMBING_TABLES.has(table)) {
+      if (PLUMBING_TABLES.has(table) && (!DRAFT_BENCH || table === 'user_session_brands')) {
         guard.seen.push(`${method} ${table} (plumbing)`);
         return route.continue();
       }
@@ -1924,6 +1978,7 @@ async function benchBrand(
     viewport: { width: 1440, height: 1000 },
     timezoneId: VIEWER_TIME_ZONE,
     colorScheme: 'light',
+    ...(DRAFT_BENCH ? { reducedMotion: 'reduce' as const } : {}),
   });
   const guard: Guard = { seen: [], blocked: [], outsideBoard: false };
   await guardWrites(context, guard);
@@ -1979,7 +2034,23 @@ async function benchBrand(
 
   try {
     const mountedAt = Date.now();
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 240_000 });
+    if (DRAFT_BENCH) {
+      await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 240_000 });
+      await expect(page.getByTestId('home-board')).toHaveAttribute(
+        'data-board-order',
+        expectedOrder.join(','),
+      );
+      await expect(page.getByTestId('home-board-root')).toHaveAttribute(
+        'data-home-presentation',
+        'current',
+      );
+    }
+    await page.goto(HOME_PATH, { waitUntil: 'domcontentloaded', timeout: 240_000 });
+    if (DRAFT_BENCH)
+      await expect(page.getByTestId('home-board-root')).toHaveAttribute(
+        'data-home-presentation',
+        'dots',
+      );
     const board = page.getByTestId('home-board');
     try {
       await expect(board).toBeVisible({ timeout: 240_000 });
@@ -2020,7 +2091,7 @@ async function benchBrand(
         grade(
           scope,
           `${tile.id} direct read`,
-          'WARN',
+          DRAFT_BENCH ? 'FAIL' : 'WARN',
           `un-exercised hop: the bench's own read failed — ${(error as Error).message.split('\n')[0]}`,
         );
         continue;
@@ -2050,7 +2121,12 @@ async function benchBrand(
         continue;
       }
       if (!attrs) {
-        grade(scope, step, 'WARN', `ready tile has no headline node · ${expected.detail}`);
+        grade(
+          scope,
+          step,
+          DRAFT_BENCH ? 'FAIL' : 'WARN',
+          `ready tile has no headline node · ${expected.detail}`,
+        );
         continue;
       }
       switch (expected.kind) {
@@ -2058,7 +2134,7 @@ async function benchBrand(
           grade(
             scope,
             step,
-            'WARN',
+            DRAFT_BENCH ? 'FAIL' : 'WARN',
             `rendered ${attrs.value}; un-exercised hop: ${expected.detail}`,
           );
           break;
@@ -2101,6 +2177,92 @@ async function benchBrand(
     const sheetChecks = await checkHomeReads(page, scope, states, reads);
     await checkOneGoal(page, scope, reads);
 
+    if (DRAFT_BENCH) {
+      await check(
+        scope,
+        'all displayed dot observations match independent authenticated reads',
+        async () => {
+          const expected = await expectedHomeDraftDots(expectedOrder, {
+            facts,
+            userId: session.userId,
+            client: await memberClient(),
+            apiBase: API_BASE,
+            now: new Date(mountedAt),
+            get: readDirectly,
+            calendar: async (body) => {
+              const response = await context.request.post(`${baseURL}/api/organic/calendar-posts`, {
+                data: body,
+              });
+              if (!response.ok()) throw new Error(`dot oracle calendar: HTTP ${response.status()}`);
+              return response.json();
+            },
+          });
+          for (const id of expectedOrder) {
+            const wanted = (expected.get(id) ?? []).slice(0, id === 'organic' ? 42 : 24);
+            const dots = page.locator(`[data-board-slot="${id}"] [data-home-dot-id]`);
+            const actual = await dots.evaluateAll((nodes) =>
+              nodes.map((node) => ({
+                id: node.getAttribute('data-home-dot-id'),
+                label: node.getAttribute('data-home-dot-label'),
+                value: node.getAttribute('data-home-dot-value'),
+                tone: node.getAttribute('data-home-dot-tone'),
+                number: node.getAttribute('data-home-dot-number'),
+                column: node.getAttribute('data-home-dot-column'),
+              })),
+            );
+            expect(actual, `${id} dots against independently refetched source`).toEqual(
+              wanted.map((item) => ({
+                id: item.id,
+                label: item.label,
+                value: item.value,
+                tone: item.tone ?? 'positive',
+                number: item.number === undefined ? null : String(item.number),
+                column: item.column === undefined ? null : String(item.column),
+              })),
+            );
+            for (const [index, item] of wanted.entries()) {
+              // Use the ordered source position; IDs are compared above and never interpolated into CSS.
+              await expect(dots.nth(index)).toHaveAttribute(
+                'aria-label',
+                `${item.label}: ${item.value}${item.detail ? `. ${item.detail}` : ''}`,
+              );
+            }
+            notes.push(`${scope}: ${id} independent dot evidence ${JSON.stringify(wanted)}`);
+          }
+          return 'IDs, counts, dates, numeric values, labels, statuses, grouping and truncation held to independently refetched data';
+        },
+      );
+      await check(
+        scope,
+        'real dot hover, focus, selection, Escape and reduced motion',
+        async () => {
+          let inspected = 0;
+          for (const inspector of await page.locator('[data-home-dot-inspector]').all()) {
+            const dot = inspector.locator('[data-home-dot-id]').first();
+            if ((await dot.count()) === 0) continue;
+            const value = await dot.getAttribute('data-home-dot-value');
+            await dot.hover();
+            await expect(inspector.locator('[data-home-dot-detail]')).toContainText(value ?? '');
+            await dot.focus();
+            await expect(inspector.locator('[data-home-dot-detail]')).toContainText(value ?? '');
+            await dot.click();
+            await expect(dot).toHaveAttribute('aria-pressed', 'true');
+            await dot.press('Escape');
+            await expect(dot).toHaveAttribute('aria-pressed', 'false');
+            expect(
+              await dot
+                .locator('span')
+                .first()
+                .evaluate((node) => getComputedStyle(node).transitionDuration),
+            ).toBe('0s');
+            inspected++;
+          }
+          expect(inspected, 'the real brand exposed no inspectable dot data').toBeGreaterThan(0);
+          return `${inspected} real-data inspectors; direct-read headline and Phase B oracles run above`;
+        },
+      );
+    }
+
     // 5. Light / dark / 390 px: screenshots, sideways scroll.
     phase = 'themes';
     await shoot(page, `${facts.key}-1440-light`);
@@ -2136,7 +2298,7 @@ async function benchBrand(
         const sheet = page.getByTestId(`home-tile-${id}-sheet`);
         await expect(sheet).toBeVisible({ timeout: 30_000 });
         await page.waitForTimeout(500);
-        mkdirSync(SHOTS_DIR, { recursive: true });
+        if (!DRAFT_BENCH) mkdirSync(SHOTS_DIR, { recursive: true });
         let sheetText = '';
         let moduleText = '';
         let checklistItems = 0;
@@ -2146,7 +2308,16 @@ async function benchBrand(
           // settled: no skeleton left. A sheet still loading after 60 s is a hung module, a FAIL.
           await expect(sheet).toHaveCSS('opacity', '1', { timeout: 30_000 });
           await expect(sheet.locator(SKELETONS)).toHaveCount(0, { timeout: 60_000 });
-          await sheet.screenshot({ path: resolve(SHOTS_DIR, `${facts.key}-sheet-${id}.png`) });
+          await captureScreenshot(`${facts.key}-sheet-${id}`, (path) => sheet.screenshot({ path }));
+          if (DRAFT_BENCH) {
+            for (const button of await sheet
+              .getByRole('button', {
+                name: /^(Save target|Remove target|Approve(?: & schedule)?|Dismiss|Send by email|Send as Continuum Report|Create paused)$/,
+              })
+              .all()) {
+              await expect(button).toBeDisabled();
+            }
+          }
           sheetText = (await sheet.innerText()).replace(/\s+/g, ' ');
           moduleText = (
             await sheet.locator('[data-testid="home-tile-sheet-body"]').innerText()
@@ -2197,7 +2368,7 @@ async function benchBrand(
         await expect(sheet).toHaveCSS('opacity', '1', { timeout: 30_000 });
         await expect(sheet.locator(SKELETONS)).toHaveCount(0, { timeout: 60_000 });
         slides = await sheet.getByTestId('home-story-slide').count();
-        await sheet.screenshot({ path: resolve(SHOTS_DIR, `${facts.key}-story.png`) });
+        await captureScreenshot(`${facts.key}-story`, (path) => sheet.screenshot({ path }));
         storyText = (await sheet.innerText()).replace(/\s+/g, ' ');
       } finally {
         await closeSheet(page, sheet);
@@ -2463,10 +2634,24 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (session) {
     try {
-      const restored = await restoreBrandPreference(session.userId, originalPreference);
+      let restored: string | null;
+      if (DRAFT_BENCH) {
+        const { data, error } = await admin
+          .schema('brand_profiles')
+          .from('user_brand_preferences')
+          .select('active_brand_id')
+          .eq('user_id', session.userId)
+          .maybeSingle();
+        if (error) throw error;
+        restored = data?.active_brand_id ?? null;
+      } else {
+        restored = await restoreBrandPreference(session.userId, originalPreference);
+      }
       grade(
         'cleanup',
-        'active-brand preference restored',
+        DRAFT_BENCH
+          ? 'global active-brand preference unchanged'
+          : 'active-brand preference restored',
         restored === originalPreference ? 'PASS' : 'FAIL',
         `read back ${restored ?? 'none'}, was ${originalPreference ?? 'none'}`,
       );
@@ -2522,17 +2707,21 @@ test('the adaptive Home on one brand per mode: order, figures, sheets, pins, the
   browser,
   baseURL,
 }) => {
-  test.setTimeout(6 * 600_000);
+  test.setTimeout(DRAFT_BENCH ? 2 * 600_000 : 6 * 600_000);
   const brands = await chooseBrands(session.userId);
   let first = true;
   for (const facts of brands) {
     await test.step(`${facts.name.slice(0, 40)} · ${facts.reading.mode}`, () =>
       benchBrand(browser, facts, baseURL ?? process.env.PLAYWRIGHT_BASE_URL ?? '', {
-        composerCheck: first,
+        composerCheck: first && !DRAFT_BENCH,
       }));
     first = false;
   }
-  for (const widened of WIDENED_CASES) {
+  if (DRAFT_BENCH)
+    notes.push(
+      'UN-EXERCISED: other brands/modes, widened windows, Jaina composer; this run is Easy Fit Meta only.',
+    );
+  for (const widened of DRAFT_BENCH ? [] : WIDENED_CASES) {
     await test.step(`widened: ${widened.key}`, () => benchWidened(browser, widened));
   }
   expect(failures, failures.join('\n')).toEqual([]);

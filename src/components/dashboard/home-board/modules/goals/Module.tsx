@@ -24,6 +24,7 @@ import {
   totalsByCurrency,
 } from '@/lib/home/homeOverviewModel';
 import { withDistinctAccountLabels } from '@/lib/integrations/distinctAccountLabels';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { GoalTargetForm } from './GoalTargetForm';
 import { GoalRing, goalPaceLine, goalTargetNote } from './GoalTargetProgress';
 import { type GoalLoad, type GoalWindow, goalWindowLabel } from './goalModel';
@@ -154,6 +155,7 @@ export default function GoalModule({
   targetStatus,
 }: GoalModuleProps) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const [scope, setScope] = useState<string>(HOME_PROFILE_BRAND_SCOPE);
   const reads = load.status === 'ready' ? load.reads : [];
   const scopedReads =
@@ -220,7 +222,10 @@ export default function GoalModule({
                 {' · '}
                 <button
                   className="underline-offset-2 hover:underline"
-                  onClick={() => profiles.reset(scope)}
+                  disabled={draft}
+                  onClick={() => {
+                    if (!draft) void profiles.reset(scope);
+                  }}
                   type="button"
                 >
                   {scope === HOME_PROFILE_BRAND_SCOPE
@@ -269,11 +274,13 @@ export default function GoalModule({
           ) : null}
           <ObjectiveStrip
             currency={group.currency}
-            editable={index === 0}
+            editable={index === 0 && !draft}
             inferredLabels={resolved.fromSuggestion || resolved.source === 'inferred'}
             figures={resolved.objectives.map((goal) => objectiveFigure(goal, group.totals))}
             objectives={resolved.objectives}
-            onChange={(next) => profiles.save(scope, next)}
+            onChange={(next) => {
+              if (!draft) void profiles.save(scope, next);
+            }}
             unavailableNote={note}
           />
         </div>

@@ -8,7 +8,10 @@ import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatCount } from '@/lib/home/format';
 import { cn } from '@/lib/utils';
+import { HomeDots } from '../../HomeDots';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
+import { organicDotItems } from '../../homeDotItems';
 import type { HomeTileProps } from '../../types';
 import { type OrganicWeek, organicTileView } from './organicWeekModel';
 import { topPostLine } from './organicWeekRead';
@@ -54,6 +57,19 @@ function WeekBars({ week }: { week: OrganicWeek }) {
   );
 }
 
+function WeekDots({ week }: { week: OrganicWeek }) {
+  const uiText = useTranslations('dashboard');
+  const items = organicDotItems(week, uiText);
+  return (
+    <HomeDots
+      limit={42}
+      columns={week.days.map((day) => day.dateLabel)}
+      items={items}
+      label={uiText('posts_by_day_each_dot_is_a_published_post_sch_8fd15ce')}
+    />
+  );
+}
+
 export default function OrganicTile({ ctx, tile }: HomeTileProps) {
   const uiText = useTranslations('dashboard');
   const uiLocale = useLocale();
@@ -63,6 +79,7 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
     waiting === 0
       ? uiText('nothing_waiting_for_approval_8cbe922')
       : uiText('count_plural_one_draft_needs_approval_other_d_5e30762', { count: waiting });
+  const draft = useHomeDraft();
   const load = useOrganicWeek(ctx.brandId, ctx.organicAccounts);
   const read = useOrganicWeekRead(ctx.brandId, ctx.organicAccounts.length > 0);
   const topPost = read.data ? topPostLine(read.data) : null;
@@ -109,10 +126,12 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
               {formatCount(week.postsThisWeek, uiLocale)}
             </span>{' '}
             <span className="font-normal text-muted-foreground text-xs">
-              {postsLabel(week.postsThisWeek)}
+              {draft
+                ? uiText('published_or_scheduled_this_week_45acbda')
+                : postsLabel(week.postsThisWeek)}
             </span>
           </p>
-          {tile.size === 's' ? null : <WeekBars week={week} />}
+          {draft ? <WeekDots week={week} /> : tile.size === 's' ? null : <WeekBars week={week} />}
           <p className="text-muted-foreground text-xs" data-testid="home-tile-organic-waiting">
             {waitingLine(week.waiting)}
           </p>

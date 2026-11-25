@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatMoney } from '@/lib/home/format';
 import { cn } from '@/lib/utils';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
 import type { HomeTileProps } from '../../types';
 import { PlanBar } from './PlanBar';
@@ -34,6 +35,7 @@ function ReadyBody({
   size: HomeTileProps['tile']['size'];
 }) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const { currency } = headline;
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -47,6 +49,14 @@ function ReadyBody({
         <span className="font-normal text-muted-foreground text-xs">{uiText('spent_2705d83')}</span>
       </p>
       <PlanBar group={headline} />
+      {draft ? (
+        <p className="text-muted-foreground text-xs">
+          {headline.through
+            ? uiText('through_day_9e48c64', { day: dayLabel(headline.through) })
+            : uiText('date_not_reported_ac99f24')}{' '}
+          · {currency ?? uiText('currency_not_recorded_b6f3038')}
+        </p>
+      ) : null}
       <p className="text-muted-foreground text-xs leading-snug">
         {headline.through
           ? uiText('of_plan_plan_expected_expected_by_day_97ad0d7', {

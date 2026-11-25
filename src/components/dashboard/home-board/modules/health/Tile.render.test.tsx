@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HomeAccountHygieneData, HomeBoardTile } from '@continuum/contracts';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { deriveDashboardSetup } from '@/components/dashboard/first-run/setupState';
 import { render } from '@/i18n/__tests__/render';
+import { HomePresentationContext } from '../../HomePresentationContext';
 import type { HomeReadLoad } from '../../homeRead';
 import { EASY_FIT_GOOGLE, EASY_FIT_META, homeCtx } from '../pacing/__fixtures__/ctx';
 import {
@@ -203,5 +204,24 @@ describe('Account doctor with the hygiene read', () => {
     fireEvent.click(screen.getByTestId('home-tile-health-open'));
     const unknown = await screen.findByTestId('home-health-group-unreadable');
     expect(unknown.textContent).toContain('not readable yet');
+  });
+});
+
+describe('Account check dot draft', () => {
+  it('keeps unknown checks separate from the readable headline and exposes their evidence', async () => {
+    reads = SUSPENDED;
+    hygiene = { status: 'unavailable' };
+    render(
+      <HomePresentationContext.Provider value="dots">
+        <HealthTile ctx={ctx} tile={tile} />
+      </HomePresentationContext.Provider>,
+    );
+    expect(screen.getByTestId('home-tile-health-headline').getAttribute('data-total')).toBe('7');
+    const unknown = document.querySelector('[data-home-dot-tone="unknown"]') as HTMLElement;
+    expect(unknown).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(unknown);
+    });
+    expect(screen.getByRole('status').textContent).toContain('Not read');
   });
 });

@@ -23,7 +23,7 @@ const draftRowSchema = z.custom<PersistedOrganicDraftRow>(
     value !== null &&
     typeof (value as { id?: unknown }).id === 'string',
 );
-const draftsResponseSchema = z.object({ drafts: z.array(draftRowSchema) });
+export const draftsResponseSchema = z.object({ drafts: z.array(draftRowSchema) });
 type DraftsResponse = { drafts: PersistedOrganicDraftRow[] };
 
 export const homeOrganicDraftsKey = (brandId: string) => ['home-organic-drafts', brandId] as const;
