@@ -94,6 +94,16 @@ export function useClientReportActions(brandId: string) {
         }),
       onSuccess: refresh,
     }),
+    /** Back to draft: every share link of the report stops opening. */
+    withdraw: useMutation<ClientReportDetailResponse, Error, string>({
+      mutationFn: (id) =>
+        http.request({
+          path: `/api/client-reports/${id}/withdraw?${brandQuery(brandId)}`,
+          method: 'POST',
+          schema: clientReportDetailResponseSchema,
+        }),
+      onSuccess: refresh,
+    }),
     share: useMutation<ClientReportShareResponse, Error, string>({
       mutationFn: (id) =>
         http.request({

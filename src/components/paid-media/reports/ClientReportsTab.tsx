@@ -13,7 +13,16 @@ import {
   type ClientReportSummary,
   type WeeklyClientReport,
 } from '@continuum/contracts';
-import { AlertTriangle, Download, FileText, Link2, Mail, RefreshCw, Target } from 'lucide-react';
+import {
+  AlertTriangle,
+  Download,
+  FileText,
+  Link2,
+  Mail,
+  RefreshCw,
+  Target,
+  Undo2,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -57,6 +66,7 @@ import {
   useClientReports,
   useClientReportTargets,
 } from '@/hooks/useClientReports';
+import { ApiError } from '@/lib/api/errors';
 
 const K = {
   title: 'weekly_client_report_07d976a',
@@ -66,6 +76,9 @@ const K = {
   generate: 'generate_this_week_7f8cdc5',
   generating: 'reading_the_ad_platforms_d597f0d',
   review: 'mark_reviewed_277c924',
+  withdraw: 'withdraw_47e5641',
+  withdrawn: 'withdrawn_its_share_links_no_longer_open_203d343',
+  reviewedWeek: 'this_week_is_reviewed_and_may_be_shared_withdraw_it_fb0cf19',
   pdf: 'export_pdf_3dd7d56',
   email: 'copy_email_draft_b391eba',
   share: 'copy_share_link_dd71c73',
@@ -393,7 +406,10 @@ export function ClientReportsTab({ brandId }: { brandId: string }) {
   const generate = () =>
     actions.generate.mutate(undefined, {
       onSuccess: (generated) => setSelected(generated.summary.id),
-      onError: () => toast.error(t(K.actionFailed)),
+      onError: (error) =>
+        error instanceof ApiError && error.status === 409
+          ? toast.warning(t(K.reviewedWeek))
+          : toast.error(t(K.actionFailed)),
     });
   const exportPdf = async () => {
     if (!id) return;
@@ -537,6 +553,22 @@ export function ClientReportsTab({ brandId }: { brandId: string }) {
             >
               <Link2 aria-hidden="true" />
               {t(K.share)}
+            </Button>
+          ) : null}
+          {canReview && summary?.status === 'reviewed' ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                actions.withdraw.mutate(summary.id, {
+                  onSuccess: () => toast.success(t(K.withdrawn)),
+                  onError: () => toast.error(t(K.actionFailed)),
+                })
+              }
+              disabled={actions.withdraw.isPending}
+            >
+              <Undo2 aria-hidden="true" />
+              {t(K.withdraw)}
             </Button>
           ) : null}
           {canReview && summary?.status === 'draft' ? (

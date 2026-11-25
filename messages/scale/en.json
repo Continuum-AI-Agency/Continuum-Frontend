@@ -4921,5 +4921,8 @@
   "sign_ups_609b051": "Sign-ups",
   "cost_per_sign_up_2c3720f": "Cost per sign-up",
   "attendance_b689313": "Attendance",
-  "sales_d0edfb6": "Sales"
+  "sales_d0edfb6": "Sales",
+  "withdraw_47e5641": "Withdraw",
+  "withdrawn_its_share_links_no_longer_open_203d343": "Withdrawn: its share links no longer open.",
+  "this_week_is_reviewed_and_may_be_shared_withdraw_it_fb0cf19": "This week is reviewed and may be shared. Withdraw it before regenerating."
 }

@@ -67,7 +67,7 @@ const report: WeeklyClientReport = {
   gaps: [],
 };
 
-const summary = {
+const draftSummary = {
   id: ID,
   brand_id: BRAND,
   week: report.week,
@@ -77,7 +77,8 @@ const summary = {
   stale_sources: 1,
 };
 
-function renderAs(canReview: boolean) {
+function renderAs(canReview: boolean, status: 'draft' | 'reviewed' = 'draft') {
+  const summary = { ...draftSummary, status };
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const list: ClientReportListResponse = {
     reports: [summary],
@@ -124,5 +125,17 @@ describe('ClientReportsTab', () => {
     expect(screen.queryByText('Copy share link')).toBeNull();
     expect(screen.queryByText('Copy email draft')).toBeNull();
     expect(screen.getByText('Export PDF')).toBeTruthy();
+  });
+
+  it('offers staff a withdraw on a reviewed week, which a draft does not have', () => {
+    renderAs(true);
+    expect(screen.queryByText('Withdraw')).toBeNull();
+    cleanup();
+    renderAs(true, 'reviewed');
+    expect(screen.getByText('Withdraw')).toBeTruthy();
+    expect(screen.queryByText('Mark reviewed')).toBeNull();
+    cleanup();
+    renderAs(false, 'reviewed');
+    expect(screen.queryByText('Withdraw')).toBeNull();
   });
 });

@@ -4921,5 +4921,8 @@
   "sign_ups_609b051": "Altas",
   "cost_per_sign_up_2c3720f": "Costo por alta",
   "attendance_b689313": "Asistencia",
-  "sales_d0edfb6": "Ventas"
+  "sales_d0edfb6": "Ventas",
+  "withdraw_47e5641": "Retirar",
+  "withdrawn_its_share_links_no_longer_open_203d343": "Retirado: sus enlaces compartidos ya no abren.",
+  "this_week_is_reviewed_and_may_be_shared_withdraw_it_fb0cf19": "Esta semana está revisada y puede estar compartida. Retírala antes de regenerarla."
 }
