@@ -34,6 +34,7 @@
     "easyfit:dashboard:render:bench": "bun --no-env-file e2e/easyfit-dashboard-render.bench.ts",
     "optimizer:viz:bench": "bun run src/components/paid-media/optimizer/charts/optimizer-viz.bench.ts",
     "studio:handle-parity:bench": "bun test ./src/StudioCanvas/studio-handle-parity.bench.tsx",
+    "client-report:tab:e2e:bench": "playwright test --config playwright.client-reports.config.ts --workers=1",
     "calendar-plan:e2e:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/calendar-plan.bench.ts",
     "canvas-media:e2e:bench": "playwright test --config playwright.canvas-media.config.ts --workers=1",
     "canvas:library-pointer:bench": "API_URL=${CANVAS_POINTER_BENCH_API_URL:-https://api.trycontinuum.ai} bun --no-env-file --env-file=../Continuum-Backend/.env e2e/canvas-library-pointer.bench.ts",

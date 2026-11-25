@@ -145,7 +145,8 @@ function useFormat(report: WeeklyClientReport | undefined): Format {
         return new Intl.NumberFormat(locale, {
           style: 'currency',
           currency: report.brand.currency,
-          maximumFractionDigits: 0,
+          // Cents only where they matter: a USD 0.36 cost per lead is not "$0".
+          maximumFractionDigits: Math.abs(value) < 100 ? 2 : 0,
         }).format(value);
       return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
     },
