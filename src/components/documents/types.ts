@@ -239,3 +239,9 @@ export function formatBytes(bytes: number, locale = 'en'): string {
     return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(bytes / 1024)} KB`;
   return `${new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`;
 }
+
+export function formatDocumentDate(iso: string, locale: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+}

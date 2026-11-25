@@ -61,6 +61,8 @@ const PANEL_TRANSITION = { duration: 0.24, ease: ROW_EASE };
 
 type DocumentManagerProps = {
   brandId: string;
+  /** Show upload metadata in the brand knowledge list; onboarding stays compact. */
+  showUploadDate?: boolean;
   seed: DocumentView[];
   density: DocumentDensity;
   onStateChange?: (state: OnboardingState) => void;
@@ -74,6 +76,7 @@ type DocumentManagerProps = {
 
 export function DocumentManager({
   brandId,
+  showUploadDate = false,
   seed,
   density,
   onStateChange,
@@ -310,6 +313,7 @@ export function DocumentManager({
                   <DocumentRow
                     key={doc.id}
                     doc={doc}
+                    showUploadDate={showUploadDate}
                     isPinned={pinnedId === doc.id}
                     now={now}
                     actions={actions}

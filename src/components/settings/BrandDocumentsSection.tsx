@@ -16,6 +16,7 @@ export function BrandDocumentsSection({ brandId, documents }: BrandDocumentsSect
   return (
     <DocumentManager
       brandId={brandId}
+      showUploadDate
       seed={documents}
       density="full"
       onStateChange={() => router.refresh()}

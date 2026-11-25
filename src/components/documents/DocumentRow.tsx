@@ -26,6 +26,7 @@ import {
   describeStep,
   documentCategoryOf,
   formatBytes,
+  formatDocumentDate,
   isArchived,
   isEphemeral,
   kindLabel,
@@ -147,7 +148,9 @@ export function DocumentRow({
   onRemove,
   onCategoryChange,
   brandId,
+  showUploadDate = false,
 }: {
+  showUploadDate?: boolean;
   doc: DocumentView;
   isPinned: boolean;
   /** Ticking clock so the retention countdown stays honest without each row owning a timer. */
@@ -226,6 +229,12 @@ export function DocumentRow({
               )}
             >
               {subtitle}
+              {showUploadDate ? (
+                <span>
+                  {' · '}
+                  {uiText('m_b68734c259')} {formatDocumentDate(doc.createdAt, uiLocale)}
+                </span>
+              ) : null}
             </span>
             {label.tone === 'progress' && typeof doc.progressPercent === 'number' ? (
               <span

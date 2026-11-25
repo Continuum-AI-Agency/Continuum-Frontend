@@ -24,7 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { DocumentView, ProgressLabel } from './types';
-import { describeStep, formatBytes, kindLabel } from './types';
+import { describeStep, formatBytes, formatDocumentDate, kindLabel } from './types';
 
 type DocumentPreviewCardProps = {
   doc: DocumentView;
@@ -252,7 +252,7 @@ function MetaGrid({ doc }: { doc: DocumentView }) {
       doc.pageCount ? new Intl.NumberFormat(uiLocale).format(doc.pageCount) : '—',
     ],
     [docT('m_6da13addb0'), sourceLabel(doc.source, docT)],
-    [docT('m_b68734c259'), formatDate(doc.createdAt, uiLocale)],
+    [docT('m_b68734c259'), formatDocumentDate(doc.createdAt, uiLocale)],
   ];
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
@@ -320,10 +320,4 @@ function ActionButton({
       {label}
     </button>
   );
-}
-
-function formatDate(iso: string, locale: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
 }
