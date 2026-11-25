@@ -1,6 +1,12 @@
 import type { TemplateSourceSummary } from '@continuum/contracts';
 import { experimental_streamedQuery, type QueryClient, queryOptions } from '@tanstack/react-query';
-import { discoverWorkspaceTemplates, streamTemplateSources } from '@/lib/library/templateSources';
+import {
+  discoverWorkspaceTemplates,
+  fetchTemplateRevisionVariants,
+  fetchTemplateVariantDefaults,
+  fetchTemplateVariants,
+  streamTemplateSources,
+} from '@/lib/library/templateSources';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 export const FORGE_STALE_MS = {
@@ -172,13 +178,41 @@ export const workspaceTemplatesQuery = (brandId: string) =>
     staleTime: FORGE_STALE_MS.lists,
   });
 
-/** Forge's route loader, run from the sidebar on intent: the default tab's two reads and the
- * Render picker's list, which the page otherwise starts on mount. */
+/** The brand's template registry: every family, its variants and their revisions. The Templates
+ * tab shows skeleton rows until it answers. */
+export const revisionVariantsQuery = (brandId: string) =>
+  queryOptions({
+    queryKey: forgeQueryKeys.revisionVariants(brandId, 'all'),
+    queryFn: () => fetchTemplateRevisionVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+
+export const templateVariantsQuery = (brandId: string) =>
+  queryOptions({
+    queryKey: forgeQueryKeys.templateVariants(brandId),
+    queryFn: () => fetchTemplateVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+
+export const variantDefaultsQuery = (brandId: string) =>
+  queryOptions({
+    queryKey: forgeQueryKeys.variantDefaults(brandId),
+    queryFn: () => fetchTemplateVariantDefaults(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+  });
+
+/** Forge's route loader, run from the sidebar on intent: every read the Templates tab waits on
+ * before its skeleton goes, and the page's own code, which otherwise downloads only after the
+ * server answers the navigation. The Render picker's list stays with ForgeTabs: nothing on the
+ * first screen shows it. */
 export function prefetchForgeEntry(queryClient: QueryClient, brandId: string) {
   return Promise.all([
+    import('@/components/forge/ForgeTabs'),
     queryClient.prefetchQuery(templateSourcesQuery(brandId)),
     queryClient.prefetchQuery(workspaceTemplatesQuery(brandId)),
-    queryClient.prefetchQuery(templateListQuery(brandId)),
+    queryClient.prefetchQuery(revisionVariantsQuery(brandId)),
+    queryClient.prefetchQuery(templateVariantsQuery(brandId)),
+    queryClient.prefetchQuery(variantDefaultsQuery(brandId)),
   ]);
 }
 
