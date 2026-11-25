@@ -142,6 +142,36 @@ for (const [name, path] of [
   });
 }
 
+// Opening a template from Forge's gallery: the detail view's code, then its own reads.
+await journey('forge_open_template_ms', async (page) => {
+  const row = 'table[aria-label="Templates"] button[aria-label^="Open "]';
+  await open(page, '/forge', row);
+  return clickAndTime(page, row, '/forge', 'body:not(:has(table[aria-label="Templates"]))');
+});
+
+// Forge from a typed URL or a bookmark: navigation start to the gallery's rows with no skeleton.
+await journey('cold_forge_ms', async (page) => {
+  await page.goto(new URL('/en/forge', BASE).href, { waitUntil: 'commit', timeout: 60_000 });
+  return Math.round(
+    await page.evaluate(
+      (timeout) =>
+        new Promise<number>((resolve, reject) => {
+          const tick = () => {
+            const rows = document.querySelectorAll('table[aria-label="Templates"] tbody tr');
+            const skeletons = [...document.querySelectorAll('[data-slot=skeleton]')].filter(
+              (el) => !el.closest('[data-sidebar]') && (el as HTMLElement).offsetParent,
+            );
+            if (rows.length > 0 && skeletons.length === 0) resolve(performance.now());
+            else if (performance.now() > timeout) reject(new Error('gallery never settled'));
+            else requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }),
+      TIMEOUT_MS,
+    ),
+  );
+});
+
 // A Settings section switch to the heaviest section (Brand Book, markdown, diagrams, maths).
 await journey('section_switch_ms', async (page) => {
   const tab = '[role=tab]:has-text("Brand Intelligence")';

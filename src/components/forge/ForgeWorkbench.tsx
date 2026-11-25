@@ -24,15 +24,13 @@ import {
   workspaceTemplatesQuery,
 } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
-import { SceneTemplateDetail } from '@/components/forge/SceneTemplateDetail';
-import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
 import {
   type SharedTemplate,
   sharedTemplateId,
   sourceDisplayName,
 } from '@/components/forge/TemplateCard';
+import { TemplateGallery } from '@/components/forge/TemplateGallery';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
-import { WebComponentTemplateDetail } from '@/components/forge/WebComponentTemplateDetail';
 import { useFigmaErrorText } from '@/components/library/FigmaImportDialog';
 import { UploadStrip } from '@/components/library/UploadStrip';
 import { useMediaUpload } from '@/components/library/useMediaUpload';
@@ -50,6 +48,7 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
+import { intentProps } from '@/lib/intent';
 import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import { importFigmaPaste, isFigmaClipboard } from '@/lib/library/figma';
 import {
@@ -63,23 +62,37 @@ import { DesignTemplateImports, useDesignTemplateImports } from './DesignTemplat
 import PresentationWorkspace from './presentations/PresentationMessages';
 import { useForgeExitGuard } from './useForgeExitGuard';
 
-// The detail and the gallery are the heaviest panels behind the tab shell: load them on first use
-// so the shell paints first.
+// The gallery is the first screen, so it ships with the page. The views a row opens are the
+// heaviest code on Forge and none is on that screen: each downloads on first use, and all are
+// warmed once a pointer or focus lands on the gallery (warmTemplateViews), so an open rarely waits.
+const loadTemplateView = {
+  template: () => import('@/components/forge/TemplateDetail'),
+  scene: () => import('@/components/forge/SceneTemplateDetail'),
+  webComponent: () => import('@/components/forge/WebComponentTemplateDetail'),
+  shared: () => import('@/components/forge/SharedTemplateDetail'),
+  native: () => import('@/components/forge/native/NativeHyperframesEditor'),
+};
+const warmTemplateViews = () => Promise.all(Object.values(loadTemplateView).map((load) => load()));
+const viewLoading = () => <Skeleton className="h-40 w-full" />;
+
 const TemplateDetail = dynamic(
-  () => import('@/components/forge/TemplateDetail').then((module) => module.TemplateDetail),
-  { loading: () => <Skeleton className="h-40 w-full" /> },
+  () => loadTemplateView.template().then((module) => module.TemplateDetail),
+  { loading: viewLoading },
 );
-
-const TemplateGallery = dynamic(
-  () => import('@/components/forge/TemplateGallery').then((module) => module.TemplateGallery),
-  { loading: () => <Skeleton className="h-40 w-full" /> },
+const SceneTemplateDetail = dynamic(
+  () => loadTemplateView.scene().then((module) => module.SceneTemplateDetail),
+  { loading: viewLoading },
 );
-
+const WebComponentTemplateDetail = dynamic(
+  () => loadTemplateView.webComponent().then((module) => module.WebComponentTemplateDetail),
+  { loading: viewLoading },
+);
+const SharedTemplateDetail = dynamic(
+  () => loadTemplateView.shared().then((module) => module.SharedTemplateDetail),
+  { loading: viewLoading },
+);
 const NativeHyperframesEditor = dynamic(
-  () =>
-    import('@/components/forge/native/NativeHyperframesEditor').then(
-      (module) => module.NativeHyperframesEditor,
-    ),
+  () => loadTemplateView.native().then((module) => module.NativeHyperframesEditor),
   { loading: () => <Skeleton className="h-96 w-full" /> },
 );
 
@@ -767,34 +780,36 @@ export function ForgeWorkbench({
           onOpenRender={onOpenRender}
         />
       ) : (
-        <TemplateGallery
-          brandId={brandId}
-          brandName={brandName}
-          sources={sources}
-          loading={sourceQuery.isPending}
-          loadingMore={loadingMoreSources}
-          shared={shared}
-          adopting={adopting}
-          onOpen={open}
-          onOpenShared={openShared}
-          onRename={(assetId, title) => void rename(assetId, title)}
-          onToggleShared={(template) => void toggleShared(template)}
-          onOpenRender={onOpenRender}
-          onFiles={(files) => void receive(files)}
-          onFonts={receiveFonts}
-          onPresentationCreated={async (assetId) => {
-            await refreshTemplate();
-            open(assetId);
-          }}
-          onFigmaImported={figmaImported}
-          onRejected={(files) =>
-            toast.error(
-              translateUi('value0_use_aep_aepx_aet_zip_psd_ai__0263204d', {
-                value0: String(files.map((file) => file.name).join(', ')),
-              }),
-            )
-          }
-        />
+        <div className="contents" {...intentProps(warmTemplateViews)}>
+          <TemplateGallery
+            brandId={brandId}
+            brandName={brandName}
+            sources={sources}
+            loading={sourceQuery.isPending}
+            loadingMore={loadingMoreSources}
+            shared={shared}
+            adopting={adopting}
+            onOpen={open}
+            onOpenShared={openShared}
+            onRename={(assetId, title) => void rename(assetId, title)}
+            onToggleShared={(template) => void toggleShared(template)}
+            onOpenRender={onOpenRender}
+            onFiles={(files) => void receive(files)}
+            onFonts={receiveFonts}
+            onPresentationCreated={async (assetId) => {
+              await refreshTemplate();
+              open(assetId);
+            }}
+            onFigmaImported={figmaImported}
+            onRejected={(files) =>
+              toast.error(
+                translateUi('value0_use_aep_aepx_aet_zip_psd_ai__0263204d', {
+                  value0: String(files.map((file) => file.name).join(', ')),
+                }),
+              )
+            }
+          />
+        </div>
       )}
 
       {exitGuard.dialog}
