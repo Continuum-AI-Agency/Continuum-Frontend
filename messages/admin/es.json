@@ -284,5 +284,8 @@
   "m_693ff6c55d": "{count, plural, one {Agregar a la biblioteca global # flujo?} other {Agregar a la biblioteca global # flujos?}}",
   "m_978e9818d4": "{count, plural, one {Asignar # flujo?} other {Asignar # flujos?}}",
   "m_061122128b": "Biblioteca global de flujos",
-  "brandTransferEmpty": "No se encontraron marcas."
+  "brandTransferEmpty": "No se encontraron marcas.",
+  "manage_user": "Administrar {email}",
+  "inspect_workflow": "Inspeccionar {name}",
+  "report_outcome_unconfirmed": "No se pudo confirmar el resultado del informe. Revísalo antes de volver a enviarlo."
 }

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { AdminUserList } from '@/components/admin/AdminUserList';
+import { resolveAdminTab } from '@/components/admin/adminUserListUtils';
 import type {
   AdminListResponse,
   AdminPagination,
@@ -48,6 +49,7 @@ async function fetchAdminUsers(params: {
   page: number;
   pageSize: number;
   query?: string;
+  loadDirectory: boolean;
 }): Promise<AdminData> {
   const server = await createSupabaseServerClient();
   const { data: userData, error: userError } = await server.auth.getUser();
@@ -57,6 +59,23 @@ async function fetchAdminUsers(params: {
 
   if (!isAdminUser(userData.user)) {
     redirect('/'); // guard
+  }
+
+  if (!params.loadDirectory) {
+    return {
+      users: [],
+      permissions: [],
+      pagination: {
+        page: 1,
+        pageSize: params.pageSize,
+        totalCount: 0,
+        totalPages: 0,
+        nextPage: null,
+        lastPage: 0,
+        hasNextPage: false,
+        hasPrevPage: false,
+      },
+    };
   }
 
   const { data: sessionData } = await server.auth.getSession();
@@ -136,6 +155,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     page,
     pageSize,
     query,
+    loadDirectory: resolveAdminTab(parseStringParam(resolvedSearchParams.tab)) === 'users',
   });
 
   return (
