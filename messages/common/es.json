@@ -1416,5 +1416,7 @@
   "list_price_expected_for_one_pass_cap_cap_7529472": "Precio de lista {expected} por una pasada, límite {cap}.",
   "creating_c79ed94": "Creando…",
   "a_project_already_has_that_name_5e57cb0": "Ya existe un proyecto con ese nombre",
-  "create_failed_3e05ffc": "Error al crear"
+  "create_failed_3e05ffc": "Error al crear",
+  "linkedin_personal_profile": "{name} — perfil personal",
+  "personal_profile": "Perfil personal"
 }

@@ -125,6 +125,11 @@ export const publishAccountCandidateSchema = z.object({
    * id is still THIS account — match a stamp against `id` or any alias id.
    */
   aliases: z.array(z.object({ id: z.string(), needsReauth: z.boolean() })).optional(),
+  /**
+   * LinkedIn only: a company Page (`organization`) or the connecting member's own personal
+   * profile (`member`). Both take a post; a picker labels the member one as a personal profile.
+   */
+  kind: z.enum(['organization', 'member']).optional(),
 });
 export type PublishAccountCandidate = z.infer<typeof publishAccountCandidateSchema>;
 
