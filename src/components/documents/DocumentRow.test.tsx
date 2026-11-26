@@ -34,6 +34,9 @@ import type { DocumentRowActionHandlers } from './useDocumentActions';
 
 afterEach(cleanup);
 
+// The row formats in the viewer's own time zone; pin it so the fixture instant is Nov 25 on
+// every host (it is Nov 26 at UTC+12 and later).
+process.env.TZ = 'UTC';
 const UPLOADED_AT = '2026-11-25T12:00:00.000Z';
 
 function renderRow(locale: string, common: Record<string, unknown>, createdAt: string) {
