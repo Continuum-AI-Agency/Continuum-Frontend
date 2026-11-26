@@ -12,20 +12,20 @@ describe('ThemeToggleGlyph', () => {
     const light = renderToStaticMarkup(<ThemeToggleGlyph appearance="light" reduce={null} />);
     const dark = renderToStaticMarkup(<ThemeToggleGlyph appearance="dark" reduce={null} />);
     expect(dark).toBe(light);
-    expect(light).toContain('lucide-sun');
-    expect(light).toContain('lucide-moon');
+    expect(light).toContain('icon-sun');
+    expect(light).toContain('icon-moon');
   });
 
   it('lets the stylesheet pick the glyph before hydration', () => {
     const html = renderToStaticMarkup(<ThemeToggleGlyph appearance="light" reduce={null} />);
-    expect(html).toMatch(/lucide-sun[^"]*hidden dark:inline-block/);
-    expect(html).toMatch(/lucide-moon[^"]*dark:hidden/);
+    expect(html).toMatch(/icon-sun[^"]*hidden dark:inline-block/);
+    expect(html).toMatch(/icon-moon[^"]*dark:hidden/);
   });
 
   it('shows the one glyph the mode switches to once hydrated', () => {
     const { container } = render(<ThemeToggleGlyph appearance="dark" reduce />);
-    expect(container.querySelector('.lucide-sun')).toBeTruthy();
-    expect(container.querySelector('.lucide-moon')).toBeNull();
+    expect(container.querySelector('.icon-sun')).toBeTruthy();
+    expect(container.querySelector('.icon-moon')).toBeNull();
   });
 });
 

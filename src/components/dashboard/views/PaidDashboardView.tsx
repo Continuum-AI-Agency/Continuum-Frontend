@@ -1,6 +1,5 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, ScrollText } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
@@ -12,6 +11,7 @@ import { PaidScopeToggle } from '@/components/dashboard/briefing/PaidScopeToggle
 import { CompetitorAdsTable } from '@/components/dashboard/competitor/CompetitorAdsTable';
 import { DashboardWarmOnMount } from '@/components/dashboard/DashboardWarmOnMount';
 import { SendPulseButton } from '@/components/dashboard/SendPulseButton';
+import { ChevronLeft, ChevronRight, ScrollText } from '@/components/icons';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';

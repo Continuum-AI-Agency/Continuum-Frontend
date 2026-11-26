@@ -16,9 +16,9 @@ import { useTranslations } from 'next-intl';
 
 import type { AdSetSnapshot, OptimizationObjective, PortfolioLevel } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
-import { TriangleAlertIcon } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
+import { TriangleAlert } from '@/components/icons';
 
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -359,7 +359,7 @@ function TrackingGapBanner({
   const uiText = useTranslations('scale');
   return (
     <div className="flex gap-2 text-warning text-xs">
-      <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" />
       <div>
         <p>
           {uiText.rich('sentence_b4f40ca56553', {

@@ -1,9 +1,9 @@
 'use client';
 
 import { type ChatMediaRef, chatMediaRefKey } from '@continuum/contracts';
-import { FileText } from 'lucide-react';
 import { useMemo } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { FileText } from '@/components/icons';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import { useChatMediaTiles } from '@/lib/media/chatMediaRefs';
 

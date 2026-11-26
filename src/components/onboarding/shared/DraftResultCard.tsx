@@ -1,8 +1,8 @@
 'use client';
 
-import { AlertTriangle, CheckCircle2, Wand2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React, { useEffect, useId, useState } from 'react';
+import { CircleCheck, TriangleAlert, Wand2 } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,7 +53,7 @@ export function DraftResultCard({ voice, audience, isDrafting, onSave }: DraftRe
           )}
           {!isDrafting && hasContent && (
             <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
-              <CheckCircle2 className="w-3 h-3 mr-1" />
+              <CircleCheck className="w-3 h-3 mr-1" />
               {tUi('m_54b2ffa9fd')}
             </Badge>
           )}
@@ -105,7 +105,7 @@ export function DraftResultCard({ voice, audience, isDrafting, onSave }: DraftRe
 
         {!isDrafting && !voice && !audience && (
           <Alert variant="destructive" className="mt-4">
-            <AlertTriangle className="h-4 w-4" />
+            <TriangleAlert className="h-4 w-4" />
             <AlertTitle>{tUi('m_ed120bd8f0')}</AlertTitle>
             <AlertDescription>{tUi('m_fb588872c5')}</AlertDescription>
           </Alert>

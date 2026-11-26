@@ -1,8 +1,8 @@
 'use client';
 
-import { Check, Link2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Check, Link2 } from '@/components/icons';
 
 export function ShareCopyLink({ href }: { href: string }) {
   const uiText = useTranslations('public');

@@ -7,6 +7,12 @@ import {
   templateDisplayName,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import type { LayerDraftChange } from '@/components/forge/layerDraft';
+import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import {
   ArrowDown,
   ArrowLeft,
@@ -20,13 +26,7 @@ import {
   Trash2,
   Undo2,
   Ungroup,
-} from 'lucide-react';
-import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import type { LayerDraftChange } from '@/components/forge/layerDraft';
-import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
+} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {

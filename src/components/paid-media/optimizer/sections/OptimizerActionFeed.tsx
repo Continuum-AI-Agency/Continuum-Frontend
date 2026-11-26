@@ -30,9 +30,9 @@ import { useTranslations } from 'next-intl';
 
 import { type OptimizerFeedWindowDays, PortfolioAdsetSchema } from '@continuum/contracts';
 import { useQueries } from '@tanstack/react-query';
-import { ArrowRightIcon, ListChecksIcon } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
+import { ArrowRight, ListChecks } from '@/components/icons';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { cn } from '@/lib/utils';
 import {
@@ -143,10 +143,7 @@ export function ActionRow({
               <span className="font-mono text-muted-foreground tabular-nums">
                 {printChangeValue(change, change.before, currency, uiLocale)}
               </span>
-              <ArrowRightIcon
-                aria-hidden="true"
-                className="size-3 shrink-0 text-muted-foreground"
-              />
+              <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
               <span className="font-mono font-semibold text-foreground tabular-nums">
                 {printChangeValue(change, change.after, currency, uiLocale)}
               </span>
@@ -299,7 +296,7 @@ function ActionTimelineEntry({
             <span className="font-mono tabular-nums">
               {printChangeValue(change, change.before, currency, uiLocale)}
             </span>
-            <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
+            <ArrowRight aria-hidden="true" className="size-3 shrink-0" />
             <span className="font-mono font-semibold text-foreground tabular-nums">
               {printChangeValue(change, change.after, currency, uiLocale)}
             </span>
@@ -491,7 +488,7 @@ export function OptimizerActionFeed({
       <div className="space-y-3">
         <EmptyState
           headline={uiText('activityNoChanges')}
-          media={<ListChecksIcon aria-hidden="true" />}
+          media={<ListChecks aria-hidden="true" />}
           description={uiText('budget_writes_pauses_setting_edits_and_recomm_0c5f86c')}
         />
         {footer}

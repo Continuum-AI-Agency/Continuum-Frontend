@@ -8,8 +8,8 @@
 // straight to the bytes on the card.
 
 import type { MediaAssetVersion } from '@continuum/contracts';
-import { Download, FileIcon } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+import { ArrowDownToLine, File } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { withForcedDownload } from '@/lib/media/downloadUrl';
 import { fileExtension, formatBytes } from './assetFileMeta';
@@ -25,7 +25,7 @@ export function OlderFileStage({ version }: OlderFileStageProps) {
   return (
     <div className="flex size-full flex-col items-center justify-center gap-4 p-8">
       <div className="relative">
-        <FileIcon className="size-16 text-muted-foreground/40" strokeWidth={1.25} />
+        <File className="size-16 text-muted-foreground/40" strokeWidth={1.25} />
         {ext && (
           <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded border border-border bg-background px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-muted-foreground">
             {ext}
@@ -50,7 +50,7 @@ export function OlderFileStage({ version }: OlderFileStageProps) {
           rel="noopener"
           className={buttonVariants({ size: 'sm' })}
         >
-          <Download className="size-4" /> {translateUi('download_v_4a1ecd49')}
+          <ArrowDownToLine className="size-4" /> {translateUi('download_v_4a1ecd49')}
           {version.versionNumber}
         </a>
       ) : (

@@ -11,21 +11,21 @@ import {
   type SortingState,
   useReactTable,
 } from '@tanstack/react-table';
+import { useLocale, useTranslations } from 'next-intl';
+import * as React from 'react';
+import { Fragment } from 'react';
 import {
   Activity,
   ArrowUpDown,
   ChevronDown,
-  ExternalLink,
-  Filter,
+  Funnel,
   GripHorizontal,
   Heart,
-  Loader2,
   MessageCircle,
   MoreHorizontal,
-} from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
-import * as React from 'react';
-import { Fragment } from 'react';
+  Spinner,
+  SquareArrowOutUpRight,
+} from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -133,7 +133,7 @@ function CitationsList({
   if (query.isLoading) {
     return (
       <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" />
+        <Spinner className="h-3 w-3 animate-spin" />
         {uiText('loading_source_signals_1307d09')}
       </div>
     );
@@ -178,7 +178,7 @@ function CitationsList({
                   className="shrink-0 text-muted-foreground hover:text-foreground"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <ExternalLink className="h-3 w-3" />
+                  <SquareArrowOutUpRight className="h-3 w-3" />
                 </a>
               ) : null}
             </div>
@@ -393,7 +393,7 @@ export function TrendsDataTable({
                             className="inline-flex items-center gap-1 hover:text-foreground"
                           >
                             <span>{meta.source ?? sourceHost}</span>
-                            <ExternalLink className="h-2.5 w-2.5" />
+                            <SquareArrowOutUpRight className="h-2.5 w-2.5" />
                           </a>
                         ) : (
                           <span>{meta?.source}</span>
@@ -568,7 +568,7 @@ export function TrendsDataTable({
                   size="sm"
                   className="h-7 px-2 text-3xs uppercase font-semibold"
                 >
-                  <Filter className="mr-1 h-3 w-3" />
+                  <Funnel className="mr-1 h-3 w-3" />
                   {uiText('trendMomentum', { state: momentumFilter })}
                 </Button>
               }

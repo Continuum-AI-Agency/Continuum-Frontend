@@ -25,8 +25,8 @@ import { useTranslations } from 'next-intl';
 //   posts" hid the only way out of a window that happened to be empty, which is
 //   exactly what a recent-but-not-this-week post produced.
 
-import { Check, ImageOff, RefreshCw } from 'lucide-react';
 import React from 'react';
+import { Check, ImageOff, RefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';

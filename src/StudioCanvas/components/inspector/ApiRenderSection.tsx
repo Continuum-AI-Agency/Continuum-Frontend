@@ -17,10 +17,10 @@ import type {
   ApiRenderOutput,
   PaidCanvasTarget,
 } from '@continuum/contracts';
-import { RefreshCw } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
+import { RefreshCw } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';

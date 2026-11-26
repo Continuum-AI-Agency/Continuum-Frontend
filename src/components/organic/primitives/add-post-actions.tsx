@@ -1,4 +1,10 @@
-import { Clapperboard, GalleryHorizontalEnd, PencilLine, Sparkles } from 'lucide-react';
+import {
+  Clapperboard,
+  GalleryHorizontalEnd,
+  type IconComponent,
+  PencilLine,
+  Sparkles,
+} from '@/components/icons';
 
 import type { CreatePostOptions } from './planner-platforms';
 
@@ -10,7 +16,7 @@ export type AddPostAction = {
   id: string;
   label: string;
   hint: string;
-  Icon: typeof PencilLine;
+  Icon: IconComponent;
   options: Pick<CreatePostOptions, 'status' | 'mode' | 'format'>;
 };
 

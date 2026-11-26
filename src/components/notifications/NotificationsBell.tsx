@@ -3,9 +3,9 @@
 // Header bell over two feeds: work in flight right now, and the recipient's durable
 // notifications. Mounted once in the dashboard header.
 
-import { BellIcon, Loader2Icon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Bell, Spinner } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -41,9 +41,9 @@ export function NotificationsBell() {
             {/* Work in flight replaces the bell outright: a spinner is the one thing that
                 reads as "still happening" without a number to interpret. */}
             {running > 0 ? (
-              <Loader2Icon className="size-4 animate-spin text-amber-500" />
+              <Spinner className="size-4 animate-spin text-amber-500" />
             ) : (
-              <BellIcon className="size-4" />
+              <Bell className="size-4" />
             )}
             {unreadCount > 0 && (
               <span className="absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-3xs font-bold tabular-nums text-primary-foreground">

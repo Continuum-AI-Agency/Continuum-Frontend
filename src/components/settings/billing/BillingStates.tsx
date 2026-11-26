@@ -1,6 +1,6 @@
-import { Building2, Check, Clock, Lock, RotateCw, TriangleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
+import { Building2, Check, Clock, Lock, RotateCw, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 

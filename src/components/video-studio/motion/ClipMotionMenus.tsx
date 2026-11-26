@@ -9,8 +9,8 @@ import {
   LOOK_EFFECTS,
   type LookEffectId,
 } from '@continuum/contracts';
-import { Blend, Palette, Sparkles } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+import { Blend, Palette, Sparkles } from '@/components/icons';
 import {
   ContextMenuItem,
   ContextMenuSeparator,

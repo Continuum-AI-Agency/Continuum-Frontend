@@ -1,17 +1,17 @@
 'use client';
 
-import {
-  AlertCircleIcon,
-  CheckCircle2Icon,
-  ChevronsUpDownIcon,
-  CircleIcon,
-  Loader2Icon,
-  MessageSquareIcon,
-  UserCheckIcon,
-} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { createContext, useContext, useState } from 'react';
+import {
+  ChevronsUpDown,
+  Circle,
+  CircleAlert,
+  CircleCheck,
+  MessageSquare,
+  Spinner,
+  UserCheck,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -116,19 +116,19 @@ export const PlanTitle = ({ children, className, ...props }: PlanTitleProps) => 
 function StatusIcon({ status }: { status: PlanStatus }) {
   switch (status) {
     case 'completed':
-      return <CheckCircle2Icon aria-hidden="true" className="size-4 text-emerald-500 shrink-0" />;
+      return <CircleCheck aria-hidden="true" className="size-4 text-emerald-500 shrink-0" />;
     case 'approved':
-      return <UserCheckIcon aria-hidden="true" className="size-4 text-emerald-500 shrink-0" />;
+      return <UserCheck aria-hidden="true" className="size-4 text-emerald-500 shrink-0" />;
     case 'in_progress':
       return (
-        <Loader2Icon aria-hidden="true" className="size-4 text-indigo-400 animate-spin shrink-0" />
+        <Spinner aria-hidden="true" className="size-4 text-indigo-400 animate-spin shrink-0" />
       );
     case 'awaiting_approval':
-      return <AlertCircleIcon aria-hidden="true" className="size-4 text-amber-500 shrink-0" />;
+      return <CircleAlert aria-hidden="true" className="size-4 text-amber-500 shrink-0" />;
     case 'rejected':
-      return <AlertCircleIcon aria-hidden="true" className="size-4 text-red-500 shrink-0" />;
+      return <CircleAlert aria-hidden="true" className="size-4 text-red-500 shrink-0" />;
     default:
-      return <CircleIcon aria-hidden="true" className="size-4 text-muted-foreground/40 shrink-0" />;
+      return <Circle aria-hidden="true" className="size-4 text-muted-foreground/40 shrink-0" />;
   }
 }
 
@@ -182,7 +182,7 @@ export const PlanTrigger = ({ className, ...props }: PlanTriggerProps) => {
           size="icon"
           variant="ghost"
         >
-          <ChevronsUpDownIcon className="size-4" />
+          <ChevronsUpDown className="size-4" />
           <span className="sr-only">{tUi('m_846b5393f6')}</span>
         </Button>
       }
@@ -211,7 +211,7 @@ export const PlanFeedback = ({
   return (
     <div className={cn('mt-4 space-y-3', className)} {...props}>
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <MessageSquareIcon className="size-3" />
+        <MessageSquare className="size-3" />
         <span>{tUi('m_88b211e322')}</span>
       </div>
       <div className="relative">

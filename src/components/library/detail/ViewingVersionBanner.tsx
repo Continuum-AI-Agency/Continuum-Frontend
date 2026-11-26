@@ -6,8 +6,8 @@
 // actions would still act on the head. The banner names the version, names what
 // a comment posted here pins to, and always offers the way back.
 
-import { History } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+import { History } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 export type ViewingVersionBannerProps = {

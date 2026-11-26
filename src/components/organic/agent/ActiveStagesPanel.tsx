@@ -1,9 +1,9 @@
 'use client';
 
-import { AlertCircleIcon, CheckCircle2Icon, CircleDotIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
+import { CircleAlert, CircleCheck, CircleDot } from '@/components/icons';
 import { Trace } from '@/components/ui/trace';
 import {
   localizeOrganicAgentLabel,
@@ -31,9 +31,9 @@ const STAGE_STATUS: Record<PipelineStageNode['status'], TraceStepStatus | undefi
 };
 
 function StageIcon({ status }: { status: PipelineStageNode['status'] }) {
-  if (status === 'done') return <CheckCircle2Icon className="text-emerald-500/70" />;
-  if (status === 'failed') return <AlertCircleIcon />;
-  return <CircleDotIcon className={status === 'active' ? 'animate-pulse' : undefined} />;
+  if (status === 'done') return <CircleCheck className="text-emerald-500/70" />;
+  if (status === 'failed') return <CircleAlert />;
+  return <CircleDot className={status === 'active' ? 'animate-pulse' : undefined} />;
 }
 
 type ActiveStagesPanelProps = {

@@ -3,15 +3,15 @@ import {
   Activity,
   BookOpen,
   Bot,
-  CalendarDays,
+  Calendar,
   ChartColumn,
   Eye,
   Frame,
   Gauge,
   Hammer,
-  Home,
+  House,
+  type IconComponent,
   Images,
-  type LucideIcon,
   MessageSquare,
   Plug,
   Settings,
@@ -19,12 +19,12 @@ import {
   Sprout,
   TrendingUp,
   Workflow,
-} from 'lucide-react';
+} from '@/components/icons';
 
 export type AppNavigationItem = {
   label: string;
   href: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   quickTabs?: boolean;
   accentColor?: string;
   badge?: {
@@ -35,7 +35,7 @@ export type AppNavigationItem = {
   items?: {
     label: string;
     href: string;
-    icon: LucideIcon;
+    icon: IconComponent;
   }[];
   adminOnly?: boolean;
   // Greyed-out, non-interactive nav entry (e.g. not yet available).
@@ -79,7 +79,7 @@ const ORGANIC_ITEMS: AppNavigationItem[] = [
   {
     label: 'Calendar',
     href: '/organic?tab=planner',
-    icon: CalendarDays,
+    icon: Calendar,
     accentColor: 'text-emerald-500',
     product: 'organic_agent',
   },
@@ -116,7 +116,7 @@ const SCALE_ITEMS: AppNavigationItem[] = [
  *  every page that does not portal into it. */
 export const APP_HEADER_MODULE_SLOT_ID = 'app-header-module-slot';
 
-const HOME: AppNavigationItem = { label: 'Home', href: '/dashboard', icon: Home };
+const HOME: AppNavigationItem = { label: 'Home', href: '/dashboard', icon: House };
 const CANVAS: AppNavigationItem = {
   label: 'Canvas',
   href: '/ai-studio',
@@ -281,7 +281,7 @@ export function isRouteActive(
 export type CommandSuggestion = {
   label: string;
   href: string;
-  icon: LucideIcon;
+  icon: IconComponent;
 };
 
 // Static route -> suggestions map keyed by top-level route. Intentionally
@@ -292,7 +292,7 @@ const CONTEXTUAL_SUGGESTIONS: Record<string, CommandSuggestion[]> = {
   '/dashboard': [
     { label: 'Generate Brand Book', href: '/settings?section=brand-book', icon: BookOpen },
     { label: 'Connect Meta', href: '/settings?section=integrations', icon: Plug },
-    { label: 'Create reel plan', href: '/organic?tab=planner', icon: CalendarDays },
+    { label: 'Create reel plan', href: '/organic?tab=planner', icon: Calendar },
     { label: 'Analyze ROAS drop', href: '/scale?tab=dashboard', icon: Activity },
   ],
   '/goals': [
@@ -300,7 +300,7 @@ const CONTEXTUAL_SUGGESTIONS: Record<string, CommandSuggestion[]> = {
     { label: 'Open media Library', href: '/library', icon: Images },
   ],
   '/organic': [
-    { label: 'Create reel plan', href: '/organic?tab=planner', icon: CalendarDays },
+    { label: 'Create reel plan', href: '/organic?tab=planner', icon: Calendar },
     { label: 'Ask the Organic Agent', href: '/organic?tab=agent', icon: Bot },
     { label: 'Review Organic Analytics', href: '/organic?tab=metrics', icon: ChartColumn },
   ],
@@ -311,11 +311,11 @@ const CONTEXTUAL_SUGGESTIONS: Record<string, CommandSuggestion[]> = {
   ],
   '/ai-studio': [
     { label: 'Open media Library', href: '/library', icon: Images },
-    { label: 'Create reel plan', href: '/organic?tab=planner', icon: CalendarDays },
+    { label: 'Create reel plan', href: '/organic?tab=planner', icon: Calendar },
   ],
   '/library': [
     { label: 'Open Canvas', href: '/ai-studio', icon: Frame },
-    { label: 'Open content Calendar', href: '/organic?tab=planner', icon: CalendarDays },
+    { label: 'Open content Calendar', href: '/organic?tab=planner', icon: Calendar },
   ],
   '/settings': [
     { label: 'Generate Brand Book', href: '/settings?section=brand-book', icon: BookOpen },
@@ -324,7 +324,7 @@ const CONTEXTUAL_SUGGESTIONS: Record<string, CommandSuggestion[]> = {
   ],
   '/competitor-spy': [
     { label: 'Analyze ROAS drop', href: '/scale?tab=dashboard', icon: Activity },
-    { label: 'Create reel plan', href: '/organic?tab=planner', icon: CalendarDays },
+    { label: 'Create reel plan', href: '/organic?tab=planner', icon: Calendar },
   ],
 };
 

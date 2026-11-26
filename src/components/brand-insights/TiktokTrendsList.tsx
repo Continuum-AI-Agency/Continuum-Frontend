@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 // come with no metrics (TikTok returns none), so they are shown as links, never scored.
 
 import type { TiktokTrendingHashtag, TiktokTrendsResponse } from '@continuum/contracts';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp } from '@/components/icons';
 
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';

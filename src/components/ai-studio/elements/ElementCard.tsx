@@ -1,8 +1,8 @@
 'use client';
 
 import { type ElementRecord, isElementPersonCategory } from '@continuum/contracts';
-import { Layers } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+import { Layers2 } from '@/components/icons';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { buildElementDragPayload, ELEMENT_DRAG_TYPE } from '@/lib/ai-studio/referenceDrop';
 
@@ -52,7 +52,7 @@ export function ElementCard({
               className={`h-full w-full ${fit}`}
             />
           ) : (
-            <Layers className="size-5 text-muted-foreground" />
+            <Layers2 className="size-5 text-muted-foreground" />
           )}
         </div>
         <div className="w-full truncate px-2 py-1.5 text-xs">{element.name}</div>

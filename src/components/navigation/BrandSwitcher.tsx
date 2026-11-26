@@ -1,9 +1,9 @@
 'use client';
 
-import { AlertTriangle, ChevronsUpDown, Layers, Loader2, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { createBrandProfileAction } from '@/app/[locale]/(post-auth)/settings/actions';
+import { ChevronsUpDown, Layers2, Plus, Spinner, TriangleAlert } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -35,7 +35,7 @@ export function BrandSwitcher() {
 
   const brands = brandSummaries.map((brand) => ({
     name: getBrandMenuItemLabel(brand, brandSummaries),
-    logo: brand.logoUrl ? brand.logoUrl : Layers,
+    logo: brand.logoUrl ? brand.logoUrl : Layers2,
     id: brand.id,
     completed: brand.completed,
     isPending: brand.isPending,
@@ -89,7 +89,7 @@ export function BrandSwitcher() {
                   </span>
                 </div>
                 {isSwitching ? (
-                  <Loader2 className="ml-auto h-4 w-4 animate-spin text-[var(--ring)] group-data-[collapsible=icon]:hidden" />
+                  <Spinner className="ml-auto h-4 w-4 animate-spin text-[var(--ring)] group-data-[collapsible=icon]:hidden" />
                 ) : (
                   <ChevronsUpDown className="ml-auto text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-data-[collapsible=icon]:hidden" />
                 )}
@@ -138,7 +138,7 @@ export function BrandSwitcher() {
                       </div>
                       <span className="flex-1 truncate text-[0.8rem]">{brand.name}</span>
                       {!brand.completed && (
-                        <AlertTriangle
+                        <TriangleAlert
                           className="size-3.5 shrink-0 text-amber-500"
                           aria-label={uiText('onboarding_incomplete_41e5f9a')}
                         />

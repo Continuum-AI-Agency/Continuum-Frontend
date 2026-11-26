@@ -1,7 +1,6 @@
 'use client';
 
 import type { ProductCode } from '@continuum/contracts';
-import { ChevronRight, Lock, LogOut, Search } from 'lucide-react';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -9,6 +8,7 @@ import type { ComponentProps } from 'react';
 import { type ElementType, Suspense, useEffect, useState } from 'react';
 import { TopUpDialog } from '@/components/billing/TopUpDialog';
 import { CurrentUserAvatar } from '@/components/current-user-avatar';
+import { ChevronRight, Lock, LogOut, Search } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useTheme } from '@/components/theme-provider';

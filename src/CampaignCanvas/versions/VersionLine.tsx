@@ -6,9 +6,9 @@
 // re-proposes an older live change, so there is no "Go back to v2" here.
 
 import { ReactFlowProvider } from '@xyflow/react';
-import { Check, GitCompareArrows } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { Check, GitCompareArrows } from '@/components/icons';
 import type { CanvasView } from '@/lib/campaign-canvas/canvasView';
 import { columnMapFromView } from '@/lib/campaign-canvas/columnMap';
 import type { CampaignViewModel } from '@/lib/campaign-canvas/lectura';

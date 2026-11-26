@@ -5,9 +5,9 @@
 // drives the review-due sweep: reminders before it, escalation after.
 
 import type { MediaAsset } from '@continuum/contracts';
-import { Loader2Icon, UserRoundPlusIcon } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
+import { Spinner, UserRoundPlus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -122,7 +122,7 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm" className="gap-1.5">
-            <UserRoundPlusIcon className="size-3.5" /> {translateUi('request_review_8f47b4cd')}
+            <UserRoundPlus className="size-3.5" /> {translateUi('request_review_8f47b4cd')}
           </Button>
         }
       />
@@ -143,7 +143,7 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
           </div>
         ) : visibleTargets === null ? (
           <div className="flex items-center justify-center py-6">
-            <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+            <Spinner className="size-4 animate-spin text-muted-foreground" />
           </div>
         ) : visibleTargets.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted-foreground">
@@ -199,7 +199,7 @@ export function RequestReviewButton({ brandId, asset }: RequestReviewButtonProps
               disabled={selectedIds.size === 0 || submitting}
               onClick={() => void handleSubmit()}
             >
-              {submitting && <Loader2Icon className="size-3.5 animate-spin" />}
+              {submitting && <Spinner className="size-3.5 animate-spin" />}
               {submitting ? translateUi('sending_b8ed5279') : translateUi('send_ping_d9e6bc8b')}
             </Button>
           </>

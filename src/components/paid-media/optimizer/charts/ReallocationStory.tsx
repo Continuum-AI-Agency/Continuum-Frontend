@@ -16,8 +16,8 @@ import type {
   CycleItemRow,
   OptimizationMetricDefinition,
 } from '@continuum/contracts';
-import { ArrowRightIcon } from 'lucide-react';
 import { useState } from 'react';
+import { ArrowRight } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DeliveryPill } from '../DeliveryPill';
@@ -198,7 +198,7 @@ function BudgetCell({
         <span className="text-muted-foreground">
           {formatCurrency(row.current, currency, uiLocale)}
         </span>
-        <ArrowRightIcon aria-hidden className="mx-1 inline size-3 text-muted-foreground" />
+        <ArrowRight aria-hidden className="mx-1 inline size-3 text-muted-foreground" />
         <span
           className={cn(
             up && 'text-success',

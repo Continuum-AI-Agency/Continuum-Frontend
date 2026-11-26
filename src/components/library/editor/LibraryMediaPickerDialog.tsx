@@ -7,9 +7,9 @@
 
 import type { MediaAsset } from '@continuum/contracts';
 import { mediaSearchResponseSchema } from '@continuum/contracts';
-import { ImageIcon, Loader2, Music2, Plus, Search, Trash2, Video } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Image, Music2, Plus, Search, Spinner, Trash2, Video } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -152,7 +152,7 @@ function MediaTile({
             ) : asset.kind === 'video' ? (
               <Video className="size-5" aria-hidden />
             ) : (
-              <ImageIcon className="size-5" aria-hidden />
+              <Image className="size-5" aria-hidden />
             )}
           </span>
         )}
@@ -319,7 +319,7 @@ export function LibraryMediaPickerDialog({
             {error ? <p className="mb-2 text-xs text-destructive">{error}</p> : null}
             {loading ? (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
+                <Spinner className="size-3.5 animate-spin" aria-hidden />{' '}
                 {translateUi('loading_media_035a75ff')}
               </p>
             ) : visible.length === 0 ? (

@@ -16,8 +16,8 @@ import type { UiLocale } from '@/i18n/config';
 
 import type { AdSetSnapshot, ConvertCboResponse, RecommendationRow } from '@continuum/contracts';
 import { readProposalPlan, readProposalResult } from '@continuum/contracts';
-import { Loader2Icon, SparklesIcon } from 'lucide-react';
 import * as React from 'react';
+import { Sparkles, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import * as typeScale from '../../typeScale';
 import {
@@ -184,7 +184,7 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
           </>
         ) : (
           <p className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Spinner className="size-3.5 animate-spin" />
             {uiText('reading_the_proposal_4be8a34')}
           </p>
         )}
@@ -222,9 +222,9 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
             variant="secondary"
           >
             {requesting ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
+              <Spinner className="size-3.5 animate-spin" />
             ) : (
-              <SparklesIcon className="size-3.5" />
+              <Sparkles className="size-3.5" />
             )}
             {uiText('askJainaAgain')}
           </Button>

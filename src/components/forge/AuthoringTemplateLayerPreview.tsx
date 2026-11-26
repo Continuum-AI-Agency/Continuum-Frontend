@@ -5,7 +5,6 @@ import type {
   TemplateAuthoringCommand,
   TemplateAuthoringNode,
 } from '@continuum/contracts';
-import { Minus, Plus, RotateCcw, Scan, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   type CSSProperties,
@@ -16,6 +15,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Minus, Plus, RotateCcw, Scan, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,

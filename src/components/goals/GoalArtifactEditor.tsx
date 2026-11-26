@@ -1,17 +1,17 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useEffect, useState } from 'react';
 import {
   Brain,
   Check,
   FileText,
   Library,
   ListChecks,
-  Loader2,
   RotateCcw,
   Save,
-} from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+  Spinner,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdown';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -178,7 +178,7 @@ export function GoalArtifactEditor({
               disabled={!dirty || isSaving}
             >
               {isSaving ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Spinner className="size-3.5 animate-spin" />
               ) : (
                 <Save className="size-3.5" />
               )}

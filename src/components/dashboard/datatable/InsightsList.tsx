@@ -1,7 +1,6 @@
-import { AlertTriangle, type LucideIcon, Minus, TrendingUp } from 'lucide-react';
-
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
+import { type IconComponent, Minus, TrendingUp, TriangleAlert } from '@/components/icons';
 import { Panel } from '@/components/shared/Panel';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,15 +19,16 @@ export type InsightListItem = {
 
 // A quiet severity cue: a small tinted icon carries good/attention/neutral without
 // the typographic weight of a filled pill. `label` stays available to assistive tech.
-const SEVERITY: Record<InsightSeverity, { label: string; Icon: LucideIcon; className: string }> = {
-  positive: { label: 'Positive', Icon: TrendingUp, className: 'text-success' },
-  negative: {
-    label: 'Needs attention',
-    Icon: AlertTriangle,
-    className: 'text-amber-600 dark:text-amber-500',
-  },
-  neutral: { label: 'Informational', Icon: Minus, className: 'text-muted-foreground' },
-};
+const SEVERITY: Record<InsightSeverity, { label: string; Icon: IconComponent; className: string }> =
+  {
+    positive: { label: 'Positive', Icon: TrendingUp, className: 'text-success' },
+    negative: {
+      label: 'Needs attention',
+      Icon: TriangleAlert,
+      className: 'text-amber-600 dark:text-amber-500',
+    },
+    neutral: { label: 'Informational', Icon: Minus, className: 'text-muted-foreground' },
+  };
 
 type InsightsListProps = {
   title: string;

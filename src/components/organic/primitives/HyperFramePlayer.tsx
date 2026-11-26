@@ -1,9 +1,9 @@
 'use client';
 
 import type { ShaderStackV1 } from '@continuum/contracts';
-import { Loader2, Play } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { Play, Spinner } from '@/components/icons';
 import { Video } from '@/components/ui/video';
 import { signHyperframeAsset } from '@/lib/organic/hyperframeSign';
 import { cn } from '@/lib/utils';
@@ -132,7 +132,7 @@ export function HyperFramePlayer({
           )}
           <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-transform group-hover:scale-110">
             {state === 'loading' ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <Spinner className="h-5 w-5 animate-spin" />
             ) : (
               <Play className="h-6 w-6 translate-x-[1px]" />
             )}

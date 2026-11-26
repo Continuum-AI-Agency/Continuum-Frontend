@@ -4,9 +4,9 @@
 // here — that's `UserConnectionsSwitcher`'s job.
 'use client';
 
-import { Plug, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
+import { Plug, Plus } from '@/components/icons';
 import { AssignmentsDialog } from '@/components/integrations/AssignmentsDialog';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';

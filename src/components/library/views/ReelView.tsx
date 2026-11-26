@@ -1,10 +1,10 @@
 'use client';
 
 import type { MediaAsset } from '@continuum/contracts';
-import { ChevronLeft, ChevronRight, FileText, ImageOff, Maximize2 } from 'lucide-react';
 import Image from 'next/image';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, FileText, ImageOff, Maximize2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Video } from '@/components/ui/video';
 import { formatDurationMs } from './cardOptions';

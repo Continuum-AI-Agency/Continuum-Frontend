@@ -16,9 +16,9 @@ import {
   DEFAULT_AUTOPILOT_SCOPES,
   type PortfolioListItem,
 } from '@continuum/contracts';
-import { Loader2Icon, LockIcon, PauseIcon, PlayIcon, ShieldIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Lock, Pause, Play, Shield, Spinner } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -217,7 +217,7 @@ export function PortfolioAutonomyCard({
             data-testid="autonomy-lock"
             key={blocker.level}
           >
-            <LockIcon aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
+            <Lock aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
             <span>
               <span className="font-medium text-foreground">
                 {uiText('autonomyLevelLabel', { level: blocker.level })}:
@@ -272,7 +272,7 @@ export function PortfolioAutonomyCard({
             // A missing cap is a warning only where autopilot could be reached at all.
             variant={cap.missing ? (read.canWrite ? 'warning' : 'muted') : 'outline'}
           >
-            <ShieldIcon aria-hidden="true" className="text-muted-foreground" />
+            <Shield aria-hidden="true" className="text-muted-foreground" />
             {cap.label}
           </Badge>
         ))}
@@ -296,11 +296,11 @@ export function PortfolioAutonomyCard({
             variant={read.stopped ? 'default' : 'outline'}
           >
             {pending?.kind === 'stop' ? (
-              <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+              <Spinner aria-hidden="true" className="size-3.5 animate-spin" />
             ) : read.stopped ? (
-              <PlayIcon aria-hidden="true" className="size-3.5" />
+              <Play aria-hidden="true" className="size-3.5" />
             ) : (
-              <PauseIcon aria-hidden="true" className="size-3.5" />
+              <Pause aria-hidden="true" className="size-3.5" />
             )}
             {read.stopped ? uiText('resume_autopilot_05810ef') : uiText('stop_autopilot_1971a79')}
           </Button>

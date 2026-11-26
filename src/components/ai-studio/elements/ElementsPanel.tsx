@@ -7,9 +7,9 @@
 // share the query and the four mutations so a regenerate in the detail refreshes the
 // list behind it.
 
-import { Layers, Plus } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
+import { Layers2, Plus } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -240,7 +240,7 @@ function ElementList({
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <Layers />
+              <Layers2 />
             </EmptyMedia>
             <EmptyTitle>{translateUi('no_elements_yet_d2dff1dd')}</EmptyTitle>
             <EmptyDescription>{translateUi('elementOnboarding')}</EmptyDescription>

@@ -1,10 +1,10 @@
 'use client';
 
-import { WrenchIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import { TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
+import { Wrench } from '@/components/icons';
 import { Trace } from '@/components/ui/trace';
 import { formatOrganicToolName } from './organicToolLabels';
 import type { ToolCallEvent } from './types';
@@ -35,7 +35,7 @@ export function OrganicThinkingPanel({ toolCalls, isStreaming }: OrganicThinking
     <Trace className="px-3 py-1.5">
       <TraceStep
         status={activeCall ? 'running' : undefined}
-        icon={<WrenchIcon />}
+        icon={<Wrench />}
         title={
           activeCall
             ? formatOrganicToolName(activeCall.toolName, uiText)

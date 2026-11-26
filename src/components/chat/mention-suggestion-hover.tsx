@@ -10,19 +10,19 @@ import { translateControlLabel } from '@/lib/ui/controlLabels';
 
 import { getOrganicMetric, type OrganicMetricPlatform } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import * as React from 'react';
 import {
   BookOpen,
+  ChartLine,
   FileText,
-  ImageIcon,
+  Image,
   Lightbulb,
-  LineChart,
   Package,
   Sparkles,
   Target,
   TrendingUp,
   Workflow,
-} from 'lucide-react';
-import * as React from 'react';
+} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -70,7 +70,7 @@ function TypeIcon({ type }: { type: AgentMentionReference['type'] }) {
   const cls = 'size-3.5 text-muted-foreground';
   switch (type) {
     case 'media_asset':
-      return <ImageIcon className={cls} />;
+      return <Image className={cls} />;
     case 'canvas_node':
     case 'pipeline':
       return <Workflow className={cls} />;
@@ -91,7 +91,7 @@ function TypeIcon({ type }: { type: AgentMentionReference['type'] }) {
     case 'creative_insight':
     case 'organic_insight':
     case 'kpi':
-      return <LineChart className={cls} />;
+      return <ChartLine className={cls} />;
     default:
       return <FileText className={cls} />;
   }
@@ -420,7 +420,7 @@ function MediaHover({
         </div>
       ) : (
         <div className="flex aspect-video items-center justify-center rounded-lg bg-muted text-muted-foreground">
-          <ImageIcon className="size-8 opacity-50" />
+          <Image className="size-8 opacity-50" />
         </div>
       )}
       {description ? (

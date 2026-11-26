@@ -6,11 +6,11 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { Clapperboard, Copy, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Clapperboard, Copy, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,

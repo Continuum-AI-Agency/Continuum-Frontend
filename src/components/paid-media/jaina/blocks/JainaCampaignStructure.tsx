@@ -25,11 +25,11 @@ import {
   type FieldProvenance,
   HYPERFRAME_UNREACHABLE_NOTE,
 } from '@continuum/contracts';
-import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LecturaView } from '@/CampaignCanvas/lectura/LecturaView';
+import { SquareArrowOutUpRight } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { campaignViewFromStructure } from '@/lib/campaign-canvas/lectura';
 import { useJainaBrandScope } from '@/lib/jaina/brandScope';
@@ -207,7 +207,7 @@ export function JainaCampaignStructure({ structure }: JainaCampaignStructureProp
             data-testid="campaign-structure-open-canvas"
             href={canvasHref}
           >
-            <ExternalLink className="size-3.5" />
+            <SquareArrowOutUpRight className="size-3.5" />
             {uiText('open_on_canvas_41c4341')}
           </Link>
         ) : null}

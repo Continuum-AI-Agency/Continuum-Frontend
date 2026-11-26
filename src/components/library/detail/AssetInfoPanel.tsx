@@ -13,9 +13,9 @@ import {
   type MediaAsset,
   type MediaAssetVersion,
 } from '@continuum/contracts';
-import { Eye, Loader2, MapPin } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState, useMemo as useUiConfigMemo } from 'react';
+import { Eye, MapPin, Spinner } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
@@ -150,7 +150,7 @@ function NotesEditor({ asset, canEdit }: { asset: MediaAsset; canEdit: boolean }
         onBlur={() => void commit()}
       />
       {saving ? (
-        <Loader2 className="absolute top-2 right-2 size-3 animate-spin text-muted-foreground" />
+        <Spinner className="absolute top-2 right-2 size-3 animate-spin text-muted-foreground" />
       ) : null}
     </div>
   );

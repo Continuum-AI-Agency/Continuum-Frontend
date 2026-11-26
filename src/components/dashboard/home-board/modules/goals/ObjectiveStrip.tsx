@@ -16,8 +16,8 @@ import {
   homeObjectiveMetricSchema,
   makeHomeObjectivePrimary,
 } from '@continuum/contracts';
-import { Pencil, Plus, Star } from 'lucide-react';
 import { useState } from 'react';
+import { Pencil, Plus, Star } from '@/components/icons';
 import { Sparkline } from '@/components/paid-media/optimizer/components/Sparkline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -1,9 +1,9 @@
 'use client';
 
 import type { CustomField, LibrarySort, MediaAsset } from '@continuum/contracts';
-import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { ArrowDown, ArrowUp, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -282,7 +282,7 @@ export function ListView({
           disabled={loadingMore}
           onClick={onLoadMore}
         >
-          {loadingMore ? <Loader2 className="size-4 animate-spin" /> : null}{' '}
+          {loadingMore ? <Spinner className="size-4 animate-spin" /> : null}{' '}
           {translateUi('load_more_ac8991ef')}
         </Button>
       ) : null}

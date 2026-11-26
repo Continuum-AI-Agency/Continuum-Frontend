@@ -1,10 +1,10 @@
 'use client';
 
-import { Check, Loader2, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrandAvatar } from '@/components/brand/BrandAvatar';
 import type { BrandPermission, BrandSummary } from '@/components/DashboardLayoutShell';
+import { Check, Search, Spinner } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -152,7 +152,7 @@ export function UserBrandsPanel({ permissions }: UserBrandsPanelProps) {
         <div ref={sentinelRef} className="h-px" aria-hidden />
         {isFetchingNextPage ? (
           <div className="flex items-center justify-center gap-2 border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
             {tUi('m_a7a883080e')}
           </div>
         ) : null}
@@ -215,7 +215,7 @@ function BrandRow({
         >
           {isSwitching ? (
             <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
               {tUi('m_ca40b0ec34')}
             </>
           ) : (

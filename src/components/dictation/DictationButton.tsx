@@ -4,8 +4,8 @@ import { useTranslations } from 'next-intl';
 // Speak-your-change: the browser's own Web Speech recognizer, no dependency and no audio
 // leaving through our servers. Firefox has none, so the button renders nothing there.
 
-import { Mic, MicOff } from 'lucide-react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Mic, MicOff } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

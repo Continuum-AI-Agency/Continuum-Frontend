@@ -16,7 +16,7 @@ import { useTranslations } from 'next-intl';
 // ("cached · age unknown") rather than inventing an age. Refresh is gated upstream by a
 // client-side cooldown (Meta throttles repeated reads) — this component only reflects it.
 
-import { Clock, RotateCw } from 'lucide-react';
+import { Clock, RotateCw } from '@/components/icons';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 

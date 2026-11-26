@@ -7,8 +7,8 @@
 import type { MediaAsset } from '@continuum/contracts';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { FileIcon } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { File } from '@/components/icons';
 import { VideoStill } from '@/components/media/VideoStill';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
@@ -58,7 +58,7 @@ function CardPreview({ asset }: { asset: MediaAsset }) {
   }
   return (
     <div className="flex h-full w-full items-center justify-center">
-      <FileIcon className="size-5 text-muted-foreground" />
+      <File className="size-5 text-muted-foreground" />
     </div>
   );
 }

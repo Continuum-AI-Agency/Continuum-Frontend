@@ -4,7 +4,6 @@ import type {
   ApiRenderDeliveryDestination,
   ApiRenderDeliveryDestinationsResponse,
 } from '@continuum/contracts';
-import { Plus } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { AddSlackRoom } from '@/components/forge/AddSlackRoom';
@@ -13,6 +12,7 @@ import {
   NOT_INSTALLED_COPY,
   ROLE_LABEL,
 } from '@/components/forge/slackRoomCopy';
+import { Plus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {

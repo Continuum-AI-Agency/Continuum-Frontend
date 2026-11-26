@@ -1,9 +1,8 @@
 'use client';
 
-import { Rocket } from 'lucide-react';
-
 import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
+import { Rocket } from '@/components/icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';

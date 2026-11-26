@@ -8,7 +8,6 @@ import {
   type PaidCanvasTarget,
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, ClipboardPaste, Loader2, Plus, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
@@ -18,6 +17,7 @@ import {
   type SlackPickerState,
 } from '@/components/forge/SlackDestinationPicker';
 import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
+import { ChevronRight, ClipboardPaste, Plus, Spinner, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -618,7 +618,7 @@ function MetaRow({
               <span className="text-destructive">{resolveError}</span>
             ) : (
               <span className="inline-flex items-center gap-1 text-muted-foreground">
-                {resolving ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+                {resolving ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}{' '}
                 {translateUi('looking_up_ad_65fe8c35')} {delivery.adId}…
               </span>
             )
@@ -856,7 +856,7 @@ export function AdDrillDown({
         ))}
         {loading ? (
           <p className="flex items-center gap-1.5 p-2 text-muted-foreground">
-            <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
+            <Spinner className="size-3 animate-spin" aria-hidden />{' '}
             {translateUi('paidTargetLoading', { level })}
           </p>
         ) : null}
@@ -992,7 +992,7 @@ export function PasteAdIds({
           disabled={!text.trim() || busy}
           onClick={() => void apply()}
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+          {busy ? <Spinner className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
           {translateUi('apply_ad_ids_4c351b51')}
         </Button>
       </div>

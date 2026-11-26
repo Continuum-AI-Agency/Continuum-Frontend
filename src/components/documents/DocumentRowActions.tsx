@@ -1,18 +1,18 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useRef, useState } from 'react';
 import {
   ArchiveRestore,
+  ArrowDownToLine,
   BookmarkPlus,
-  Download,
-  ExternalLink,
   MoreHorizontal,
   Pencil,
   RefreshCw,
+  SquareArrowOutUpRight,
   Trash2,
   Undo2,
-} from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import { useRef, useState } from 'react';
+} from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -92,11 +92,11 @@ export function DocumentRowActions({
           {doc.storagePath ? (
             <>
               <DropdownMenuItem onSelect={() => actions.onOpenInline(doc.storagePath ?? '')}>
-                <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                <SquareArrowOutUpRight className="mr-2 h-3.5 w-3.5" />
                 {uiText('open_ed077f3')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => void actions.onDownload(doc.storagePath ?? '')}>
-                <Download className="mr-2 h-3.5 w-3.5" />
+                <ArrowDownToLine className="mr-2 h-3.5 w-3.5" />
                 {uiText('download_d6eafe8')}
               </DropdownMenuItem>
             </>

@@ -1,11 +1,11 @@
 'use client';
 
-import { Layers, Plus } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { ElementCard } from '@/components/ai-studio/elements/ElementCard';
 import { ElementsPanel } from '@/components/ai-studio/elements/ElementsPanel';
 import { elementCategoryLabel } from '@/components/ai-studio/elements/elementPresentation';
+import { Layers2, Plus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ELEMENT_CATEGORIES,

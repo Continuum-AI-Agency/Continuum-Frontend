@@ -6,11 +6,11 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { Copy, Pause, Play, Trash2, Unlink, Volume2 } from 'lucide-react';
 import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Copy, Pause, Play, Trash2, Unlink, Volume2 } from '@/components/icons';
 import {
   ContextMenu,
   ContextMenuContent,

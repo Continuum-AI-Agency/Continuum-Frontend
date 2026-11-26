@@ -1,8 +1,7 @@
 import type { GraphIssue } from '@continuum/contracts';
-import { ShieldCheck } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-
 import { Panel } from '@/components/ai-elements/panel';
+import { ShieldCheck } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 

@@ -1,9 +1,9 @@
 'use client';
 
 import type { VideoEditorPoolAsset } from '@continuum/contracts';
-import { ExternalLink, Film, ImageIcon, Music, Plus } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Film, Image, Music, Plus, SquareArrowOutUpRight } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,7 +17,7 @@ import type { UiLocale } from '@/i18n/config';
 import { formatDecimal } from '@/lib/format/decimal';
 import { VIDEO_STUDIO_ASSET_DRAG_TYPE, type VideoStudioContext } from '../types';
 
-const KIND_ICON = { video: Film, image: ImageIcon, audio: Music } as const;
+const KIND_ICON = { video: Film, image: Image, audio: Music } as const;
 
 /** Tells every sources panel the pool changed (a generation finished). */
 export const POOL_CHANGED_EVENT = 'video-studio:pool-changed';
@@ -168,7 +168,8 @@ export function PoolAssetCard({
             )
           }
         >
-          <ExternalLink className="mr-2 size-4" /> {translateUi('open_in_library_c0a66bb6')}
+          <SquareArrowOutUpRight className="mr-2 size-4" />{' '}
+          {translateUi('open_in_library_c0a66bb6')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

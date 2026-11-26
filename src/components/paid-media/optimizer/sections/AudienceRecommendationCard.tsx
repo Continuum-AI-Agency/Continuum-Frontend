@@ -22,17 +22,17 @@ import type {
   RecommendationRow,
 } from '@continuum/contracts';
 import { adsManagerUrls, clampBudgetMinorUnits } from '@continuum/contracts';
-import {
-  AlertTriangleIcon,
-  ArrowRightIcon,
-  ChevronDownIcon,
-  ExternalLinkIcon,
-  Loader2Icon,
-  RotateCwIcon,
-  SparklesIcon,
-  UndoIcon,
-} from 'lucide-react';
 import * as React from 'react';
+import {
+  ArrowRight,
+  ChevronDown,
+  RotateCw,
+  Sparkles,
+  Spinner,
+  SquareArrowOutUpRight,
+  TriangleAlert,
+  Undo,
+} from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -250,7 +250,7 @@ function BeforeAfter({
         ) : null}
       </section>
       <div aria-hidden="true" className="grid place-items-center text-muted-foreground">
-        <ArrowRightIcon className="size-4 rotate-90 @2xl:rotate-0" />
+        <ArrowRight className="size-4 rotate-90 @2xl:rotate-0" />
       </div>
       <section
         className="grid min-w-0 content-start gap-2 border-primary/60 border-t-2 pt-2"
@@ -283,7 +283,7 @@ function BeforeAfter({
                 data-testid="audience-exclusion-warning"
                 variant="warning"
               >
-                <AlertTriangleIcon aria-hidden="true" />
+                <TriangleAlert aria-hidden="true" />
                 {comparison.exclusionWarning}
               </Badge>
             ) : null}
@@ -329,7 +329,7 @@ export function WhatAudience({
   if (state === 'queued' || state === 'proposing') {
     return (
       <p className="flex items-center gap-2 text-muted-foreground text-sm">
-        <Loader2Icon className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5 animate-spin" />
         {state === 'queued'
           ? uiText('queued_jaina_picks_it_up_in_under_a_minute_44f7764')
           : uiText('jaina_is_reading_the_audience_the_catalogue_a_397b8e7')}
@@ -413,9 +413,9 @@ export function ProposalFailureBlock({
             {uiText.rich('sentence_bb0e4dac6611', {
               v0: () =>
                 retrying ? (
-                  <Loader2Icon className="size-3.5 animate-spin" />
+                  <Spinner className="size-3.5 animate-spin" />
                 ) : (
-                  <RotateCwIcon className="size-3.5" />
+                  <RotateCw className="size-3.5" />
                 ),
             })}
           </Button>
@@ -430,9 +430,9 @@ export function ProposalFailureBlock({
             variant="secondary"
           >
             {requesting ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
+              <Spinner className="size-3.5 animate-spin" />
             ) : (
-              <SparklesIcon className="size-3.5" />
+              <Sparkles className="size-3.5" />
             )}
             {uiText('askJainaAgain')}
           </Button>
@@ -513,7 +513,7 @@ function NoveltyTile({ novelty }: { novelty: AudienceNovelty | null }) {
       {hasLists ? (
         <Collapsible>
           <CollapsibleTrigger className="inline-flex items-center gap-1 text-primary-ink text-xs underline-offset-2 hover:underline">
-            <ChevronDownIcon className="size-3.5" />
+            <ChevronDown className="size-3.5" />
             {uiText('see_the_list_b15e722')}
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -760,9 +760,9 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
       variant={variant}
     >
       {props.requesting ? (
-        <Loader2Icon className="size-3.5 animate-spin" />
+        <Spinner className="size-3.5 animate-spin" />
       ) : (
-        <SparklesIcon className="size-3.5" />
+        <Sparkles className="size-3.5" />
       )}
       {label}
     </Button>
@@ -846,9 +846,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 >
                   {uiText.rich('sentence_f1eb2ab61a93', {
                     v0: () =>
-                      props.convertingCbo ? (
-                        <Loader2Icon className="size-3.5 animate-spin" />
-                      ) : null,
+                      props.convertingCbo ? <Spinner className="size-3.5 animate-spin" /> : null,
                   })}
                 </Button>
               </div>
@@ -869,7 +867,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
               >
                 {uiText.rich('sentence_5a0b5bd7f7a8', {
                   v0: () =>
-                    props.convertingCbo ? <Loader2Icon className="size-3.5 animate-spin" /> : null,
+                    props.convertingCbo ? <Spinner className="size-3.5 animate-spin" /> : null,
                 })}
               </Button>
             )}
@@ -944,7 +942,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
               >
                 {uiText.rich('sentence_90f2277981c0', {
                   icon: () =>
-                    props.approving ? <Loader2Icon className="size-3.5 animate-spin" /> : null,
+                    props.approving ? <Spinner className="size-3.5 animate-spin" /> : null,
                   active: activate ? 'yes' : 'no',
                 })}
               </Button>
@@ -1002,7 +1000,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         state === 'switching' ||
         state === 'undoing' ? (
           <p className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Spinner className="size-3.5 animate-spin" />
             {state === 'approved'
               ? uiText('approved_the_worker_creates_it_in_under_a_min_3946361')
               : state === 'executing'
@@ -1053,7 +1051,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                           target="_blank"
                         >
                           {uiText('open_2348f99')}
-                          <ExternalLinkIcon className="size-3.5" />
+                          <SquareArrowOutUpRight className="size-3.5" />
                         </a>
                       ) : null,
                   })}
@@ -1074,7 +1072,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                           target="_blank"
                         >
                           {uiText('open_2348f99')}
-                          <ExternalLinkIcon className="size-3.5" />
+                          <SquareArrowOutUpRight className="size-3.5" />
                         </a>
                       ) : null,
                   })}
@@ -1088,7 +1086,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   'h-8 gap-1.5 px-3 text-sm',
                 )}
               >
-                <ChevronDownIcon className="size-3.5" />
+                <ChevronDown className="size-3.5" />
                 {uiText('what_was_implemented_58e62c4')}
               </CollapsibleTrigger>
               <CollapsibleContent>
@@ -1134,7 +1132,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   type="button"
                   variant="ghost"
                 >
-                  <UndoIcon className="size-3.5" />
+                  <Undo className="size-3.5" />
                   {uiText('undo_a8283ad')}
                 </Button>
               </div>

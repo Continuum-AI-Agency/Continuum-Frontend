@@ -9,9 +9,9 @@ import { useTranslations } from 'next-intl';
 // no glow/bounce; transform/opacity-only motion; prefers-reduced-motion collapses.
 
 import { useDroppable } from '@dnd-kit/core';
-import { ImageIcon, Loader2, Upload } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import * as React from 'react';
+import { ArrowUpFromLine, Image, Spinner } from '@/components/icons';
 import type { PlacementError } from '@/components/organic/hooks/useDraftMediaPlacement';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -203,7 +203,7 @@ export function PreviewMediaDropZone({
             isInvalidDrag ? 'text-amber-700 dark:text-amber-400' : 'text-primary',
           )}
         >
-          <Upload className="h-5 w-5" />
+          <ArrowUpFromLine className="h-5 w-5" />
           {isInvalidDrag ? uiText('wrong_type_9f4442e') : uiText('drop_here_dcff950')}
         </div>
       </div>
@@ -231,7 +231,7 @@ export function PreviewMediaDropZone({
                   )}
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/40 bg-background text-primary transition-colors group-hover/gen:border-primary/70">
-                    {action.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : action.icon}
+                    {action.busy ? <Spinner className="h-4 w-4 animate-spin" /> : action.icon}
                   </div>
                   <p className="text-sm font-medium text-primary">
                     {action.busy ? (action.busyLabel ?? action.label) : action.label}
@@ -249,7 +249,7 @@ export function PreviewMediaDropZone({
             className="group/lib flex flex-1 flex-col items-center justify-center gap-1.5 border-b border-border/50 bg-muted/60 px-4 text-center transition-colors duration-150 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background transition-colors group-hover/lib:border-primary/40">
-              <ImageIcon className="h-4 w-4 text-muted-foreground transition-colors group-hover/lib:text-primary" />
+              <Image className="h-4 w-4 text-muted-foreground transition-colors group-hover/lib:text-primary" />
             </div>
             <p className="text-sm font-medium text-muted-foreground transition-colors group-hover/lib:text-foreground">
               {uiText('select_from_library_6cd3e82')}
@@ -261,7 +261,7 @@ export function PreviewMediaDropZone({
             className="group/up flex flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 bg-muted/60 px-4 text-center transition-colors duration-150 hover:bg-primary/5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background transition-colors group-hover/up:border-primary/40">
-              <Upload className="h-4 w-4 text-muted-foreground transition-colors group-hover/up:text-primary" />
+              <ArrowUpFromLine className="h-4 w-4 text-muted-foreground transition-colors group-hover/up:text-primary" />
             </div>
             <p className="text-sm font-medium text-muted-foreground transition-colors group-hover/up:text-foreground">
               {uiText('upload_from_your_computer_fa31c65')}

@@ -11,9 +11,9 @@
 // helpers in customFieldFilters own that rule; this component only renders it.
 
 import type { CustomField, CustomFieldFilter, CustomFieldOption } from '@continuum/contracts';
-import { ChevronDown } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { ChevronDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import {

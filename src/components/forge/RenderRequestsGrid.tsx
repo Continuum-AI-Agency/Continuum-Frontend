@@ -47,7 +47,6 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronRight, ClipboardPaste, Loader2, Send, Undo2, X } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDefaultLayout } from 'react-resizable-panels';
@@ -170,6 +169,15 @@ import {
 import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
 import { checkpointGraph } from '@/components/forge/templateCheckpoints';
 import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
+import {
+  ChevronDown,
+  ChevronRight,
+  ClipboardPaste,
+  Send,
+  Spinner,
+  Undo2,
+  X,
+} from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -3177,7 +3185,7 @@ export function RenderRequestsGrid({
         >
           {generating ? (
             <p className="flex min-w-0 flex-1 items-center gap-1.5">
-              <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
+              <Spinner className="size-3 animate-spin" aria-hidden />{' '}
               {translateUi('drafting_1f91c1e4')} {generating.count}{' '}
               {generating.count === 1
                 ? translateUi('variation_819b60bb')

@@ -13,8 +13,8 @@ import { useLocale, useTranslations } from 'next-intl';
 // on confirm. The Undo stays on the card after the dialog closes.
 
 import type { ActionRevertResponse } from '@continuum/contracts';
-import { Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Spinner, TriangleAlert } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -80,7 +80,7 @@ const UNREACHABLE: CardActionVerdict = {
 function Pending({ children }: { children: string }) {
   return (
     <p className="flex items-center gap-2 text-muted-foreground text-sm" role="status">
-      <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+      <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
       {children}
     </p>
   );
@@ -96,7 +96,7 @@ function Verdict({ verdict, testId }: { verdict: CardActionVerdict; testId: stri
       data-testid={testId}
       data-tone={verdict.tone}
     >
-      {verdict.tone === 'ok' ? null : <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />}
+      {verdict.tone === 'ok' ? null : <TriangleAlert className="mt-0.5 size-4 shrink-0" />}
       <span>{verdict.text}</span>
     </p>
   );

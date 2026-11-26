@@ -4,9 +4,9 @@ import type { useTranslations as ScaleTranslationHook } from 'next-intl';
 type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
 
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Rocket, Save, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React from 'react';
+import { Rocket, Save, Send, Spinner } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { PAID_SCAFFOLD_TREE_QUERY_ROOT } from '@/components/paid-media/jaina/scaffold/usePaidScaffoldTree';
 import { Button } from '@/components/ui/button';
@@ -447,7 +447,7 @@ export function ScaffoldRecordBar({
 
       {isLoadingGraph ? (
         <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Spinner className="h-3.5 w-3.5 animate-spin" />
           {uiText('loading_dc38088')}
         </span>
       ) : null}
@@ -512,7 +512,7 @@ export function ScaffoldRecordBar({
                   data-testid="canvas-save"
                 >
                   {isSaving ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Spinner className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Save className="h-3.5 w-3.5" />
                   )}

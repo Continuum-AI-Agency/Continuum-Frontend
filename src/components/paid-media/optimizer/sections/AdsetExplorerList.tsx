@@ -8,8 +8,8 @@ import { useLocale, useTranslations } from 'next-intl';
 // "Ad sets today" table showed, but selecting a row is what drives the creative
 // mosaic on the right — the whole reason this replaced the in-cell preview.
 
-import { SearchIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Search } from '@/components/icons';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -55,7 +55,7 @@ export function AdsetExplorerList({
   return (
     <div className="flex min-h-0 flex-col gap-2">
       <div className="relative shrink-0">
-        <SearchIcon
+        <Search
           className="pointer-events-none absolute top-2 left-2 size-3.5 text-muted-foreground"
           aria-hidden="true"
         />

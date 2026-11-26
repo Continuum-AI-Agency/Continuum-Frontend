@@ -9,9 +9,8 @@ import { formatDecimal } from '@/lib/format/decimal';
 // request a fresh single-post detail so the quick-look gets a live caption and
 // an unexpired thumbnail — the same pattern as the dashboard Top Creatives table.
 
-import { ExternalLink } from 'lucide-react';
-
 import { LeaderboardThumbnail } from '@/components/dashboard/briefing/LeaderboardThumbnail';
+import { SquareArrowOutUpRight } from '@/components/icons';
 import { PostQuickLook } from '@/components/organic/cards/PostQuickLook';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { hookRateTextColor } from '@/lib/organic/hook-rate-color';
@@ -128,7 +127,7 @@ export function AwarenessTopPostRow({
                   // but don't treat icon clicks as "select the row".
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <ExternalLink className="size-3" aria-hidden />
+                  <SquareArrowOutUpRight className="size-3" aria-hidden />
                 </a>
               ) : null}
             </span>

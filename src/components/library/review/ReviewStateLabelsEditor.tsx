@@ -7,9 +7,9 @@
 // surface that shows a status picks the change up through useReviewStateLabels.
 
 import type { MediaReviewStatus, ReviewCustomState, ReviewStateLabel } from '@continuum/contracts';
-import { Loader2, Plus, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useReducer, useRef, useState } from 'react';
+import { Plus, Spinner, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -280,7 +280,7 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
             {translateUi('cancel_19766ed6')}
           </Button>
           <Button type="button" size="sm" disabled={saving || invalid} onClick={() => void save()}>
-            {saving && <Loader2 className="size-3.5 animate-spin" />}{' '}
+            {saving && <Spinner className="size-3.5 animate-spin" />}{' '}
             {translateUi('save_labels_78956453')}
           </Button>
         </DialogFooter>

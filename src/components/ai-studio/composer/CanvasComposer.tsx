@@ -1,6 +1,5 @@
 'use client';
 import type { AgentMentionReference } from '@continuum/contracts';
-import { Gem, MessageCircle, Play, Trash2, TriangleAlert, Wand2, Workflow, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
@@ -24,6 +23,16 @@ import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { PromptInput } from '@/components/chat/prompt-input';
 import { TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
+import {
+  Gem,
+  MessageCircle,
+  Play,
+  Trash2,
+  TriangleAlert,
+  Wand2,
+  Workflow,
+  X,
+} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Trace } from '@/components/ui/trace';

@@ -82,12 +82,12 @@ describe('SuggestionAsk — the optimizer type scale', () => {
       // A small glyph beside the label — the row is one quiet line, not three icon cards.
       expect(icon.className).toContain('size-8');
     }
-    expect(screen.getByTestId('suggestion-ask-icon:audience').innerHTML).toContain('lucide-users');
+    expect(screen.getByTestId('suggestion-ask-icon:audience').innerHTML).toContain('icon-users');
     expect(screen.getByTestId('suggestion-ask-icon:budget').innerHTML).toContain(
-      'lucide-arrow-left-right',
+      'icon-arrow-left-right',
     );
     expect(screen.getByTestId('suggestion-ask-icon:creative').innerHTML).toContain(
-      'lucide-image-plus',
+      'icon-image-plus',
     );
   });
 

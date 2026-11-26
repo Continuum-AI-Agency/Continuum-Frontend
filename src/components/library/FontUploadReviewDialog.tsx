@@ -2,11 +2,11 @@
 
 import { readFontNames } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -242,7 +242,7 @@ export function FontUploadReviewDialog({
                 {translateUi('cancel_19766ed6')}
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}{' '}
+                {saving ? <Spinner className="size-4 animate-spin" aria-hidden /> : null}{' '}
                 {translateUi('add_to_engine_a8987bd6')}
               </Button>
             </DialogFooter>

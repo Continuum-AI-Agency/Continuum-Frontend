@@ -3,11 +3,11 @@
 import { mergeProps } from '@base-ui/react/merge-props';
 import { useRender } from '@base-ui/react/use-render';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { PanelLeftIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { isValidElement } from 'react';
+import { PanelLeft } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -394,7 +394,7 @@ const SidebarTrigger = React.forwardRef<
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      <PanelLeft />
       <span className="sr-only">{uiText('toggle_sidebar_1d4c17d')}</span>
     </Button>
   );

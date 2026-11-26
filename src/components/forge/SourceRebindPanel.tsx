@@ -7,7 +7,6 @@ import {
   templateDisplayName,
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
-import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { uploadRefusal } from '@/components/forge/ForgeProjectDrop';
@@ -17,6 +16,7 @@ import {
   RepairProjectChoiceRequired,
   repairMissingMediaPackage,
 } from '@/components/forge/repairMissingMedia';
+import { Spinner, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -668,7 +668,7 @@ function SourceRebindForm({
           disabled={!versionId || versionId === expectedVersionId || busy}
           onClick={() => void inspect()}
         >
-          {busy ? <Loader2 className="animate-spin" /> : null}
+          {busy ? <Spinner className="animate-spin" /> : null}
           {translateUi('preview_changes_330c32c4')}
         </Button>
         <Label className="cursor-pointer">
@@ -687,7 +687,7 @@ function SourceRebindForm({
       </div>
       {uploading ? (
         <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
+          <Spinner className="size-3.5 animate-spin" aria-hidden />{' '}
           {translateUi('uploading_8b898ca3')} {uploading}{' '}
           {translateUi('as_a_new_revision_ea08fdd0')}
         </p>
@@ -727,7 +727,7 @@ function SourceRebindForm({
           </div>
           {ambiguous ? (
             <p className="flex items-center gap-2 text-xs text-destructive">
-              <AlertTriangle className="size-4" />{' '}
+              <TriangleAlert className="size-4" />{' '}
               {translateUi('ambiguous_slots_must_be_resolved_be_021a7f11')}
             </p>
           ) : null}

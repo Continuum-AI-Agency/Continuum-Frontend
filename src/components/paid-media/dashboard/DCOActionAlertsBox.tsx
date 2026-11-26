@@ -10,12 +10,12 @@ import {
 
 type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
 
-import { RotateCw, Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useMemo } from 'react';
 import { CreativeSwapComparison } from '@/components/dco/CreativeSwapComparison';
+import { RotateCw, Search } from '@/components/icons';
 import { EmptyState, ErrorRetryState } from '@/components/shared/state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

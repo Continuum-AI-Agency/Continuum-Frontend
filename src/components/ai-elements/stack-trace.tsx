@@ -1,6 +1,5 @@
 'use client';
 
-import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, CopyIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import {
@@ -13,6 +12,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Check, ChevronDown, Copy, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useControllableState } from '@/hooks/useControllableState';
@@ -228,7 +228,7 @@ export type StackTraceErrorProps = ComponentProps<'div'>;
 
 export const StackTraceError = memo(({ className, children, ...props }: StackTraceErrorProps) => (
   <div className={cn('flex flex-1 items-center gap-2 overflow-hidden', className)} {...props}>
-    <AlertTriangleIcon className="size-4 shrink-0 text-destructive" />
+    <TriangleAlert className="size-4 shrink-0 text-destructive" />
     {children}
   </div>
 ));
@@ -328,7 +328,7 @@ export const StackTraceCopyButton = memo(
       [],
     );
 
-    const Icon = isCopied ? CheckIcon : CopyIcon;
+    const Icon = isCopied ? Check : Copy;
 
     return (
       <Button
@@ -352,7 +352,7 @@ export const StackTraceExpandButton = memo(
 
     return (
       <div className={cn('flex size-7 items-center justify-center', className)} {...props}>
-        <ChevronDownIcon
+        <ChevronDown
           className={cn(
             'size-4 text-muted-foreground transition-transform',
             isOpen ? 'rotate-180' : 'rotate-0',

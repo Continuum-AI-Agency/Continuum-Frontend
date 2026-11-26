@@ -52,8 +52,8 @@ import {
   type PortfolioListItem,
   type RecommendationRow,
 } from '@continuum/contracts';
-import { ChevronDownIcon, ChevronRightIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import * as React from 'react';
+import { ChevronDown, ChevronRight, Spinner, TriangleAlert } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -2035,9 +2035,7 @@ function QueueToolbar({
           >
             {uiText.rich('sentence_80045f771fa9', {
               icon: () =>
-                applyApprovedPending ? (
-                  <Loader2Icon className="mr-1 size-3.5 animate-spin" />
-                ) : null,
+                applyApprovedPending ? <Spinner className="mr-1 size-3.5 animate-spin" /> : null,
               count: applyBudgetCount,
             })}
           </Button>
@@ -2053,7 +2051,7 @@ function QueueToolbar({
           >
             {uiText.rich('sentence_78447c88868c', {
               icon: () =>
-                pausePending ? <Loader2Icon className="mr-1 size-3.5 animate-spin" /> : null,
+                pausePending ? <Spinner className="mr-1 size-3.5 animate-spin" /> : null,
               count: approvedPauseCount,
             })}
           </Button>
@@ -2137,7 +2135,7 @@ function SelectionBar({
           type="button"
         >
           {uiText.rich('sentence_cb3c36af49d5', {
-            v0: () => (busy ? <Loader2Icon className="mr-1 size-3.5 animate-spin" /> : null),
+            v0: () => (busy ? <Spinner className="mr-1 size-3.5 animate-spin" /> : null),
           })}
         </Button>
       </span>
@@ -2362,7 +2360,7 @@ function QueueRowView({
             ) : null}
             {approving ? (
               <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
-                <Loader2Icon className="size-3 animate-spin" />
+                <Spinner className="size-3 animate-spin" />
                 {uiText('approving_8b64d4c')}
               </span>
             ) : null}
@@ -2458,11 +2456,7 @@ function QueueRowView({
               }}
               type="button"
             >
-              {expanded ? (
-                <ChevronDownIcon className="size-4" />
-              ) : (
-                <ChevronRightIcon className="size-4" />
-              )}
+              {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
             </button>
           </div>
         </div>
@@ -3062,7 +3056,7 @@ function AdLevelDangerIcon() {
               className="mt-0.5 inline-flex text-amber-600 dark:text-amber-500"
               role="img"
             >
-              <TriangleAlertIcon aria-hidden="true" className="size-4" />
+              <TriangleAlert aria-hidden="true" className="size-4" />
             </span>
           }
         />

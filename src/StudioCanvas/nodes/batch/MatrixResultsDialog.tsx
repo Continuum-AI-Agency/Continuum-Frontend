@@ -9,9 +9,9 @@
 // cell that failed are different facts, and an empty square says neither.
 
 import { MAX_BATCH_ITEMS } from '@continuum/contracts';
-import { Download, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { ArrowDownToLine, X } from '@/components/icons';
 
 import { VideoStill } from '@/components/media/VideoStill';
 import { Button } from '@/components/ui/button';
@@ -163,7 +163,7 @@ export function MatrixResultsDialog({
               })
             }
           >
-            <Download className="size-3" />
+            <ArrowDownToLine className="size-3" />
           </Button>
         ) : null}
       </>

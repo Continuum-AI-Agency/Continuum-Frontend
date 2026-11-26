@@ -8,21 +8,21 @@ import { formatDecimal } from '@/lib/format/decimal';
 type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
 
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  DownloadIcon,
-  Edit2Icon,
-  FileTextIcon,
-  Loader2Icon,
-  PlayIcon,
-  SaveIcon,
-  Trash2Icon,
-  XIcon,
-} from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import React from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
+import {
+  ArrowDownToLine,
+  FileText,
+  Pencil,
+  Play,
+  Save,
+  Spinner,
+  Trash2,
+  X,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useUiErrorMessage } from '@/i18n/errors';
@@ -3341,10 +3341,10 @@ export function JainaChatSurface({
     reportArtifactJob?.status === 'pending' ||
     reportArtifactJob?.status === 'running' ||
     isReportArtifactDownloading
-      ? Loader2Icon
+      ? Spinner
       : reportArtifactJob?.status === 'done'
-        ? DownloadIcon
-        : FileTextIcon;
+        ? ArrowDownToLine
+        : FileText;
 
   if (!adAccountId) {
     return <JainaEmptyState adAccountId={null} brandId={brandProfileId} />;
@@ -3579,7 +3579,7 @@ export function JainaChatSurface({
                                               aria-label={uiText('save_queued_message_3d52a0d')}
                                               onClick={handleQueueEditSave}
                                             >
-                                              <SaveIcon className="size-3.5" />
+                                              <Save className="size-3.5" />
                                             </QueueItemAction>
                                             <QueueItemAction
                                               aria-label={uiText(
@@ -3587,7 +3587,7 @@ export function JainaChatSurface({
                                               )}
                                               onClick={handleQueueEditCancel}
                                             >
-                                              <XIcon className="size-3.5" />
+                                              <X className="size-3.5" />
                                             </QueueItemAction>
                                           </>
                                         ) : (
@@ -3611,20 +3611,20 @@ export function JainaChatSurface({
                                                   })();
                                                 }}
                                               >
-                                                <PlayIcon className="size-3.5" />
+                                                <Play className="size-3.5" />
                                               </QueueItemAction>
                                             ) : null}
                                             <QueueItemAction
                                               aria-label={uiText('edit_queued_message_250ac6f')}
                                               onClick={() => handleQueueEditStart(queuedMessage)}
                                             >
-                                              <Edit2Icon className="size-3.5" />
+                                              <Pencil className="size-3.5" />
                                             </QueueItemAction>
                                             <QueueItemAction
                                               aria-label={uiText('remove_queued_message_1c99e52')}
                                               onClick={() => handleQueueRemove(queuedMessage.id)}
                                             >
-                                              <Trash2Icon className="size-3.5" />
+                                              <Trash2 className="size-3.5" />
                                             </QueueItemAction>
                                           </>
                                         )}

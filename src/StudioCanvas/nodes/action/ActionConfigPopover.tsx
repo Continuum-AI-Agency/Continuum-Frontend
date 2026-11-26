@@ -4,8 +4,8 @@
 // with the selection inspector's action section so both surfaces stay identical.
 
 import type { ActionId } from '@continuum/contracts';
-import { Settings2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+import { Settings2 } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';

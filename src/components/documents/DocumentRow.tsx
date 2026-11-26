@@ -1,21 +1,21 @@
 'use client';
 
 import type { DocumentCategory } from '@continuum/contracts';
-import type { LucideIcon } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import {
-  AlertCircle,
-  CheckCircle2,
+  CircleAlert,
+  CircleCheck,
   FileSpreadsheet,
   FileText,
   FileType,
+  type IconComponent,
   Image as ImageIcon,
-  Loader2,
   Presentation,
   RotateCw,
+  Spinner,
   X,
-} from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
+} from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
 import { DocumentPreviewCard } from './DocumentPreviewCard';
@@ -36,7 +36,7 @@ import type { UploadEntry } from './useDocumentMutations';
 export const ROW_EASE = [0.2, 0.8, 0.2, 1] as const;
 const ROW_TRANSITION = { duration: 0.24, ease: ROW_EASE };
 
-const KIND_ICON: Record<string, LucideIcon> = {
+const KIND_ICON: Record<string, IconComponent> = {
   pdf: FileType,
   docx: FileText,
   pptx: Presentation,
@@ -50,7 +50,7 @@ const KIND_ICON: Record<string, LucideIcon> = {
   unknown: FileText,
 };
 
-function iconFor(doc: DocumentView): LucideIcon {
+function iconFor(doc: DocumentView): IconComponent {
   if (doc.kind && KIND_ICON[doc.kind]) return KIND_ICON[doc.kind];
   const lower = doc.name.toLowerCase();
   if (lower.endsWith('.pdf')) return FileType;
@@ -92,7 +92,7 @@ export function PendingRow({
             isError ? 'bg-rose-500/10 text-rose-600' : 'bg-muted text-muted-foreground',
           )}
         >
-          {isError ? <AlertCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+          {isError ? <CircleAlert className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
         </span>
         <span className="shrink-0 font-mono text-sm text-muted-foreground">
           {formatBytes(entry.file.size, uiLocale)}
@@ -126,7 +126,7 @@ export function PendingRow({
           <CircleAction
             ariaLabel={uiText('m_de27240983')}
             tone="progress"
-            icon={Loader2}
+            icon={Spinner}
             spin
             disabled
           />
@@ -177,7 +177,7 @@ export function DocumentRow({
       : label.text;
 
   const statusIcon =
-    label.tone === 'success' ? CheckCircle2 : label.tone === 'error' ? AlertCircle : Loader2;
+    label.tone === 'success' ? CircleCheck : label.tone === 'error' ? CircleAlert : Spinner;
   const statusTone: ActionTone =
     label.tone === 'success' ? 'success' : label.tone === 'error' ? 'error' : 'progress';
 
@@ -288,7 +288,7 @@ function StatusBadge({
   spin,
 }: {
   tone: ActionTone;
-  icon: LucideIcon;
+  icon: IconComponent;
   spin?: boolean;
 }) {
   return (
@@ -315,7 +315,7 @@ function CircleAction({
 }: {
   ariaLabel: string;
   tone: ActionTone;
-  icon: LucideIcon;
+  icon: IconComponent;
   onClick?: () => void;
   disabled?: boolean;
   spin?: boolean;

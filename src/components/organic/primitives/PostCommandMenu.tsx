@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import * as React from 'react';
 import {
   Clapperboard,
   Copy,
@@ -11,9 +13,7 @@ import {
   Trash2,
   Undo2,
   Wand2,
-} from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import * as React from 'react';
+} from '@/components/icons';
 
 import {
   DropdownMenu,

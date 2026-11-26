@@ -1,10 +1,9 @@
 'use client';
 
-import { DownloadIcon, FileCode2Icon, Share2Icon, Table2Icon } from 'lucide-react';
-
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
+import { ArrowDownToLine, FileCode2, Share2, Table2 } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -169,7 +168,7 @@ export function JainaInlineReport({
             disabled={isStreaming}
             aria-label={uiText('download_report_as_pdf_bb6939f')}
           >
-            <DownloadIcon className="size-3.5" />
+            <ArrowDownToLine className="size-3.5" />
             {uiText('download_d6eafe8')}
           </Button>
         </div>
@@ -252,7 +251,7 @@ export function JainaInlineReport({
             aria-label={uiText('export_report_to_google_sheets_cd12c3b')}
           >
             {uiText.rich('sentence_7ada52d96afe', {
-              v0: () => <Table2Icon className="size-3.5" />,
+              v0: () => <Table2 className="size-3.5" />,
             })}
           </Button>
           <Button
@@ -263,7 +262,7 @@ export function JainaInlineReport({
             disabled={isStreaming || exporting !== null}
             aria-label={uiText('share_report_by_email_6991803')}
           >
-            <Share2Icon className="size-3.5" />
+            <Share2 className="size-3.5" />
             {uiText('email_969ccbd')}
           </Button>
           <Button
@@ -274,7 +273,7 @@ export function JainaInlineReport({
             disabled={isStreaming || exporting !== null}
             aria-label={uiText('export_response_as_html_18a729c')}
           >
-            <FileCode2Icon className="size-3.5" />
+            <FileCode2 className="size-3.5" />
             {uiText('export_html_17f681a')}
           </Button>
         </div>

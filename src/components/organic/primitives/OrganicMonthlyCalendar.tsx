@@ -1,19 +1,19 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
+import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
+import * as React from 'react';
 import {
-  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   GalleryHorizontalEnd,
   Pencil,
   Plus,
   Trash2,
+  TriangleAlert,
   Zap,
-} from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useLocale, useTranslations } from 'next-intl';
-import * as React from 'react';
+} from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -200,7 +200,7 @@ const DraftChip = React.memo(function DraftChip({
                     data-save-failed={saveFailed ? '' : undefined}
                   >
                     {saveFailed ? (
-                      <AlertTriangle className="size-3 shrink-0 text-destructive" aria-hidden />
+                      <TriangleAlert className="size-3 shrink-0 text-destructive" aria-hidden />
                     ) : (
                       <StatusDot status={draft.status} />
                     )}

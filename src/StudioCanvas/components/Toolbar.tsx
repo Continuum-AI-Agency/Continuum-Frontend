@@ -1,7 +1,7 @@
-import { Hash, Play, RotateCw, Square } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { ElementsPanel } from '@/components/ai-studio/elements/ElementsPanel';
+import { Hash, Play, RotateCw, Square } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

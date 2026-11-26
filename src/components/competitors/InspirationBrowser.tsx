@@ -11,13 +11,13 @@ import { useTranslations } from 'next-intl';
 // body interleaves both, and "Saved" is the brand's Library of saved posts.
 // `compact` trims chrome for the dashboard widget.
 
-import { RefreshCw, Search } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { AdSnapshotGrid } from '@/components/competitor-spy/AdSnapshotGrid';
 import { CompetitorQuickSelectChips } from '@/components/competitor-spy/CompetitorQuickSelectChips';
 import { CompetitorRail } from '@/components/competitor-spy/CompetitorRail';
 import { competitorHealthChip } from '@/components/competitor-spy/competitorHealth';
 import { SaveToBoardButton } from '@/components/competitor-spy/SaveToBoardButton';
+import { RefreshCw, Search } from '@/components/icons';
 import { useRouter } from '@/i18n/navigation';
 import {
   MAX_INSTAGRAM_POSTS,

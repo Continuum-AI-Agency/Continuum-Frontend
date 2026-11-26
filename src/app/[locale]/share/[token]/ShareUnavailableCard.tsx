@@ -1,5 +1,5 @@
-import { Link2Off } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Link2Off } from '@/components/icons';
 import type { ShareUnavailableReason } from './loadSharePayload';
 
 const MESSAGES: Record<ShareUnavailableReason, string> = {

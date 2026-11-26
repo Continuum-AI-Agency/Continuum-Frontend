@@ -1,5 +1,5 @@
-import { ArrowUpRight } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+import { ArrowUpRight } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import {
   Table,

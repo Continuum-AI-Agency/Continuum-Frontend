@@ -1,10 +1,10 @@
 'use client';
 
 import type { Skill } from '@continuum/contracts';
-import { ArrowUp, Paperclip, Square } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { ArrowUp, Paperclip, Square } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   InputGroup,

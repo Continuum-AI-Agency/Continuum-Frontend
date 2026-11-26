@@ -10,8 +10,8 @@ import { competitorErrorCopy } from './competitorErrorCopy';
 // it was saved. Pasting any public Instagram post URL saves it here, so a post
 // from an account nobody tracks can still be analysed and developed.
 
-import { Link2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { Link2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSavedInspirationPosts, useSaveInspirationUrl } from '@/lib/api/competitorSpy';

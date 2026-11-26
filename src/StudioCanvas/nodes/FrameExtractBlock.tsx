@@ -6,11 +6,11 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { Camera, Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Camera, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
@@ -110,7 +110,7 @@ export function FrameExtractBlock({
             onMouseDown={(event) => event.stopPropagation()}
             onClick={() => void extract()}
           >
-            {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}{' '}
+            {data.isExecuting ? <Spinner className="mr-1 size-3 animate-spin" /> : null}{' '}
             {translateUi('extract_c15301c0')}
           </Button>
           <NodeDownloadButton

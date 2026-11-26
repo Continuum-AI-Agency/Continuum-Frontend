@@ -1,7 +1,7 @@
 'use client';
 
-import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { ArrowDown, ArrowUp } from '@/components/icons';
 import { formatValue } from '@/lib/jaina/formatValue';
 import type { ComparisonBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
@@ -191,10 +191,10 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
                     {hasChange ? (
                       <>
                         {pair.change_direction === 'up' && (
-                          <ArrowUpIcon className="mr-0.5 inline-block h-3 w-3" />
+                          <ArrowUp className="mr-0.5 inline-block h-3 w-3" />
                         )}
                         {pair.change_direction === 'down' && (
-                          <ArrowDownIcon className="mr-0.5 inline-block h-3 w-3" />
+                          <ArrowDown className="mr-0.5 inline-block h-3 w-3" />
                         )}
                         {Math.abs(pair.change as number)}%
                       </>

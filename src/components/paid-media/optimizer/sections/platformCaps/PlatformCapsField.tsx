@@ -8,8 +8,8 @@ import { useUiErrorSentence } from '@/i18n/errors';
 // the autopilot scopes do: the limit is a per-platform guardrail beside the portfolio form, not
 // a column of it. Amounts are never added across platforms, so two currencies never meet here.
 
-import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -130,7 +130,7 @@ function PlatformCapRow({
             onClick={() => void handleSave()}
           >
             {uiText.rich('sentence_e66795836de4', {
-              v0: () => (saving ? <Loader2 className="size-3.5 animate-spin" /> : null),
+              v0: () => (saving ? <Spinner className="size-3.5 animate-spin" /> : null),
             })}
           </Button>
         </div>

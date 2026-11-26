@@ -1,9 +1,9 @@
 'use client';
 
 import type { PaidScaffoldPlan } from '@continuum/contracts';
-import { Copy, Film, GalleryHorizontal, ImageIcon, ImageOff } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
+import { Copy, Film, GalleryHorizontal, Image, ImageOff } from '@/components/icons';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import { Button } from '@/components/ui/button';
 import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
@@ -276,7 +276,7 @@ export function ScaffoldAudiences({ audiences }: { audiences: AudienceLine[] }) 
   );
 }
 
-const FORMAT_ICON = { image: ImageIcon, video: Film, carousel: GalleryHorizontal } as const;
+const FORMAT_ICON = { image: Image, video: Film, carousel: GalleryHorizontal } as const;
 const TILE_LIMIT = 8;
 
 function CreativeThumb({ tile, signedUrl }: { tile: CreativeTile; signedUrl?: string }) {

@@ -1,7 +1,7 @@
-import { ArrowsCounterClockwise, MinusCircle, WarningCircle } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { createContext, type ReactNode, useContext } from 'react';
+import { CircleAlert, CircleMinus, RotateCcw } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,7 +80,7 @@ export function CardSurface({
     body = (
       <EndedEmpty
         icon={
-          <WarningCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--cs-warning,#cb8e00)]" />
+          <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--cs-warning,#cb8e00)]" />
         }
         message={errorMessage ?? analysisError ?? tUi('sectionFailed')}
         onRetry={onRetry}
@@ -89,7 +89,7 @@ export function CardSurface({
   } else if (phase === 'unavailable') {
     body = (
       <EndedEmpty
-        icon={<MinusCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />}
+        icon={<CircleMinus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />}
         message={tUi('sectionUnavailable')}
         onRetry={onRetry}
       />
@@ -173,7 +173,7 @@ function EndedEmpty({
       </div>
       {onRetry ? (
         <Button type="button" size="sm" variant="outline" onClick={onRetry}>
-          <ArrowsCounterClockwise aria-hidden className="h-3.5 w-3.5" />
+          <RotateCcw aria-hidden className="h-3.5 w-3.5" />
           {tUi('m_15ceaf8667')}
         </Button>
       ) : null}

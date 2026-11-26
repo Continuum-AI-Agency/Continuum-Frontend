@@ -23,12 +23,14 @@ import {
   parseCommentHashtags,
   splitCommentBodyForRender,
 } from '@continuum/contracts';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { useEffect, useRef, useState } from 'react';
 import {
+  ArrowDownToLine,
   Check,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Download,
+  CircleCheck,
   Globe,
   History,
   Link2,
@@ -38,9 +40,7 @@ import {
   SmilePlus,
   Trash2,
   X,
-} from 'lucide-react';
-import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
-import { useEffect, useRef, useState } from 'react';
+} from '@/components/icons';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -552,7 +552,7 @@ function ThreadCard({
           className="h-6 px-1.5 text-2xs text-muted-foreground"
           onClick={() => onResolve(!resolved)}
         >
-          {resolved ? <RotateCcw className="size-3" /> : <CheckCircle2 className="size-3" />}
+          {resolved ? <RotateCcw className="size-3" /> : <CircleCheck className="size-3" />}
           {resolved ? translateUi('reopen_a886d1dc') : translateUi('resolve_c8f193b3')}
         </Button>
         {currentUserId && thread.root.createdBy === currentUserId && (
@@ -741,7 +741,7 @@ export function CommentThreads({
                   className="h-6 px-1.5 text-2xs text-muted-foreground"
                   aria-label={translateUi('export_comments_as_markers_364ffdbf')}
                 >
-                  <Download className="size-3" /> {translateUi('export_markers_87f171d6')}
+                  <ArrowDownToLine className="size-3" /> {translateUi('export_markers_87f171d6')}
                 </Button>
               }
             />

@@ -1,7 +1,7 @@
-import { Workflow, Zap } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { AutomationTemplateGallery } from '@/components/automations/workspace/AutomationTemplateGallery';
+import { Workflow, Zap } from '@/components/icons';
 import { Link } from '@/i18n/navigation';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { createSupabaseServerClient } from '@/lib/supabase/server';

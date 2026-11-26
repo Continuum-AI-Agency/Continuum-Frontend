@@ -17,8 +17,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
  * that says "3 changes" is consent to nothing.
  */
 
-import { AlertTriangle, Loader2, Pause, Play, Plus, Send } from 'lucide-react';
 import React from 'react';
+import { Pause, Play, Plus, Send, Spinner, TriangleAlert } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import {
@@ -261,7 +261,7 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
         </Button>
 
         {isLoadingGraph ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          <Spinner className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
         ) : null}
 
         {hydration ? (
@@ -336,7 +336,7 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
             <ul className="space-y-1.5 text-sm">
               {plan.issues.map((issue) => (
                 <li key={issue} className="flex items-start gap-2 text-destructive">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>{issue}</span>
                 </li>
               ))}
@@ -374,7 +374,7 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
             >
               {uiText.rich('sentence_762b7c93acd5', {
                 icon: () =>
-                  isPublishing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null,
+                  isPublishing ? <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null,
                 count: plan?.steps.length ?? 0,
               })}
             </Button>

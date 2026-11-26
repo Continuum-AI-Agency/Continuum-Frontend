@@ -6,9 +6,9 @@ import {
   type MediaReviewStatus,
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, MessageSquare } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo } from 'react';
+import { MessageSquare, SquareArrowOutUpRight } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Link } from '@/i18n/navigation';
 import { librarySearchPath } from '@/lib/library/libraryHref';
@@ -103,7 +103,8 @@ export function OpenInLibrary({ brandId, assetId }: { brandId: string; assetId: 
       href={libraryAssetHref(brandId, assetId)}
       className="inline-flex items-center gap-1 text-primary hover:underline"
     >
-      <ExternalLink className="size-3" aria-hidden /> {translateUi('open_in_library_c0a66bb6')}
+      <SquareArrowOutUpRight className="size-3" aria-hidden />{' '}
+      {translateUi('open_in_library_c0a66bb6')}
     </Link>
   );
 }

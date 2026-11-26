@@ -1,7 +1,7 @@
 'use client';
 
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
+import { ChevronDown, ChevronLeft, ChevronRight } from '@/components/icons';
 
 import { cn } from '@/lib/utils';
 
@@ -48,9 +48,9 @@ function ResizableHandle({ withHandle, className, ...props }: ResizableHandlePro
 }
 
 const COLLAPSE_CHEVRON = {
-  left: ChevronLeftIcon,
-  right: ChevronRightIcon,
-  down: ChevronDownIcon,
+  left: ChevronLeft,
+  right: ChevronRight,
+  down: ChevronDown,
 } as const;
 
 type ResizablePanelCollapseButtonProps = Omit<React.ComponentProps<'button'>, 'aria-label'> & {

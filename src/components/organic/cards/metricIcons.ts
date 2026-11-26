@@ -1,4 +1,4 @@
-// Maps a metric descriptor icon key to its lucide glyph. Kept apart from the
+// Maps a metric descriptor icon key to its glyph. Kept apart from the
 // pure cardMetricSet module so that module stays React-free and unit-testable.
 
 import {
@@ -6,17 +6,17 @@ import {
   Clock,
   Eye,
   Heart,
-  type LucideIcon,
+  type IconComponent,
   MessageCircle,
   Share2,
   TrendingUp,
   Users,
   Zap,
-} from 'lucide-react';
+} from '@/components/icons';
 
 import type { MetricIconKey } from './cardMetricSet';
 
-export const METRIC_ICONS: Record<MetricIconKey, LucideIcon> = {
+export const METRIC_ICONS: Record<MetricIconKey, IconComponent> = {
   views: Eye,
   reach: Users,
   engagement: TrendingUp,

@@ -14,8 +14,8 @@ import {
   type AutomationSocialPlatform,
   automationSocialPlatformSchema,
 } from '@continuum/contracts';
-import { Check, ChevronsUpDown } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
+import { Check, ChevronsUpDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Command,

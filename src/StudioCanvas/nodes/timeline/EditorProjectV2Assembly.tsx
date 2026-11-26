@@ -20,9 +20,9 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Plus, Redo2, Undo2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
+import { Plus, Redo2, Undo2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';

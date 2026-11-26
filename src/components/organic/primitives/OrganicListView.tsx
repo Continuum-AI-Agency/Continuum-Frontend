@@ -1,10 +1,9 @@
 'use client';
 
-import { Check, ChevronDown, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-
 import * as React from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import { Check, ChevronDown, Pencil, Plus, Trash2, X, Zap } from '@/components/icons';
 import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
 import { useUnscheduleDraft } from '@/components/organic/hooks/useUnscheduleDraft';
 import { Badge } from '@/components/ui/badge';

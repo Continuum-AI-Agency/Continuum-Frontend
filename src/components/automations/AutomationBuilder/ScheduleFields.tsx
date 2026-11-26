@@ -1,9 +1,9 @@
 'use client';
 
-import { ChevronDownIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { Control } from 'react-hook-form';
 import { useWatch } from 'react-hook-form';
+import { ChevronDown } from '@/components/icons';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -196,7 +196,7 @@ export function ScheduleFields({ control }: { control: Control<AutomationBuilder
       {scheduleKind !== 'cron' && (
         <Collapsible>
           <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-            <ChevronDownIcon className="size-3.5" />
+            <ChevronDown className="size-3.5" />
             {uiText('advanced_switch_to_a_raw_cron_expression_b8aae0b')}
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-2">

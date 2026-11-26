@@ -11,9 +11,9 @@ import { createCalendarLocale } from './calendar-locale';
 // day grid was flex, and "Su MoTuWeThFrSa" ran together in every date picker. The header
 // and the week rows now share one layout (flex, 2rem cells), so they cannot drift again.
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type * as React from 'react';
 import { DayPicker } from 'react-day-picker';
+import { ChevronLeft, ChevronRight } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

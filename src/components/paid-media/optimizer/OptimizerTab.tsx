@@ -17,8 +17,8 @@ import { useTranslations } from 'next-intl';
 // state sits in a bordered card: every state paints straight onto the page.
 
 import type { PortfolioListItem } from '@continuum/contracts';
-import { ArrowRightIcon, ChevronLeftIcon, FileTextIcon, LayersIcon, PlusIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, ChevronLeft, FileText, Layers2, Plus } from '@/components/icons';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -192,7 +192,7 @@ function PlatformSwitch({
                 platform={platform}
               />
             ) : (
-              <LayersIcon aria-hidden="true" className="size-4 shrink-0" />
+              <Layers2 aria-hidden="true" className="size-4 shrink-0" />
             )}
             {tab === 'all' ? uiText('all_a52ace4') : platformTabLabel(tab)}
             {disconnected ? (
@@ -232,7 +232,7 @@ function OverviewToolbar({
         >
           {uiText.rich('sentence_98aeb8190d23', {
             v0: pendingCount,
-            v1: () => <ArrowRightIcon aria-hidden="true" className="size-3.5" />,
+            v1: () => <ArrowRight aria-hidden="true" className="size-3.5" />,
           })}
         </Button>
       ) : null}
@@ -246,7 +246,7 @@ function OverviewToolbar({
         data-testid="overview-weekly-report"
         href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
       >
-        <FileTextIcon aria-hidden="true" className="size-3.5" />
+        <FileText aria-hidden="true" className="size-3.5" />
         {uiText('weekly_report_53f750c')}
       </a>
       <Button
@@ -256,7 +256,7 @@ function OverviewToolbar({
         size="sm"
         type="button"
       >
-        <PlusIcon aria-hidden="true" className="size-3.5" />
+        <Plus aria-hidden="true" className="size-3.5" />
         {uiText('portfolio_1853eb2')}
       </Button>
     </div>
@@ -454,7 +454,7 @@ export function OptimizerTab({
             className="border-border/60 px-[var(--app-shell-pad-inline)]"
             title={
               <span className="inline-flex items-center gap-2">
-                <LayersIcon className="size-4" aria-hidden="true" />
+                <Layers2 className="size-4" aria-hidden="true" />
                 {uiText('all_portfolios_52fd3f5')}
               </span>
             }
@@ -466,7 +466,7 @@ export function OptimizerTab({
                 className="h-7 gap-1.5 px-2 text-xs"
                 onClick={() => setBrowsingAllAccounts(false)}
               >
-                <ChevronLeftIcon className="size-3.5" aria-hidden="true" />
+                <ChevronLeft className="size-3.5" aria-hidden="true" />
                 {uiText('back_76900f1')}
               </Button>
             }

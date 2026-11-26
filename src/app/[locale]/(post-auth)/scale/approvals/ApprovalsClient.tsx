@@ -1,6 +1,5 @@
 'use client';
 
-import { List, Table as TableIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { FocusComposer } from '@/components/approvals/FocusComposer';
@@ -9,6 +8,7 @@ import { LaneStrip } from '@/components/approvals/LaneStrip';
 import { LiveStatusDot } from '@/components/approvals/LiveStatusDot';
 import { QueueList } from '@/components/approvals/QueueList';
 import { QueueTable } from '@/components/approvals/QueueTable';
+import { List, Table as TableIcon } from '@/components/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { ErrorRetryState } from '@/components/shared/state/ErrorRetryState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

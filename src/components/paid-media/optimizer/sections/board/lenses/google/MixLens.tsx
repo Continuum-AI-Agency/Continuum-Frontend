@@ -9,10 +9,10 @@
 
 import type { BoardModuleSize, GoogleTopCampaigns } from '@continuum/contracts';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { AlertTriangleIcon, CheckIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Check, TriangleAlert } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { type FigureWindow, figureProps, formatCurrency } from '../../../../format';
@@ -308,7 +308,7 @@ function GoalBadge({ standing }: { standing: GoalStanding }) {
   const under = standing.side === 'under';
   return (
     <Badge data-testid="mix-goal" variant={under ? 'success' : 'destructive'}>
-      {under ? <CheckIcon aria-hidden="true" /> : <AlertTriangleIcon aria-hidden="true" />}
+      {under ? <Check aria-hidden="true" /> : <TriangleAlert aria-hidden="true" />}
       {standing.label}
     </Badge>
   );
@@ -791,9 +791,9 @@ function LineView({
                     variant={row.flagged ? 'destructive' : 'success'}
                   >
                     {row.flagged ? (
-                      <AlertTriangleIcon aria-hidden="true" />
+                      <TriangleAlert aria-hidden="true" />
                     ) : (
-                      <CheckIcon aria-hidden="true" />
+                      <Check aria-hidden="true" />
                     )}
                     {signedPoints(row.deviation, uiText)}
                   </Badge>

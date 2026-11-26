@@ -1,6 +1,10 @@
 'use client';
 
 import { ReactFlowProvider } from '@xyflow/react';
+import { AnimatePresence, motion, useDragControls } from 'motion/react';
+import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Bot,
@@ -9,11 +13,7 @@ import {
   MessageSquareText,
   Minimize2,
   X,
-} from 'lucide-react';
-import { AnimatePresence, motion, useDragControls } from 'motion/react';
-import Link from 'next/link';
-import { useTranslations } from 'next-intl';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+} from '@/components/icons';
 import { JainaChatSurface } from '@/components/paid-media/jaina/JainaChatSurface';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button, buttonVariants } from '@/components/ui/button';

@@ -1,9 +1,9 @@
 'use client';
 
-import { AlertCircle, Check, FileText, Loader2, RefreshCw, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromAttachment } from '@/components/chat/media/media';
+import { Check, CircleAlert, FileText, RefreshCw, Spinner, X } from '@/components/icons';
 import {
   AttachmentAction,
   AttachmentActions,
@@ -145,9 +145,9 @@ function statusText(file: Attachment, t: ReturnType<typeof useTranslations<'comm
 
 function AttachmentStatusIcon({ file }: { file: Attachment }) {
   if (file.status === 'uploading' || file.status === 'indexing') {
-    return <Loader2 className="animate-spin" aria-hidden="true" />;
+    return <Spinner className="animate-spin" aria-hidden="true" />;
   }
-  if (file.status === 'error') return <AlertCircle aria-hidden="true" />;
+  if (file.status === 'error') return <CircleAlert aria-hidden="true" />;
   if (file.kind === 'document') return <FileText aria-hidden="true" />;
   return <Check aria-hidden="true" />;
 }

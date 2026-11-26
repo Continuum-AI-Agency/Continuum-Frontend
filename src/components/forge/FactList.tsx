@@ -1,5 +1,5 @@
-import type { LucideIcon } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
+import type { IconComponent } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 // column is capped so on a wide screen the second pair stays near the first.
 
 export type Fact = {
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   value: ReactNode;
   /** Mono, tabular figures, so counts line up down the list. */

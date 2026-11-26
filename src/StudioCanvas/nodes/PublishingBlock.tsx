@@ -13,11 +13,11 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
-import { Copy, Megaphone, Send, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState, useMemo as useUiConfigMemo } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Copy, Megaphone, Send, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';

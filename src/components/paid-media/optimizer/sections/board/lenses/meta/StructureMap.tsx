@@ -8,7 +8,6 @@
 // bare two-row icicle.
 
 import type { BoardModuleSize } from '@continuum/contracts';
-import { AlertTriangleIcon, ChevronRightIcon } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import {
@@ -19,6 +18,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { ChevronRight, TriangleAlert } from '@/components/icons';
 import {
   currencyColumnSuffix,
   formatCurrency,
@@ -312,7 +312,7 @@ function StructureSmall({ model }: { model: StructureModel }) {
       </div>
       {lost ? (
         <p className="flex items-start gap-1.5 text-xs" data-testid={`${TEST_ID}-lost`}>
-          <AlertTriangleIcon
+          <TriangleAlert
             aria-hidden="true"
             className="mt-0.5 size-3 shrink-0 text-destructive-ink"
           />
@@ -449,10 +449,7 @@ function StructureFull({
             >
               {model.root.name}
             </button>
-            <ChevronRightIcon
-              aria-hidden="true"
-              className="size-3 shrink-0 text-muted-foreground"
-            />
+            <ChevronRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
             <span className="min-w-0 truncate font-medium" title={focused.name}>
               {focused.name}
             </span>
@@ -555,7 +552,7 @@ function StructureFull({
           data-testid={`${TEST_ID}-lost`}
           key={group.portfolioId}
         >
-          <AlertTriangleIcon
+          <TriangleAlert
             aria-hidden="true"
             className="mt-0.5 size-3 shrink-0 text-destructive-ink"
           />

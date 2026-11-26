@@ -1,7 +1,7 @@
 'use client';
 
-import { Moon, Sun } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Moon, Sun } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

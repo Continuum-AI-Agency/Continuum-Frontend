@@ -5,7 +5,7 @@
 // read consistently wherever a metric or a chart hover row needs a directional or
 // categorical cue, instead of each call site re-picking an icon and a color.
 
-import { MinusIcon, TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
+import { Minus, TrendingDown, TrendingUp } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { statusColor, trajectoryColor } from './vizTokens';
 
@@ -18,11 +18,7 @@ export function TrajectoryIndicator({
 }) {
   const normalized = (state ?? 'neutral').toLowerCase();
   const Icon =
-    normalized === 'positive'
-      ? TrendingUpIcon
-      : normalized === 'negative'
-        ? TrendingDownIcon
-        : MinusIcon;
+    normalized === 'positive' ? TrendingUp : normalized === 'negative' ? TrendingDown : Minus;
   return (
     <Icon
       aria-hidden="true"

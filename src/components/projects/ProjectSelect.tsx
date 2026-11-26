@@ -9,8 +9,8 @@ import { useTranslations } from 'next-intl';
 // it, so search never filters. This is the pairing every combobox in the app uses.
 
 import type { Project } from '@continuum/contracts';
-import { Check, ChevronsUpDown, FolderOpen, Plus } from 'lucide-react';
 import * as React from 'react';
+import { Check, ChevronsUpDown, FolderOpen, Plus } from '@/components/icons';
 import { useActiveProject } from '@/components/projects/ActiveProjectProvider';
 import { ProjectChip, projectColor } from '@/components/projects/ProjectChip';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';

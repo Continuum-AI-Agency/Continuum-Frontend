@@ -66,9 +66,9 @@ import {
   trialNextStepOf,
   trialStatusOf,
 } from '@continuum/contracts';
-import { Download, Flag, RotateCw, Send } from 'lucide-react';
 import { BrandTrendsHeaderModule } from '@/components/brand-insights/BrandTrendsHeaderModule';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
+import { ArrowDownToLine, Flag, RotateCw, Send } from '@/components/icons';
 import { Reel, ReelContent, type ReelItem, ReelVideo } from '@/components/kibo-ui/reel';
 import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
 import { CreativeStrategyCard } from '@/components/organic/CreativeStrategyCard';
@@ -3072,7 +3072,9 @@ export function OrganicMetricsDashboard({
                     aria-label={uiText('open_organic_report_export_or_email_options_74d50c5')}
                     className="h-8 px-2 text-xs"
                   >
-                    <Download className={cn(exportingReportFormat !== null && 'animate-pulse')} />
+                    <ArrowDownToLine
+                      className={cn(exportingReportFormat !== null && 'animate-pulse')}
+                    />
                     {exportingReportFormat !== null
                       ? uiText('exporting_a2dd9cb')
                       : uiText('export_or_email_3ac2a7e')}

@@ -19,8 +19,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // invisible only because the formatter answered a missing code with "$" — on an account
 // whose currency nobody recorded, that dressed the figure in the wrong money.
 
-import { Loader2Icon, TriangleAlertIcon, Undo2Icon } from 'lucide-react';
 import * as React from 'react';
+import { Spinner, TriangleAlert, Undo2 } from '@/components/icons';
 
 import {
   AlertDialog,
@@ -187,7 +187,7 @@ export function RevertApplyDialog({
             variant="ghost"
             className={`h-6 shrink-0 gap-1 px-1.5 ${triggerTextSize} text-muted-foreground hover:text-foreground`}
           >
-            <Undo2Icon aria-hidden="true" className="size-3" />
+            <Undo2 aria-hidden="true" className="size-3" />
             {isStatus ? uiText('unpause_ccf1af7') : uiText('revert_0026c50')}
           </Button>
         }
@@ -208,7 +208,7 @@ export function RevertApplyDialog({
 
         {phase === 'applying' ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-            <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+            <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
             {isStatus
               ? uiText('restoring_the_prior_status_on_meta_5d1402f')
               : uiText('restoring_the_prior_budget_on_meta_26300db')}
@@ -221,7 +221,7 @@ export function RevertApplyDialog({
                 : 'rounded-md border border-success/40 bg-success/10 px-3 py-2 text-xs text-success'
             }
           >
-            {phase === 'error' ? <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" /> : null}
+            {phase === 'error' ? <TriangleAlert className="mt-0.5 size-4 shrink-0" /> : null}
             <span>{resultNote}</span>
           </p>
         ) : (
@@ -241,7 +241,7 @@ export function RevertApplyDialog({
           {phase !== 'done' ? (
             <Button type="button" className="gap-1.5" disabled={!canRevert} onClick={handleRevert}>
               {phase === 'applying' ? (
-                <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+                <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
               ) : null}
               {isStatus ? uiText('unpause_ad_set_335c259') : uiText('revert_budget_dea8d0b')}
             </Button>
@@ -270,7 +270,7 @@ function RevertPreviewBody({
   if (isPending) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-        <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+        <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
         {uiText('computing_the_revert_cff726c')}
       </p>
     );
@@ -338,7 +338,7 @@ function RevertPreviewBody({
 function InlineError({ children }: { children: React.ReactNode }) {
   return (
     <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-      <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" />
       <span>{children}</span>
     </p>
   );

@@ -30,9 +30,9 @@ import {
   sectionForToken,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
-import { X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
+import { X } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';

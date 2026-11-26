@@ -1,20 +1,20 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useLocale, useTranslations } from 'next-intl';
+import * as React from 'react';
 import {
   Activity,
   Check,
   ChevronDown,
-  ExternalLink,
   Heart,
-  Loader2,
   MessageCircle,
   RefreshCw,
   Sparkles,
+  Spinner,
+  SquareArrowOutUpRight,
   Zap,
-} from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
-import * as React from 'react';
+} from '@/components/icons';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -182,7 +182,7 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
   if (query.isLoading) {
     return (
       <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" /> {uiText('loading_source_signals_1307d09')}
+        <Spinner className="h-3 w-3 animate-spin" /> {uiText('loading_source_signals_1307d09')}
       </div>
     );
   }
@@ -226,7 +226,7 @@ function CitationsPanel({ brandProfileId, kind, insightId, enabled }: CitationsP
                   className="shrink-0 text-muted-foreground hover:text-foreground"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <ExternalLink className="h-3 w-3" />
+                  <SquareArrowOutUpRight className="h-3 w-3" />
                 </a>
               ) : null}
             </div>
@@ -387,7 +387,7 @@ const TrendTableRow = React.memo(function TrendTableRow({
                         className="inline-flex items-center gap-1 hover:text-foreground"
                       >
                         <span>{meta.source ?? sourceHost}</span>
-                        <ExternalLink className="h-2.5 w-2.5" />
+                        <SquareArrowOutUpRight className="h-2.5 w-2.5" />
                       </a>
                     ) : (
                       <span>{meta?.source}</span>

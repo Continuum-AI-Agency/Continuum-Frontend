@@ -16,8 +16,8 @@ import type {
   AutomationWorkflowDefinition,
   TestAutomationWorkflowResponse,
 } from '@continuum/contracts';
-import { AlertTriangle, CheckCircle2, FlaskConical, Loader2, PlugZap } from 'lucide-react';
 import { useMemo } from 'react';
+import { CircleCheck, FlaskConical, PlugZap, Spinner, TriangleAlert } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -114,7 +114,7 @@ export function PublishReadinessDialog({
                     onClick={() => onFocusNode(blocker.nodeId)}
                     className="flex w-full items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-left transition-colors hover:bg-destructive/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive"
                   >
-                    <AlertTriangle
+                    <TriangleAlert
                       aria-hidden="true"
                       className="mt-0.5 size-4 shrink-0 text-destructive"
                     />
@@ -165,7 +165,7 @@ export function PublishReadinessDialog({
 
         {!blocked && warnings.length === 0 ? (
           <p className="flex items-center gap-2 text-xs text-secondary">
-            <CheckCircle2 aria-hidden="true" className="size-4 shrink-0 text-primary" />
+            <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-primary" />
             {uiText('every_enabled_step_is_wired_and_ready_to_run__98bc271')}
           </p>
         ) : null}
@@ -179,7 +179,7 @@ export function PublishReadinessDialog({
               {uiText.rich('sentence_54a2616ab986', {
                 v0: () =>
                   testing ? (
-                    <Loader2 data-icon="inline-start" className="animate-spin" />
+                    <Spinner data-icon="inline-start" className="animate-spin" />
                   ) : (
                     <FlaskConical data-icon="inline-start" />
                   ),
@@ -212,7 +212,7 @@ export function PublishReadinessDialog({
             <Button disabled={blocked || publishing || !definition} onClick={onConfirmPublish}>
               {uiText.rich('sentence_d37719a6076d', {
                 v0: () =>
-                  publishing ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null,
+                  publishing ? <Spinner data-icon="inline-start" className="animate-spin" /> : null,
               })}
             </Button>
           </div>

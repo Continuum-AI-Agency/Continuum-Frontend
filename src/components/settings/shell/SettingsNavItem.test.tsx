@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { Tabs } from '@base-ui/react/tabs';
 import { cleanup, render } from '@testing-library/react';
-import { IdCard } from 'lucide-react';
+import { IdCard } from '@/components/icons';
 import { SettingsNavItem } from './SettingsNavItem';
 
 // APP-SWEEP-settings-selected-tab-invisible: every Settings page drew its selected section

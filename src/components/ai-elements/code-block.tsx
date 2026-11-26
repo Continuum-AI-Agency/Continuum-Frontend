@@ -1,6 +1,5 @@
 'use client';
 
-import { CheckIcon, CopyIcon } from 'lucide-react';
 import type { ComponentProps, CSSProperties, HTMLAttributes } from 'react';
 import {
   createContext,
@@ -14,6 +13,7 @@ import {
 } from 'react';
 import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } from 'shiki';
 import { createHighlighter } from 'shiki';
+import { Check, Copy } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -463,7 +463,7 @@ export const CodeBlockCopyButton = ({
     [],
   );
 
-  const Icon = isCopied ? CheckIcon : CopyIcon;
+  const Icon = isCopied ? Check : Copy;
 
   return (
     <Button

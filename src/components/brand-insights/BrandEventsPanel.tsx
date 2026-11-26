@@ -1,5 +1,5 @@
-import { BookOpen, Calendar, Clock, Globe } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+import { BookOpen, Calendar, Clock, Globe } from '@/components/icons';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { GlassPanel } from '@/components/ui/GlassPanel';

@@ -12,7 +12,7 @@ import { useTranslations } from 'next-intl';
 // local stack and reads it as "this product is broken and nobody noticed". What
 // they actually need to know is whether their money is at risk while it's down.
 
-import { ServerCrashIcon } from 'lucide-react';
+import { ServerCrash } from '@/components/icons';
 
 import { ErrorRetryState } from '@/components/shared/state/ErrorRetryState';
 
@@ -27,7 +27,7 @@ export function OptimizerOffline({ onRetry }: OptimizerOfflineProps) {
       <ErrorRetryState
         title={uiText('can_t_reach_the_optimizer_7a9e477')}
         message={uiText('your_portfolios_and_cycle_data_can_t_load_rig_77be253')}
-        media={<ServerCrashIcon aria-hidden="true" />}
+        media={<ServerCrash aria-hidden="true" />}
         onRetry={onRetry}
         retryLabel={uiText('retry_942087c')}
       />

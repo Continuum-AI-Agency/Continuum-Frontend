@@ -10,19 +10,6 @@ import {
   templateDisplayName,
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  Check,
-  Fingerprint,
-  GitCommitVertical,
-  History,
-  Loader2,
-  Pencil,
-  Play,
-  Plus,
-  RectangleHorizontal,
-  Type,
-  Variable,
-} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useMemo, useState } from 'react';
 import { FactList } from '@/components/forge/FactList';
@@ -34,6 +21,19 @@ import {
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { thumbnailSrc } from '@/components/forge/renderOutputMedia';
+import {
+  Check,
+  FingerprintPattern,
+  GitCommitVertical,
+  History,
+  Pencil,
+  Play,
+  Plus,
+  RectangleHorizontal,
+  Spinner,
+  Type,
+  Variable,
+} from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { VideoStill } from '@/components/media/VideoStill';
 import { Button } from '@/components/ui/button';
@@ -495,7 +495,7 @@ export function TemplateFacts({
           },
           { icon: GitCommitVertical, label: translateUi('version_dd167905'), value: revision },
           {
-            icon: Fingerprint,
+            icon: FingerprintPattern,
             label: translateUi('digest_6e2f80bf'),
             value: source.aepSha256 ? (
               <span className="break-all font-mono text-2xs">{source.aepSha256}</span>
@@ -705,7 +705,7 @@ export function SharedTemplateCard({
                 disabled={busy}
                 onClick={onToggle}
               >
-                {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+                {busy ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}{' '}
                 {translateUi('remove_c3812fc4')}
               </Button>
               {!template.draft && onRender ? (
@@ -723,7 +723,7 @@ export function SharedTemplateCard({
           ) : (
             <Button type="button" size="sm" className="gap-1.5" disabled={busy} onClick={onToggle}>
               {busy ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                <Spinner className="size-3.5 animate-spin" aria-hidden />
               ) : (
                 <Plus className="size-3.5" aria-hidden />
               )}{' '}

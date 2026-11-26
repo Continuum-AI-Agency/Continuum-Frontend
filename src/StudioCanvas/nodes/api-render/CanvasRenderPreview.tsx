@@ -2,12 +2,12 @@
 
 import type { ApiRenderInputValue, ApiRenderTemplateContract } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Expand } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
 import type { RequestRow } from '@/components/forge/renderRequestRows';
+import { Expand } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { apiRendersApi } from './apiRendersApi';

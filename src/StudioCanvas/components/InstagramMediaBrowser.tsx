@@ -10,9 +10,9 @@ import type {
   InstagramTopMediaResponse,
   UnfurlMediaItem,
 } from '@continuum/contracts';
-import { AtSign, Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AtSign, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -175,7 +175,7 @@ export function InstagramMediaBrowser({
         />
         <Button type="submit" disabled={status === 'loading' || !username.trim()}>
           {status === 'loading' ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Spinner className="h-4 w-4 animate-spin" />
           ) : (
             translateUi('search_49c266ba')
           )}

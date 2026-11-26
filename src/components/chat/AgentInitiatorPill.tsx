@@ -2,8 +2,8 @@
 
 import type { AgentInitiator, AgentKind } from '@continuum/contracts';
 import { agentConversationPath, agentInitiatorLabel } from '@continuum/contracts';
-import { ArrowUpRightIcon, SparklesIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { ArrowUpRight, Sparkles } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
@@ -25,7 +25,7 @@ export function AgentInitiatorPill({
   if (initiator !== 'agent') return null;
   return (
     <Pill variant="outline" className={cn('gap-1 text-primary', className)}>
-      <SparklesIcon className="size-3" />
+      <Sparkles className="size-3" />
       {agentInitiatorLabel(initiatorAgent)}
     </Pill>
   );
@@ -74,7 +74,7 @@ export function ChatProvenanceBanner({
         className,
       )}
     >
-      <SparklesIcon className="size-3.5 text-primary" />
+      <Sparkles className="size-3.5 text-primary" />
       <span>
         {tUi('m_757532a877')}
         {label}
@@ -84,7 +84,7 @@ export function ChatProvenanceBanner({
           <span aria-hidden="true">—</span>
           <Link href={href} className="inline-flex items-center gap-1 text-primary hover:underline">
             {tUi('m_151592a062')}
-            <ArrowUpRightIcon className="size-3" />
+            <ArrowUpRight className="size-3" />
           </Link>
         </>
       ) : null}

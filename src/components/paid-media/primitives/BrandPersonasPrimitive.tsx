@@ -1,7 +1,7 @@
 'use client';
 
-import { User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { User } from '@/components/icons';
 
 import { ComingSoonPrimitive } from './ComingSoonPrimitive';
 

@@ -38,11 +38,11 @@ import {
   pickSectionExemplar,
 } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
-import { Gem, Loader2, Sparkles } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Gem, Sparkles, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
@@ -288,7 +288,7 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
                   onClick={() => void generateSpecimen()}
                 >
                   {isGenerating ? (
-                    <Loader2 className="mr-1 size-3 animate-spin" />
+                    <Spinner className="mr-1 size-3 animate-spin" />
                   ) : (
                     <Sparkles className="mr-1 size-3" />
                   )}

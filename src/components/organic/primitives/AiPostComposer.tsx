@@ -21,8 +21,8 @@ import {
   PUBLISH_PLATFORM_ORDER,
   type PublishPlatform,
 } from '@continuum/contracts';
-import { ImageOff, Images, Loader2, Play, Sparkles } from 'lucide-react';
 import * as React from 'react';
+import { ImageOff, Images, Play, Sparkles, Spinner } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -351,7 +351,7 @@ export function AiPostComposer({
 
           {evidence.loading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
-              <Loader2 className="size-3 animate-spin" />
+              <Spinner className="size-3 animate-spin" />
               {uiText('loading_brand_evidence_f3be8ab')}
             </div>
           ) : (
@@ -521,7 +521,7 @@ export function AiPostComposer({
             className="gap-1.5"
           >
             {submitting ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Spinner className="size-4 animate-spin" />
             ) : (
               <Sparkles className="size-4" />
             )}

@@ -1,5 +1,5 @@
-import { LightbulbIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Lightbulb } from '@/components/icons';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 
 interface JainaReportInsightsProps {
@@ -18,7 +18,7 @@ export function JainaReportInsights({ insights }: JainaReportInsightsProps) {
       <div className="rounded-xl bg-primary/10 p-4">
         <div className="flex gap-4 items-start p-2">
           <div className="mt-1 p-2 bg-indigo-500/20 rounded-full text-indigo-400">
-            <LightbulbIcon size={20} />
+            <Lightbulb size={20} />
           </div>
           <div className="space-y-3 flex-1">
             {insights.map((insight, index) => (

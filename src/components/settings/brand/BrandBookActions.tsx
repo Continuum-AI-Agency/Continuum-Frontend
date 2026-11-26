@@ -1,10 +1,10 @@
 'use client';
 
 import type { BrandBookResponse } from '@continuum/contracts';
-import { Download, FileText, Package } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { ArrowDownToLine, FileText, Package } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -135,7 +135,7 @@ export function BrandBookActions({
               disabled={editorIsDirty || exporting !== null}
               title={editorIsDirty ? tUi('m_81d7fb23cd') : undefined}
             >
-              <Download aria-hidden />
+              <ArrowDownToLine aria-hidden />
               {exporting ? tUi('m_583cccdcd1') : tUi('m_f3e4fadb9e')}
             </Button>
           }

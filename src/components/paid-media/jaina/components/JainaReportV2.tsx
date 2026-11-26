@@ -1,20 +1,10 @@
 'use client';
 
-import {
-  BookIcon,
-  ChevronDownIcon,
-  CodeIcon,
-  EyeIcon,
-  EyeOffIcon,
-  FileDownIcon,
-  Share2Icon,
-  Table2Icon,
-} from 'lucide-react';
-
 import { useTranslations } from 'next-intl';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
+import { Book, ChevronDown, Code, Eye, EyeOff, FileDown, Share2, Table2 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
@@ -117,7 +107,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
           <summary className={DISCLOSURE_SUMMARY_CLASS}>
             {uiText.rich('sentence_f03740c15f68', {
               v0: objectives.length,
-              v1: () => <ChevronDownIcon aria-hidden="true" className={DISCLOSURE_CHEVRON_CLASS} />,
+              v1: () => <ChevronDown aria-hidden="true" className={DISCLOSURE_CHEVRON_CLASS} />,
             })}
           </summary>
           <ul className="mt-2 space-y-1.5">
@@ -144,7 +134,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
         <details className="group">
           <summary className={DISCLOSURE_SUMMARY_CLASS}>
             {uiText('analysis_e70d8eb')}
-            <ChevronDownIcon aria-hidden="true" className={DISCLOSURE_CHEVRON_CLASS} />
+            <ChevronDown aria-hidden="true" className={DISCLOSURE_CHEVRON_CLASS} />
           </summary>
           <SafeMarkdown
             content={reasoning}
@@ -348,7 +338,7 @@ export function JainaReportV2({
               aria-label={uiText('template_dee909e33af9', { count: citationCount })}
             >
               {uiText.rich('sentence_29cff36b24a0', {
-                v0: () => <BookIcon className="size-3" aria-hidden="true" />,
+                v0: () => <Book className="size-3" aria-hidden="true" />,
                 v1: citationCount,
               })}
             </Badge>
@@ -460,7 +450,7 @@ export function JainaReportV2({
                   aria-pressed={isVisible}
                   onClick={() => toggleBlock(block.block_id)}
                 >
-                  {isVisible ? <EyeIcon aria-hidden="true" /> : <EyeOffIcon aria-hidden="true" />}
+                  {isVisible ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
                   {block.title}
                 </Button>
               );
@@ -491,7 +481,7 @@ export function JainaReportV2({
             aria-label={uiText('export_visible_modules_to_google_sheets_6262ea6')}
           >
             {uiText.rich('sentence_7ada52d96afe', {
-              v0: () => <Table2Icon className="size-3.5" />,
+              v0: () => <Table2 className="size-3.5" />,
             })}
           </Button>
           <Button
@@ -502,7 +492,7 @@ export function JainaReportV2({
             disabled={isStreaming || exporting !== null}
             aria-label={uiText('share_report_by_email_6991803')}
           >
-            <Share2Icon className="size-3.5" />
+            <Share2 className="size-3.5" />
             {uiText('email_969ccbd')}
           </Button>
           <Button
@@ -513,7 +503,7 @@ export function JainaReportV2({
             disabled={isStreaming || exporting !== null}
             aria-label={uiText('export_report_as_html_3e86f53')}
           >
-            <CodeIcon className="size-3.5" />
+            <Code className="size-3.5" />
             {exporting === 'html' ? uiText('preparing_5d1fa38') : uiText('export_html_17f681a')}
           </Button>
           <Button
@@ -524,7 +514,7 @@ export function JainaReportV2({
             disabled={isStreaming || exporting !== null}
             aria-label={uiText('export_report_as_pdf_42e2244')}
           >
-            <FileDownIcon className="size-3.5" />
+            <FileDown className="size-3.5" />
             {exporting === 'pdf' ? uiText('preparing_5d1fa38') : uiText('export_pdf_7aad9d4')}
           </Button>
         </div>

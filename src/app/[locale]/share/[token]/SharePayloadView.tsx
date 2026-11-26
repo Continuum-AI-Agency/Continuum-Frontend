@@ -28,8 +28,8 @@ import {
   commentDeepLinkFromAnnotation,
   viewerFamily,
 } from '@continuum/contracts';
-import { Download, FileArchive } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
+import { ArrowDownToLine, FileArchive } from '@/components/icons';
 import { type StaticMark, StaticMarks } from '@/components/library/detail/annotation/StaticMarks';
 import { FamilyViewer } from '@/components/library/viewers';
 import { initialsFor } from '@/lib/library/comments';
@@ -83,7 +83,7 @@ function DownloadButton({
       data-share-download={asset.id}
       className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
     >
-      <Download className="size-3.5" aria-hidden />
+      <ArrowDownToLine className="size-3.5" aria-hidden />
       {uiText('download_d6eafe8')}
     </a>
   );
@@ -725,7 +725,7 @@ export function SharePayloadView({
                 data-share-download-all
                 className={DOWNLOAD_ALL_CLASS}
               >
-                <Download className="size-3.5" aria-hidden />
+                <ArrowDownToLine className="size-3.5" aria-hidden />
                 {uiText('downloadAll')}
               </a>
             ) : null}

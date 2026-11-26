@@ -2,10 +2,10 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Copy, Image, Scissors, Trash2, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback } from 'react';
+import { Copy, Image, Scissors, Trash2, Video, Volume2, VolumeOff, X } from '@/components/icons';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -218,7 +218,7 @@ export function TimelineClipBlock({
         ) : null}
         {onToggleMute && isVideo ? (
           <ContextMenuItem onClick={onToggleMute}>
-            {muted ? <Volume2 /> : <VolumeX />}
+            {muted ? <Volume2 /> : <VolumeOff />}
             {muted ? translateUi('unmute_ce4ee4ef') : translateUi('mute_8dd6857b')}
           </ContextMenuItem>
         ) : null}

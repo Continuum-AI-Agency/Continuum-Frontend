@@ -7,10 +7,10 @@ import {
   type DocumentCategory,
   type DocumentScope,
 } from '@continuum/contracts';
-import { FileText, Loader2, Plus, Upload } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUpFromLine, FileText, Plus, Spinner } from '@/components/icons';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -387,7 +387,7 @@ function SyncBar({
           )}
         >
           {uploading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Spinner className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <Plus className="h-3.5 w-3.5" />
           )}
@@ -497,7 +497,7 @@ function EmptyState({
         onClick={onBrowse}
         className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Upload className="h-3.5 w-3.5" />
+        <ArrowUpFromLine className="h-3.5 w-3.5" />
         {tUi('m_524932e050')}
       </button>
       <p className="text-xs text-muted-foreground">{tUi('m_ad4c78b7ee')}</p>

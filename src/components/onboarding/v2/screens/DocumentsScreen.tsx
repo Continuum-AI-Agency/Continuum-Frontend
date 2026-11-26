@@ -1,9 +1,8 @@
 'use client';
 
-import { FileText } from '@phosphor-icons/react';
 import { useTranslations } from 'next-intl';
-
 import { DesignSystemCard } from '@/components/design-system/DesignSystemCard';
+import { FileText } from '@/components/icons';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { DocumentUploader } from '@/components/onboarding/shared/DocumentUploader';
 import { HelpPopover } from '../HelpPopover';

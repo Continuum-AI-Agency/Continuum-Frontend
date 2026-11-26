@@ -1,7 +1,7 @@
 'use client';
 
-import { Lock, SearchX } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Lock, SearchX } from '@/components/icons';
 import { PLATFORM_ICONS } from '@/components/settings/shell/platformIcons';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';

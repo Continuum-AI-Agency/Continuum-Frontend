@@ -1,9 +1,9 @@
 'use client';
 
 import type { EditorProjectV2, EditorTextClip, EditorTrack } from '@continuum/contracts';
-import { Plus, Trash2, Type } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
+import { Plus, Trash2, Type } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';

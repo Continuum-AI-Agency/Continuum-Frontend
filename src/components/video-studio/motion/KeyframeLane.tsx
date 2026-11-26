@@ -1,13 +1,13 @@
 'use client';
 
 import type { EditorKeyframe, EditorProjectV2 } from '@continuum/contracts';
-import { Trash2 } from 'lucide-react';
 import {
   useTranslations,
   useLocale as useUiLocale,
   useTranslations as useUiTranslations,
 } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { formatDecimal } from '@/lib/format/decimal';

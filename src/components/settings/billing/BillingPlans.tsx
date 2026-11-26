@@ -2,9 +2,9 @@
 
 import type { PlanCode } from '@continuum/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { Check } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import {
   AlertDialog,

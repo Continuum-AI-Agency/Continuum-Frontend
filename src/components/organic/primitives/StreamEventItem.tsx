@@ -1,8 +1,8 @@
 'use client';
 
-import { Check, FileText, RotateCw, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import type * as React from 'react';
+import { Check, FileText, RotateCw, X } from '@/components/icons';
 import type { UiLocale } from '@/i18n/config';
 import type { CalendarGenerationEvent } from '@/lib/organic/calendar-generation';
 import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';

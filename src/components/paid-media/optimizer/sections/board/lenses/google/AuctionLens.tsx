@@ -9,9 +9,9 @@
 
 import type { BoardModuleSize, GoogleTopCampaigns } from '@continuum/contracts';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { AlertTriangleIcon, LockIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
+import { Lock, TriangleAlert } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -373,13 +373,13 @@ function ShareRow({
         <div className="flex flex-wrap gap-1.5">
           {row.v3 ? (
             <Badge data-testid="auction-v3" variant="destructive">
-              <AlertTriangleIcon aria-hidden="true" />
+              <TriangleAlert aria-hidden="true" />
               {uiText('share_or_more_lost_to_budget_2fb4276', { share: shareText(V3_BUDGET_LOST) })}
             </Badge>
           ) : null}
           {row.locked ? (
             <Badge data-testid="auction-locked" variant="secondary">
-              <LockIcon aria-hidden="true" />
+              <Lock aria-hidden="true" />
               {uiText('raise_locked_b576c4f')}
             </Badge>
           ) : null}
@@ -454,7 +454,7 @@ function SharesView({
           className="flex items-start gap-1.5 text-muted-foreground text-xs"
           data-testid="auction-lock-note"
         >
-          <LockIcon aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
+          <Lock aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
           <span>
             {uiText('raise_locked_for_campaigns_fix_the_primary_co_842c17f', {
               campaigns: model.locked.join(', '),
@@ -572,7 +572,7 @@ function DarkView({
         />
       ) : (
         <Badge className="self-start" data-testid="auction-dark-days" variant="destructive">
-          <AlertTriangleIcon aria-hidden="true" />
+          <TriangleAlert aria-hidden="true" />
           {darkDaysText}
         </Badge>
       )}

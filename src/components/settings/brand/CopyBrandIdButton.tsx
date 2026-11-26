@@ -1,8 +1,8 @@
 'use client';
 
-import { Check, Copy } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { Check, Copy } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 export function CopyBrandIdButton({ brandId }: { brandId: string }) {

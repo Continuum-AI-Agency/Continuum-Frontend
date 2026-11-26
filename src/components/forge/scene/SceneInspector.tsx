@@ -1,9 +1,9 @@
 'use client';
 
 import type { BlendField } from '@continuum/contracts';
-import { ChevronRight, RotateCcw } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useState } from 'react';
+import { ChevronRight, RotateCcw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';

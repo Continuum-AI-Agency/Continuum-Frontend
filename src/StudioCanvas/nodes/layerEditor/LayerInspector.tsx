@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { memo, useMemo as useUiConfigMemo } from 'react';
 import {
   AlignCenterHorizontal,
   AlignCenterVertical,
@@ -13,9 +15,8 @@ import {
   ChevronUp,
   FlipHorizontal,
   FlipVertical,
-} from 'lucide-react';
-import { useTranslations as useUiTranslations } from 'next-intl';
-import { memo, useMemo as useUiConfigMemo } from 'react';
+  type IconComponent,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
 import { Label } from '@/components/ui/label';
@@ -58,7 +59,7 @@ const FRAME_PRESET_LABELS: Readonly<Record<string, string>> = Object.fromEntries
 function useLocalAlignButtonsMessages() {
   const translateConfig = useUiTranslations('studio');
   return useUiConfigMemo(() => {
-    const value: { edge: AlignEdge; label: string; Icon: typeof AlignStartVertical }[] = [
+    const value: { edge: AlignEdge; label: string; Icon: IconComponent }[] = [
       { edge: 'left', label: translateConfig('align_left_eac0f9c3'), Icon: AlignStartVertical },
       {
         edge: 'center',
@@ -81,7 +82,7 @@ function useLocalAlignButtonsMessages() {
 function useLocalOrderButtonsMessages() {
   const translateConfig = useUiTranslations('studio');
   return useUiConfigMemo(() => {
-    const value: { move: LayerMove; label: string; Icon: typeof ChevronsUp }[] = [
+    const value: { move: LayerMove; label: string; Icon: IconComponent }[] = [
       { move: 'top', label: translateConfig('bring_to_front_520cdb7e'), Icon: ChevronsUp },
       { move: 'up', label: translateConfig('bring_forward_2a3d681d'), Icon: ChevronUp },
       { move: 'down', label: translateConfig('send_backward_f6cfe26a'), Icon: ChevronDown },

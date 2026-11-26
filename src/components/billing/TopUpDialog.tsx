@@ -4,10 +4,10 @@ import { Radio } from '@base-ui/react/radio';
 import { RadioGroup } from '@base-ui/react/radio-group';
 import { CREDIT_PACK_OFFER, type CreditPackOffer, type CreditWallet } from '@continuum/contracts';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowRight, Check } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useId, useRef, useState } from 'react';
+import { ArrowRight, Check } from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,

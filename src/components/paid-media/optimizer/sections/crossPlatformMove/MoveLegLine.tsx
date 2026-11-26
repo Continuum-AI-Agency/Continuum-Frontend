@@ -1,10 +1,11 @@
 import { useLocale, useTranslations } from 'next-intl';
+
 // One leg of a cross-platform move, as both the queue row and the Activity decision print it:
 // platform chip, the entity (its name, its id small beside it), before → after to the minor
 // unit, and the side's percentage. Shared so the two surfaces cannot disagree about a leg.
 
-import { ArrowRightIcon } from 'lucide-react';
 import type * as React from 'react';
+import { ArrowRight } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { PlatformChip } from '../platforms/PlatformChip';
 import type { AdPlatform } from '../platforms/platformTabsModel';
@@ -59,7 +60,7 @@ export function MoveLegLine({
       </span>
       <span className="inline-flex items-center gap-1.5 font-mono text-xs tabular-nums">
         <span className="text-muted-foreground">{money(beforeMinor)}</span>
-        <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+        <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
         <span className="font-semibold">{money(afterMinor)}</span>
         <span className="text-muted-foreground">{uiText('day_ea30d1c')}</span>
       </span>

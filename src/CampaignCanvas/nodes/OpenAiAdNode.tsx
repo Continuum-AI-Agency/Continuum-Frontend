@@ -1,6 +1,5 @@
 'use client';
 
-import { AlertCircle, CheckCircle2, Copy, MessageSquare, Trash2, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useCallback } from 'react';
 import {
@@ -10,6 +9,7 @@ import {
   NodeHeader,
   NodeTitle,
 } from '@/components/ai-elements/node';
+import { CircleAlert, CircleCheck, CircleX, Copy, MessageSquare, Trash2 } from '@/components/icons';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -79,13 +79,13 @@ export const OpenAiAdNode = memo(({ id, data, selected }: CampaignNodeProps<'ope
               </div>
               <div className="flex items-center gap-1">
                 {data.validationStatus === 'valid' && !titleOver && !bodyOver && (
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <CircleCheck className="h-4 w-4 text-green-500" />
                 )}
                 {data.validationStatus === 'warning' && (
-                  <AlertCircle className="h-4 w-4 text-yellow-500" />
+                  <CircleAlert className="h-4 w-4 text-yellow-500" />
                 )}
                 {(data.validationStatus === 'error' || titleOver || bodyOver) && (
-                  <XCircle className="h-4 w-4 text-destructive" />
+                  <CircleX className="h-4 w-4 text-destructive" />
                 )}
               </div>
             </div>

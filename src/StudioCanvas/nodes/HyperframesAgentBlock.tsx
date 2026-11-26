@@ -18,22 +18,22 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
-import {
-  AlertTriangle,
-  Check,
-  Circle,
-  Download,
-  ExternalLink,
-  Film,
-  Play,
-  Share2,
-  Sparkles,
-} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
 import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
+import {
+  ArrowDownToLine,
+  Check,
+  Circle,
+  Film,
+  Play,
+  Share2,
+  Sparkles,
+  SquareArrowOutUpRight,
+  TriangleAlert,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -86,7 +86,7 @@ type StageState = 'pending' | 'active' | 'done' | 'failed';
 
 const stageIcon = (state: StageState) => {
   if (state === 'done') return <Check className="size-3" />;
-  if (state === 'failed') return <AlertTriangle className="size-3" />;
+  if (state === 'failed') return <TriangleAlert className="size-3" />;
   return <Circle className={state === 'active' ? 'size-3 fill-current' : 'size-3'} />;
 };
 
@@ -1010,7 +1010,7 @@ export function HyperframesAgentBlock({
 
           {failure ? (
             <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
               <span>{failure}</span>
             </div>
           ) : null}
@@ -1038,7 +1038,7 @@ export function HyperframesAgentBlock({
               onClick={() => void exportProject()}
               disabled={exporting}
             >
-              <Download className="mr-2 h-3.5 w-3.5" />
+              <ArrowDownToLine className="mr-2 h-3.5 w-3.5" />
               {exporting
                 ? translateUi('exporting_project_bc51f607')
                 : translateUi('download_editable_project_zip_e6f11f77')}
@@ -1052,7 +1052,7 @@ export function HyperframesAgentBlock({
               onClick={() => void openEditor()}
               disabled={openingEditor}
             >
-              <ExternalLink className="mr-2 h-3.5 w-3.5" />
+              <SquareArrowOutUpRight className="mr-2 h-3.5 w-3.5" />
               {openingEditor
                 ? translateUi('opening_video_editor_a5d5df33')
                 : translateUi('send_to_video_editor_7231e444')}

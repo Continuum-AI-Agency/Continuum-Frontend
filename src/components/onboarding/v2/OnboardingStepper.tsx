@@ -1,6 +1,6 @@
-import { Check } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
+import { Check } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import type { ShellPillId } from './OnboardingShell';
 
@@ -58,7 +58,7 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
                     animate={{ scale: 1, rotate: 0 }}
                     transition={{ type: 'spring', stiffness: 460, damping: 22 }}
                   >
-                    <Check className="h-4 w-4" weight="bold" />
+                    <Check className="h-4 w-4" strokeWidth={3} />
                   </motion.span>
                 ) : (
                   <motion.span

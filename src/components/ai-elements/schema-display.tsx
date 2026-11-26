@@ -1,9 +1,9 @@
 'use client';
 
-import { ChevronRightIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps, HTMLAttributes } from 'react';
 import { createContext, useContext, useMemo } from 'react';
+import { ChevronRight } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
@@ -201,7 +201,7 @@ export const SchemaDisplayParameters = ({
   return (
     <Collapsible className={cn(className)} defaultOpen {...props}>
       <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50">
-        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
         <span className="font-medium text-sm">{tUi('m_a975eea30d')}</span>
         <Badge className="ml-auto text-xs" variant="secondary">
           {parameters?.length}
@@ -269,7 +269,7 @@ export const SchemaDisplayRequest = ({
   return (
     <Collapsible className={cn(className)} defaultOpen {...props}>
       <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50">
-        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
         <span className="font-medium text-sm">{tUi('m_6f8efc89e6')}</span>
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -298,7 +298,7 @@ export const SchemaDisplayResponse = ({
   return (
     <Collapsible className={cn(className)} defaultOpen {...props}>
       <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50">
-        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
         <span className="font-medium text-sm">{tUi('m_6e617e4fc9')}</span>
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -352,7 +352,7 @@ export const SchemaDisplayProperty = ({
           )}
           style={{ paddingLeft }}
         >
-          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
           <span className="font-mono text-sm">{name}</span>
           <Badge className="text-xs" variant="outline">
             {type}

@@ -2,11 +2,11 @@
 
 import { readableLayerName, type TemplatePreview } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutTemplate } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React, { type ComponentType, type ReactNode } from 'react';
 import { fileForFormat, type PreviewFormat } from '@/components/forge/FormatPreview';
+import { LayoutTemplate } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 

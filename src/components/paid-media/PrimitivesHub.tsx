@@ -1,9 +1,9 @@
 'use client';
 
-import { ArrowLeft, Component, FileText, SlidersHorizontal, User } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { type ReactElement, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Component, FileText, SlidersHorizontal, User } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import type { BrandGuidelineSummary } from '@/lib/schemas/brandGuidelines';

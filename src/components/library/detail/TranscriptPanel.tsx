@@ -8,9 +8,9 @@
 // the same time+endMs comment the player's I/O keys make. Export hands the same
 // lines on as SRT / WebVTT captions or plain text.
 
-import { Check, Copy, Loader2, MessageSquarePlus, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { Check, Copy, MessageSquarePlus, Spinner, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { type TranscriptExportFormat, toSrt, toTxt, toVtt } from '@/lib/library/transcriptExport';
 import { cn } from '@/lib/utils';
@@ -177,7 +177,7 @@ export function TranscriptPanel({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8 text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
+        <Spinner className="size-4 animate-spin" />
       </div>
     );
   }

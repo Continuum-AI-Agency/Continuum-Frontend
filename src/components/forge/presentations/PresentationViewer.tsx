@@ -1,9 +1,9 @@
 'use client';
 
 import type { PresentationDocument } from '@continuum/contracts';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { PresentationCanvas } from './PresentationCanvas';

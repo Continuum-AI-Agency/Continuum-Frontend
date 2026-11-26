@@ -1,7 +1,7 @@
 'use client';
 
-import { Check, RotateCw, X } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { Check, RotateCw, X } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Progress } from '@/components/ui/progress';
 import type { GridStatus } from '@/lib/organic/store';

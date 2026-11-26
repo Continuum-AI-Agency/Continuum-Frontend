@@ -10,8 +10,8 @@ import { useTranslations } from 'next-intl';
 // so a brand that skipped this during onboarding finds exactly the control it skipped.
 
 import type { DesignSystemSnapshot } from '@continuum/contracts';
-import { AlertTriangle, CheckCircle2, FileUp, FolderUp, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { CircleCheck, FileUp, FolderUp, Spinner, TriangleAlert } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { uploadDesignSystem } from '@/lib/brands/designSystem.client';
@@ -138,7 +138,7 @@ export function DesignSystemCard({
 
       {state.phase === 'error' || uploadError ? (
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
           <p className="text-foreground">{uploadError ?? state.errorMessage}</p>
         </div>
       ) : null}
@@ -201,7 +201,7 @@ function ProgressRow({ label, percent }: { label: string; percent: number }) {
   return (
     <div className="mt-4">
       <div className="flex items-center gap-2 text-sm text-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden />
+        <Spinner className="size-4 animate-spin" aria-hidden />
         <span>{label}…</span>
       </div>
       <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
@@ -239,7 +239,7 @@ function SystemSummary({
   return (
     <div className="mt-4 space-y-3">
       <div className="flex items-center gap-2 text-sm text-foreground">
-        <CheckCircle2 className="size-4 text-emerald-500" aria-hidden />
+        <CircleCheck className="size-4 text-emerald-500" aria-hidden />
         <span>
           {tUi('m_03283ea975')}
           {version ?? '—'} · {snapshot.tokens.length}
@@ -270,7 +270,7 @@ function SystemSummary({
 
       {unresolved.length > 0 ? (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
           <div>
             <p className="font-medium text-foreground">
               {unresolved.length === 1

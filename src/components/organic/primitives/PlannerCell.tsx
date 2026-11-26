@@ -1,7 +1,7 @@
 import { useDroppable } from '@dnd-kit/core';
-import { GalleryHorizontalEnd, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
+import { GalleryHorizontalEnd, Plus } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

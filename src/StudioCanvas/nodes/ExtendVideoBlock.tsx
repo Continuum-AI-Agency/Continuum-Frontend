@@ -5,12 +5,12 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
-import { Copy, Download, Play, Trash2, Video } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
+import { ArrowDownToLine, Copy, Play, Trash2, Video } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -155,7 +155,7 @@ export function ExtendVideoBlock({
                           title={translateUi('download_output_b86e2324')}
                           aria-label={translateUi('download_generated_video_d30b5aa4')}
                         >
-                          <Download className="h-4 w-4" />
+                          <ArrowDownToLine className="h-4 w-4" />
                         </Button>
                       </NodeVideoPreview>
                     ) : (
@@ -246,7 +246,7 @@ export function ExtendVideoBlock({
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
+            <ArrowDownToLine className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem

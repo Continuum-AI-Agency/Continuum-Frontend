@@ -17,8 +17,12 @@ import { useMemo } from 'react';
 // Filter chips narrow the fleet, and the counts line ALWAYS reports the real totals, so
 // nothing is ever hidden without a signpost.
 
-import { ListFilterIcon, SearchIcon, ZapIcon } from 'lucide-react';
 import { useState } from 'react';
+import {
+  ListFilter as ListFilterIcon,
+  Search as SearchIcon,
+  Zap as ZapIcon,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Command,

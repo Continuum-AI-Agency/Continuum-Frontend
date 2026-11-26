@@ -11,7 +11,7 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // (8s READ_TIMEOUT_MS x retry: 1). This names the failure, shows what actually went wrong,
 // and gives the user the one action that can help.
 
-import { RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
+import { RefreshCw, TriangleAlert } from '@/components/icons';
 
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,7 @@ export function OptimizerReadError({
       className={className}
       action={
         <Button onClick={onRetry} size="sm" type="button" variant="secondary">
-          <RefreshCwIcon aria-hidden="true" className="size-3.5" />
+          <RefreshCw aria-hidden="true" className="size-3.5" />
           {uiText('retry_942087c')}
         </Button>
       }
@@ -52,7 +52,7 @@ export function OptimizerReadError({
           : uiText('nothing_was_changed_this_is_a_read_abf2f16')
       }
       headline={uiText('optimizerLoadFailure', { subject })}
-      media={<TriangleAlertIcon aria-hidden="true" />}
+      media={<TriangleAlert aria-hidden="true" />}
     />
   );
 }

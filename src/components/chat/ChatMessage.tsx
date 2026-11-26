@@ -1,7 +1,7 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { Sparkles } from '@/components/icons';
 import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import {
   Message,

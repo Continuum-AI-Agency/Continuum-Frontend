@@ -4,9 +4,9 @@
 // the hook that decides which one shows (lib/campaign-canvas/canvasView.ts holds the rules)
 // and the one-time hint that explains an automatic switch.
 
-import { BookOpenText, Network, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { BookOpenText, Network, X } from '@/components/icons';
 import {
   CANVAS_VIEW_PHONE_MAX_WIDTH,
   type CanvasView,

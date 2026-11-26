@@ -1,10 +1,10 @@
 'use client';
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
-import { RotateCw, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useMemo } from 'react';
+import { RotateCw, Search } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { IntegrationErrorBanner } from '@/components/ui/IntegrationErrorBanner';

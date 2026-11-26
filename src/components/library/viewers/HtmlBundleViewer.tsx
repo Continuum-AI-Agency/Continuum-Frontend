@@ -6,9 +6,9 @@
 // allow-same-origin, so the bundle can run its scripts but can reach no one's cookies,
 // storage or DOM — not the app's, not the API's.
 
-import { ExternalLink, Monitor, RotateCcw, Smartphone, Tablet } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { Monitor, RotateCcw, Smartphone, SquareArrowOutUpRight, Tablet } from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -92,7 +92,7 @@ export function HtmlBundleViewer({ entryUrl, label, onReload }: Props) {
             aria-label={translateUi('open_in_a_new_tab_306ef19c')}
             className={buttonVariants({ size: 'sm', variant: 'ghost' })}
           >
-            <ExternalLink className="size-4" />
+            <SquareArrowOutUpRight className="size-4" />
           </a>
         </div>
         <span className="text-xs tabular-nums text-muted-foreground">

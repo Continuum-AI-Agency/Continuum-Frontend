@@ -1,12 +1,11 @@
 'use client';
 
-import { RotateCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-
 import { useMemo } from 'react';
 import { DASHBOARD_PANEL_MAX_HEIGHT } from '@/components/dashboard/briefing/panelLayout';
 import { type InsightListItem, InsightsList } from '@/components/dashboard/datatable/InsightsList';
 import type { InstagramAccountOption } from '@/components/dashboard/InstagramOrganicReportingWidget';
+import { RotateCw } from '@/components/icons';
 import { ModuleShortcutLink } from '@/components/shared/ModuleShortcutLink';
 import { useOrganicInsights } from '@/hooks/useOrganicInsights';
 import { resolveOrganicAccount } from '@/lib/organic/resolve-organic-account';

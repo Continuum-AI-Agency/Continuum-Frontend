@@ -1,9 +1,9 @@
 'use client';
 
-import { ChevronDownIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { ChevronDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
@@ -216,7 +216,7 @@ export const WebPreviewConsole = ({
             variant="ghost"
           >
             {tUi('m_9f3341d371')}
-            <ChevronDownIcon
+            <ChevronDown
               className={cn(
                 'h-4 w-4 transition-transform duration-200',
                 consoleOpen && 'rotate-180',

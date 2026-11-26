@@ -1,10 +1,10 @@
 'use client';
 
-// House-modified: diverged from the upstream ai-elements component of the same name.
-// Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
-import { ChevronDown, Code2, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { createContext, Fragment, type ReactNode, useContext, useState } from 'react';
+// Home-modified: diverged from the upstream ai-elements component of the same name.
+// Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
+import { ChevronDown, CodeXml, Spinner } from '@/components/icons';
 
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -104,10 +104,10 @@ export function ToolHeader({
           className="flex w-full items-center justify-between gap-2 rounded-sm p-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="flex min-w-0 items-center gap-2">
-            <Code2 className="size-3.5 shrink-0 text-muted-foreground" />
+            <CodeXml className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate text-sm font-medium text-foreground">{displayTitle}</span>
             {state === 'running' && (
-              <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+              <Spinner className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
             )}
           </span>
           {showDisclosure ? (

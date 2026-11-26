@@ -28,19 +28,6 @@ import {
   MAX_LIBRARY_THEN_BY,
   templateFamilyForLibraryFormat,
 } from '@continuum/contracts';
-import {
-  ChevronDown,
-  Columns3,
-  FolderUp,
-  GalleryHorizontalEnd,
-  LayoutGrid,
-  List,
-  Menu,
-  ScanSearch,
-  Trash2,
-  Upload,
-  X,
-} from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import {
@@ -59,6 +46,19 @@ import {
   useDesignTemplateImports,
 } from '@/components/forge/DesignTemplateImports';
 import { isForgeDesignFile } from '@/components/forge/ForgeProjectDrop';
+import {
+  ArrowUpFromLine,
+  ChevronDown,
+  Columns3,
+  FolderUp,
+  GalleryHorizontalEnd,
+  LayoutGrid,
+  List,
+  Menu,
+  ScanSearch,
+  Trash2,
+  X,
+} from '@/components/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -1091,7 +1091,7 @@ export function LibraryViewer({
                         onClick={() => fileInputRef.current?.click()}
                         className="active:scale-[0.96] [transition-property:scale]"
                       >
-                        <Upload className="size-4" /> {translateUi('upload_865e89de')}
+                        <ArrowUpFromLine className="size-4" /> {translateUi('upload_865e89de')}
                       </Button>
                     </div>
                   </div>
@@ -1510,7 +1510,7 @@ export function LibraryViewer({
                   className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5 backdrop-blur-sm"
                 >
                   <div className="flex flex-col items-center gap-2 text-primary">
-                    <Upload className="size-7" />
+                    <ArrowUpFromLine className="size-7" />
                     <span className="text-sm font-medium">
                       {showTemplates
                         ? translateUi('drop_to_add_template_4c581e40')

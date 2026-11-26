@@ -20,8 +20,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // so a second run UPDATES. The summary says "updated", because "imported 4 products"
 // after a re-run is how somebody concludes they now hold eight.
 
-import { Package, Trash, UploadSimple, Warning } from '@phosphor-icons/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { ArrowUpFromLine, Package, Trash, TriangleAlert } from '@/components/icons';
 
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { Button } from '@/components/ui/button';
@@ -260,7 +260,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
             onClick={() => inputRef.current?.click()}
             disabled={uploading > 0}
           >
-            <UploadSimple className="mr-1.5 h-4 w-4" />
+            <ArrowUpFromLine className="mr-1.5 h-4 w-4" />
             {uploading > 0 ? tUi('productUploading', { count: uploading }) : tUi('m_a59893579b')}
           </Button>
         </section>
@@ -342,7 +342,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
                     className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2"
                   >
                     <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                      <Warning className="h-4 w-4 shrink-0 text-amber-600" />
+                      <TriangleAlert className="h-4 w-4 shrink-0 text-amber-600" />
                       <span className="tabular-nums">
                         {tUi('m_c553701d90')}
                         {row.index + 1}

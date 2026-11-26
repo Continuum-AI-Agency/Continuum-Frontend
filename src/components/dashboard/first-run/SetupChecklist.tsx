@@ -6,7 +6,7 @@ import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
 // surface where the user can act — it never rebuilds an assignment path, it
 // links into the existing one.
 
-import { ArrowRight, CheckCircle2, Circle } from 'lucide-react';
+import { ArrowRight, Circle, CircleCheck } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
@@ -14,7 +14,7 @@ import type { DashboardSetupState, DashboardSetupStep } from './setupState';
 
 function StepIcon({ status }: { status: DashboardSetupStep['status'] }) {
   if (status === 'done') {
-    return <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-emerald-500" />;
+    return <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-emerald-500" />;
   }
   return <Circle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground/60" />;
 }

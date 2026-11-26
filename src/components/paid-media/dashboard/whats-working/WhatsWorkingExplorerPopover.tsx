@@ -17,8 +17,8 @@ import { useLocale, useTranslations } from 'next-intl';
 // of every dimension x value x funnel stage read as a wall, not an answer.
 
 import type { CreativeWinRateFlag, CreativeWinRateRow } from '@continuum/contracts';
-import { Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Sparkles } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';

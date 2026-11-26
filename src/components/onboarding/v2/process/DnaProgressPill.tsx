@@ -1,6 +1,6 @@
-import { Check, Loader2, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
+import { Check, Sparkles, Spinner } from '@/components/icons';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -56,7 +56,7 @@ export function DnaProgressPill() {
                 rotate: { duration: 1.4, ease: 'linear', repeat: Infinity },
               }}
             >
-              <Loader2 className="h-4 w-4" />
+              <Spinner className="h-4 w-4" />
             </motion.span>
           )}
         </AnimatePresence>

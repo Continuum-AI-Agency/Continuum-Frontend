@@ -1,10 +1,10 @@
 'use client';
 
-import { CheckCircle2Icon, CircleDashedIcon, CircleXIcon, LoaderIcon } from 'lucide-react';
 import Link from 'next/link';
 // The pieces the doctor tile and its module share: a check's status icon and the link to where
 // it is fixed (in the product, or on the ad platform in a new tab).
 import { useTranslations } from 'next-intl';
+import { CircleCheck, CircleDashed, CircleX, Spinner } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { DoctorCheckStatus, DoctorFix } from './doctorModel';
@@ -14,7 +14,7 @@ export function CheckIcon({ status }: { status: DoctorCheckStatus }) {
   const className = 'mt-0.5 size-4 shrink-0';
   if (status === 'pass') {
     return (
-      <CheckCircle2Icon
+      <CircleCheck
         aria-label={uiText('passes_d9720c0')}
         className={cn(className, 'text-emerald-500')}
       />
@@ -22,22 +22,19 @@ export function CheckIcon({ status }: { status: DoctorCheckStatus }) {
   }
   if (status === 'fail') {
     return (
-      <CircleXIcon
-        aria-label={uiText('fails_c5d5077')}
-        className={cn(className, 'text-destructive')}
-      />
+      <CircleX aria-label={uiText('fails_c5d5077')} className={cn(className, 'text-destructive')} />
     );
   }
   if (status === 'loading') {
     return (
-      <LoaderIcon
+      <Spinner
         aria-label={uiText('reading_463816d')}
         className={cn(className, 'text-muted-foreground')}
       />
     );
   }
   return (
-    <CircleDashedIcon
+    <CircleDashed
       aria-label={uiText('not_readable_9742efc')}
       className={cn(className, 'text-muted-foreground')}
     />

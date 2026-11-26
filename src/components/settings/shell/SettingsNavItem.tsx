@@ -1,13 +1,13 @@
 'use client';
 
 import { Tabs } from '@base-ui/react/tabs';
-import type { LucideIcon } from 'lucide-react';
+import type { IconComponent } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 type SettingsNavItemProps = {
   value: string;
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
 };
 
 export function SettingsNavItem({ value, label, icon: Icon }: SettingsNavItemProps) {

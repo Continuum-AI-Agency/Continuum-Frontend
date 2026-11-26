@@ -19,7 +19,7 @@ import { useTranslations } from 'next-intl';
 // cycle because the response contract disagreed with the service's wire shape. So the one
 // state the user saw was the one state that was never true.
 
-import { CheckCircle2Icon, CircleSlashIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
+import { CircleCheck, CircleSlash, Spinner, TriangleAlert } from '@/components/icons';
 
 import type { RunCycleOutcome } from '@/components/paid-media/optimizer/useOptimizerData';
 import { cn } from '@/lib/utils';
@@ -135,10 +135,10 @@ function describe(
   }
 }
 
-const ICON: Record<Tone, typeof CheckCircle2Icon> = {
-  success: CheckCircle2Icon,
-  warning: CircleSlashIcon,
-  destructive: TriangleAlertIcon,
+const ICON: Record<Tone, typeof CircleCheck> = {
+  success: CircleCheck,
+  warning: CircleSlash,
+  destructive: TriangleAlert,
 };
 
 export function RunOutcomeNotice({
@@ -155,7 +155,7 @@ export function RunOutcomeNotice({
         role="status"
         className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
       >
-        <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />
+        <Spinner className="size-3.5 animate-spin" aria-hidden="true" />
         {uiText('running_a_cycle_scoring_the_enrolled_ad_sets_7fcfc66')}
       </p>
     );

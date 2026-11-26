@@ -2,7 +2,6 @@
 
 import { type TemplateSourceSummary, templateDisplayName } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Box, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { OpenInLibrary } from '@/components/forge/libraryState';
@@ -12,6 +11,7 @@ import { ScenePreviewStage } from '@/components/forge/scene/ScenePreviewStage';
 import { SceneRenderHistory, SceneSignedMedia } from '@/components/forge/scene/SceneRenderPanel';
 import { useScenePreview } from '@/components/forge/scene/useScenePreview';
 import { HouseScenePill, InlineRename } from '@/components/forge/TemplateCard';
+import { ArrowLeft, Box, Trash2 } from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Link } from '@/i18n/navigation';
 import {

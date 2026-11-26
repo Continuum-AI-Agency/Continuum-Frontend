@@ -1,9 +1,9 @@
 'use client';
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
-import { Megaphone, RotateCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
+import { Megaphone, RotateCw } from '@/components/icons';
 import { EmptyState } from '@/components/shared/state';
 import {
   Accordion,

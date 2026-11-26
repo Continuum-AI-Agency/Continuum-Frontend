@@ -1,7 +1,6 @@
 'use client';
 
 import type { TemplateAuthoringCommand, TemplateAuthoringNode } from '@continuum/contracts';
-import { ChevronDown, Pause, Play, Plus, Trash2 } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import {
   type PointerEvent as ReactPointerEvent,
@@ -11,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { ChevronDown, Pause, Play, Plus, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';

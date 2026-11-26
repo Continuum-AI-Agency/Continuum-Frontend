@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent } from '@testing-library/react';
-import * as lucideIcons from 'lucide-react';
 import type { ReactNode } from 'react';
+import * as icons from '@/components/icons';
 import { render as rtlRender } from '@/i18n/__tests__/render';
 
 import type { CalendarToolbar as CalendarToolbarType } from './CalendarToolbar';
@@ -23,7 +23,7 @@ Object.assign(global.window, {
 // and override only the icons this file asserts on. A sync factory over a static import
 // is required: an async importActual factory deadlocks bun's module registry.
 // These stubs WRAP the real icon rather than replacing it. mock.module is process-wide and
-// lucide-react is imported by ~400 files, so a replacing stub silently changes what every other
+// @/components/icons is imported by ~800 files, so a replacing stub silently changes what every other
 // spec in the run renders (it did: PostMetaChips started failing). Wrapping keeps the real
 // glyph for everyone else while giving this file its test ids.
 const tagged = (id: string, Icon: React.ComponentType<Record<string, unknown>>) =>
@@ -35,14 +35,14 @@ const tagged = (id: string, Icon: React.ComponentType<Record<string, unknown>>) 
     );
   };
 
-mock.module('lucide-react', () => ({
-  ...lucideIcons,
-  Check: tagged('check-icon', lucideIcons.Check),
-  X: tagged('cross-icon', lucideIcons.X),
-  TriangleAlert: tagged('warning-icon', lucideIcons.TriangleAlert),
-  Zap: tagged('lightning-icon', lucideIcons.Zap),
-  Plus: tagged('plus-icon', lucideIcons.Plus),
-  Trash2: tagged('trash-icon', lucideIcons.Trash2),
+mock.module('@/components/icons', () => ({
+  ...icons,
+  Check: tagged('check-icon', icons.Check),
+  X: tagged('cross-icon', icons.X),
+  TriangleAlert: tagged('warning-icon', icons.TriangleAlert),
+  Zap: tagged('lightning-icon', icons.Zap),
+  Plus: tagged('plus-icon', icons.Plus),
+  Trash2: tagged('trash-icon', icons.Trash2),
 }));
 
 mock.module('@/components/ui/button', () => ({

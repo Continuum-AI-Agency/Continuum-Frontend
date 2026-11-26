@@ -16,8 +16,8 @@ import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTrans
 // under the anchor number, beside the figures they are read against. What the line says is
 // decided in ./heroHeaderModel.
 
-import { CheckCheckIcon, PauseIcon, PlayIcon, RefreshCwIcon } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
+import { CheckCheck, Pause, Play, RefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { PlatformChips } from '../platforms/PlatformChip';
@@ -55,7 +55,7 @@ const MODE_TONE: Record<NonNullable<HeroHeader['mode']>['tone'], string> = {
   idle: 'bg-muted text-muted-foreground',
 };
 
-const SECONDARY_ICON = { stop: PauseIcon, resume: PlayIcon, review: CheckCheckIcon } as const;
+const SECONDARY_ICON = { stop: Pause, resume: Play, review: CheckCheck } as const;
 
 /** The settings the grey line names; budget and target live beside their figures. */
 const LINE_SETTINGS: readonly HeroSetting[] = ['objective', 'strategy', 'window'];
@@ -137,7 +137,7 @@ export function PortfolioHeaderBar({
           </Button>
         ) : null}
         <Button disabled={running} onClick={onRun} size="sm" type="button" variant="cta">
-          <RefreshCwIcon className={cn(running && 'animate-spin')} />
+          <RefreshCw className={cn(running && 'animate-spin')} />
           {uiText('run_now_0991397')}
         </Button>
       </div>

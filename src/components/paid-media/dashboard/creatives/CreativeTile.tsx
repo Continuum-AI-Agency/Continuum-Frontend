@@ -1,11 +1,10 @@
 'use client';
 
-import { PlayIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromCreativeAd } from '@/components/chat/media/media';
+import { Play } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import type { ActionLog } from '@/lib/types/dco';
 import { cn } from '@/lib/utils';
@@ -105,7 +104,7 @@ export function CreativeTile({
           <div className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1">
             {isVideo ? (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-black/55 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
-                <PlayIcon className="h-2.5 w-2.5 fill-current" aria-hidden />
+                <Play className="h-2.5 w-2.5 fill-current" aria-hidden />
                 {uiText('video_d534be8')}
               </span>
             ) : null}

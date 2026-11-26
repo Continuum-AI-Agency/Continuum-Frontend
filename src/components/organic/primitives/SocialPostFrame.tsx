@@ -19,6 +19,8 @@
  * only controls in the panel are real ones. A published post keeps the familiar look.
  */
 import type { PublishPlatform } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
+import * as React from 'react';
 import {
   Bookmark,
   Forward,
@@ -27,14 +29,12 @@ import {
   MessageSquare,
   MoreHorizontal,
   Play,
-  Repeat2,
+  Repeat,
   Send,
   ThumbsDown,
   ThumbsUp,
   X,
-} from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import * as React from 'react';
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { flattenHashtags } from '@/lib/organic/hashtags';
 import { POST_PLATFORMS } from '@/lib/organic/postPlatforms';
@@ -109,8 +109,8 @@ const VERTICAL_RAIL: Record<PublishPlatform, readonly RailIcon[]> = {
   facebook: [ThumbsUp, MessageCircle, Forward],
   youtube: [ThumbsUp, ThumbsDown, MessageSquare, Forward],
   tiktok: [Heart, MessageCircle, Bookmark, Forward],
-  linkedin: [ThumbsUp, MessageSquare, Repeat2, Send],
-  x: [MessageCircle, Repeat2, Heart, Bookmark],
+  linkedin: [ThumbsUp, MessageSquare, Repeat, Send],
+  x: [MessageCircle, Repeat, Heart, Bookmark],
 };
 
 // Full-screen frames: off-shape media letterboxes on black instead of being cropped.
@@ -408,7 +408,7 @@ function FeedFrame(props: SocialPreviewProps) {
     ? ([
         [ThumbsUp, 'Like'],
         [MessageSquare, 'Comment'],
-        [Repeat2, 'Repost'],
+        [Repeat, 'Repost'],
         [Send, 'Send'],
       ] as const)
     : ([

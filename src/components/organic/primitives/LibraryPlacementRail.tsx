@@ -10,8 +10,8 @@ import { useTranslations } from 'next-intl';
 import type { MediaAsset } from '@continuum/contracts';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDownIcon, ChevronUpIcon, ImageOff, Play } from 'lucide-react';
 import * as React from 'react';
+import { ChevronDown, ChevronUp, ImageOff, Play } from '@/components/icons';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { AssetStill } from '@/components/media/AssetStill';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -177,9 +177,9 @@ export function LibraryPlacementRail({
           {uiText('your_library_1ad8428')}
         </span>
         {collapsed ? (
-          <ChevronDownIcon className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         ) : (
-          <ChevronUpIcon className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
         )}
       </button>
 

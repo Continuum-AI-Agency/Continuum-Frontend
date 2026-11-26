@@ -17,9 +17,9 @@
 // by frame (compareMath.followerCorrection), exactly one side audible. Unlinked:
 // each side zooms and plays on its own, with its own controls.
 
-import { Link2, Pause, Play, Unlink } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { Link2, Pause, Play, Unlink } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {

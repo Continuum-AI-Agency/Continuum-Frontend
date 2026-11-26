@@ -3,7 +3,6 @@
 import MapLibreGL, { type MarkerOptions, type PopupOptions } from 'maplibre-gl';
 import { useTranslations } from 'next-intl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Loader2, Locate, Maximize, Minus, Plus, X } from 'lucide-react';
 import {
   createContext,
   forwardRef,
@@ -18,6 +17,7 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { Locate, Maximize, Minus, Plus, Spinner, X } from '@/components/icons';
 import { readThemeAppearanceFromRoot } from '@/lib/theme/themeDom';
 import { cn } from '@/lib/utils';
 
@@ -832,7 +832,7 @@ function MapControls({
             disabled={waitingForLocation}
           >
             {waitingForLocation ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Spinner className="size-4 animate-spin" />
             ) : (
               <Locate className="size-4" />
             )}

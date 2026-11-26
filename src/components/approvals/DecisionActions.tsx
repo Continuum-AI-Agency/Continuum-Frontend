@@ -1,9 +1,9 @@
 'use client';
 
-import { CheckCircle2, Loader2 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { CircleCheck, Spinner } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import { loadFailureCause } from '@/lib/api/loadFailure';
@@ -182,9 +182,9 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
           className={cn(buttonVariants({ size: 'lg' }), 'min-w-[10rem] gap-2')}
         >
           {busy ? (
-            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+            <Spinner className="h-4 w-4 animate-spin" strokeWidth={1.5} />
           ) : (
-            <CheckCircle2 className="h-4 w-4" strokeWidth={1.5} />
+            <CircleCheck className="h-4 w-4" strokeWidth={1.5} />
           )}
           <span>{uiText('approve_6007acb')}</span>
         </motion.button>

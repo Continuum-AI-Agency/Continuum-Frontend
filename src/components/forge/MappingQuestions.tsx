@@ -7,9 +7,9 @@ import {
   suggestedAnswer,
   type TemplateForgeNeed,
 } from '@continuum/contracts';
-import { Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -106,7 +106,7 @@ export function MappingQuestions({
           disabled={busy || unanswered > 0}
           onClick={() => void onAnswer(decisionsFor(questions, answers))}
         >
-          {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+          {busy ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}{' '}
           {translateUi('apply_answers_be5c8116')}
         </Button>
         <span className="text-muted-foreground">

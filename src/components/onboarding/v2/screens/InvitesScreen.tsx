@@ -1,5 +1,5 @@
-import { Users } from '@phosphor-icons/react';
 import { useTranslations } from 'next-intl';
+import { Users } from '@/components/icons';
 
 import { TeamInviteSection } from '../dna/TeamInviteSection';
 import { HelpPopover } from '../HelpPopover';

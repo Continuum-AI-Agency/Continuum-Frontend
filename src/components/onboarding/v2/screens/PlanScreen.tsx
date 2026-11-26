@@ -1,11 +1,11 @@
 'use client';
 
 import type { PlanCode } from '@continuum/contracts';
-import { Check, CircleNotch, CreditCard, Handshake } from '@phosphor-icons/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { Check, CreditCard, Handshake, Spinner } from '@/components/icons';
 import { CopyButton } from '@/components/paid-media/conversions/CapiShared';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -323,7 +323,7 @@ function PlanOption({
               : 'border-border bg-background',
           )}
         >
-          {selected ? <Check className="size-3" weight="bold" /> : null}
+          {selected ? <Check className="size-3" strokeWidth={3} /> : null}
         </span>
       </span>
       <span className="flex flex-col gap-1.5">
@@ -347,7 +347,7 @@ function ConfirmingState() {
       data-testid="plan-confirming"
       className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"
     >
-      <CircleNotch className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+      <Spinner className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
       {tUi('m_e2e125b69b')}
     </p>
   );

@@ -1,10 +1,9 @@
 'use client';
 
-import { Loader2, X } from 'lucide-react';
-
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { revokeIntegrationFromBrandAction } from '@/app/[locale]/(post-auth)/settings/integrations/actions';
+import { Spinner, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';
@@ -50,7 +49,7 @@ export function RevokeGrantButton({
 
   return (
     <Button variant="ghost" size="sm" onClick={handleRevoke} disabled={isPending}>
-      {isPending ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
+      {isPending ? <Spinner className="size-4 animate-spin" /> : <X className="size-4" />}
       <span className="ml-1.5">{uiText('revoke_87e6d00')}</span>
     </Button>
   );

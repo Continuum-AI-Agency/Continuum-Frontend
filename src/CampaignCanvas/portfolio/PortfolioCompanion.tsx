@@ -5,9 +5,9 @@
 // uses — with a breadcrumb back to the portfolio. Read-only, like the live change companion:
 // each approval stays on its own chat card.
 
-import { ChevronLeft } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { ChevronLeft } from '@/components/icons';
 import type { PortfolioRow, PortfolioViewModel } from '@/lib/campaign-canvas/portfolio';
 import type { VersionLine } from '@/lib/campaign-canvas/versions';
 import { CanvasViewHint, CanvasViewToggle, useCanvasView } from '../lectura/CanvasViewToggle';

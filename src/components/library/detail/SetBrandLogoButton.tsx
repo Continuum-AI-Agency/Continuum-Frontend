@@ -5,9 +5,9 @@
 // images to the roles the Backend accepts (operator and up, as MCP set_brand_logo).
 
 import type { MediaAsset } from '@continuum/contracts';
-import { BadgeCheck, Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { BadgeCheck, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import { useUiErrorMessage } from '@/i18n/errors';
@@ -54,7 +54,7 @@ export function SetBrandLogoButton({ brandId, asset }: SetBrandLogoButtonProps) 
       title={translateUi('setAsBrandLogoHint')}
     >
       {saving ? (
-        <Loader2 className="size-3.5 animate-spin" aria-hidden />
+        <Spinner className="size-3.5 animate-spin" aria-hidden />
       ) : (
         <BadgeCheck className="size-3.5" aria-hidden />
       )}{' '}

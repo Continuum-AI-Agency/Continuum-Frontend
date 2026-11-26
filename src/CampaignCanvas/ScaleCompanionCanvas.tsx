@@ -1,9 +1,9 @@
 'use client';
 
 import { ReactFlowProvider } from '@xyflow/react';
-import { PencilLine } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef } from 'react';
+import { PencilLine } from '@/components/icons';
 import type { CanvasViewContext } from '@/lib/campaign-canvas/canvasView';
 import type { ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
 import type { VersionLine } from '@/lib/campaign-canvas/versions';

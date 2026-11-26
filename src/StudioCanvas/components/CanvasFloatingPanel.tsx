@@ -1,9 +1,9 @@
 'use client';
 
-import { X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Panel } from '@/components/ai-elements/panel';
+import { X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

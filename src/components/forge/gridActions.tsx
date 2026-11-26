@@ -5,6 +5,11 @@ import {
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   readableLayerName,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
+import type { RefObject } from 'react';
+import type { DataGridMenuTarget } from '@/components/forge/DataGrid';
+import { MAX_BATCH_ROWS, type RequestRow, rowDepth } from '@/components/forge/renderRequestRows';
+import type { RequestRowActions } from '@/components/forge/requestCells';
 import {
   ArrowDownToLine,
   BookmarkPlus,
@@ -13,19 +18,14 @@ import {
   Copy,
   CornerDownRight,
   EyeOff,
-  type LucideIcon,
+  type IconComponent,
   Pencil,
   Plus,
   RotateCcw,
   Sparkles,
   Trash2,
   X,
-} from 'lucide-react';
-import type { useTranslations } from 'next-intl';
-import type { RefObject } from 'react';
-import type { DataGridMenuTarget } from '@/components/forge/DataGrid';
-import { MAX_BATCH_ROWS, type RequestRow, rowDepth } from '@/components/forge/renderRequestRows';
-import type { RequestRowActions } from '@/components/forge/requestCells';
+} from '@/components/icons';
 import {
   ContextMenuGroup,
   ContextMenuItem,
@@ -52,7 +52,7 @@ import {
 export type GridAction = {
   id: string;
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   /** Shown beside the label: the key that does the same thing. */
   shortcut?: string;
   /** What the action does, for a tooltip where the label is terse. */

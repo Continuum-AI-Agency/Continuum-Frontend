@@ -2,8 +2,8 @@
 // data reaches ("Peaking: datos al 1-nov"), and a banner in words when a source is behind.
 
 import type { EasyfitDashboardResponse, EasyfitSource } from '@continuum/contracts';
-import { TriangleAlertIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { TriangleAlert } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { formatDay, formatTimestamp } from './dashboardFormat';
 import { EASYFIT_TIME_ZONE } from './easyfitBrand';
@@ -54,7 +54,7 @@ export function DashboardHeader({
           data-testid="stale-banner"
           role="alert"
         >
-          <TriangleAlertIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
+          <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
           <span>
             <b>{t.header.staleTitle}.</b> {t.header.staleBody(lateNames.join(', '))}
           </span>

@@ -4,9 +4,9 @@
 // optional due date that drives the reminder/escalation sweep, plus the
 // collection's approval report. Mounted from the collection's menu.
 
-import { Loader2, UsersRound } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { Spinner, Users } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -100,7 +100,7 @@ export function RequestCollectionReviewDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
-            <UsersRound className="size-4" /> {translateUi('request_review_8f47b4cd')}
+            <Users className="size-4" /> {translateUi('request_review_8f47b4cd')}
           </DialogTitle>
           <DialogDescription className="truncate text-xs">
             {translateUi('every_asset_in_0774c290')} {collectionName}{' '}
@@ -109,7 +109,7 @@ export function RequestCollectionReviewDialog({
         </DialogHeader>
         {targets === null ? (
           <div className="flex justify-center py-6">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <Spinner className="size-4 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <div className="max-h-48 space-y-1 overflow-y-auto">
@@ -175,7 +175,7 @@ export function RequestCollectionReviewDialog({
             disabled={selected.size === 0 || submitting}
             onClick={() => void submit()}
           >
-            {submitting && <Loader2 className="size-3.5 animate-spin" />}{' '}
+            {submitting && <Spinner className="size-3.5 animate-spin" />}{' '}
             {translateUi('request_review_8f47b4cd')}
           </Button>
         </DialogFooter>

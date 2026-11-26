@@ -1,5 +1,5 @@
 import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 // Radix took `type="single"|"multiple"` (+ `collapsible`) and a string value in single mode.

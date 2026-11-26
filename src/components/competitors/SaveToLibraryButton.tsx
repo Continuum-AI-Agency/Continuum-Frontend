@@ -1,8 +1,8 @@
 'use client';
 
-import { Check, FolderPlus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Check, FolderPlus } from '@/components/icons';
 import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 
 import { useSaveCompetitorPostToLibrary, useSavedCompetitorPostIds } from '@/lib/api/competitorSpy';
