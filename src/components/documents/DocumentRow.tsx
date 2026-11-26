@@ -50,6 +50,12 @@ const KIND_ICON: Record<string, LucideIcon> = {
   unknown: FileText,
 };
 
+function uploadedOn(iso: string, locale: string): string | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date);
+}
+
 function iconFor(doc: DocumentView): LucideIcon {
   if (doc.kind && KIND_ICON[doc.kind]) return KIND_ICON[doc.kind];
   const lower = doc.name.toLowerCase();
@@ -171,6 +177,7 @@ export function DocumentRow({
   if (doc.pageCount) codeParts.push(`${doc.pageCount} pp`);
   else if (doc.size) codeParts.push(formatBytes(doc.size, uiLocale));
 
+  const uploadedLabel = uploadedOn(doc.createdAt, uiLocale);
   const subtitle =
     label.tone === 'progress' && typeof doc.progressPercent === 'number'
       ? `${label.text}`
@@ -226,6 +233,14 @@ export function DocumentRow({
               )}
             >
               {subtitle}
+              {uploadedLabel ? (
+                <>
+                  {' · '}
+                  <time dateTime={doc.createdAt}>
+                    {uploadedLabel}
+                  </time>
+                </>
+              ) : null}
             </span>
             {label.tone === 'progress' && typeof doc.progressPercent === 'number' ? (
               <span
