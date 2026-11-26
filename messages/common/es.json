@@ -1417,5 +1417,6 @@
   "creating_c79ed94": "Creando…",
   "a_project_already_has_that_name_5e57cb0": "Ya existe un proyecto con ese nombre",
   "create_failed_3e05ffc": "Error al crear",
-  "linkedin_personal_profile": "{name} — perfil personal"
+  "linkedin_personal_profile": "{name} — perfil personal",
+  "personal_profile": "Perfil personal"
 }
