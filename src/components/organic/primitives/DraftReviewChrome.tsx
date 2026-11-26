@@ -167,7 +167,11 @@ export function AccountPicker({
                   className="flex min-w-0 flex-1 cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none hover:bg-muted focus-visible:bg-accent focus-visible:ring-1 focus-visible:ring-ring data-disabled:cursor-not-allowed data-disabled:text-muted-foreground data-disabled:hover:bg-transparent"
                 >
                   <AccountAvatar account={account} className="size-6" />
-                  <span className="min-w-0 flex-1 truncate">{accountName(account)}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {account.kind === 'member'
+                      ? uiText('linkedin_personal_profile', { name: accountName(account) })
+                      : accountName(account)}
+                  </span>
                   {checked ? <Check className="size-3.5 shrink-0" aria-hidden="true" /> : null}
                 </RadioPrimitive.Root>
                 {account.needsReauth ? (

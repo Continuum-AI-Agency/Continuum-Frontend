@@ -74,7 +74,11 @@ function AccountRow({
       ) : null}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="block truncate text-sm font-medium text-foreground">{row.label}</span>
+          <span className="block truncate text-sm font-medium text-foreground">
+            {row.personalProfile
+              ? uiText('linkedin_personal_profile', { name: row.label })
+              : row.label}
+          </span>
           {row.readOnly ? (
             <Badge
               variant="outline"
