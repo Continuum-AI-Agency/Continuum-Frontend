@@ -3,7 +3,7 @@
 import { mergeProps } from '@base-ui/react/merge-props';
 import { useRender } from '@base-ui/react/use-render';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { PanelLeftIcon } from 'lucide-react';
+import { PanelLeftIcon, XIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -290,19 +291,45 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
+            className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0"
             style={
               {
                 '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
               } as React.CSSProperties
             }
             side={side}
+            showOverlay
+            showCloseButton={false}
           >
             <SheetHeader className="sr-only">
               <SheetTitle>{tUi('m_f5171c931c')}</SheetTitle>
               <SheetDescription>{tUi('m_5800c600e6')}</SheetDescription>
             </SheetHeader>
-            <div className="flex h-full w-full flex-col">{children}</div>
+            {/* Outside the panel, over the scrim: the header's own top-right holds the search button. */}
+            <SheetClose
+              data-sidebar="mobile-close"
+              render={
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className={cn('absolute top-3', side === 'left' ? '-right-12' : '-left-12')}
+                />
+              }
+            >
+              <XIcon />
+              <span className="sr-only">{tUi('close_7d9eb7a')}</span>
+            </SheetClose>
+            {/* Picking a destination closes the sheet, so the page it opened is visible. */}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: delegation for the links inside, which keep their own roles */}
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: a link activated from the keyboard fires click, so it bubbles here too */}
+            <div
+              className="flex h-full w-full flex-col"
+              onClick={(event) => {
+                if ((event.target as Element).closest('a[href]')) setOpenMobile(false);
+              }}
+            >
+              {children}
+            </div>
           </SheetContent>
         </Sheet>
       );
