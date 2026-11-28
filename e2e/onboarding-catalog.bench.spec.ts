@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { mintAccessTokenForEmail, mintSessionWithPassword } from './support/auth';
@@ -30,6 +31,15 @@ import { type LocalBackend, startLocalBackend } from './support/localBackend';
 // then what the screen carries and what the Backend's `validateMembers` loads. Everything
 // on both sides of that hop - the drop zone, the draft editor, the request, the endpoint,
 // the rows, the read-back - is real.
+//
+// The brand-asset section (logos, reference images, fonts) adds one more intercepted hop for
+// the same reason: tagging goes through the `library-creative-operations` edge function, so the
+// interception runs that function's own RPC (`media.library_execute_operation`) with the
+// service role. The brand-logo and font writes go to the REAL Backend, and every one is read
+// back from its real store: `brand_profiles.logo_path`, the logo object, `media.assets.tags`,
+// `media.fonts`. NOT covered here, and unit-tested instead: font files inside a design-system
+// upload (the ingest runs model calls) and a website typed beside documents (needs the public
+// internet).
 
 const LOCAL_OWNER_EMAIL = 'local@continuum.test';
 const LOCAL_OWNER_PASSWORD = 'localdev123';
@@ -44,6 +54,15 @@ const HERO = { name: 'Bench Hero Bottle', slug: 'bench-hero-bottle', sku: 'BENCH
 const MUG = { name: 'Bench Trail Mug', slug: 'bench-trail-mug' };
 const BROKEN = { name: 'Bench Broken Widget', slug: 'bench-broken-widget' };
 const BENCH_SLUGS = [HERO.slug, MUG.slug, BROKEN.slug];
+
+const BENCH_FONT_FAMILY = 'Bench Anton';
+const FONT_BYTES = readFileSync(new URL('../public/fonts/Anton-Regular.woff2', import.meta.url));
+const FONT_BUCKET = 'brand-fonts';
+const LEGACY_FONT_BUCKET = 'brand-docs';
+const FONT_MANIFEST = `${BRAND_ID}/fonts/manifest.json`;
+const CREATIVE_BUCKET =
+  process.env.NEXT_PUBLIC_SUPABASE_CREATIVE_BUCKET?.trim() || 'brand-profile-assets';
+const LOGO_PATH = `${BRAND_ID}/branding/logo.png`;
 
 const HAS_LOCAL_STACK = Boolean(
   /127\.0\.0\.1|localhost/.test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') &&
@@ -168,6 +187,24 @@ async function interceptLibraryUpload(page: Page, supabase: SupabaseClient): Pro
     });
   });
 
+  // Tagging: the edge function's own RPC, run with the service role it would have used.
+  await page.route('**/functions/v1/library-creative-operations', async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    if (body?.action !== 'bulk_update_asset_tags') {
+      await route.fulfill({ status: 400, body: `unexpected ${String(body?.action)}` });
+      return;
+    }
+    const { data, error } = await media(supabase).rpc('library_execute_operation', {
+      p_action: 'bulk_update_asset_tags',
+      p_payload: { ...body, actor: OWNER_ID },
+    });
+    await route.fulfill(
+      error
+        ? { status: 500, contentType: 'application/json', body: JSON.stringify(error) }
+        : { status: 200, contentType: 'application/json', body: JSON.stringify(data) },
+    );
+  });
+
   // The bytes are already in the bucket; the SDK only needs `{ Key }` back.
   await page.route('**/storage/v1/object/upload/sign/**', async (route) => {
     const path = new URL(route.request().url()).pathname.split('/object/upload/sign/')[1] ?? '';
@@ -183,6 +220,109 @@ async function interceptLibraryUpload(page: Page, supabase: SupabaseClient): Pro
 
 let previousActiveBrandId: string | null = null;
 let previousStep: number | null = null;
+
+/* -- brand-asset fixtures: everything the logo and font writes touch, restored after ---- */
+
+type Snapshot = {
+  onboardingState: Record<string, unknown> | null;
+  logoPath: string | null;
+  composite: { id: string; brand_tokens: unknown } | null;
+  logoBytes: Blob | null;
+  fontManifest: Blob | null;
+};
+let snapshot: Snapshot | null = null;
+
+async function download(supabase: SupabaseClient, bucket: string, path: string) {
+  const { data } = await supabase.storage.from(bucket).download(path);
+  return data ?? null;
+}
+
+async function snapshotBrandAssets(supabase: SupabaseClient): Promise<Snapshot> {
+  const [{ data: state }, { data: profile }, { data: composite }] = await Promise.all([
+    brandProfiles(supabase)
+      .from('user_onboarding_states')
+      .select('state')
+      .eq('user_id', OWNER_ID)
+      .eq('brand_id', BRAND_ID)
+      .maybeSingle(),
+    brandProfiles(supabase).from('brand_profiles').select('logo_path').eq('id', BRAND_ID).single(),
+    brandProfiles(supabase)
+      .from('brand_report_composites')
+      .select('id, brand_tokens')
+      .eq('brand_profile_id', BRAND_ID)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  return {
+    onboardingState: (state as { state?: Record<string, unknown> } | null)?.state ?? null,
+    logoPath: (profile as { logo_path: string | null } | null)?.logo_path ?? null,
+    composite: (composite as Snapshot['composite']) ?? null,
+    logoBytes: await download(supabase, CREATIVE_BUCKET, LOGO_PATH),
+    fontManifest: await download(supabase, LEGACY_FONT_BUCKET, FONT_MANIFEST),
+  };
+}
+
+async function benchFontRows(supabase: SupabaseClient) {
+  const { data } = await media(supabase)
+    .from('fonts')
+    .select('id, storage_bucket, storage_path')
+    .eq('brand_id', BRAND_ID)
+    .eq('family', BENCH_FONT_FAMILY);
+  return (data ?? []) as { id: string; storage_bucket: string; storage_path: string }[];
+}
+
+async function restoreBrandAssets(supabase: SupabaseClient, saved: Snapshot): Promise<void> {
+  for (const row of await benchFontRows(supabase)) {
+    await supabase.storage.from(row.storage_bucket).remove([row.storage_path]);
+    await media(supabase).from('fonts').delete().eq('id', row.id).throwOnError();
+  }
+  if (saved.fontManifest)
+    await supabase.storage
+      .from(LEGACY_FONT_BUCKET)
+      .upload(FONT_MANIFEST, saved.fontManifest, { upsert: true, contentType: 'application/json' });
+  else await supabase.storage.from(LEGACY_FONT_BUCKET).remove([FONT_MANIFEST]);
+
+  if (saved.logoBytes)
+    await supabase.storage
+      .from(CREATIVE_BUCKET)
+      .upload(LOGO_PATH, saved.logoBytes, { upsert: true, contentType: 'image/png' });
+  else await supabase.storage.from(CREATIVE_BUCKET).remove([LOGO_PATH]);
+  await brandProfiles(supabase)
+    .from('brand_profiles')
+    .update({ logo_path: saved.logoPath })
+    .eq('id', BRAND_ID)
+    .throwOnError();
+  if (saved.composite)
+    await brandProfiles(supabase)
+      .from('brand_report_composites')
+      .update({ brand_tokens: saved.composite.brand_tokens })
+      .eq('id', saved.composite.id)
+      .throwOnError();
+  if (saved.onboardingState)
+    await brandProfiles(supabase)
+      .from('user_onboarding_states')
+      .update({ state: saved.onboardingState })
+      .eq('user_id', OWNER_ID)
+      .eq('brand_id', BRAND_ID)
+      .throwOnError();
+}
+
+/** The run starts from a brand with no chosen logo, so the first upload must become it. */
+async function clearChosenLogo(supabase: SupabaseClient, state: Record<string, unknown>) {
+  const brand = (state.brand ?? {}) as Record<string, unknown>;
+  await brandProfiles(supabase)
+    .from('user_onboarding_states')
+    .update({ state: { ...state, brand: { ...brand, logoPath: null } } })
+    .eq('user_id', OWNER_ID)
+    .eq('brand_id', BRAND_ID)
+    .throwOnError();
+  await brandProfiles(supabase)
+    .from('brand_profiles')
+    .update({ logo_path: null })
+    .eq('id', BRAND_ID)
+    .throwOnError();
+}
 
 async function setActiveBrand(supabase: SupabaseClient, activeBrandId: string): Promise<void> {
   await brandProfiles(supabase)
@@ -289,6 +429,9 @@ const benchStartedMs = Date.now();
 const UN_EXERCISED_HOP =
   'The real image upload (library-upload edge function) is NOT exercised — edge functions are not wired on the local stack. Its artifacts (real storage object + real media.assets row) are seeded by the interception; every hop on both sides of it is real.';
 
+const UN_EXERCISED_BRAND_ASSETS =
+  "Tagging (library-creative-operations edge function) is intercepted and runs that function's own RPC with the service role. Font files inside a design-system upload and a website typed beside documents are NOT exercised here (model calls / public internet); both are unit-tested.";
+
 function printBenchEnvelope(): void {
   const counts = { pass: 0, warn: 0, skip: 0, fail: 0 };
   for (const result of graded) {
@@ -302,7 +445,7 @@ function printBenchEnvelope(): void {
       startedAt: benchStartedAt,
       durationMs: Date.now() - benchStartedMs,
       results: graded,
-      notes: [UN_EXERCISED_HOP],
+      notes: [UN_EXERCISED_HOP, UN_EXERCISED_BRAND_ASSETS],
       counts,
       exitCode: counts.fail > 0 ? 1 : 0,
     }),
@@ -327,14 +470,16 @@ test.describe('onboarding product catalog', () => {
 
     const supabase = admin();
     // The local stack is built from a schema-only prod snapshot, so bucket ROWS are
-    // absent. Private, like the real media library.
-    const { error: bucketError } = await supabase.storage.createBucket(MEDIA_BUCKET, {
-      public: false,
-    });
-    if (bucketError && !/already exists/i.test(bucketError.message)) {
-      throw new Error(
-        `[onboarding:catalog:bench] Could not create ${MEDIA_BUCKET}: ${bucketError.message}`,
-      );
+    // absent. All private, like the real ones (the font store refuses a public bucket).
+    for (const bucket of [MEDIA_BUCKET, FONT_BUCKET, LEGACY_FONT_BUCKET, CREATIVE_BUCKET]) {
+      const { error: bucketError } = await supabase.storage.createBucket(bucket, {
+        public: false,
+      });
+      if (bucketError && !/already exists/i.test(bucketError.message)) {
+        throw new Error(
+          `[onboarding:catalog:bench] Could not create ${bucket}: ${bucketError.message}`,
+        );
+      }
     }
 
     const { data: pref } = await brandProfiles(supabase)
@@ -344,8 +489,13 @@ test.describe('onboarding product catalog', () => {
       .maybeSingle();
     previousActiveBrandId = (pref?.active_brand_id as string | undefined) ?? null;
     await setActiveBrand(supabase, BRAND_ID);
+    snapshot = await snapshotBrandAssets(supabase);
+    if (!snapshot.onboardingState)
+      throw new Error('[onboarding:catalog:bench] No fixture onboarding state - hydrate.');
+    await clearChosenLogo(supabase, snapshot.onboardingState);
     await setOnboardingStep(supabase, 2);
     await purge(supabase);
+    expect(await benchFontRows(supabase)).toHaveLength(0);
 
     accessToken = await mintAccessTokenForEmail(LOCAL_OWNER_EMAIL);
     // Nothing of ours may exist yet, or "2 added" would be measuring somebody else.
@@ -389,6 +539,9 @@ test.describe('onboarding product catalog', () => {
     expect(leftovers ?? []).toHaveLength(0);
     if (previousActiveBrandId) await setActiveBrand(supabase, previousActiveBrandId);
     if (previousStep !== null) await setOnboardingStep(supabase, previousStep);
+    // After the step reset, so the restored onboarding state is the original byte for byte.
+    if (snapshot) await restoreBrandAssets(supabase, snapshot);
+    expect(await benchFontRows(supabase)).toHaveLength(0);
     await backend?.stop();
     backend = null;
     printBenchEnvelope();
@@ -532,5 +685,96 @@ test.describe('onboarding product catalog', () => {
     // Not imported - this row exists only to check the reading.
     await row.getByTestId('catalog-remove').click();
     await expect(page.getByTestId('catalog-draft-row')).toHaveCount(0);
+  });
+
+  test('logos land in the Library tagged logo, and the first becomes the brand logo', async () => {
+    const zone = page.getByTestId('brand-library-logo');
+    await page.getByTestId('brand-library-logo-input').setInputFiles([
+      { name: 'bench-logo-full.png', mimeType: 'image/png', buffer: PNG_BYTES },
+      { name: 'bench-logo-icon.png', mimeType: 'image/png', buffer: PNG_BYTES },
+    ]);
+    await expect(zone.getByText('In your Library')).toHaveCount(2, { timeout: 60_000 });
+    await expect(zone.getByText('Brand logo')).toBeVisible({ timeout: 60_000 });
+    await expect(zone.getByRole('button', { name: 'Use as brand logo' })).toHaveCount(1);
+    await expect(zone.getByRole('link', { name: 'View in Library' })).toHaveAttribute(
+      'href',
+      /\/library\?tags=logo$/,
+    );
+
+    const supabase = admin();
+    const { data: tagged } = await media(supabase)
+      .from('assets')
+      .select('file_name, tags')
+      .in('file_name', ['bench-logo-full.png', 'bench-logo-icon.png'])
+      .in('id', seededAssetIds);
+    expect(tagged ?? []).toHaveLength(2);
+    for (const row of (tagged ?? []) as { tags: string[] | null }[]) {
+      expect(row.tags ?? []).toContain('logo');
+    }
+
+    // The brand logo is a real row and real bytes, written by the real Backend route.
+    const { data: profile } = await brandProfiles(supabase)
+      .from('brand_profiles')
+      .select('logo_path')
+      .eq('id', BRAND_ID)
+      .single();
+    expect((profile as { logo_path: string }).logo_path).toBe(LOGO_PATH);
+    const logo = await download(supabase, CREATIVE_BUCKET, LOGO_PATH);
+    expect(Buffer.from(await (logo as Blob).arrayBuffer()).equals(PNG_BYTES)).toBe(true);
+    // And onboarding state agrees, or the launch kit would put a scraped logo back.
+    const { data: state } = await brandProfiles(supabase)
+      .from('user_onboarding_states')
+      .select('state')
+      .eq('user_id', OWNER_ID)
+      .eq('brand_id', BRAND_ID)
+      .single();
+    expect((state as { state: { brand: { logoPath: string | null } } }).state.brand.logoPath).toBe(
+      LOGO_PATH,
+    );
+  });
+
+  test('reference images land tagged reference and never offer to become the logo', async () => {
+    const zone = page.getByTestId('brand-library-reference');
+    await page
+      .getByTestId('brand-library-reference-input')
+      .setInputFiles([{ name: 'bench-moodboard.png', mimeType: 'image/png', buffer: PNG_BYTES }]);
+    await expect(zone.getByText('In your Library')).toHaveCount(1, { timeout: 60_000 });
+    await expect(zone.getByRole('button', { name: 'Use as brand logo' })).toHaveCount(0);
+
+    const { data } = await media(admin())
+      .from('assets')
+      .select('tags')
+      .eq('file_name', 'bench-moodboard.png')
+      .in('id', seededAssetIds)
+      .single();
+    expect((data as { tags: string[] }).tags).toContain('reference');
+  });
+
+  test('a font file is refused by the image zones and saved by Fonts, with a live specimen', async () => {
+    await page
+      .getByTestId('brand-library-logo-input')
+      .setInputFiles([{ name: 'Anton-Regular.woff2', mimeType: 'font/woff2', buffer: FONT_BYTES }]);
+    await expect(page.getByTestId('brand-library-logo')).toContainText(
+      'Font files go in Fonts below',
+    );
+
+    const fonts = page.getByTestId('brand-library-fonts');
+    await fonts
+      .locator('input[type="file"]')
+      .setInputFiles([{ name: 'Anton-Regular.woff2', mimeType: 'font/woff2', buffer: FONT_BYTES }]);
+    const dialog = page.getByRole('dialog');
+    // Drawn from the picked bytes in a real browser: the face loaded, not a fallback.
+    await expect(dialog.getByTestId('font-specimen')).toHaveAttribute('data-ready', 'true', {
+      timeout: 30_000,
+    });
+    await dialog.getByLabel('Font family').fill(BENCH_FONT_FAMILY);
+    await dialog.getByLabel('Weight (optional)').fill('400');
+    await dialog.getByRole('button', { name: /add to engine/i }).click();
+
+    await expect(fonts.getByText(BENCH_FONT_FAMILY)).toBeVisible({ timeout: 60_000 });
+    await expect(fonts.getByTestId('font-specimen')).toHaveAttribute('data-ready', 'true');
+    const rows = await benchFontRows(admin());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.storage_bucket).toBe(FONT_BUCKET);
   });
 });

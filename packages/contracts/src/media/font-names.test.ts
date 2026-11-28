@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { readFontNames } from './font-names';
+import { readFontNames, readFontWeight } from './font-names';
 
 type Name = { platformId: number; languageId: number; nameId: number; text: string };
 
@@ -94,5 +94,31 @@ describe('readFontNames', () => {
       { platformId: 3, languageId: 0x409, nameId: 6, text: 'X-Bold' },
     ]).subarray(0, 20);
     expect(readFontNames(truncated)).toBeNull();
+  });
+});
+
+describe('readFontWeight', () => {
+  /** A one-table sfnt whose only table is the start of `OS/2`, up to usWeightClass. */
+  const withWeight = (weight: number) => {
+    const bytes = new Uint8Array(12 + 16 + 6);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(0, 0x00010000);
+    view.setUint16(4, 1);
+    view.setUint32(12, 0x4f532f32);
+    view.setUint32(12 + 8, 28);
+    view.setUint32(12 + 12, 6);
+    view.setUint16(28 + 4, weight);
+    return bytes;
+  };
+
+  it('reads the weight the file declares', () => {
+    expect(readFontWeight(withWeight(700))).toBe(700);
+    expect(readFontWeight(withWeight(350))).toBe(350);
+  });
+
+  it('is null for an out-of-range weight, a font with no OS/2 table, and a non-font', () => {
+    expect(readFontWeight(withWeight(0))).toBeNull();
+    expect(readFontWeight(sfnt([]))).toBeNull();
+    expect(readFontWeight(new Uint8Array([1, 2, 3]))).toBeNull();
   });
 });
