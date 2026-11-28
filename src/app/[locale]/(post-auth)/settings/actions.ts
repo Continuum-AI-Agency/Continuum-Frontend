@@ -43,12 +43,16 @@ export async function updateBrandContentLanguageAction(
   if (!brandId) throw new Error('Brand is required');
   const trimmed = language?.trim() ?? '';
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .schema('brand_profiles')
     .from('brand_profiles')
     .update({ content_language: trimmed.length > 0 ? trimmed : null })
-    .eq('id', brandId);
+    .eq('id', brandId)
+    .select('id')
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  // RLS lets only owners and admins update: anyone else matches no row and changed nothing.
+  if (!data) throw new Error('Only a brand owner or admin can change its content language');
   revalidatePath('/settings', 'page');
 }
 
@@ -66,7 +70,9 @@ export async function updateBrandTimezoneAction(brandId: string, timezone: strin
   const { data, error } = await supabase
     .schema('brand_profiles')
     .from('brand_profiles')
-    .update({ timezone })
+    // 'UTC' is the column default, which the Backend reads as "never set" and fills from the
+    // next chat's browser zone. A deliberate UTC is stored as its alias so it stays chosen.
+    .update({ timezone: timezone === 'UTC' ? 'Etc/UTC' : timezone })
     .eq('id', brandId)
     .select('id')
     .maybeSingle();

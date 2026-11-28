@@ -1042,8 +1042,12 @@ function OrganicCalendarWorkspaceInner({
     [weekStart, uiLocale],
   );
   // The zone every scheduled time in this planner is expressed in. The app displayed it
-  // nowhere, which left every "9:00 AM" ambiguous to anyone not in the brand's zone.
-  const plannerTimeZone = React.useMemo(() => resolvePlannerTimeZone(null), []);
+  // nowhere, which left every "9:00 AM" ambiguous to anyone not in the brand's zone. It is the
+  // brand's zone, like the cards: naming the browser's put a header and its times in two zones.
+  const plannerTimeZone = React.useMemo(
+    () => resolvePlannerTimeZone(brandTimeZone),
+    [brandTimeZone],
+  );
   const weekSubtitle = React.useMemo(
     () =>
       uiText('plannerWeekSubtitle', {

@@ -1160,5 +1160,8 @@
   "brandDnaReanalyzeAudienceHint": "Com suas próprias palavras. A nova análise monta o público a partir disso em vez de deduzi-lo do site.",
   "brandDnaReanalyzeFinished": "Análise concluída",
   "brandDnaReanalyzeDoneEditKept": "A nova análise de {url} foi salva, mas uma edição salva enquanto ela rodava foi mantida em vez de substituída. Suas edições continuam com prioridade; redefina-as no editor abaixo para ver a nova análise.",
-  "brandDnaReanalyzeNotSaved": "A análise de {url} terminou, mas não foi possível salvá-la, então seu Brand DNA não mudou. Execute de novo; se falhar outra vez, fale com o suporte."
+  "brandDnaReanalyzeNotSaved": "A análise de {url} terminou, mas não foi possível salvá-la, então seu Brand DNA não mudou. Execute de novo; se falhar outra vez, fale com o suporte.",
+  "displayNameSave": "Salvar nome",
+  "displayNameSaved": "Nome salvo",
+  "displayNameSaveFailed": "Não foi possível salvar seu nome"
 }

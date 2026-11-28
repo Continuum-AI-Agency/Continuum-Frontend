@@ -1,6 +1,6 @@
 'use client';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useId, useMemo, useState, useTransition } from 'react';
 import {
   renameBrandProfileAction,
   updateBrandContentLanguageAction,
@@ -42,6 +42,8 @@ export function BrandIdentitySection({
   timezone: initialTimezone = 'UTC',
 }: BrandIdentitySectionProps) {
   const uiLocale = useLocale();
+  const languageListId = useId();
+  const languageSuggestions = useMemo(() => contentLanguageSuggestions(uiLocale), [uiLocale]);
 
   const uiErrorMessage = useUiErrorMessage();
 
@@ -190,7 +192,13 @@ export function BrandIdentitySection({
               placeholder={tUi('m_a2fd122ff6')}
               className="min-w-[260px]"
               disabled={!canEdit}
+              list={languageListId}
             />
+            <datalist id={languageListId}>
+              {languageSuggestions.map((language) => (
+                <option key={language} value={language} />
+              ))}
+            </datalist>
             <Button type="submit" variant="outline" disabled={isPending || !canEdit}>
               {tUi('m_af5a1075cf')}
             </Button>
@@ -231,4 +239,17 @@ function Detail({ label, value }: { label: string; value: string }) {
       <span className="text-sm">{value}</span>
     </div>
   );
+}
+
+// Suggestions, not a closed list: the field is free text because 'Spanish (Colombia)' and
+// 'Spanish (Argentina, voseo)' are different instructions to the copywriter.
+const SUGGESTED_CONTENT_LANGUAGES = ['es-CO', 'es-MX', 'es', 'en-US', 'en-GB', 'pt-BR', 'pt-PT', 'fr', 'de', 'it'];
+
+function contentLanguageSuggestions(uiLocale: string): string[] {
+  try {
+    const names = new Intl.DisplayNames([uiLocale], { type: 'language' });
+    return SUGGESTED_CONTENT_LANGUAGES.map((code) => names.of(code) ?? code);
+  } catch {
+    return SUGGESTED_CONTENT_LANGUAGES;
+  }
 }

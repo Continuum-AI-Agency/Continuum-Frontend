@@ -1160,5 +1160,8 @@
   "brandDnaReanalyzeAudienceHint": "Con tus propias palabras. El nuevo análisis construye la audiencia a partir de esto en lugar de deducirla del sitio web.",
   "brandDnaReanalyzeFinished": "Análisis terminado",
   "brandDnaReanalyzeDoneEditKept": "El nuevo análisis de {url} está guardado, pero se conservó una edición guardada mientras se ejecutaba, en lugar de reemplazarla. Tus ediciones siguen teniendo prioridad; restablécelas en el editor de abajo para ver el nuevo análisis.",
-  "brandDnaReanalyzeNotSaved": "El análisis de {url} terminó, pero no se pudo guardar, así que tu Brand DNA no ha cambiado. Vuelve a ejecutarlo; si falla de nuevo, contacta con soporte."
+  "brandDnaReanalyzeNotSaved": "El análisis de {url} terminó, pero no se pudo guardar, así que tu Brand DNA no ha cambiado. Vuelve a ejecutarlo; si falla de nuevo, contacta con soporte.",
+  "displayNameSave": "Guardar nombre",
+  "displayNameSaved": "Nombre guardado",
+  "displayNameSaveFailed": "No se pudo guardar tu nombre"
 }

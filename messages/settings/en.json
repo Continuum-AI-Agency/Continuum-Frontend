@@ -1160,5 +1160,8 @@
   "brandDnaReanalyzeAudienceHint": "In your own words. The new analysis builds the audience from this instead of guessing it from the website.",
   "brandDnaReanalyzeFinished": "Analysis finished",
   "brandDnaReanalyzeDoneEditKept": "The new analysis of {url} is saved, but an edit saved while it ran was kept instead of replaced. Your edits still take priority; reset them in the editor below to see the new analysis.",
-  "brandDnaReanalyzeNotSaved": "The analysis of {url} finished, but saving it failed, so your Brand DNA has not changed. Run it again; if it fails again, contact support."
+  "brandDnaReanalyzeNotSaved": "The analysis of {url} finished, but saving it failed, so your Brand DNA has not changed. Run it again; if it fails again, contact support.",
+  "displayNameSave": "Save name",
+  "displayNameSaved": "Name saved",
+  "displayNameSaveFailed": "Could not save your name"
 }
