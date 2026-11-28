@@ -44,7 +44,13 @@ import {
   saveInspirationUrlResponseSchema,
   tiktokTrendsResponseSchema,
 } from '@continuum/contracts';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { request } from '@/lib/api/http';
 import { brandSkillsQueryKey } from '@/lib/organic/skills';
 
@@ -428,12 +434,15 @@ const keys = {
   tiktokTrends: (brandId: string) => ['competitor-spy', 'tiktok-trends', brandId] as const,
 };
 
-export function useCompetitors(brandId: string) {
-  return useQuery({
+const competitorsQuery = (brandId: string) =>
+  queryOptions({
     queryKey: keys.competitors(brandId),
     queryFn: () => listCompetitors(brandId),
     enabled: Boolean(brandId),
   });
+
+export function useCompetitors(brandId: string) {
+  return useQuery(competitorsQuery(brandId));
 }
 
 export function useAdTimeline(params: TimelineParams) {
@@ -444,14 +453,16 @@ export function useAdTimeline(params: TimelineParams) {
   });
 }
 
-export function useInstagramPosts(params: {
+type InstagramPostsParams = {
   brandId: string;
   competitorId?: string;
   limit?: number;
   sort?: InspirationSort;
   platform?: OrganicPostPlatform;
-}) {
-  return useQuery({
+};
+
+const instagramPostsQuery = (params: InstagramPostsParams) =>
+  queryOptions({
     queryKey: keys.instagramPosts(
       params.brandId,
       params.competitorId,
@@ -464,6 +475,9 @@ export function useInstagramPosts(params: {
     staleTime: 10 * 60_000,
     retry: false,
   });
+
+export function useInstagramPosts(params: InstagramPostsParams) {
+  return useQuery(instagramPostsQuery(params));
 }
 
 // Server refreshes on a 12h TTL; a first load may take several seconds while it queries TikTok.
@@ -612,13 +626,33 @@ export function useCompetitorSmartSearch(brandId: string, q: string) {
   });
 }
 
-export function useAdCounts(brandId: string) {
-  return useQuery({
+const adCountsQuery = (brandId: string) =>
+  queryOptions({
     queryKey: keys.adCounts(brandId),
     queryFn: () => fetchAdCounts(brandId),
     enabled: Boolean(brandId),
     staleTime: 5 * 60_000,
   });
+
+export function useAdCounts(brandId: string) {
+  return useQuery(adCountsQuery(brandId));
+}
+
+/** Brand Spy's route loader, run from the sidebar on intent: the reads its default tab
+ *  (Inspiration, organic source, with the competitor rail) renders first. */
+export function prefetchCompetitorSpyEntry(queryClient: QueryClient, brandId: string) {
+  return Promise.all([
+    queryClient.prefetchQuery(competitorsQuery(brandId)),
+    queryClient.prefetchQuery(adCountsQuery(brandId)),
+    queryClient.prefetchQuery(
+      instagramPostsQuery({
+        brandId,
+        limit: MAX_INSTAGRAM_POSTS,
+        sort: 'recent',
+        platform: 'instagram',
+      }),
+    ),
+  ]);
 }
 
 // --- Onboarding-derived recommendations (Competitors tab) -------------------

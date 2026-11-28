@@ -18,6 +18,14 @@ import {
   type TemplateItem,
   type TemplateSection,
 } from '@continuum/contracts';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { MODULE_TINT } from '../blocks/modules';
 import { JAINA_TABLE, JAINA_TYPE, JUDGEMENT_TEXT } from '../reading';
@@ -250,58 +258,59 @@ function ShareTable({ block, section }: TemplateSectionBodyProps) {
   const lastRow = table.rows.length - 1;
   return (
     <div className="space-y-3">
-      <div className={JAINA_TABLE.wrap}>
-        <table className={JAINA_TABLE.table} data-balance-table>
-          <thead>
-            <tr className={JAINA_TABLE.headRow}>
-              <th className={cn(JAINA_TABLE.th, 'text-left')} />
-              {table.columns.map((column) => (
-                <th key={column.key} className={cn(JAINA_TABLE.th, 'text-right')}>
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.rows.map((row, rowIndex) => {
-              const tone = toneOfRow(row.label);
-              const isTotal = rowIndex === lastRow && row.entity_id === null && tone === null;
-              return (
-                <tr
-                  key={`${row.label}-${row.entity_id ?? ''}`}
-                  className={cn(JAINA_TABLE.row, isTotal && 'font-semibold')}
-                  data-tone={tone ?? undefined}
+      <Table className={JAINA_TABLE.table} data-balance-table>
+        <TableHeader>
+          <TableRow className={JAINA_TABLE.headRow}>
+            <TableHead className={cn(JAINA_TABLE.th, 'text-left')} />
+            {table.columns.map((column) => (
+              <TableHead key={column.key} className={cn(JAINA_TABLE.th, 'text-right')}>
+                {column.label}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {table.rows.map((row, rowIndex) => {
+            const tone = toneOfRow(row.label);
+            const isTotal = rowIndex === lastRow && row.entity_id === null && tone === null;
+            return (
+              <TableRow
+                key={`${row.label}-${row.entity_id ?? ''}`}
+                className={cn(JAINA_TABLE.row, isTotal && 'font-semibold')}
+                data-tone={tone ?? undefined}
+              >
+                <TableCell
+                  className={cn(
+                    JAINA_TABLE.td,
+                    'max-w-[16rem] overflow-hidden text-ellipsis whitespace-nowrap text-foreground',
+                  )}
+                  title={row.label}
                 >
-                  <td
-                    className={cn(JAINA_TABLE.td, 'max-w-[16rem] truncate text-foreground')}
-                    title={row.label}
-                  >
-                    {row.label}
-                  </td>
-                  {table.columns.map((column) => (
-                    <td key={column.key} className={cn(JAINA_TABLE.td, 'text-right')}>
-                      {row.cells[column.key] ? (
-                        <FigureById
-                          figures={block.figures}
-                          id={row.cells[column.key]}
-                          className={cn(
-                            'font-normal',
-                            column.key === 'index' && tone && JUDGEMENT_TEXT[TONE_JUDGEMENT[tone]],
-                            column.key === 'index' && tone && tone !== 'neutral' && 'font-semibold',
-                            isTotal && 'font-semibold',
-                          )}
-                        />
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  {row.label}
+                </TableCell>
+                {table.columns.map((column) => (
+                  <TableCell key={column.key} className={cn(JAINA_TABLE.td, 'text-right')}>
+                    {row.cells[column.key] ? (
+                      <FigureById
+                        figures={block.figures}
+                        id={row.cells[column.key]}
+                        className={cn(
+                          'font-normal',
+                          column.key === 'index' && tone && JUDGEMENT_TEXT[TONE_JUDGEMENT[tone]],
+                          column.key === 'index' && tone && tone !== 'neutral' && 'font-semibold',
+                          isTotal && 'font-semibold',
+                        )}
+                      />
+                    ) : (
+                      '—'
+                    )}
+                  </TableCell>
+                ))}
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
       {section.items.length > 0 ? (
         <ul className={cn('space-y-1', JAINA_TYPE.body)} data-balance-readings>
           {section.items.map((item) => (

@@ -2,9 +2,9 @@
 import { useTranslations } from 'next-intl';
 
 import * as React from 'react';
+import { Sparkline } from '@/components/organic/cards/Sparkline';
 import type { PaidMetricsTrendPoint } from '@/components/paid-media/dashboard/PerformanceDetails';
 import type { CampaignPerformanceMetricKey } from '@/lib/paid-media/performance-types';
-import { cn } from '@/lib/utils';
 
 type MetricSparklineProps = {
   trends: PaidMetricsTrendPoint[] | undefined;
@@ -31,12 +31,6 @@ const TREND_FIELD_BY_METRIC: Partial<
   clicks: 'clicks',
 };
 
-const TONE_STROKE: Record<'positive' | 'negative' | 'flat', string> = {
-  positive: 'oklch(72% 0.16 154)',
-  negative: 'oklch(64% 0.20 28)',
-  flat: 'oklch(60% 0.02 250)',
-};
-
 export function MetricSparkline({
   trends,
   metric,
@@ -50,59 +44,20 @@ export function MetricSparkline({
   const field = TREND_FIELD_BY_METRIC[metric];
 
   const values = React.useMemo(() => {
-    if (!trends || !field || trends.length < 2) return [];
+    if (!trends || !field) return [];
     return trends
       .map((point) => point[field])
       .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
   }, [trends, field]);
 
-  if (values.length < 2) {
-    return (
-      <div
-        className={cn('inline-flex items-center text-muted-foreground/60', className)}
-        style={{ width, height }}
-        aria-hidden
-      >
-        <span className="block h-px w-full bg-current/30" />
-      </div>
-    );
-  }
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const stepX = values.length === 1 ? 0 : width / (values.length - 1);
-
-  const points = values
-    .map((value, index) => {
-      const x = index * stepX;
-      const y = height - ((value - min) / span) * (height - 2) - 1;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(' ');
-
-  const lastIndex = values.length - 1;
-  const lastX = lastIndex * stepX;
-  const lastY = height - ((values[lastIndex] - min) / span) * (height - 2) - 1;
-
   return (
-    <svg
-      className={cn('inline-block align-middle', className)}
-      width={width}
+    <Sparkline
+      ariaLabel={uiText('template_ddf435e47a89', { v0: metric })}
+      className={className}
       height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label={uiText('template_ddf435e47a89', { v0: metric })}
-    >
-      <polyline
-        fill="none"
-        stroke={TONE_STROKE[tone]}
-        strokeWidth={1.25}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={points}
-      />
-      <circle cx={lastX} cy={lastY} r={1.5} fill={TONE_STROKE[tone]} />
-    </svg>
+      tone={tone}
+      values={values}
+      width={width}
+    />
   );
 }

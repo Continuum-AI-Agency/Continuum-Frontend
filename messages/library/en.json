@@ -1184,5 +1184,15 @@
   "brandLogoSetTitle": "Brand logo updated",
   "brandLogoSetDescription": "New content will use this logo.",
   "brandLogoSetFailedTitle": "Couldn't set the brand logo",
-  "brandLogoSetFailedDescription": "Please try again."
+  "brandLogoSetFailedDescription": "Please try again.",
+  "brandIdentity": "Brand identity",
+  "brandReference": "Brand reference",
+  "logoVariant": "Logo variant",
+  "logoVariantPrimary": "Primary",
+  "logoVariantWhite": "White, for dark backgrounds",
+  "logoVariantDark": "Dark, for light backgrounds",
+  "logoVariantIcon": "Icon or mark",
+  "logoVariantHorizontal": "Horizontal",
+  "brandIdentityTagFailed": "Couldn't update the tag. Please try again.",
+  "brandReferencesFilter": "Brand references"
 }

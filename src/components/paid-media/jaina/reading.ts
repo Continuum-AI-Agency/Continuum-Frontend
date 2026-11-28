@@ -205,12 +205,13 @@ export const JAINA_TYPE = {
  * outer columns sit flush with the module's own text.
  */
 export const JAINA_TABLE = {
-  wrap: 'overflow-x-auto',
   table: `w-full ${JAINA_TYPE.table} tabular-nums`,
   headRow: 'border-b border-foreground/5',
-  th: `px-2 py-1.5 first:pl-0 last:pr-0 ${JAINA_TYPE.label} text-muted-foreground`,
+  // `h-auto whitespace-normal` undo `ui/table`'s fixed head height and no-wrap cells:
+  // a campaign name wraps under its column instead of widening the answer.
+  th: `h-auto whitespace-normal px-2 py-1.5 first:pl-0 last:pr-0 ${JAINA_TYPE.label} text-muted-foreground`,
   row: 'border-b border-foreground/5 last:border-0',
-  td: 'px-2 py-1.5 first:pl-0 last:pr-0',
+  td: 'whitespace-normal px-2 py-1.5 first:pl-0 last:pr-0',
 } as const;
 
 /**

@@ -37,6 +37,8 @@ export type BrandProfileDetails = {
   emailReportOptIn: boolean;
   /** Null until someone pins one or the backend detects it from the brand's own posts. */
   contentLanguage: string | null;
+  /** IANA zone; the column defaults to 'UTC'. */
+  timezone: string;
 };
 
 export async function fetchBrandProfileDetails(
@@ -47,7 +49,7 @@ export async function fetchBrandProfileDetails(
     .schema('brand_profiles')
     .from('brand_profiles')
     .select(
-      'id, brand_name, logo_path, created_at, updated_at, created_by, completed_at, email_report_opt_in, content_language',
+      'id, brand_name, logo_path, created_at, updated_at, created_by, completed_at, email_report_opt_in, content_language, timezone',
     )
     .eq('id', brandId)
     .maybeSingle();
@@ -70,6 +72,7 @@ export async function fetchBrandProfileDetails(
     completedAt: data.completed_at,
     emailReportOptIn: (data as { email_report_opt_in?: boolean }).email_report_opt_in ?? true,
     contentLanguage: (data as { content_language?: string | null }).content_language ?? null,
+    timezone: (data as { timezone?: string | null }).timezone ?? 'UTC',
   };
 }
 

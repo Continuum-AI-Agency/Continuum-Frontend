@@ -2,6 +2,14 @@
 
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 // OWNED BY the weekly_report agent — only that agent edits this file. Recipe:
 // Continuum-Backend/App/agents-ts/Jaina/src/agents/templates/README.md.
@@ -162,52 +170,58 @@ function PeriodTable({
   );
 
   return (
-    <div className={JAINA_TABLE.wrap}>
-      <table className={JAINA_TABLE.table} data-testid="weekly-report-period-table">
-        <thead>
-          <tr className={JAINA_TABLE.headRow}>
-            <th scope="col" className={cn(JAINA_TABLE.th, 'text-left')}>
-              {uiText('metric_2d275a7')}
-            </th>
-            <th scope="col" className={cn(JAINA_TABLE.th, 'text-right')} data-column="period_a">
-              {uiText.rich('sentence_723af3eee6db', {
-                v0: () => (
-                  <span className="block font-normal normal-case tracking-normal">
-                    {range(header.period_a)}
-                  </span>
-                ),
-              })}
-            </th>
-            <th scope="col" className={cn(JAINA_TABLE.th, 'text-right')} data-column="period_b">
-              {uiText.rich('sentence_d8b3ba1ca07c', {
-                v0: () => (
-                  <span className="block font-normal normal-case tracking-normal">
-                    {range(header.period_b)}
-                  </span>
-                ),
-              })}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {ROW_METRICS.map(({ key, label }) => (
-            <tr key={key} className={JAINA_TABLE.row} data-metric={key}>
-              <th
-                scope="row"
-                className={cn(JAINA_TABLE.td, 'text-left font-normal text-foreground')}
-              >
-                {label}
-              </th>
-              {[a, b].map((row, index) => (
-                <td key={index === 0 ? 'a' : 'b'} className={cn(JAINA_TABLE.td, 'text-right')}>
-                  {row[key] ? <FigureById figures={figures} id={row[key]} /> : '—'}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table className={JAINA_TABLE.table} data-testid="weekly-report-period-table">
+      <TableHeader>
+        <TableRow className={JAINA_TABLE.headRow}>
+          <TableHead scope="col" className={cn(JAINA_TABLE.th, 'text-left')}>
+            {uiText('metric_2d275a7')}
+          </TableHead>
+          <TableHead
+            scope="col"
+            className={cn(JAINA_TABLE.th, 'text-right')}
+            data-column="period_a"
+          >
+            {uiText.rich('sentence_723af3eee6db', {
+              v0: () => (
+                <span className="block font-normal normal-case tracking-normal">
+                  {range(header.period_a)}
+                </span>
+              ),
+            })}
+          </TableHead>
+          <TableHead
+            scope="col"
+            className={cn(JAINA_TABLE.th, 'text-right')}
+            data-column="period_b"
+          >
+            {uiText.rich('sentence_d8b3ba1ca07c', {
+              v0: () => (
+                <span className="block font-normal normal-case tracking-normal">
+                  {range(header.period_b)}
+                </span>
+              ),
+            })}
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {ROW_METRICS.map(({ key, label }) => (
+          <TableRow key={key} className={JAINA_TABLE.row} data-metric={key}>
+            <TableHead
+              scope="row"
+              className={cn(JAINA_TABLE.td, 'text-left font-normal text-foreground')}
+            >
+              {label}
+            </TableHead>
+            {[a, b].map((row, index) => (
+              <TableCell key={index === 0 ? 'a' : 'b'} className={cn(JAINA_TABLE.td, 'text-right')}>
+                {row[key] ? <FigureById figures={figures} id={row[key]} /> : '—'}
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 

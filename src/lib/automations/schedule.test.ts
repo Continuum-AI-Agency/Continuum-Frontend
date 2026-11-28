@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 
-import { describeSchedule, nextRunTimes, scheduleToCronExpression, validateCron } from './schedule';
+import {
+  describeSchedule,
+  isValidTimezone,
+  listTimezones,
+  nextRunTimes,
+  scheduleToCronExpression,
+  validateCron,
+} from './schedule';
 
 describe('scheduleToCronExpression', () => {
   it('canonicalizes every preset and passes cron through', () => {
@@ -57,5 +64,20 @@ describe('describeSchedule', () => {
     expect(describeSchedule({ kind: 'cron', expr: '*/30 9-17 * * *', timezone: 'UTC' })).toContain(
       'Custom cron',
     );
+  });
+});
+
+// Brand Settings saves only a zone this accepts: El Quinto Elemento (Alcaldía de Cali) sat on the
+// 'UTC' default with no way to pick America/Bogota.
+describe('isValidTimezone', () => {
+  it('accepts IANA zones and UTC, refuses anything else', () => {
+    expect(isValidTimezone('America/Bogota')).toBe(true);
+    expect(isValidTimezone('UTC')).toBe(true);
+    expect(isValidTimezone('America/Cali')).toBe(false);
+    expect(isValidTimezone('')).toBe(false);
+  });
+
+  it('accepts every zone the picker offers', () => {
+    expect(listTimezones().every(isValidTimezone)).toBe(true);
   });
 });
