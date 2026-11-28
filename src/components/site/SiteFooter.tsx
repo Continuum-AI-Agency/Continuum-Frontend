@@ -14,11 +14,11 @@ export function SiteFooter() {
               © {new Date().getFullYear()} Continuum AI
             </span>
             <div className="flex items-center gap-3">
-              <Link href="/privacy" className="text-sm">
+              <Link href="/privacy" prefetch={false} className="text-sm">
                 {uiText('privacy_54a57c3')}
               </Link>
               <Separator orientation="vertical" className="h-8" />
-              <Link href="/terms" className="text-sm">
+              <Link href="/terms" prefetch={false} className="text-sm">
                 {uiText('terms_ede5489')}
               </Link>
             </div>

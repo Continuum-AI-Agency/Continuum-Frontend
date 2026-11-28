@@ -9,6 +9,7 @@ import {
   OpenPlannerDraftProvider,
   useWorkspaceOpenPlannerDraft,
 } from '@/components/organic/openPlannerDraft';
+import { intentProps } from '@/lib/intent';
 import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
 import { prefetchMetricsDashboard } from '@/lib/prefetch/organic-metrics-cache';
 import { cn } from '@/lib/utils';
@@ -202,6 +203,8 @@ export function OrganicWorkspaceTabs({
                           ? 'organic-agent-tab'
                           : undefined
                     }
+                    // Rules mounts (hidden) on intent, so its chunk and rules load before the click.
+                    {...(view === 'rules' ? intentProps(() => setRulesEverShown(true)) : {})}
                     onClick={() => handleValueChange(view)}
                     className={cn(
                       'h-7 shrink-0 rounded-md px-3 text-xs font-medium transition-colors sm:h-8 sm:px-3.5 sm:text-sm',
