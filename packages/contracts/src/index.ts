@@ -9,6 +9,7 @@ export * from './billing/index';
 export * from './brand-intelligence/index';
 export * from './brands/index';
 export * from './chat/index';
+export * from './client-report/weekly';
 export * from './comment-automation/index';
 export * from './competitor-spy/index';
 export * from './creative/index';

@@ -90,7 +90,6 @@ import {
   useDraftDeletionConfirmation,
 } from './DraftDeletionConfirmation';
 import { MissingDraftPanel } from './MissingDraftPanel';
-import { OrganicCreativesPicker } from './OrganicCreativesPicker';
 import { PlannerAttentionDock } from './PlannerAttentionDock';
 import { ListViewSkeleton, MonthGridSkeleton, PlannerViewSkeleton } from './PlannerViewSkeletons';
 import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail';
@@ -138,6 +137,14 @@ const OrganicDraftPreview = dynamic(
 );
 const PostedContentPreview = dynamic(
   () => import('./PostedContentQuickLook').then((m) => m.PostedContentPreview),
+  { ssr: false },
+);
+
+// Gesture-gated: the picker renders only inside an open dialog or the expanded "Browse all"
+// grid, yet a static import put its library grid stack (~160 KiB) into the planner's first load.
+const loadCreativesPicker = () => import('./OrganicCreativesPicker');
+const OrganicCreativesPicker = dynamic(
+  () => loadCreativesPicker().then((m) => m.OrganicCreativesPicker),
   { ssr: false },
 );
 
@@ -1451,6 +1458,12 @@ function OrganicCalendarWorkspaceInner({
   const attachTargetDraftIds = React.useMemo(() => {
     return selectedIds.filter((id) => drafts.some((d) => d.id === id && Boolean(d.backendDraftId)));
   }, [drafts, selectedIds]);
+
+  // Selecting drafts is the intent behind bulk attach: warm the picker before the dialog opens.
+  const hasAttachTargets = attachTargetDraftIds.length > 0;
+  React.useEffect(() => {
+    if (hasAttachTargets) void loadCreativesPicker().catch(() => {});
+  }, [hasAttachTargets]);
 
   const attachCreative = useAttachCreative();
 

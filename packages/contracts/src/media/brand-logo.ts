@@ -46,6 +46,29 @@ export const setBrandLogoErrorCodeSchema = z.enum([
   'asset_not_found',
   'not_an_image',
   'logo_too_large',
+  /** An SVG with scripts, embedded HTML or references outside the file. */
+  'unsafe_svg',
   'logo_save_failed',
 ]);
 export type SetBrandLogoErrorCode = z.infer<typeof setBrandLogoErrorCodeSchema>;
+
+/** Every logo the brand hands over is a Library image tagged `logo`. */
+export const LOGO_TAG = 'logo';
+/** A Library image the brand wants generation to draw on for look and feel. */
+export const REFERENCE_TAG = 'reference';
+/**
+ * Which version of the logo a Library image is. Generation still uses only the brand logo
+ * (`logo_path`); these let a person, and an agent, find the white or icon version.
+ */
+export const LOGO_VARIANT_TAGS = [
+  'logo:primary',
+  'logo:white',
+  'logo:dark',
+  'logo:icon',
+  'logo:horizontal',
+] as const;
+export type LogoVariantTag = (typeof LOGO_VARIANT_TAGS)[number];
+/** An SVG set as the brand logo is stored as a PNG; the SVG stays in the Library with this tag. */
+export const LOGO_SOURCE_SVG_TAG = 'logo:source-svg';
+/** The tags a brand-identity editor (onboarding, Library, MCP) may add or remove. */
+export const BRAND_IDENTITY_TAGS = [LOGO_TAG, REFERENCE_TAG, ...LOGO_VARIANT_TAGS] as const;

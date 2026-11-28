@@ -149,6 +149,29 @@ describe('LibraryFilterBar', () => {
     expect(screen.queryByRole('group', { name: 'Filter by format' })).toBeNull();
   });
 
+  it('offers Brand references before any image carries the tag, and toggles the reference tag', () => {
+    const onTagsChange = mock((_tags: string[]) => undefined);
+    render(
+      <LibraryFilterBar
+        source="all"
+        kind="all"
+        onSourceChange={() => {}}
+        onKindChange={() => {}}
+        mediaType="all"
+        onMediaTypeChange={() => {}}
+        createdWith={[]}
+        onCreatedWithChange={() => {}}
+        tagOptions={[]}
+        selectedTags={['launch']}
+        onTagsChange={onTagsChange}
+      />,
+    );
+    openFilters('Filter 1');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Brand references/ }));
+    expect(onTagsChange).toHaveBeenLastCalledWith(['launch', 'reference']);
+  });
+
   it('lists every format group with its count and toggles one into families', () => {
     const { onStructuredFiltersChange, onMediaTypeChange } = renderPageBar({
       structuredFilters: { families: ['image'] },

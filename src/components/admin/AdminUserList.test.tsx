@@ -19,8 +19,9 @@ mock.module('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(searchParamsValue),
 }));
 
+const showMock = mock((_message: { title: string; variant?: string }) => {});
 mock.module('@/components/ui/ToastProvider', () => ({
-  useToast: () => ({ show: () => {} }),
+  useToast: () => ({ show: showMock }),
 }));
 
 type InvokeReply = { data: unknown; error: unknown };
@@ -58,6 +59,199 @@ const visibleUsers: AdminUser[] = [
     createdAt: '2026-07-01T00:00:00.000Z',
   },
 ];
+
+describe('AdminUserList support workflow regressions', () => {
+  beforeEach(() => {
+    searchParamsValue = 'page=1&pageSize=50';
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(noReply);
+    showMock.mockClear();
+  });
+  afterEach(cleanup);
+
+  it('does not request inactive tab datasets on the Users tab', async () => {
+    render(
+      <AdminUserList
+        users={visibleUsers}
+        permissions={[]}
+        pagination={pagination}
+        searchQuery=""
+      />,
+    );
+    await settleRenderedEffects();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves the selected user when refreshed rows are new objects', async () => {
+    const second: AdminUser = {
+      ...visibleUsers[0]!,
+      id: 'user-2',
+      email: 'blair@example.com',
+      name: 'Blair Example',
+    };
+    const rows = [...visibleUsers, second];
+    const view = render(
+      <AdminUserList users={rows} permissions={[]} pagination={pagination} searchQuery="" />,
+    );
+    await settleRenderedEffects();
+    fireEvent.click(screen.getByText('Blair Example'));
+    view.rerender(
+      <AdminUserList
+        users={rows.map((row) => ({ ...row }))}
+        permissions={[]}
+        pagination={pagination}
+        searchQuery=""
+      />,
+    );
+    await settleRenderedEffects();
+    expect(view.container.querySelector('tr[data-state="selected"]')?.textContent).toContain(
+      'blair@example.com',
+    );
+  });
+
+  it('exposes user selection as an explicitly named button', async () => {
+    render(
+      <AdminUserList
+        users={visibleUsers}
+        permissions={[]}
+        pagination={pagination}
+        searchQuery=""
+      />,
+    );
+    await settleRenderedEffects();
+    expect(screen.getByRole('button', { name: 'Manage alex@example.com' })).toBeTruthy();
+  });
+
+  it('keeps an audit request failure visible with a retry control', async () => {
+    searchParamsValue = 'tab=audit';
+    invokeMock.mockImplementation(async (name) =>
+      name === 'admin-audit-log'
+        ? { data: null, error: new Error('Audit service unavailable') }
+        : { data: null, error: null },
+    );
+    render(<AdminUserList users={[]} permissions={[]} pagination={pagination} searchQuery="" />);
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('Unable to load audit log'),
+    );
+    expect(screen.getByRole('button', { name: /refresh/i })).toBeTruthy();
+  });
+
+  it('does not claim an email was sent when the report response is incomplete', async () => {
+    searchParamsValue = 'tab=reports';
+    render(<AdminUserList users={[]} permissions={[]} pagination={pagination} searchQuery="" />);
+    await settleRenderedEffects();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Brand ID' }), {
+      target: { value: '22222222-2222-4222-8222-222222222222' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /send smoke/i }));
+    await waitFor(() => expect(showMock).toHaveBeenCalled());
+    expect(showMock.mock.calls.at(-1)?.[0].variant).toBe('error');
+  });
+
+  it('ignores workflows returned for a previously selected brand', async () => {
+    searchParamsValue = 'tab=workflows';
+    const pending = new Map<string, (reply: InvokeReply) => void>();
+    invokeMock.mockImplementation(async (_name, options) => {
+      const body = options?.body as { action?: string; brandProfileId?: string };
+      if (body.action === 'list_brands')
+        return {
+          data: {
+            brands: ['Alpha', 'Beta'].map((name) => ({
+              id: name,
+              brand_name: name,
+              tier: 1,
+              active: true,
+              ownerEmail: null,
+            })),
+          },
+          error: null,
+        };
+      if (body.action === 'list' && body.brandProfileId)
+        return new Promise<InvokeReply>((resolve) => pending.set(body.brandProfileId!, resolve));
+      return { data: { workflows: [] }, error: null };
+    });
+    const view = render(
+      <AdminUserList users={[]} permissions={[]} pagination={pagination} searchQuery="" />,
+    );
+    await waitFor(() =>
+      expect(
+        invokeMock.mock.calls.some(
+          ([, options]) => (options?.body as { action?: string })?.action === 'list_brands',
+        ),
+      ).toBe(true),
+    );
+    await settleRenderedEffects();
+    for (const brand of ['Alpha', 'Beta']) {
+      fireEvent.click(view.container.querySelector('#workflow-source-filter')!);
+      fireEvent.click(await screen.findByRole('option', { name: new RegExp(brand) }));
+      await waitFor(() => expect(pending.has(brand)).toBe(true));
+    }
+    const reply = (name: string): InvokeReply => ({
+      data: {
+        workflows: [
+          {
+            id: name,
+            name,
+            brand_profile_id: name,
+            description: null,
+            node_count: 0,
+            tags: [],
+            visibility: 'brand',
+            source_scope: null,
+            source_workflow_id: null,
+            source_brand_profile_id: null,
+            promoted_from_workflow_id: null,
+            copied_by: null,
+            copied_at: null,
+            created_by: null,
+            created_at: '2026-11-25',
+            updated_at: '2026-11-25',
+          },
+        ],
+      },
+      error: null,
+    });
+    await act(async () => {
+      pending.get('Beta')!(reply('Beta workflow'));
+    });
+    await act(async () => {
+      pending.get('Alpha')!(reply('Alpha workflow'));
+    });
+    expect(screen.getByRole('button', { name: 'Inspect Beta workflow' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Inspect Alpha workflow' })).toBeNull();
+  });
+
+  it('loads continuation pages for brand selection and workflow search', async () => {
+    searchParamsValue = 'tab=workflows';
+    invokeMock.mockImplementation(async (_name, options) => {
+      const body = options?.body as { action: string; offset: number };
+      const next = body.offset === 0;
+      return {
+        data: {
+          ...(body.action === 'list_brands'
+            ? { brands: [] }
+            : {
+                workflows: next
+                  ? []
+                  : [{ id: 'last-workflow', name: 'Last workflow', tags: [], node_count: 0 }],
+              }),
+          pagination: { has_more: next, next_offset: next ? 200 : null },
+        },
+        error: null,
+      };
+    });
+    render(<AdminUserList users={[]} permissions={[]} pagination={pagination} searchQuery="" />);
+    expect(await screen.findByRole('button', { name: 'Inspect Last workflow' })).toBeTruthy();
+    for (const action of ['list_brands', 'list']) {
+      expect(
+        invokeMock.mock.calls.some(([, options]) => {
+          const body = options?.body as { action: string; offset: number };
+          return body.action === action && body.offset === 200;
+        }),
+      ).toBe(true);
+    }
+  });
+});
 
 async function settleRenderedEffects() {
   await act(async () => {

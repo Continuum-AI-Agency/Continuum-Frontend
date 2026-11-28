@@ -120,6 +120,17 @@ export function browserTimezone(): string {
   }
 }
 
+/** True for any zone the runtime can format in — the same test every reader of it applies. */
+export function isValidTimezone(timeZone: string): boolean {
+  if (!timeZone) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 let cachedTimezones: string[] | null = null;
 
 export function listTimezones(): string[] {

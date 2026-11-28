@@ -83,10 +83,14 @@ describe('navigation structure', () => {
     ]);
   });
 
-  it('nests Performance + sub-routes as Optimizer then Jaina, with Dashboards hidden', () => {
+  it('nests Performance + sub-routes as Optimizer, Jaina, Reports, with Dashboards hidden', () => {
     const scale = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Performance +');
-    expect(scale?.items.map((i) => i.label)).toEqual(['Optimizer', 'Jaina']);
-    expect(scale?.items.map((i) => i.href)).toEqual(['/scale?tab=performance', '/scale?tab=jaina']);
+    expect(scale?.items.map((i) => i.label)).toEqual(['Optimizer', 'Jaina', 'Reports']);
+    expect(scale?.items.map((i) => i.href)).toEqual([
+      '/scale?tab=performance',
+      '/scale?tab=jaina',
+      '/scale?tab=reports',
+    ]);
     // Dashboards is unfinished: no sidebar entry, from any group.
     expect(
       APP_NAVIGATION_GROUPS.flatMap((g) => g.items).some((i) => i.href === '/scale?tab=dashboard'),
@@ -156,7 +160,7 @@ describe('navigation structure', () => {
       APP_NAVIGATION_GROUPS.flatMap((g) => g.items)
         .filter((i) => i.product === product)
         .map((i) => i.label);
-    expect(byProduct('paid_media')).toEqual(['Optimizer', 'Jaina', 'Forge']);
+    expect(byProduct('paid_media')).toEqual(['Optimizer', 'Jaina', 'Reports', 'Forge']);
     expect(byProduct('organic_agent')).toEqual(['Organic Agent', 'Organic Analytics', 'Calendar']);
     expect(byProduct('studio')).toEqual(['Canvas']);
     // Free surfaces never lock.

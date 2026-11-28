@@ -14,6 +14,7 @@ import {
   type MediaReviewStatus,
   type MediaSource,
   type Project,
+  REFERENCE_TAG,
   VIDEO_CODEC_FAMILIES,
 } from '@continuum/contracts';
 import { Check, ChevronDown, Search, SlidersHorizontal, Tags, X } from 'lucide-react';
@@ -207,7 +208,7 @@ export function LibraryFilterBar({
         {(selectedTags ?? []).map((tag) => (
           <RemovableChip
             key={tag}
-            label={tag}
+            label={tag === REFERENCE_TAG ? translateUi('brandReferencesFilter') : tag}
             removeLabel={translateUi('remove_value0_tag_filter_dab6833b', { value0: String(tag) })}
             onRemove={() => onTagsChange?.((selectedTags ?? []).filter((item) => item !== tag))}
           />
@@ -656,10 +657,23 @@ function AdvancedFilterPopover({
             </FilterSection>
           ) : null}
 
-          {onTagsChange && tagOptions.some(({ tag }) => matches(tag)) ? (
+          {/* Brand references always show, even before any image carries the tag: they are
+              what generation grounds on, and a filter that appears only once they exist
+              never tells anyone they can make them. */}
+          {onTagsChange &&
+          (matches(translateUi('brandReferencesFilter')) ||
+            tagOptions.some(({ tag }) => matches(tag))) ? (
             <FilterSection label={translateUi('tags_1331275b')}>
+              {matches(translateUi('brandReferencesFilter')) ? (
+                <FilterChoice
+                  label={translateUi('brandReferencesFilter')}
+                  count={tagOptions.find(({ tag }) => tag === REFERENCE_TAG)?.count}
+                  selected={selectedTags.includes(REFERENCE_TAG)}
+                  onClick={() => onTagsChange(toggleValue(selectedTags, REFERENCE_TAG))}
+                />
+              ) : null}
               {tagOptions
-                .filter(({ tag }) => matches(tag))
+                .filter(({ tag }) => tag !== REFERENCE_TAG && matches(tag))
                 .map(({ tag, count }) => (
                   <FilterChoice
                     key={tag}

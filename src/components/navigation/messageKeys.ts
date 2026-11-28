@@ -4,6 +4,7 @@ export const navigationMessageKeys = {
   Calendar: 'navCalendar',
   'Comment Rules': 'navComments',
   Optimizer: 'navOptimizer',
+  Reports: 'navReports',
   Home: 'navHome',
   Canvas: 'navCanvas',
   Automations: 'navAutomations',

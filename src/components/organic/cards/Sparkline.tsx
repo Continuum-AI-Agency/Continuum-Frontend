@@ -1,13 +1,9 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
-
-// Lightweight inline trend line for dense cards. Generalized from the paid-media
-// MetricSparkline so it works on any numeric series without paid-media types.
+// Inline trend line for dense cards: bklit's LineSparkline, coloured by tone.
 // Renders a flat baseline when there are fewer than two points.
-
-import * as React from 'react';
-
+import { useTranslations } from 'next-intl';
+import { LineSparkline } from '@/components/charts/sparkline';
 import { cn } from '@/lib/utils';
 
 export type SparklineTone = 'positive' | 'negative' | 'flat';
@@ -18,30 +14,7 @@ const TONE_STROKE: Record<SparklineTone, string> = {
   flat: 'oklch(60% 0.02 250)',
 };
 
-// Pure geometry for the polyline. Returns null when there are fewer than two
-// finite points (the component then renders a flat baseline). Kept separate so
-// it is unit-testable without a DOM.
-export function sparklinePoints(
-  values: ReadonlyArray<number | undefined>,
-  width: number,
-  height: number,
-): { points: string; lastX: number; lastY: number } | null {
-  const clean = values.filter(
-    (value): value is number => typeof value === 'number' && Number.isFinite(value),
-  );
-  if (clean.length < 2) return null;
-
-  const min = Math.min(...clean);
-  const max = Math.max(...clean);
-  const span = max - min || 1;
-  const stepX = width / (clean.length - 1);
-  const yFor = (value: number) => height - ((value - min) / span) * (height - 3) - 1.5;
-
-  const points = clean
-    .map((value, index) => `${(index * stepX).toFixed(2)},${yFor(value).toFixed(2)}`)
-    .join(' ');
-  return { points, lastX: (clean.length - 1) * stepX, lastY: yFor(clean[clean.length - 1]) };
-}
+const asValue = (value: number) => value;
 
 type SparklineProps = {
   values: ReadonlyArray<number | undefined>;
@@ -58,17 +31,14 @@ export function Sparkline({
   width = 120,
   height = 28,
   className,
-  ariaLabel: providedAriaLabel,
+  ariaLabel,
 }: SparklineProps) {
   const uiText = useTranslations('organic');
-  const ariaLabel = providedAriaLabel ?? uiText('trend_9e21771');
-
-  const geometry = React.useMemo(
-    () => sparklinePoints(values, width, height),
-    [values, width, height],
+  const points = values.filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value),
   );
 
-  if (!geometry) {
+  if (points.length < 2) {
     return (
       <div
         className={cn('inline-flex items-center text-muted-foreground/50', className)}
@@ -80,28 +50,17 @@ export function Sparkline({
     );
   }
 
-  const { points, lastX, lastY } = geometry;
-  const stroke = TONE_STROKE[tone];
-
   return (
-    <svg
+    <LineSparkline
+      aria-label={ariaLabel ?? uiText('trend_9e21771')}
       className={cn('inline-block align-middle', className)}
-      width={width}
+      color={TONE_STROKE[tone]}
+      data={points}
+      dataKey={asValue}
+      endDot
       height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label={ariaLabel}
-      preserveAspectRatio="none"
-    >
-      <polyline
-        fill="none"
-        stroke={stroke}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={points}
-      />
-      <circle cx={lastX} cy={lastY} r={2} fill={stroke} />
-    </svg>
+      strokeWidth={1.5}
+      width={width}
+    />
   );
 }

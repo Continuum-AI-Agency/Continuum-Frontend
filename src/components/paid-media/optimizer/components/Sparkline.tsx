@@ -1,7 +1,5 @@
-// A dependency-free inline sparkline: one polyline, an area under it, and a dot on the
-// last point. Small enough to sit inside a KPI tile and render in tests without a
-// ResizeObserver, unlike the visx chart kit.
-
+// Inline sparkline for KPI tiles: bklit's AreaSparkline with a dot on the last point.
+import { AreaSparkline } from '@/components/charts/sparkline';
 import { cn } from '@/lib/utils';
 
 type SparklineProps = {
@@ -15,21 +13,7 @@ type SparklineProps = {
   label?: string;
 };
 
-export function sparklinePath(values: number[], width: number, height: number): string {
-  if (values.length === 0) return '';
-  const max = Math.max(...values, 0);
-  const min = Math.min(...values, 0);
-  const span = max - min || 1;
-  const stepX = values.length > 1 ? width / (values.length - 1) : 0;
-  const pad = 2;
-  return values
-    .map((value, index) => {
-      const x = values.length > 1 ? index * stepX : width / 2;
-      const y = height - pad - ((value - min) / span) * (height - pad * 2);
-      return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-}
+const asValue = (value: number) => value;
 
 export function Sparkline({
   values,
@@ -39,33 +23,22 @@ export function Sparkline({
   className,
   label,
 }: SparklineProps) {
-  const path = sparklinePath(values, width, height);
-  if (!path) return null;
-  const last = values[values.length - 1];
-  const max = Math.max(...values, 0);
-  const min = Math.min(...values, 0);
-  const span = max - min || 1;
-  const lastX = values.length > 1 ? width : width / 2;
-  const lastY = height - 2 - ((last - min) / span) * (height - 4);
+  if (values.length === 0) return null;
   return (
-    <svg
+    <AreaSparkline
       aria-label={label}
       className={cn('block overflow-visible', className)}
+      color={stroke}
+      data={values}
+      dataKey={asValue}
+      endDot
+      fill="solid"
+      fillOpacity={0.12}
       height={height}
-      role={label ? 'img' : undefined}
-      viewBox={`0 0 ${width} ${height}`}
+      strokeWidth={1.5}
       width={width}
-    >
-      <path d={`${path} L${lastX},${height} L0,${height} Z`} fill={stroke} fillOpacity={0.12} />
-      <path
-        d={path}
-        fill="none"
-        stroke={stroke}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.5}
-      />
-      <circle cx={lastX} cy={lastY} fill={stroke} r={2} />
-    </svg>
+      // The fill reads as magnitude, so the axis keeps zero instead of hugging the data.
+      yDomain={[Math.min(0, ...values)]}
+    />
   );
 }

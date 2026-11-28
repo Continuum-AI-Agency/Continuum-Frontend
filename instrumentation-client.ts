@@ -1,5 +1,6 @@
 import { afterLoadIdle } from '@/lib/observability/afterLoadIdle';
 import { bufferEarlyErrors } from '@/lib/observability/earlyErrorBuffer';
+import { markNavigationStart, reportWebVitals } from '@/lib/observability/webVitals';
 import { guardAgainstTranslatedDom } from '@/lib/translateDomGuard';
 
 // Before hydration, so React never touches a translated text node unguarded.
@@ -31,6 +32,7 @@ if (process.env.NODE_ENV !== 'development') {
           capture_exceptions: true,
         });
         earlyErrors.flushTo(posthog);
+        return reportWebVitals(posthog);
       })
       .catch(() => {
         // Analytics failing to load must not leave listeners attached forever.
@@ -39,4 +41,9 @@ if (process.env.NODE_ENV !== 'development') {
   };
 
   afterLoadIdle(start);
+}
+
+// Starts the clock for the `navigation_painted` field timing (webVitals.ts).
+export function onRouterTransitionStart() {
+  markNavigationStart();
 }

@@ -1,0 +1,82 @@
+/* uiarc components read Arc's own token names. Their CSS modules are vendored with every
+   `var(--x)` renamed to `var(--arc-x)` (component-local --halo, --marker and
+   --focus-outline-offset keep their names), because Arc's --accent and --foreground would
+   otherwise collide with ours. After `shadcn add @uiarc/<name>`, run on the new module:
+     sed -i -E 's/var\(--(halo|marker|focus-outline-offset)\b/var(--KEEP\1/g; s/var\(--([a-z])/var(--arc-\1/g; s/var\(--KEEP/var(--/g' <file>
+   and map any new name below. Colours follow our theme; sizes and motion keep Arc's values. */
+/* Declared wherever the theme can switch, so each scope resolves its own colours: a value
+   set only on :root resolves there once and every descendant would inherit the light one. */
+:root,
+.dark,
+[data-theme] {
+  --arc-foreground: var(--foreground);
+  --arc-text-secondary: var(--muted-foreground);
+  --arc-text-muted: color-mix(in oklab, var(--muted-foreground) 75%, transparent);
+  --arc-surface: var(--background);
+  --arc-surface-muted: var(--muted);
+  --arc-border: var(--border);
+  --arc-border-strong: color-mix(in oklab, var(--foreground) 22%, var(--border));
+  --arc-accent: var(--primary);
+  --arc-accent-strong: color-mix(in oklab, var(--primary) 82%, var(--foreground));
+  --arc-accent-subtle: color-mix(in oklab, var(--primary) 12%, transparent);
+  --arc-accent-foreground: var(--primary-foreground);
+  --arc-success: var(--success);
+  --arc-danger: var(--destructive);
+  --arc-font-body: var(--font-sans);
+  --arc-radius-control: var(--radius);
+  --arc-radius-pill: 9999px;
+  --arc-control-height-sm: 2rem;
+  --arc-space-1: 0.25rem;
+  --arc-space-2: 0.5rem;
+  --arc-space-3: 0.75rem;
+  --arc-space-4: 1rem;
+  --arc-space-5: 1.125rem;
+  --arc-space-6: 1.25rem;
+  --arc-text-xs: 0.75rem;
+  --arc-text-sm: 0.8125rem;
+  --arc-leading-body: 1.4;
+  --arc-tracking-body: -0.01em;
+  --arc-duration-fast: 150ms;
+  --arc-duration-standard: 200ms;
+  --arc-duration-spring: 440ms;
+  --arc-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --arc-ease-spring: linear(
+    0,
+    0.0213,
+    0.0739,
+    0.1443,
+    0.2235,
+    0.305,
+    0.3849,
+    0.4606,
+    0.5305,
+    0.594,
+    0.6508,
+    0.7011,
+    0.7452,
+    0.7836,
+    0.8168,
+    0.8454,
+    0.8699,
+    0.8907,
+    0.9084,
+    0.9234,
+    0.9361,
+    0.9467,
+    0.9557,
+    0.9632,
+    0.9694,
+    0.9747,
+    0.979,
+    0.9826,
+    0.9857,
+    0.9882,
+    0.9902,
+    0.992,
+    0.9934,
+    0.9946,
+    0.9955,
+    0.9963,
+    1
+  );
+}
