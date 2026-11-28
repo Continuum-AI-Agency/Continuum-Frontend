@@ -28,6 +28,7 @@ import {
 } from '@/lib/brands/brandIntelligence.client';
 import { cn } from '@/lib/utils';
 import { BrandDnaPanel, BrandReadinessPanel, BrandSourcesPanel } from './BrandBookView';
+import type { BrandBookGenerationPayload } from './brandBookGeneration';
 
 const queryKey = (brandId: string) => ['brand-intelligence', brandId] as const;
 
@@ -151,11 +152,15 @@ export function BrandIntelligenceWorkspace({
   brandName,
   brandBook,
   initialOverview,
+  canEdit = false,
+  reanalysisPayload = null,
 }: {
   brandId: string;
   brandName: string;
   brandBook: BrandBookResponse | null;
   initialOverview: BrandIntelligenceOverview | null;
+  canEdit?: boolean;
+  reanalysisPayload?: BrandBookGenerationPayload | null;
 }) {
   const uiLocale = useLocale();
 
@@ -262,7 +267,11 @@ export function BrandIntelligenceWorkspace({
         </TabsContent>
         <TabsContent value="dna">
           {brandBook?.present ? (
-            <BrandDnaPanel brandBook={brandBook} />
+            <BrandDnaPanel
+              brandBook={brandBook}
+              canEdit={canEdit}
+              reanalysisPayload={reanalysisPayload}
+            />
           ) : (
             <p className="text-sm text-muted-foreground">{tUi('m_1b40487401')}</p>
           )}

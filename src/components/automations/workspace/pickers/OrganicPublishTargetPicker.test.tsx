@@ -43,6 +43,35 @@ describe('OrganicPublishTargetPicker', () => {
     expect(screen.getByText('Company page')).toBeTruthy();
   });
 
+  test('labels a LinkedIn member as a personal profile beside the company Page', () => {
+    const onChange = mock();
+    render(
+      <OrganicPublishTargetPicker
+        brandId={BRAND_ID}
+        value={{ platform: 'instagram', accountId: 'ig-main' }}
+        disabled={false}
+        onChange={onChange}
+        useSource={stubSource({
+          items: [
+            ...accounts,
+            {
+              platform: 'linkedin',
+              platformLabel: 'LinkedIn',
+              accountId: 'li-member',
+              label: 'Ana Pérez',
+              personalProfile: true,
+            },
+          ],
+        })}
+      />,
+    );
+
+    openTarget();
+    expect(screen.getByText('Company page')).toBeTruthy();
+    fireEvent.click(screen.getByText('Ana Pérez — personal profile'));
+    expect(onChange).toHaveBeenLastCalledWith({ platform: 'linkedin', accountId: 'li-member' });
+  });
+
   test('sets platform and accountId TOGETHER so the pair can never disagree', () => {
     const onChange = mock();
     render(

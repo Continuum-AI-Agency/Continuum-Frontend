@@ -284,5 +284,8 @@
   "m_693ff6c55d": "{count, plural, one {Promote # workflow?} other {Promote # workflows?}}",
   "m_978e9818d4": "{count, plural, one {Assign # workflow?} other {Assign # workflows?}}",
   "m_061122128b": "Global workflow library",
-  "brandTransferEmpty": "No brands found."
+  "brandTransferEmpty": "No brands found.",
+  "manage_user": "Manage {email}",
+  "inspect_workflow": "Inspect {name}",
+  "report_outcome_unconfirmed": "The report outcome could not be confirmed. Check the report result before sending again."
 }

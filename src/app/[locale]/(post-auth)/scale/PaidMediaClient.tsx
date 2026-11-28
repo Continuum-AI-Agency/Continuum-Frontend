@@ -16,6 +16,7 @@ import { useDeployRequest } from '@/CampaignCanvas/hooks/useDeployRequest';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import {
   Bot,
+  FileText,
   Gauge,
   Maximize2,
   Megaphone,
@@ -88,6 +89,7 @@ const PAID_MEDIA_TABS = [
   'conversions',
   'jaina',
   'creative-insights',
+  'reports',
 ] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
 
@@ -201,6 +203,14 @@ const OptimizerTab = dynamic(
 const CampaignsTab = dynamic(
   () => import('@/components/paid-media/campaigns/CampaignsTab').then((mod) => mod.CampaignsTab),
   { ssr: false, loading: () => <CampaignsTabSkeleton /> },
+);
+
+// The weekly client report: results vs targets and the month-end forecast, drafted every Monday,
+// reviewed by staff before anything reaches the client. Per brand, every platform.
+const ClientReportsTab = dynamic(
+  () =>
+    import('@/components/paid-media/reports/ClientReportsTab').then((mod) => mod.ClientReportsTab),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-lg" /> },
 );
 
 // Meta only: the brand's Conversions API — pixel, one-off and CSV sends, webhook sources from the
@@ -980,6 +990,19 @@ export default function PaidMediaClientPage({
                 <Bot aria-hidden="true" className={SCALE_TAB_ICON_CLASS} />
                 <span className={SCALE_TAB_LABEL_CLASS}>{uiText('jaina_15cdaaf')}</span>
               </TabsTrigger>
+              <TabsTrigger
+                value="reports"
+                className={SCALE_TAB_CLASS}
+                onMouseEnter={() => {
+                  void import('@/components/paid-media/reports/ClientReportsTab');
+                }}
+                onFocus={() => {
+                  void import('@/components/paid-media/reports/ClientReportsTab');
+                }}
+              >
+                <FileText aria-hidden="true" className={SCALE_TAB_ICON_CLASS} />
+                <span className={SCALE_TAB_LABEL_CLASS}>{uiText('reports_88bc3fe')}</span>
+              </TabsTrigger>
             </TabsList>
           </div>
         </ScaleHeaderBar>
@@ -1252,6 +1275,10 @@ export default function PaidMediaClientPage({
               {uiText('creative_insights_reads_meta_ad_accounts_5491d36')}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="reports" className="box-border min-h-0 flex-1 overflow-y-auto">
+          <ClientReportsTab key={brandProfileId} brandId={brandProfileId} />
         </TabsContent>
       </Tabs>
     </div>

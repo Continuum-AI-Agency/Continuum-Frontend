@@ -53,8 +53,16 @@ export async function deepenBrandBook(brandId: string): Promise<DeepenBrandBookR
  * source of truth; the corrected tokens flow into creative grounding. Returns the
  * new effective doc so the editor can update without a refetch.
  */
-export async function saveBrandMd(brandId: string, brandMd: string): Promise<BrandMdSaveResult> {
-  const body = brandMdSaveRequestSchema.parse({ brand_md: brandMd });
+export async function saveBrandMd(
+  brandId: string,
+  brandMd: string,
+  // The brand_md_version the edit started from; the Backend answers 409 if the doc moved since.
+  expectedVersion?: string | null,
+): Promise<BrandMdSaveResult> {
+  const body = brandMdSaveRequestSchema.parse({
+    brand_md: brandMd,
+    ...(expectedVersion ? { expected_updated_at: expectedVersion } : {}),
+  });
   const response = await http.request({
     path: `/onboarding/brand-profiles/${encodeURIComponent(brandId)}/brand-md`,
     method: 'POST',

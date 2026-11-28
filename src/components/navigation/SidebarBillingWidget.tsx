@@ -59,15 +59,16 @@ export function SidebarBillingWidget({
     'data-kind': view.kind,
     'data-low': warn || undefined,
     className: cn(
-      'group/billing btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-[var(--color-border)] px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
-      'group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:p-0',
+      'group/billing btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-[var(--color-border)] px-[calc(0.5rem-1px)] py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
+      // In the rail the card keeps its size (nothing below it moves) and only loses its frame.
+      'group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:bg-transparent',
       warn &&
         'border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)]',
     ),
   };
 
   return (
-    <SidebarMenu className="group-data-[collapsible=icon]:items-center">
+    <SidebarMenu>
       <SidebarMenuItem>
         <HoverCard openDelay={150} closeDelay={100}>
           <HoverCardTrigger
@@ -94,12 +95,12 @@ export function SidebarBillingWidget({
                 />
               ) : null}
             </span>
-            <span className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:invisible">
               <WidgetLines view={view} />
             </span>
             <ChevronRight
               aria-hidden
-              className="size-3.5 shrink-0 text-[var(--sidebar-muted-dim)] transition-transform group-hover/billing:translate-x-0.5 group-data-[collapsible=icon]:hidden motion-reduce:transition-none"
+              className="size-3.5 shrink-0 text-[var(--sidebar-muted-dim)] transition-transform group-hover/billing:translate-x-0.5 group-data-[collapsible=icon]:invisible motion-reduce:transition-none"
             />
           </HoverCardTrigger>
           <HoverCardContent

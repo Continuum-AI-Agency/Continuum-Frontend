@@ -6,7 +6,8 @@ import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Spinner } from '@/components/icons';
+import { FontSpecimen } from '@/components/brand/FontSpecimen';
+import { Spinner as Loader2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -37,6 +38,14 @@ function makeFormSchema(t: ReturnType<typeof useUiTranslations<'library'>>) {
 }
 type FormValues = z.infer<ReturnType<typeof makeFormSchema>>;
 
+/** A face the store accepted, with the local file it came from (for a specimen). */
+export type StoredFontFace = {
+  family: string;
+  weight: number | null;
+  style: 'normal' | 'italic';
+  file: File;
+};
+
 const familyFromFileName = (name: string) =>
   name
     .replace(/\.[^.]+$/, '')
@@ -52,7 +61,7 @@ export function FontUploadReviewDialog({
   brandId: string;
   files: File[];
   onClose: () => void;
-  onUploaded: () => void;
+  onUploaded: (stored: StoredFontFace[]) => void;
 }) {
   const validationErrorMap = useValidationErrorMap();
 
@@ -108,18 +117,19 @@ export function FontUploadReviewDialog({
     const failedFiles: File[] = [];
     const failedRows: FormValues['fonts'] = [];
     const failures: string[] = [];
-    let stored = 0;
+    const stored: StoredFontFace[] = [];
     for (const [index, file] of activeFiles.entries()) {
       const row = fonts[index];
+      const weight = row.weight === '' ? null : Number(row.weight);
       try {
-        await uploadBrandFont({
+        const result = await uploadBrandFont({
           brandId,
           family: row.family.trim(),
           file,
-          ...(row.weight === '' ? {} : { weight: Number(row.weight) }),
+          ...(weight === null ? {} : { weight }),
           style: row.style,
         });
-        stored += 1;
+        stored.push({ family: result.family, weight, style: row.style, file });
       } catch (error) {
         failedFiles.push(file);
         failedRows.push(row);
@@ -128,8 +138,8 @@ export function FontUploadReviewDialog({
       }
     }
     setSaving(false);
-    setSaved((value) => value + stored);
-    if (stored > 0) onUploaded();
+    setSaved((value) => value + stored.length);
+    if (stored.length > 0) onUploaded(stored);
     if (failedFiles.length > 0) {
       setActiveFiles(failedFiles);
       setRowErrors(failures);
@@ -160,6 +170,7 @@ export function FontUploadReviewDialog({
                 <legend className="max-w-full truncate px-1 text-xs font-medium">
                   {file.name}
                 </legend>
+                <FontSpecimen file={file} />
                 <label htmlFor={`font-family-${index}`} className="block space-y-1 text-xs">
                   <span>{translateUi('family_bd2d677b')}</span>
                   <Input
@@ -242,7 +253,7 @@ export function FontUploadReviewDialog({
                 {translateUi('cancel_19766ed6')}
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? <Spinner className="size-4 animate-spin" aria-hidden /> : null}{' '}
+                {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}{' '}
                 {translateUi('add_to_engine_a8987bd6')}
               </Button>
             </DialogFooter>

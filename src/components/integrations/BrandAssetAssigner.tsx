@@ -131,10 +131,11 @@ function buildAssetItem(
   assignedSet: Set<string>,
   t: ReturnType<typeof useTranslations<'common'>>,
 ): IntegrationSwitcherItem {
+  const name = asset.name?.trim() || asset.external_account_id || t('m_5c0de372dc');
   return {
     id: asset.id,
     code: asset.external_account_id ?? asset.id.slice(0, 8),
-    title: asset.name?.trim() || asset.external_account_id || t('m_5c0de372dc'),
+    title: asset.type === 'linkedin_member' ? t('linkedin_personal_profile', { name }) : name,
     icon: PLATFORM_ICONS[platform] ?? Plug,
     status: assignedSet.has(asset.id) ? 'checked' : 'copy',
   };

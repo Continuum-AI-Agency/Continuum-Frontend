@@ -25,6 +25,7 @@ import { persistOnboardingBrandKit } from '@/lib/onboarding/inspirationsClient';
 import {
   intakeDocumentsProcessing,
   intakeInputKey,
+  intakeSourceUrl,
   readyIntakeDocuments,
 } from '@/lib/onboarding/intake';
 import { PLAN_SCREEN, resumeScreenFor, type ScreenIndex } from '@/lib/onboarding/resumeScreen';
@@ -414,26 +415,27 @@ function ExperienceInner({
     const userId = (await getSessionUser())?.id;
     if (!userId || generation !== analysisGenerationRef.current) return false;
     let source: OnboardingSourceResponse | null = null;
-    if (intake.url) {
-      if (sourceRef.current?.url === intake.url && !force) {
+    const sourceUrl = intakeSourceUrl(intake);
+    if (sourceUrl) {
+      if (sourceRef.current?.url === sourceUrl.url && !force) {
         source = sourceRef.current.value;
       } else {
         let sourceFailure: string | null = null;
         source = await start('scrape', async (signal) => {
           try {
-            return await readOnboardingSource(brandId, intake.url!, signal);
+            return await readOnboardingSource(brandId, sourceUrl.url, signal);
           } catch (error) {
             sourceFailure = error instanceof Error ? uiErrorMessage(error) : tUi('m_5da20ba082');
             throw error;
           }
         });
         if (generation !== analysisGenerationRef.current) return false;
-        if (!source) {
+        if (!source && sourceUrl.required) {
           setSourceError(sourceFailure ?? tUi('m_a1e04bb0d2'));
           await navigate(0);
           return false;
         }
-        sourceRef.current = { url: intake.url, value: source };
+        if (source) sourceRef.current = { url: sourceUrl.url, value: source };
       }
     }
     const scrape = source?.kind === 'web' ? source.scrape : null;

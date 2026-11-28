@@ -243,6 +243,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
               terms: (chunks) => (
                 <Link
                   href="/terms"
+                  prefetch={false}
                   className="underline transition-opacity hover:opacity-80"
                   style={{ color: 'var(--primary)' }}
                 >
@@ -252,6 +253,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
               privacy: (chunks) => (
                 <Link
                   href="/privacy"
+                  prefetch={false}
                   className="underline transition-opacity hover:opacity-80"
                   style={{ color: 'var(--primary)' }}
                 >

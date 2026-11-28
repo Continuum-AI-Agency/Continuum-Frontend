@@ -74,8 +74,10 @@ describe('SliderField', () => {
   });
 
   it('names the control for assistive tech', () => {
-    const { getByLabelText } = renderField();
+    const { getAllByLabelText } = renderField();
 
-    expect(getByLabelText('Opacity')).toBeTruthy();
+    // Base UI names both the slider group and its range input; the input is the control.
+    const named = getAllByLabelText('Opacity');
+    expect(named.some((el) => el instanceof HTMLInputElement && el.type === 'range')).toBe(true);
   });
 });

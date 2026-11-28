@@ -40,6 +40,7 @@ import {
 import { cn } from '@/lib/utils';
 
 import { HelpPopover } from '../HelpPopover';
+import { BrandLibraryAssets } from './BrandLibraryAssets';
 
 type RejectedRow = {
   index: number;
@@ -77,7 +78,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
   const tUi = useTranslations('onboarding');
   const uiLocale = useLocale();
 
-  const { brandId } = useOnboarding();
+  const { brandId, state, updateState, reloadState } = useOnboarding();
   const { show } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -87,8 +88,9 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
   const [summary, setSummary] = useState<CatalogImportSummary | null>(null);
   const [rejected, setRejected] = useState<RejectedRow[]>([]);
   const [dragActive, setDragActive] = useState(false);
+  const [assetsBusy, setAssetsBusy] = useState(false);
 
-  const busy = uploading > 0 || importing;
+  const busy = uploading > 0 || importing || assetsBusy;
   useEffect(() => {
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);
@@ -360,6 +362,17 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
             ) : null}
           </div>
         ) : null}
+
+        <BrandLibraryAssets
+          brandId={brandId}
+          onDocumentsChange={reloadState}
+          brandLogo={{
+            path: state.brand.logoPath,
+            // Kept in onboarding state too, or the launch kit would put a scraped logo back.
+            onChange: (logoPath) => updateState({ brand: { logoPath } }),
+          }}
+          onBusyChange={setAssetsBusy}
+        />
       </div>
     </div>
   );

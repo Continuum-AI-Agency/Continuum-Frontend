@@ -57,6 +57,7 @@ export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
         <ul
           aria-label={uiText('suggested_questions_823a7e3')}
           className="flex min-w-0 flex-wrap gap-1.5"
+          data-ask-suggestions=""
         >
           {suggestions.map((suggestion) => (
             <li className="min-w-0 max-w-full" key={suggestion.key}>

@@ -35,6 +35,7 @@ import {
   Image as ImageIcon,
   ListChecks,
   Palette,
+  PencilLine,
   Sparkles,
   Type,
   Users,
@@ -42,6 +43,7 @@ import {
 } from '@/components/icons';
 
 import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Empty,
@@ -52,12 +54,21 @@ import {
 } from '@/components/ui/empty';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { BrandBookActions } from './BrandBookActions';
+import { BrandDnaReanalyze } from './BrandDnaReanalyze';
 import { BrandMdDirtyProvider } from './BrandMdDirtyContext';
 import { BrandMdEditor } from './BrandMdEditor';
 import { BrandScorecard } from './BrandScorecard';
-import { resolveColorTokens, resolveFontTokens } from './brandBookIdentity';
+import type { BrandBookGenerationPayload } from './brandBookGeneration';
+import {
+  type EditedStrategy,
+  resolveColorTokens,
+  resolveEditedStrategy,
+  resolveFontTokens,
+  withEditedGuidelines,
+} from './brandBookIdentity';
 
 type ReadinessBadge = { label: string; variant: 'default' | 'secondary' | 'outline' };
 
@@ -209,14 +220,16 @@ function TypeSpecimens({ fonts }: { fonts: BrandFontToken[] }) {
 function IdentityTab({
   tokens,
   composite,
+  edited,
 }: {
   tokens: BrandMdTokens | null;
   composite: BrandReportResult | null;
+  edited: boolean;
 }) {
   const tUi = useTranslations('settings');
 
-  const colors = resolveColorTokens(tokens, composite);
-  const typography = resolveFontTokens(tokens, composite);
+  const colors = resolveColorTokens(tokens, composite, edited);
+  const typography = resolveFontTokens(tokens, composite, edited);
   const voice = tokens?.voice ?? null;
   const personality = tokens?.personality ?? null;
   const imagery = tokens?.imagery ?? null;
@@ -440,7 +453,13 @@ function GuidelinesCard({ guidelines }: { guidelines: BrandGuidelines }) {
   );
 }
 
-function StrategyTab({ composite }: { composite: BrandReportResult | null }) {
+function StrategyTab({
+  composite,
+  edited,
+}: {
+  composite: BrandReportResult | null;
+  edited: EditedStrategy;
+}) {
   const tUi = useTranslations('settings');
 
   if (!composite) {
@@ -451,25 +470,29 @@ function StrategyTab({ composite }: { composite: BrandReportResult | null }) {
 
   const understanding = composite.understanding;
   const audience = composite.structured.target_audience;
-  const guidelines = composite.structured.guidelines;
-  const pillars = understanding.brand_pillars ?? [];
-  const segments = audience.segments ?? [];
-  const audienceSummary = audience.summary ?? null;
+  const guidelines = withEditedGuidelines(composite.structured.guidelines, edited);
+  const tone = edited.tone ?? understanding.tonal_signal;
+  const positioning =
+    edited.positioning !== undefined ? edited.positioning : understanding.positioning_thesis;
+  const pillars = edited.pillars ?? understanding.brand_pillars ?? [];
+  // brand.md carries no segments, so once the audience is edited the analysis's segments
+  // describe the audience it replaced.
+  const audienceEdited = edited.audience !== undefined && edited.audience !== audience.summary;
+  const segments = audienceEdited ? [] : (audience.segments ?? []);
+  const audienceSummary = edited.audience ?? audience.summary ?? null;
 
   return (
     <div className="flex flex-col gap-4">
       <SectionCard icon={Compass} title={tUi('m_86ba514122')} description={tUi('m_1c94705824')}>
-        {understanding.positioning_thesis ? (
-          <p className="text-sm">{understanding.positioning_thesis}</p>
-        ) : null}
+        {positioning ? <p className="text-sm">{positioning}</p> : null}
         {pillars.length > 0 ? (
           <Field label={tUi('m_352c56ff4d')}>
             <Chips items={pillars} />
           </Field>
         ) : null}
-        {understanding.tonal_signal ? (
+        {tone ? (
           <Field label={tUi('m_aac6a2780a')}>
-            <p className="text-sm text-muted-foreground">{understanding.tonal_signal}</p>
+            <p className="text-sm text-muted-foreground">{tone}</p>
           </Field>
         ) : null}
       </SectionCard>
@@ -595,13 +618,33 @@ function SourcesTab({
   const tUi = useTranslations('settings');
 
   const onboardingPresent = onboarding?.present ?? false;
+  const manage = (
+    <SectionCard
+      icon={FolderOpen}
+      title={tUi('brandDnaSourcesTitle')}
+      description={tUi('brandDnaSourcesDescription')}
+    >
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href="/settings?section=knowledge"
+          className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+        >
+          {tUi('brandDnaManageDocuments')}
+        </Link>
+      </div>
+    </SectionCard>
+  );
   if (documents.length === 0 && !onboardingPresent) {
     return (
-      <EmptyTab icon={FolderOpen} title={tUi('m_1780c4a5f9')} description={tUi('m_1f67cf9a88')} />
+      <div className="flex flex-col gap-4">
+        <EmptyTab icon={FolderOpen} title={tUi('m_1780c4a5f9')} description={tUi('m_1f67cf9a88')} />
+        {manage}
+      </div>
     );
   }
   return (
     <div className="flex flex-col gap-4">
+      {manage}
       {documents.length > 0 ? <DocumentsCard documents={documents} /> : null}
       <SectionCard
         icon={ClipboardCheck}
@@ -634,9 +677,11 @@ function SourcesTab({
 export function BrandBookView({
   brandBook,
   brandName,
+  canEdit,
 }: {
   brandBook: BrandBookResponse;
   brandName: string;
+  canEdit: boolean;
 }) {
   const uiLocale = useLocale();
 
@@ -647,8 +692,12 @@ export function BrandBookView({
   const assembled = brandBook.assembled;
   const documents = (assembled?.documents ?? brandBook.documents) as BookDocument[];
   const onboarding = assembled?.onboarding ?? null;
-  const palettePreview = resolveColorTokens(tokens, composite).slice(0, 6);
-  const primaryFont = resolveFontTokens(tokens, composite)[0]?.family ?? null;
+  const palettePreview = resolveColorTokens(tokens, composite, brandBook.brand_md_is_edited).slice(
+    0,
+    6,
+  );
+  const primaryFont =
+    resolveFontTokens(tokens, composite, brandBook.brand_md_is_edited)[0]?.family ?? null;
   // Readiness is stored on the report layer, not always inside the composite —
   // prefer whichever is present so the score shows in both places.
   const effectiveReadiness = composite?.readiness ?? assembled?.report?.readiness ?? null;
@@ -717,10 +766,17 @@ export function BrandBookView({
           </TabsList>
 
           <TabsContent value="identity">
-            <IdentityTab tokens={tokens} composite={composite} />
+            <IdentityTab
+              tokens={tokens}
+              composite={composite}
+              edited={brandBook.brand_md_is_edited}
+            />
           </TabsContent>
           <TabsContent value="strategy">
-            <StrategyTab composite={composite} />
+            <StrategyTab
+              composite={composite}
+              edited={resolveEditedStrategy(brandBook.brand_md, brandBook.brand_md_is_edited)}
+            />
           </TabsContent>
           <TabsContent value="readiness">
             <ReadinessTab
@@ -742,6 +798,8 @@ export function BrandBookView({
                 brandId={brandBook.brand_id}
                 initialBrandMd={brandBook.brand_md}
                 isEdited={brandBook.brand_md_is_edited}
+                version={brandBook.assembled?.report?.brand_md_version ?? null}
+                canEdit={canEdit}
               />
             </SectionCard>
           </TabsContent>
@@ -751,23 +809,74 @@ export function BrandBookView({
   );
 }
 
-export function BrandDnaPanel({ brandBook }: { brandBook: BrandBookResponse }) {
+const BRAND_DNA_EDITOR_ID = 'brand-dna-editor';
+
+export function BrandDnaPanel({
+  brandBook,
+  canEdit,
+  reanalysisPayload,
+}: {
+  brandBook: BrandBookResponse;
+  canEdit: boolean;
+  // Null when the viewer cannot start a run (no session user), which hides re-analysis.
+  reanalysisPayload: BrandBookGenerationPayload | null;
+}) {
   const tUi = useTranslations('settings');
 
   const composite = brandBook.composite ?? null;
   const tokens = brandBook.brand_tokens ?? null;
+  const website =
+    composite?.structured.website?.website_url ?? composite?.brand_profile.website_url ?? null;
   return (
     <BrandMdDirtyProvider>
       <div className="flex flex-col gap-4">
-        <IdentityTab tokens={tokens} composite={composite} />
-        <StrategyTab composite={composite} />
-        <SectionCard icon={FileText} title={tUi('m_fef5aa706d')} description={tUi('m_0a76f0c4c5')}>
-          <BrandMdEditor
-            brandId={brandBook.brand_id}
-            initialBrandMd={brandBook.brand_md}
-            isEdited={brandBook.brand_md_is_edited}
-          />
-        </SectionCard>
+        {canEdit ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const editor = document.getElementById(BRAND_DNA_EDITOR_ID);
+                editor?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                editor?.focus({ preventScroll: true });
+              }}
+            >
+              <PencilLine className="size-4" aria-hidden />
+              {tUi('brandDnaEdit')}
+            </Button>
+            {reanalysisPayload ? (
+              <BrandDnaReanalyze
+                brandId={brandBook.brand_id}
+                payload={reanalysisPayload}
+                currentWebsite={website}
+                editedBrandMd={brandBook.brand_md_is_edited ? brandBook.brand_md : null}
+                documents={readyDocuments(brandBook)}
+                refreshedAt={brandBook.refreshed_at}
+              />
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{tUi('brandDnaReadOnly')}</p>
+        )}
+        <IdentityTab tokens={tokens} composite={composite} edited={brandBook.brand_md_is_edited} />
+        <StrategyTab
+          composite={composite}
+          edited={resolveEditedStrategy(brandBook.brand_md, brandBook.brand_md_is_edited)}
+        />
+        <div id={BRAND_DNA_EDITOR_ID} tabIndex={-1} className="scroll-mt-4 outline-none">
+          <SectionCard
+            icon={FileText}
+            title={tUi('m_fef5aa706d')}
+            description={tUi('m_0a76f0c4c5')}
+          >
+            <BrandMdEditor
+              brandId={brandBook.brand_id}
+              initialBrandMd={brandBook.brand_md}
+              isEdited={brandBook.brand_md_is_edited}
+              version={brandBook.assembled?.report?.brand_md_version ?? null}
+              canEdit={canEdit}
+            />
+          </SectionCard>
+        </div>
       </div>
     </BrandMdDirtyProvider>
   );
@@ -779,7 +888,22 @@ export function BrandReadinessPanel({ brandBook }: { brandBook: BrandBookRespons
   return <ReadinessTab composite={composite} readiness={readiness} brandId={brandBook.brand_id} />;
 }
 
+function bookDocuments(brandBook: BrandBookResponse): BookDocument[] {
+  return (brandBook.assembled?.documents ?? brandBook.documents) as BookDocument[];
+}
+
+// Only a ready document has chunks a run can read.
+function readyDocuments(brandBook: BrandBookResponse) {
+  return bookDocuments(brandBook)
+    .filter((doc) => doc.status === 'ready')
+    .map(({ id, name }) => ({ id, name }));
+}
+
 export function BrandSourcesPanel({ brandBook }: { brandBook: BrandBookResponse }) {
-  const documents = (brandBook.assembled?.documents ?? brandBook.documents) as BookDocument[];
-  return <SourcesTab documents={documents} onboarding={brandBook.assembled?.onboarding ?? null} />;
+  return (
+    <SourcesTab
+      documents={bookDocuments(brandBook)}
+      onboarding={brandBook.assembled?.onboarding ?? null}
+    />
+  );
 }

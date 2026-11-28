@@ -1,19 +1,23 @@
 'use client';
 
 import { Tabs } from '@base-ui/react/tabs';
-import type { IconComponent } from '@/components/icons';
+import type { IconComponent as LucideIcon } from '@/components/icons';
+import { warmSection } from '@/components/settings/lazySections';
+import { intentProps } from '@/lib/intent';
 import { cn } from '@/lib/utils';
+import type { SectionKey } from './sections';
 
 type SettingsNavItemProps = {
-  value: string;
+  value: SectionKey;
   label: string;
-  icon: IconComponent;
+  icon: LucideIcon;
 };
 
 export function SettingsNavItem({ value, label, icon: Icon }: SettingsNavItemProps) {
   return (
     <Tabs.Tab
       value={value}
+      {...intentProps(() => warmSection(value))}
       className={cn(
         'group relative flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium',
         'text-muted-foreground transition-colors duration-150',

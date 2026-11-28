@@ -1,15 +1,17 @@
 'use client';
 
+import { isDocumentLayoutMimeType } from '@continuum/contracts';
 import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import {
   ArchiveRestore,
-  ArrowDownToLine,
   BookmarkPlus,
+  ArrowDownToLine as Download,
+  SquareArrowOutUpRight as ExternalLink,
   MoreHorizontal,
   Pencil,
   RefreshCw,
-  SquareArrowOutUpRight,
+  ScanSearch,
   Trash2,
   Undo2,
 } from '@/components/icons';
@@ -33,6 +35,7 @@ import {
 import { ACCEPTED_DOCUMENT_EXTENSIONS } from '@/lib/documents/uploadLimits';
 import { cn } from '@/lib/utils';
 import { DocumentProjectSubmenu } from './DocumentProjectSubmenu';
+import { useOpenDocumentInspector } from './inspector/DocumentInspectorProvider';
 import { RenameDocumentDialog } from './RenameDocumentDialog';
 import type { DocumentView } from './types';
 import { isArchived, isEphemeral } from './types';
@@ -61,6 +64,14 @@ export function DocumentRowActions({
 
   const archived = isArchived(doc);
   const ephemeral = isEphemeral(doc);
+  const openInspector = useOpenDocumentInspector();
+  // A one-off chat upload opens only inside its own conversation, which Knowledge is not.
+  const inspectable =
+    openInspector !== null &&
+    doc.status === 'ready' &&
+    !archived &&
+    !ephemeral &&
+    isDocumentLayoutMimeType(doc.mimeType);
 
   return (
     <>
@@ -89,14 +100,22 @@ export function DocumentRowActions({
           <MoreHorizontal className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
+          {inspectable ? (
+            <DropdownMenuItem
+              onSelect={() => openInspector?.({ documentId: doc.id, name: doc.name })}
+            >
+              <ScanSearch className="mr-2 h-3.5 w-3.5" />
+              {uiText('inspectorOpen')}
+            </DropdownMenuItem>
+          ) : null}
           {doc.storagePath ? (
             <>
               <DropdownMenuItem onSelect={() => actions.onOpenInline(doc.storagePath ?? '')}>
-                <SquareArrowOutUpRight className="mr-2 h-3.5 w-3.5" />
+                <ExternalLink className="mr-2 h-3.5 w-3.5" />
                 {uiText('open_ed077f3')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => void actions.onDownload(doc.storagePath ?? '')}>
-                <ArrowDownToLine className="mr-2 h-3.5 w-3.5" />
+                <Download className="mr-2 h-3.5 w-3.5" />
                 {uiText('download_d6eafe8')}
               </DropdownMenuItem>
             </>

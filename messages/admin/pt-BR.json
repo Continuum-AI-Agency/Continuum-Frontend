@@ -284,5 +284,8 @@
   "m_693ff6c55d": "{count, plural, one {Promover # fluxo?} other {Promover # fluxos?}}",
   "m_978e9818d4": "{count, plural, one {Atribuir # fluxo?} other {Atribuir # fluxos?}}",
   "m_061122128b": "Biblioteca global de fluxos",
-  "brandTransferEmpty": "Nenhuma marca encontrada."
+  "brandTransferEmpty": "Nenhuma marca encontrada.",
+  "manage_user": "Gerenciar {email}",
+  "inspect_workflow": "Inspecionar {name}",
+  "report_outcome_unconfirmed": "Não foi possível confirmar o resultado do relatório. Confira o resultado antes de enviar novamente."
 }

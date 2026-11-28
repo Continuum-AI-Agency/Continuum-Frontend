@@ -75,6 +75,15 @@ function AccountRow({
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className="block truncate text-sm font-medium text-foreground">{row.label}</span>
+          {/* Beside the name, not in it: a truncated "Name — personal profile" reads like the Page. */}
+          {row.personalProfile ? (
+            <Badge
+              variant="outline"
+              className="shrink-0 text-2xs font-normal text-muted-foreground"
+            >
+              {uiText('personal_profile')}
+            </Badge>
+          ) : null}
           {row.readOnly ? (
             <Badge
               variant="outline"

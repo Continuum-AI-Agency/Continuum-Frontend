@@ -3,17 +3,17 @@
 import type { DocumentCategory } from '@continuum/contracts';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
+import type { IconComponent as LucideIcon } from '@/components/icons';
 import {
-  CircleAlert,
-  CircleCheck,
+  CircleAlert as AlertCircle,
+  CircleCheck as CheckCircle2,
   FileSpreadsheet,
   FileText,
   FileType,
-  type IconComponent,
   Image as ImageIcon,
+  Spinner as Loader2,
   Presentation,
   RotateCw,
-  Spinner,
   X,
 } from '@/components/icons';
 import { cn } from '@/lib/utils';
@@ -36,7 +36,7 @@ import type { UploadEntry } from './useDocumentMutations';
 export const ROW_EASE = [0.2, 0.8, 0.2, 1] as const;
 const ROW_TRANSITION = { duration: 0.24, ease: ROW_EASE };
 
-const KIND_ICON: Record<string, IconComponent> = {
+const KIND_ICON: Record<string, LucideIcon> = {
   pdf: FileType,
   docx: FileText,
   pptx: Presentation,
@@ -50,7 +50,13 @@ const KIND_ICON: Record<string, IconComponent> = {
   unknown: FileText,
 };
 
-function iconFor(doc: DocumentView): IconComponent {
+function uploadedOn(iso: string, locale: string): string | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date);
+}
+
+function iconFor(doc: DocumentView): LucideIcon {
   if (doc.kind && KIND_ICON[doc.kind]) return KIND_ICON[doc.kind];
   const lower = doc.name.toLowerCase();
   if (lower.endsWith('.pdf')) return FileType;
@@ -92,7 +98,7 @@ export function PendingRow({
             isError ? 'bg-rose-500/10 text-rose-600' : 'bg-muted text-muted-foreground',
           )}
         >
-          {isError ? <CircleAlert className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+          {isError ? <AlertCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
         </span>
         <span className="shrink-0 font-mono text-sm text-muted-foreground">
           {formatBytes(entry.file.size, uiLocale)}
@@ -126,7 +132,7 @@ export function PendingRow({
           <CircleAction
             ariaLabel={uiText('m_de27240983')}
             tone="progress"
-            icon={Spinner}
+            icon={Loader2}
             spin
             disabled
           />
@@ -171,13 +177,14 @@ export function DocumentRow({
   if (doc.pageCount) codeParts.push(`${doc.pageCount} pp`);
   else if (doc.size) codeParts.push(formatBytes(doc.size, uiLocale));
 
+  const uploadedLabel = uploadedOn(doc.createdAt, uiLocale);
   const subtitle =
     label.tone === 'progress' && typeof doc.progressPercent === 'number'
       ? `${label.text}`
       : label.text;
 
   const statusIcon =
-    label.tone === 'success' ? CircleCheck : label.tone === 'error' ? CircleAlert : Spinner;
+    label.tone === 'success' ? CheckCircle2 : label.tone === 'error' ? AlertCircle : Loader2;
   const statusTone: ActionTone =
     label.tone === 'success' ? 'success' : label.tone === 'error' ? 'error' : 'progress';
 
@@ -226,6 +233,12 @@ export function DocumentRow({
               )}
             >
               {subtitle}
+              {uploadedLabel ? (
+                <>
+                  {' · '}
+                  <time dateTime={doc.createdAt}>{uploadedLabel}</time>
+                </>
+              ) : null}
             </span>
             {label.tone === 'progress' && typeof doc.progressPercent === 'number' ? (
               <span
@@ -288,7 +301,7 @@ function StatusBadge({
   spin,
 }: {
   tone: ActionTone;
-  icon: IconComponent;
+  icon: LucideIcon;
   spin?: boolean;
 }) {
   return (
@@ -315,7 +328,7 @@ function CircleAction({
 }: {
   ariaLabel: string;
   tone: ActionTone;
-  icon: IconComponent;
+  icon: LucideIcon;
   onClick?: () => void;
   disabled?: boolean;
   spin?: boolean;

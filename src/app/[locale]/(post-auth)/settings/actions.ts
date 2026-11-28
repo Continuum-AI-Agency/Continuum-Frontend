@@ -3,6 +3,7 @@
 import { revalidatePath, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getClaimsIdentity } from '@/lib/auth/claims';
+import { isValidTimezone } from '@/lib/automations/schedule';
 import { AD_NAMING_SCHEMAS_TABLE } from '@/lib/brands/adNaming';
 import { normalizeBrandDocumentStoragePath } from '@/lib/brands/document-download';
 import { tags } from '@/lib/cache/tags';
@@ -48,6 +49,30 @@ export async function updateBrandContentLanguageAction(
     .update({ content_language: trimmed.length > 0 ? trimmed : null })
     .eq('id', brandId);
   if (error) throw new Error(error.message);
+  revalidatePath('/settings', 'page');
+}
+
+/**
+ * The zone a brand's posting times, reports and headless agent runs read their clock in.
+ *
+ * Nothing in the app wrote it: every brand started on the 'UTC' default and kept it until an
+ * organic chat turn happened to teach it the browser's zone, so an owner who never chatted there
+ * saw UTC with no way to change it.
+ */
+export async function updateBrandTimezoneAction(brandId: string, timezone: string): Promise<void> {
+  if (!brandId) throw new Error('Brand is required');
+  if (!isValidTimezone(timezone)) throw new Error(`Unknown time zone ${timezone}`);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .update({ timezone })
+    .eq('id', brandId)
+    .select('id')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  // RLS lets only owners and admins update: anyone else matches no row and changed nothing.
+  if (!data) throw new Error('Only a brand owner or admin can change its time zone');
   revalidatePath('/settings', 'page');
 }
 

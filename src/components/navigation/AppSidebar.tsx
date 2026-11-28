@@ -1,6 +1,7 @@
 'use client';
 
 import type { ProductCode } from '@continuum/contracts';
+import { useQueryClient } from '@tanstack/react-query';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -46,9 +47,11 @@ import { PLAN_NAME_FOR_PRODUCT } from '@/lib/billing/productAccess';
 import type { SidebarBillingView } from '@/lib/billing/sidebarBilling';
 import { openTopUp } from '@/lib/billing/topUp';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
+import { intentProps } from '@/lib/intent';
 import { cn } from '@/lib/utils';
 import { BrandSwitcher } from './BrandSwitcher';
 import { useCommandPalette } from './CommandPaletteProvider';
+import { runRouteLoader } from './routeLoaders';
 import { type AppNavigationItem, isRouteActive } from './routes';
 import { SidebarBillingWidget, sidebarOpensTopUp } from './SidebarBillingWidget';
 import { ThemeToggleGlyph, ThemeToggleText } from './ThemeToggleGlyph';
@@ -152,6 +155,13 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
   const { isMobile, state, collapseHover } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user, activeBrandId, permissions } = useActiveBrandContext();
+  const queryClient = useQueryClient();
+  // Navigation intent: the destination's App Shell plus, for client-fetched pages, the reads it
+  // renders first (routeLoaders.ts). A locked product's page only redirects, so skip its reads.
+  const warmRoute = (href: string, locked = false) => {
+    router.prefetch(href);
+    return locked ? undefined : runRouteLoader(href, queryClient, activeBrandId);
+  };
   const owner = isBrandOwner(permissions, activeBrandId);
   useLowCreditsNudge({
     view: billing,
@@ -209,11 +219,11 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                   className="group relative cursor-not-allowed opacity-50 text-[var(--sidebar-muted)] [--btn-fill:transparent] hover:bg-transparent hover:text-[var(--sidebar-muted)]"
                 >
                   <DisabledIcon className="!h-[18px] !w-[18px] stroke-[1.8] text-[var(--sidebar-muted)]" />
-                  <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                  <span className="group-data-[collapsible=icon]:invisible text-[0.78rem] font-medium tracking-[0.01em]">
                     {item.label}
                   </span>
                   {item.locked ? (
-                    <Lock className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden" />
+                    <Lock className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:invisible" />
                   ) : null}
                 </SidebarMenuButton>
               }
@@ -245,10 +255,8 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
         <SidebarMenuItem key={item.href}>
           {/* biome-ignore lint/a11y/noStaticElementInteractions: hover/focus reveal is progressive enhancement only; keyboard users reach the sub-routes through the collapsible nav path, so no role is warranted on this wrapper. */}
           <div
-            onMouseEnter={() => {
-              router.prefetch(item.href);
-              setHoveredQuickTabs(item.href);
-            }}
+            {...intentProps(() => warmRoute(item.href))}
+            onMouseEnter={() => setHoveredQuickTabs(item.href)}
             onMouseLeave={() =>
               setHoveredQuickTabs((current) => (current === item.href ? null : current))
             }
@@ -285,14 +293,14 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                   active={active || isSubActive}
                   accentColor={item.accentColor}
                 />
-                <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                <span className="group-data-[collapsible=icon]:invisible text-[0.78rem] font-medium tracking-[0.01em]">
                   {item.label}
                 </span>
               </Link>
             </SidebarMenuButton>
             <div
               className={cn(
-                'grid transition-[grid-template-rows,opacity] duration-150 ease-out pl-9 pr-1 group-data-[collapsible=icon]:hidden',
+                'grid transition-[grid-template-rows,opacity] duration-150 ease-out pl-9 pr-1 group-data-[collapsible=icon]:invisible',
                 showQuickTabs ? 'grid-rows-[1fr] opacity-100 pt-1' : 'grid-rows-[0fr] opacity-0',
               )}
             >
@@ -304,7 +312,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                       <Link
                         key={subItem.href}
                         href={subItem.href}
-                        onMouseEnter={() => router.prefetch(subItem.href)}
+                        {...intentProps(() => warmRoute(subItem.href))}
                         className={cn(
                           buttonVariants({
                             size: 'sm',
@@ -351,7 +359,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                         <SidebarMenuButton
                           size="default"
                           isActive={active || isSubActive}
-                          onMouseEnter={() => router.prefetch(item.href)}
+                          {...intentProps(() => warmRoute(item.href))}
                           className={cn(
                             'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
                             active || isSubActive
@@ -371,10 +379,10 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                             active={active || isSubActive}
                             accentColor={item.accentColor}
                           />
-                          <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                          <span className="group-data-[collapsible=icon]:invisible text-[0.78rem] font-medium tracking-[0.01em]">
                             {item.label}
                           </span>
-                          <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
+                          <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:invisible" />
                         </SidebarMenuButton>
                       }
                     />
@@ -403,7 +411,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                           asChild
                           isActive={subActive}
                           size="md"
-                          onMouseEnter={() => router.prefetch(subItem.href)}
+                          {...intentProps(() => warmRoute(subItem.href))}
                           className={cn(
                             'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[var(--sidebar-active-bg)]',
                             'group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0',
@@ -418,7 +426,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                                 accentColor={item.accentColor}
                               />
                             )}
-                            <span className="group-data-[collapsible=icon]:hidden text-[0.74rem] font-medium tracking-[0.01em]">
+                            <span className="group-data-[collapsible=icon]:invisible text-[0.74rem] font-medium tracking-[0.01em]">
                               {subItem.label}
                             </span>
                           </Link>
@@ -451,7 +459,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
           isActive={active}
           tooltip={lockedLabel ?? item.label}
           size="default"
-          onMouseEnter={() => router.prefetch(item.href)}
+          {...intentProps(() => warmRoute(item.href, Boolean(lockedBy)))}
           className={cn(
             'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
             active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',
@@ -466,13 +474,13 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
               <ActiveMarker layoutId="nav-active-marker" animate={!reduce} className="h-4 w-0.5" />
             ) : null}
             <NavIcon icon={item.icon} active={active} accentColor={item.accentColor} />
-            <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+            <span className="group-data-[collapsible=icon]:invisible text-[0.78rem] font-medium tracking-[0.01em]">
               {item.label}
             </span>
             {lockedBy ? (
               <Lock
                 aria-hidden
-                className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden"
+                className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:invisible"
               />
             ) : null}
           </Link>
@@ -497,54 +505,56 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
         className="border-r border-[var(--color-border)] bg-[var(--sidebar)] [view-transition-name:app-sidebar]"
       >
         <LayoutGroup>
-          <SidebarHeader className="flex items-center justify-between gap-1 overflow-hidden px-3">
+          <SidebarHeader className="flex-row items-center justify-between gap-1 overflow-hidden px-1.5">
             <div className="min-w-0 flex-1">
               <BrandSwitcher />
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
-              {state !== 'collapsed' && (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        onClick={() => openPalette(true)}
-                        className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] hover:text-[var(--sidebar-foreground)]"
-                        aria-label={uiText('search_k_adc4c57')}
-                      >
-                        <Search className="h-[14px] w-[14px]" />
-                      </button>
-                    }
-                  />
-                  <TooltipContent side="bottom" className="flex items-center gap-2">
-                    {uiText('search')}
-                    <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-2xs font-medium opacity-100">
-                      ⌘K
-                    </kbd>
-                  </TooltipContent>
-                </Tooltip>
-              )}
+              {/* Rendered in the rail too (hidden there), so the header keeps one row in both states. */}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={() => openPalette(true)}
+                      className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] hover:text-[var(--sidebar-foreground)] group-data-[collapsible=icon]:invisible"
+                      aria-label={uiText('search_k_adc4c57')}
+                    >
+                      <Search className="h-[14px] w-[14px]" />
+                    </button>
+                  }
+                />
+                <TooltipContent side="bottom" className="flex items-center gap-2">
+                  {uiText('search')}
+                  <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-2xs font-medium opacity-100">
+                    ⌘K
+                  </kbd>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="px-3 py-4">
+          {/* px-1.5 plus each row's p-2 puts the 18px icons at x 12.7: centred in the 3rem rail. */}
+          <SidebarContent className="px-1.5 py-4">
+            {/* The server cannot read the reduced-motion preference, so the first render must not
+                depend on it (a hydration mismatch otherwise); reduced motion makes the fade instant. */}
             <motion.div
-              initial={reduce ? false : { opacity: 0 }}
+              initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
+              transition={reduce ? { duration: 0 } : { duration: 0.2, ease: [0, 0, 0.2, 1] }}
             >
               {APP_NAVIGATION_GROUPS.map((group, index) => (
                 <SidebarGroup
                   key={group.label ?? `group-${index}`}
-                  className={cn('p-1', index > 0 && 'mt-3 pt-3')}
+                  className={cn('py-1', index > 0 && 'mt-3 pt-3')}
                 >
                   {group.label ? (
-                    <SidebarGroupLabel className="px-2 text-xs font-medium uppercase tracking-[0.12em] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden">
+                    <SidebarGroupLabel className="px-2 text-xs font-medium uppercase tracking-[0.12em] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:invisible">
                       {group.label}
                     </SidebarGroupLabel>
                   ) : null}
                   <SidebarGroupContent>
-                    <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
+                    <SidebarMenu className="gap-1">
                       {group.items.map((item) =>
                         renderNavItem(
                           item.href === '/automations' && !hasAutomationAccess
@@ -564,7 +574,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
             </motion.div>
           </SidebarContent>
 
-          <SidebarFooter className="px-3 pb-3">
+          <SidebarFooter className="px-1.5 pb-3">
             {billing ? (
               <SidebarBillingWidget
                 view={billing}
@@ -575,9 +585,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                 }
               />
             ) : null}
-            {/* px-1 matches SidebarGroup's p-1 in the content above, so footer icons and labels
-              share the nav's icon column and text line. */}
-            <SidebarMenu className="gap-1 px-1 group-data-[collapsible=icon]:items-center">
+            <SidebarMenu className="gap-1">
               {APP_NAVIGATION_FOOTER.map((item) => {
                 if (item.adminOnly && !isAdmin) return null;
                 const active = isRouteActive(pathname, searchParams, item);
@@ -589,7 +597,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                       isActive={active}
                       tooltip={item.label}
                       size="default"
-                      onMouseEnter={() => router.prefetch(item.href)}
+                      {...intentProps(() => warmRoute(item.href))}
                       className={cn(
                         'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
                         active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',
@@ -604,7 +612,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                           />
                         ) : null}
                         <NavIcon icon={item.icon} active={active} />
-                        <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                        <span className="group-data-[collapsible=icon]:invisible text-[0.78rem] font-medium tracking-[0.01em]">
                           {item.label}
                         </span>
                       </Link>
@@ -622,7 +630,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                   className="group btn-fill [--btn-fill:var(--sidebar-destructive-bg)] text-[var(--destructive)] hover:text-[var(--destructive)]"
                 >
                   <LogOut className="!h-[18px] !w-[18px] stroke-[1.8]" />
-                  <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                  <span className="group-data-[collapsible=icon]:invisible text-[0.78rem] font-medium tracking-[0.01em]">
                     {isPending ? uiText('signing_out_0436231') : uiText('sign_out_48f0d3d')}
                   </span>
                 </SidebarMenuButton>
@@ -630,10 +638,9 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
             </SidebarMenu>
 
             <SidebarSeparator className="my-2 bg-[var(--color-border)]" />
-            {/* The identity row stays on the header's frame line (its 32px avatar is wider than the
-              icon column and pairs with the brand switcher), so only the theme row takes the inset. */}
+            {/* The 32px avatar is wider than the icon column, so its row drops the padding: centred on the column. */}
             <div className="flex flex-col gap-1">
-              <SidebarMenu className="gap-1 px-1 group-data-[collapsible=icon]:items-center">
+              <SidebarMenu className="gap-1">
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     tooltip={
@@ -646,28 +653,22 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                     className="group btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)]"
                   >
                     <ThemeToggleGlyph appearance={appearance} reduce={reduce} />
-                    <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                    <span className="group-data-[collapsible=icon]:invisible text-[0.78rem] font-medium tracking-[0.01em]">
                       <ThemeToggleText appearance={appearance} />
                     </span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
-              <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
+              <SidebarMenu className="gap-1">
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     size="lg"
-                    className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] px-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
-                    {/* Collapsed, the row is 27px with no padding, so a 32px avatar overflows and
-                    SidebarMenuButton's own overflow-hidden crops it flat top and bottom. The
-                    important modifier is needed because the size arrives as an inline style. */}
-                    <div className="flex items-center justify-center w-8 group-data-[collapsible=icon]:w-auto">
-                      <CurrentUserAvatar
-                        size={32}
-                        className="group-data-[collapsible=icon]:!size-6"
-                      />
+                    <div className="flex w-8 items-center justify-center">
+                      <CurrentUserAvatar size={32} />
                     </div>
-                    <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                    <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:invisible">
                       <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">
                         {userDisplayName}
                       </span>

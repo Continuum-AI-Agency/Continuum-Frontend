@@ -137,6 +137,10 @@
   "music_for_this_brand_ed6f636": "Music for this brand",
   "search_49c266b": "Search",
   "first_comment_f80a181": "First comment",
+  "showOnMainGrid": "Show on main grid",
+  "showOnMainGridDescription": "Turn off to publish to the Reels tab only and keep this Reel off your main profile grid and feed.",
+  "reelPlacementVideoOnly": "Grid placement applies to Reels only. Clear it to publish this format.",
+  "clearReelPlacement": "Clear Reel placement",
   "trial_reel_1cfed77": "Trial reel",
   "ai_generated_content_871cd7d": "AI-generated content",
   "describe_a_change_8612ced": "Describe a change",
@@ -1552,5 +1556,6 @@
   "empty_draft_nothing_written_yet_f0ec0fe": "Empty draft — nothing written yet",
   "generate_copy_e0f96b1": "Generate copy",
   "generate_with_ai_0dbd840": "Generate with AI",
-  "last_publish_failed_a078eb3": "Last publish failed"
+  "last_publish_failed_a078eb3": "Last publish failed",
+  "linkedin_personal_profile": "{name} — personal profile"
 }

@@ -137,6 +137,10 @@
   "music_for_this_brand_ed6f636": "Música para esta marca",
   "search_49c266b": "Buscar",
   "first_comment_f80a181": "Primer comentario",
+  "showOnMainGrid": "Mostrar en la cuadrícula principal",
+  "showOnMainGridDescription": "Desactiva esta opción para publicar solo en la pestaña Reels, sin incluir este reel en la cuadrícula principal del perfil ni en el feed.",
+  "reelPlacementVideoOnly": "La ubicación en la cuadrícula solo se aplica a Reels. Bórrala para publicar este formato.",
+  "clearReelPlacement": "Borrar ubicación del reel",
   "trial_reel_1cfed77": "Reel de prueba",
   "ai_generated_content_871cd7d": "Contenido generado por IA",
   "describe_a_change_8612ced": "Describe un cambio",
@@ -1552,5 +1556,6 @@
   "empty_draft_nothing_written_yet_f0ec0fe": "Borrador vacío: todavía no hay nada escrito",
   "generate_copy_e0f96b1": "Generar texto",
   "generate_with_ai_0dbd840": "Generar con IA",
-  "last_publish_failed_a078eb3": "Falló la última publicación"
+  "last_publish_failed_a078eb3": "Falló la última publicación",
+  "linkedin_personal_profile": "{name} — perfil personal"
 }

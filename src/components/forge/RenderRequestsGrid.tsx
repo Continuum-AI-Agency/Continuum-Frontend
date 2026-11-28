@@ -75,8 +75,10 @@ import { isStillsOnly } from '@/components/forge/OutputSettingsPanel';
 import {
   FORGE_STALE_MS,
   forgeQueryKeys,
+  revisionVariantsQuery,
   templateListQuery,
   templateLoadQueries,
+  templateVariantsQuery,
 } from '@/components/forge/queryKeys';
 import { type FiredRow, RenderConfirmDialog } from '@/components/forge/RenderConfirmDialog';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
@@ -198,7 +200,6 @@ import { ApiError } from '@/lib/api/errors';
 import {
   fetchTemplateLineage,
   fetchTemplateRevisionVariants,
-  fetchTemplateVariants,
   saveTemplateVariables,
 } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
@@ -1356,17 +1357,9 @@ export function RenderRequestsGrid({
     focusRowId.current = added.id;
   };
 
-  const { data: sourceVariants } = useQuery({
-    queryKey: forgeQueryKeys.templateVariants(brandId),
-    queryFn: () => fetchTemplateVariants(brandId),
-    staleTime: FORGE_STALE_MS.active,
-  });
+  const { data: sourceVariants } = useQuery(templateVariantsQuery(brandId));
   // What each template was authored in, for the picker: the same one registry read the gallery makes.
-  const { data: brandRegistry } = useQuery({
-    queryKey: forgeQueryKeys.revisionVariants(brandId, 'all'),
-    queryFn: () => fetchTemplateRevisionVariants(brandId),
-    staleTime: FORGE_STALE_MS.active,
-  });
+  const { data: brandRegistry } = useQuery(revisionVariantsQuery(brandId));
   const templateSourceKinds = useMemo(
     () =>
       brandRegistry

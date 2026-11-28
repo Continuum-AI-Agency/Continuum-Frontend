@@ -10,7 +10,8 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpFromLine, FileText, Plus, Spinner } from '@/components/icons';
+import { FileText, Spinner as Loader2, Plus, ArrowUpFromLine as Upload } from '@/components/icons';
+import { FontUploadReviewDialog } from '@/components/library/FontUploadReviewDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -27,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
 import { DocumentRow, PendingRow, ROW_EASE } from './DocumentRow';
 import { DocumentScopeSelect } from './DocumentScopeSelect';
+import { DocumentInspectorProvider } from './inspector/DocumentInspectorProvider';
 import type { CategoryFilter, DocumentDensity, DocumentView } from './types';
 import {
   categoryLabel,
@@ -34,6 +36,7 @@ import {
   filterDocumentsByScope,
   isEphemeral,
 } from './types';
+import { useBrandUploadRouting } from './useBrandUploadRouting';
 import { useDocumentActions } from './useDocumentActions';
 import { useDocumentMutations } from './useDocumentMutations';
 import { useDocuments } from './useDocuments';
@@ -55,7 +58,9 @@ function useNowTicker(enabled: boolean): number {
   return now;
 }
 
-const ACCEPT = '.pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif';
+// Anything brand material can be: useBrandUploadRouting sends each file where it is used.
+const ACCEPT =
+  '.pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif,.svg,.ttf,.otf,.woff,.woff2,.zip';
 
 const PANEL_TRANSITION = { duration: 0.24, ease: ROW_EASE };
 
@@ -130,7 +135,7 @@ export function DocumentManager({
     mutations.uploads.filter((u) => u.status === 'uploading').length;
   const errorCount = scopedDocuments.filter((d) => (d.progressStep ?? d.status) === 'error').length;
 
-  const handleFiles = async (files: File[]) => {
+  const uploadDocuments = async (files: File[]) => {
     if (files.length === 0) return;
     const result = await mutations.uploadFiles(files, onStateChange, uploadCategory);
     if (result.succeeded > 0) {
@@ -151,6 +156,10 @@ export function DocumentManager({
       });
     }
   };
+
+  // Logos, images, SVGs and fonts go where they are used; see useBrandUploadRouting.
+  const routing = useBrandUploadRouting({ brandId, uploadDocuments });
+  const handleFiles = routing.route;
 
   const initialFilesTakenRef = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: upload the handed-over files once, on mount.
@@ -245,88 +254,99 @@ export function DocumentManager({
   };
 
   return (
-    // A labelled section rather than a bare div: drag-and-drop is a pointer-only
-    // convenience here, and the keyboard-accessible path is the Upload button inside.
-    <section
-      aria-label={uiText('brand_documents_7bc955e')}
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept={ACCEPT}
-        className="hidden"
-        onChange={handleInputChange}
-      />
-      <Card
-        className={cn(
-          'w-full gap-4 rounded-lg bg-card p-3 shadow-sm motion-safe:transition-colors',
-          compact ? 'max-w-[560px]' : 'max-w-none',
-          dragActive && 'ring-2 ring-emerald-500/30',
-        )}
+    <DocumentInspectorProvider brandId={brandId}>
+      {/* A labelled section rather than a bare div: drag-and-drop is a pointer-only
+        convenience here, and the keyboard-accessible path is the Upload button inside. */}
+      <section
+        aria-label={uiText('brand_documents_7bc955e')}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
       >
-        <CardContent className="space-y-3 p-0">
-          <SyncBar
-            onUploadClick={() => inputRef.current?.click()}
-            uploading={anyUploading}
-            ready={readyCount}
-            processing={processingCount}
-            errors={errorCount}
-            categoryFilter={categoryFilter}
-            onCategoryFilterChange={setCategoryFilter}
-            uploadCategory={uploadCategory}
-            onUploadCategoryChange={setUploadCategory}
-            scope={scope}
-            onScopeChange={setScope}
-            showScope={!compact}
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept={ACCEPT}
+          className="hidden"
+          onChange={handleInputChange}
+        />
+        <Card
+          className={cn(
+            'w-full gap-4 rounded-lg bg-card p-3 shadow-sm motion-safe:transition-colors',
+            compact ? 'max-w-[560px]' : 'max-w-none',
+            dragActive && 'ring-2 ring-emerald-500/30',
+          )}
+        >
+          <CardContent className="space-y-3 p-0">
+            <SyncBar
+              onUploadClick={() => inputRef.current?.click()}
+              uploading={anyUploading}
+              ready={readyCount}
+              processing={processingCount}
+              errors={errorCount}
+              categoryFilter={categoryFilter}
+              onCategoryFilterChange={setCategoryFilter}
+              uploadCategory={uploadCategory}
+              onUploadCategoryChange={setUploadCategory}
+              scope={scope}
+              onScopeChange={setScope}
+              showScope={!compact}
+            />
+            <ItemPanel
+              hasItems={hasItems}
+              maxHeight={compact ? 280 : 480}
+              reduceMotion={reduceMotion ?? false}
+              emptyState={
+                <EmptyState
+                  hint={emptyHint}
+                  dragActive={dragActive}
+                  onBrowse={() => inputRef.current?.click()}
+                />
+              }
+            >
+              <ul className="flex flex-col">
+                <AnimatePresence initial={false}>
+                  {mutations.uploads.map((entry) => (
+                    <PendingRow
+                      key={entry.key}
+                      entry={entry}
+                      onRetry={(key) => void mutations.retryUpload(key, onStateChange)}
+                      onDiscard={mutations.discardUpload}
+                    />
+                  ))}
+                  {visibleDocuments.map((doc) => (
+                    <DocumentRow
+                      key={doc.id}
+                      doc={doc}
+                      isPinned={pinnedId === doc.id}
+                      now={now}
+                      actions={actions}
+                      onPinnedChange={(pinned) => setPinnedId(pinned ? doc.id : null)}
+                      onOpenInline={(storagePath) => void handleOpenInline(storagePath)}
+                      onDownload={handleDownload}
+                      brandId={brandId}
+                      onRemove={(id) => void handleRemove(id)}
+                      onCategoryChange={(id, category) => void handleCategoryChange(id, category)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </ul>
+            </ItemPanel>
+          </CardContent>
+        </Card>
+        {routing.fontFiles.length > 0 ? (
+          <FontUploadReviewDialog
+            key={routing.fontFiles.map((file) => `${file.name}:${file.size}`).join('|')}
+            brandId={brandId}
+            files={routing.fontFiles}
+            onClose={routing.clearFontFiles}
+            onUploaded={routing.clearFontFiles}
           />
-          <ItemPanel
-            hasItems={hasItems}
-            maxHeight={compact ? 280 : 480}
-            reduceMotion={reduceMotion ?? false}
-            emptyState={
-              <EmptyState
-                hint={emptyHint}
-                dragActive={dragActive}
-                onBrowse={() => inputRef.current?.click()}
-              />
-            }
-          >
-            <ul className="flex flex-col">
-              <AnimatePresence initial={false}>
-                {mutations.uploads.map((entry) => (
-                  <PendingRow
-                    key={entry.key}
-                    entry={entry}
-                    onRetry={(key) => void mutations.retryUpload(key, onStateChange)}
-                    onDiscard={mutations.discardUpload}
-                  />
-                ))}
-                {visibleDocuments.map((doc) => (
-                  <DocumentRow
-                    key={doc.id}
-                    doc={doc}
-                    isPinned={pinnedId === doc.id}
-                    now={now}
-                    actions={actions}
-                    onPinnedChange={(pinned) => setPinnedId(pinned ? doc.id : null)}
-                    onOpenInline={(storagePath) => void handleOpenInline(storagePath)}
-                    onDownload={handleDownload}
-                    brandId={brandId}
-                    onRemove={(id) => void handleRemove(id)}
-                    onCategoryChange={(id, category) => void handleCategoryChange(id, category)}
-                  />
-                ))}
-              </AnimatePresence>
-            </ul>
-          </ItemPanel>
-        </CardContent>
-      </Card>
-    </section>
+        ) : null}
+      </section>
+    </DocumentInspectorProvider>
   );
 }
 
@@ -387,7 +407,7 @@ function SyncBar({
           )}
         >
           {uploading ? (
-            <Spinner className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <Plus className="h-3.5 w-3.5" />
           )}
@@ -497,7 +517,7 @@ function EmptyState({
         onClick={onBrowse}
         className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <ArrowUpFromLine className="h-3.5 w-3.5" />
+        <Upload className="h-3.5 w-3.5" />
         {tUi('m_524932e050')}
       </button>
       <p className="text-xs text-muted-foreground">{tUi('m_ad4c78b7ee')}</p>

@@ -25,6 +25,7 @@ const TRUETYPE = 0x00010000;
 const TRUE_TAG = 0x74727565; // 'true' — legacy Apple TrueType
 const OTTO_TAG = 0x4f54544f; // 'OTTO' — CFF-flavoured OpenType
 const NAME_TAG = 0x6e616d65; // 'name'
+const OS2_TAG = 0x4f532f32; // 'OS/2'
 
 const WINDOWS = 3;
 const MAC = 1;
@@ -101,25 +102,47 @@ function pick(records: readonly NameRecord[], nameId: number): string | null {
  */
 export function readFontNames(input: Uint8Array | ArrayBuffer): FontNames | null {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const view = sfntView(bytes);
+  if (!view) return null;
+  const nameOffset = tableOffset(view, NAME_TAG);
+  if (nameOffset === null || nameOffset + 6 > bytes.length) return null;
+  const records = readRecords(view, bytes, nameOffset);
+  return {
+    family: pick(records, 16) ?? pick(records, 1),
+    subfamily: pick(records, 17) ?? pick(records, 2),
+    postScriptName: pick(records, 6),
+    fullName: pick(records, 4),
+  };
+}
+
+/**
+ * The face's CSS weight from its OS/2 `usWeightClass` (Bold is 700), or null when the file
+ * is not an uncompressed TrueType/OpenType font or carries no usable value. The file's own
+ * number, not a guess from "Bold" in a name, so two cuts of a family never share a weight.
+ */
+export function readFontWeight(input: Uint8Array | ArrayBuffer): number | null {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const view = sfntView(bytes);
+  if (!view) return null;
+  const os2 = tableOffset(view, OS2_TAG);
+  if (os2 === null || os2 + 6 > bytes.length) return null;
+  const weight = view.getUint16(os2 + 4);
+  return weight >= 1 && weight <= 1000 ? weight : null;
+}
+
+function sfntView(bytes: Uint8Array): DataView | null {
   if (bytes.length < 12) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const version = view.getUint32(0);
-  if (version !== TRUETYPE && version !== TRUE_TAG && version !== OTTO_TAG) return null;
+  return version === TRUETYPE || version === TRUE_TAG || version === OTTO_TAG ? view : null;
+}
 
+function tableOffset(view: DataView, tag: number): number | null {
   const numTables = view.getUint16(4);
   for (let i = 0; i < numTables; i += 1) {
     const at = 12 + i * 16;
-    if (at + 16 > bytes.length) return null;
-    if (view.getUint32(at) !== NAME_TAG) continue;
-    const nameOffset = view.getUint32(at + 8);
-    if (nameOffset + 6 > bytes.length) return null;
-    const records = readRecords(view, bytes, nameOffset);
-    return {
-      family: pick(records, 16) ?? pick(records, 1),
-      subfamily: pick(records, 17) ?? pick(records, 2),
-      postScriptName: pick(records, 6),
-      fullName: pick(records, 4),
-    };
+    if (at + 16 > view.byteLength) return null;
+    if (view.getUint32(at) === tag) return view.getUint32(at + 8);
   }
   return null;
 }

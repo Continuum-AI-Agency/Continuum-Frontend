@@ -12,6 +12,7 @@ import { preconnect } from 'react-dom';
 import { ClientOnly } from '@/components/ui/ClientOnly';
 import { VersionBanner } from '@/components/version-banner';
 import { PointerOrigin } from '../../components/shared/PointerOrigin';
+import { RouteTimings } from '../../components/shared/RouteTimings';
 import { StrandedLockGuard } from '../../components/shared/StrandedLockGuard';
 import { ThemeProvider } from '../../components/theme-provider';
 
@@ -115,13 +116,14 @@ export default async function RootLayout({
             <div className="relative z-10">{children}</div>
           </ThemeProvider>
         </FeatureMessages>
-        {/* Both call `useParams()`/`useSearchParams()` to report the parameterized route pattern.
+        {/* All three call `useParams()`/`useSearchParams()` to report the parameterized route pattern.
             Under Cache Components that reads URL data during prerender, so every dynamic route lost
             its static shell to CLIENT_HOOK_DYNAMIC. A `<Suspense>` boundary here does not clear it
             (measured). Neither reports anything before hydration anyway, so gate them on mount. */}
         <ClientOnly>
           <Analytics />
           <SpeedInsights />
+          <RouteTimings />
         </ClientOnly>
       </body>
     </html>

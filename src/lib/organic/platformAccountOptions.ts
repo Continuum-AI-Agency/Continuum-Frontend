@@ -19,6 +19,8 @@ import { ORGANIC_POST_PLATFORM_KEYS } from './postPlatforms';
 export type OrganicAccountOption = {
   id: string;
   label: string;
+  /** A LinkedIn member's own feed rather than a company Page: pickers say so next to the name. */
+  personalProfile?: true;
 };
 
 export type OrganicPlatformAccounts = {
@@ -48,15 +50,17 @@ type DeriveInput = {
 
 // A summary bucket can hold assets that cannot receive a post (Facebook and LinkedIn share theirs
 // with the platform's ad accounts). Only these asset types can — the same ones the Backend token
-// resolvers sign with, one per platform. Pink Elephant, 2026-10-14: "Moisés Avendaño" (an ad
-// account) sorted ahead of the brand's Page and became the Facebook default.
-const POSTING_ASSET_TYPES: Readonly<Record<OrganicPlatformKey, string>> = {
-  instagram: 'meta_instagram_account',
-  facebook: 'meta_page',
-  linkedin: 'linkedin_organization',
-  tiktok: 'tiktok_user',
-  youtube: 'youtube_channel',
-  x: 'x_user',
+// resolvers sign with. Pink Elephant, 2026-10-14: "Moisés Avendaño" (an ad account) sorted ahead
+// of the brand's Page and became the Facebook default. LinkedIn posts as a company Page or as the
+// connecting member's own profile, so it takes both.
+const LINKEDIN_MEMBER_ASSET_TYPE = 'linkedin_member';
+const POSTING_ASSET_TYPES: Readonly<Record<OrganicPlatformKey, ReadonlySet<string>>> = {
+  instagram: new Set(['meta_instagram_account']),
+  facebook: new Set(['meta_page']),
+  linkedin: new Set(['linkedin_organization', LINKEDIN_MEMBER_ASSET_TYPE]),
+  tiktok: new Set(['tiktok_user']),
+  youtube: new Set(['youtube_channel']),
+  x: new Set(['x_user']),
 };
 
 export function deriveOrganicPlatformAccounts({
@@ -71,7 +75,7 @@ export function deriveOrganicPlatformAccounts({
     const options: OrganicAccountOption[] = (
       integrationSummary?.[platform as PlatformKey]?.accounts ?? []
     )
-      .filter((account) => account.type === POSTING_ASSET_TYPES[platform])
+      .filter((account) => POSTING_ASSET_TYPES[platform].has(account.type ?? ''))
       .filter((account) => {
         const key = account.externalAccountId ?? account.integrationAccountId;
         if (seen.has(key)) return false;
@@ -81,6 +85,7 @@ export function deriveOrganicPlatformAccounts({
       .map((account) => ({
         id: account.integrationAccountId,
         label: account.alias ?? account.name,
+        ...(account.type === LINKEDIN_MEMBER_ASSET_TYPE ? { personalProfile: true as const } : {}),
       }));
 
     return {
@@ -100,6 +105,7 @@ export type OrganicPublishAccountOption = {
   platformLabel: string;
   accountId: string;
   label: string;
+  personalProfile?: true;
 };
 
 /**
@@ -120,6 +126,7 @@ export function deriveOrganicPublishAccountOptions(
       platformLabel: entry.label,
       accountId: option.id,
       label: option.label,
+      ...(option.personalProfile ? { personalProfile: true as const } : {}),
     })),
   );
 }

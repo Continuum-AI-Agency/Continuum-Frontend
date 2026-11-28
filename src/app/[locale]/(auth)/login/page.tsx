@@ -1,10 +1,10 @@
-import Image from 'next/image';
 import { getTranslations } from 'next-intl/server';
 import { LanguageSelector } from '@/components/i18n/LanguageSelector';
+import { ContinuumWordmark } from '@/components/shared/ContinuumWordmark';
 import { buildInviteCallbackPath } from '@/lib/invites/urls';
+import styles from '@/lib/ui/nightSky.module.css';
 import { LoginForm } from './LoginForm';
 import { LoginStarfield } from './LoginStarfield';
-import styles from './login.module.css';
 
 // TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
 // See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
@@ -68,14 +68,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-4 py-8 text-foreground sm:px-6 lg:px-8">
         <LoginStarfield className="w-full max-w-[28rem]">
           <div className="mb-5 flex justify-center sm:mb-7">
-            <Image
-              src="/logos/Continuum.png"
-              alt="Continuum"
-              width={180}
-              height={48}
-              priority
-              className="h-10 w-auto drop-shadow-[0_10px_24px_rgba(15,23,42,0.18)] sm:h-12"
-            />
+            <ContinuumWordmark onDark className="h-10 w-auto sm:h-12" />
           </div>
 
           <div className="mb-4 flex justify-end">

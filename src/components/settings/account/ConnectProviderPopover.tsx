@@ -237,6 +237,12 @@ export function ConnectProviderPopover({
             description: tUi('m_2feb7998d1'),
             variant: 'info',
           });
+        } else if (result.warning === 'linkedin_no_admin_pages') {
+          show({
+            title: tUi('m_2ab1a45715'),
+            description: tUi('m_a64de6406e'),
+            variant: 'info',
+          });
         } else if (result.warning === 'meta_partial_sync') {
           // Meta connected, but one or more Graph edges came back degraded, so
           // some accounts may be missing (see #154). The asset picker retries a

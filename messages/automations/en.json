@@ -758,5 +758,6 @@
   "it_has_not_woken_yet_56bd076": "It has not woken yet.",
   "calls_plural_one_call_other_calls_cost_haswal_d1cd1ec": "{calls, plural, one {# call} other {# calls}} · {cost}{hasWall, select, yes { · {seconds} s} other {}}",
   "duration_ms_743886b": "{duration} ms",
-  "the_brand_s_always_on_agent_what_it_may_do_on_ae852ae": "The brand's always-on agent: what it may do on its own, what waits for your approval, and every wake with its calls and cost. Brand admins only."
+  "the_brand_s_always_on_agent_what_it_may_do_on_ae852ae": "The brand's always-on agent: what it may do on its own, what waits for your approval, and every wake with its calls and cost. Brand admins only.",
+  "linkedin_personal_profile": "{name} — personal profile"
 }
