@@ -134,6 +134,7 @@ type AdminWorkflowResponse = {
   workflows?: AdminWorkflowLibraryRow[];
   brands?: AdminBrandOption[];
   workflow?: AdminWorkflowLibraryRow;
+  pagination?: { has_more: boolean; next_offset: number | null };
 };
 
 type AdminWorkflowMoveResponse = {
@@ -265,6 +266,8 @@ export function AdminUserList({
 
   const [brands, setBrands] = useState<AdminBrandOption[]>([]);
   const [isBrandLoading, setIsBrandLoading] = useState(false);
+  const brandsLoadedRef = useRef(false);
+  const brandsLoadingRef = useRef(false);
   const [sourceBrandId, setSourceBrandId] = useState('global');
   const [targetBrandId, setTargetBrandId] = useState('');
   const [workflowQuery, setWorkflowQuery] = useState('');
@@ -273,8 +276,12 @@ export function AdminUserList({
   const [checkedWorkflowIds, setCheckedWorkflowIds] = useState<Set<string>>(new Set());
   const [transferResults, setTransferResults] = useState<BulkTransferOutcome[] | null>(null);
   const [isWorkflowLoading, setIsWorkflowLoading] = useState(false);
+  const workflowRequestSeqRef = useRef(0);
+  const [workflowResultScope, setWorkflowResultScope] = useState<string | null>(null);
+  const workflowScopeReady = !isWorkflowLoading && workflowResultScope === sourceBrandId;
   const [auditEntries, setAuditEntries] = useState<AdminAuditLogEntry[]>([]);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [auditPage, setAuditPage] = useState(1);
   const [auditActionFilter, setAuditActionFilter] = useState<string>(AUDIT_ACTION_ALL);
   const [auditBrandFilter, setAuditBrandFilter] = useState<string>(AUDIT_BRAND_ALL);
@@ -309,8 +316,10 @@ export function AdminUserList({
   }, []);
 
   useEffect(() => {
-    setSelectedUserId(users[0]?.id ?? null);
-  }, [pagination.page, searchQuery, users]);
+    setSelectedUserId((current) =>
+      users.some((user) => user.id === current) ? current : (users[0]?.id ?? null),
+    );
+  }, [users]);
 
   useEffect(() => {
     setTierOverrides({});
@@ -737,48 +746,67 @@ export function AdminUserList({
   }
 
   async function loadBrands() {
+    if (brandsLoadingRef.current) return;
+    brandsLoadingRef.current = true;
     setIsBrandLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke<AdminWorkflowResponse>(
-        'admin-workflow-library',
-        {
-          method: 'POST',
-          // Every brand, once. The combobox fuzzy-matches in memory, which is
-          // both faster than a round trip and the only way the 213 brands past
-          // the old cap were ever reachable.
-          body: { action: 'list_brands', limit: 500 },
-        },
-      );
-      if (error) {
-        show({
-          title: uiText('unable_to_load_brands_042e500'),
-          description: await adminEdgeError(error, 'Brand list request failed.'),
-          variant: 'error',
-        });
-        return;
+      const allBrands: AdminBrandOption[] = [];
+      let offset: number | null = 0;
+      while (offset !== null) {
+        const { data, error }: { data: AdminWorkflowResponse | null; error: unknown } =
+          await supabase.functions.invoke<AdminWorkflowResponse>('admin-workflow-library', {
+            method: 'POST',
+            body: { action: 'list_brands', limit: 500, offset },
+          });
+        if (error) throw new Error(await adminEdgeError(error, 'Brand list request failed.'));
+        allBrands.push(...(data?.brands ?? []));
+        const next: number | null = data?.pagination?.has_more ? data.pagination.next_offset : null;
+        if (data?.pagination?.has_more && (next === null || next <= offset))
+          throw new Error('Brand pagination did not advance.');
+        offset = next;
       }
-      setBrands(data?.brands ?? []);
+      setBrands(allBrands);
+      brandsLoadedRef.current = true;
+    } catch (error) {
+      show({
+        title: uiText('unable_to_load_brands_042e500'),
+        description: getUiErrorMessage(error),
+        variant: 'error',
+      });
     } finally {
+      brandsLoadingRef.current = false;
       setIsBrandLoading(false);
     }
   }
 
   async function loadWorkflows() {
+    const seq = ++workflowRequestSeqRef.current;
+    const isCurrent = () => seq === workflowRequestSeqRef.current;
     setIsWorkflowLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke<AdminWorkflowResponse>(
-        'admin-workflow-library',
-        {
-          method: 'POST',
-          body: {
-            action: 'list',
-            ...(sourceBrandId !== 'global' ? { brandProfileId: sourceBrandId } : {}),
-          },
-        },
-      );
-      if (error) throw new Error(await adminEdgeError(error, 'Workflow library request failed.'));
-      const nextWorkflows = data?.workflows ?? [];
+      const nextWorkflows: AdminWorkflowLibraryRow[] = [];
+      let offset: number | null = 0;
+      while (offset !== null) {
+        const { data, error }: { data: AdminWorkflowResponse | null; error: unknown } =
+          await supabase.functions.invoke<AdminWorkflowResponse>('admin-workflow-library', {
+            method: 'POST',
+            body: {
+              action: 'list',
+              limit: 200,
+              offset,
+              ...(sourceBrandId !== 'global' ? { brandProfileId: sourceBrandId } : {}),
+            },
+          });
+        if (!isCurrent()) return;
+        if (error) throw new Error(await adminEdgeError(error, 'Workflow library request failed.'));
+        nextWorkflows.push(...(data?.workflows ?? []));
+        const next: number | null = data?.pagination?.has_more ? data.pagination.next_offset : null;
+        if (data?.pagination?.has_more && (next === null || next <= offset))
+          throw new Error('Workflow pagination did not advance.');
+        offset = next;
+      }
       setWorkflows(nextWorkflows);
+      setWorkflowResultScope(sourceBrandId);
       const nextIds = new Set(nextWorkflows.map((workflow) => workflow.id));
       setFocusedWorkflowId((current) =>
         current && nextIds.has(current) ? current : (nextWorkflows[0]?.id ?? null),
@@ -787,13 +815,16 @@ export function AdminUserList({
         (current) => new Set(Array.from(current).filter((id) => nextIds.has(id))),
       );
     } catch (error) {
+      if (!isCurrent()) return;
+      setWorkflowResultScope(null);
+      setCheckedWorkflowIds(new Set());
       show({
         title: uiText('unable_to_load_workflows_7d6b735'),
         description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
-      setIsWorkflowLoading(false);
+      if (isCurrent()) setIsWorkflowLoading(false);
     }
   }
 
@@ -801,6 +832,7 @@ export function AdminUserList({
     const seq = (auditRequestSeqRef.current += 1);
     const isCurrent = () => seq === auditRequestSeqRef.current;
     setIsAuditLoading(true);
+    setAuditError(null);
     try {
       const { data, error } = await supabase.functions.invoke<AdminAuditResponse>(
         'admin-audit-log',
@@ -823,6 +855,9 @@ export function AdminUserList({
       setAuditPagination(data?.pagination ?? null);
     } catch (error) {
       if (!isCurrent()) return;
+      setAuditError(getUiErrorMessage(error));
+      setAuditEntries([]);
+      setAuditPagination(null);
       show({
         title: uiText('unable_to_load_audit_log_e9b1584'),
         description: getUiErrorMessage(error),
@@ -834,21 +869,34 @@ export function AdminUserList({
   }
 
   useEffect(() => {
-    void loadBrands();
+    if (activeTab !== 'users' && !brandsLoadedRef.current) void loadBrands();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeTab]);
 
   // Only the brand scope refetches. Typing filters the loaded rows in memory, so
   // the search no longer costs an edge-function call per keystroke.
   useEffect(() => {
+    if (activeTab !== 'workflows') return;
+    setCheckedWorkflowIds(new Set());
+    setFocusedWorkflowId(null);
+    setTransferResults(null);
+    setWorkflows([]);
+    setWorkflowResultScope(null);
     void loadWorkflows();
+    return () => {
+      workflowRequestSeqRef.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceBrandId]);
+  }, [activeTab, sourceBrandId]);
 
   useEffect(() => {
+    if (activeTab !== 'audit') return;
     void loadAuditEntries(auditPage, auditFilters);
+    return () => {
+      auditRequestSeqRef.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auditPage, auditFilters]);
+  }, [activeTab, auditPage, auditFilters]);
 
   function handleAuditActionChange(value: string) {
     setExpandedAuditId(null);
@@ -998,6 +1046,7 @@ export function AdminUserList({
   }
 
   async function handleBulkMove() {
+    if (!workflowScopeReady) return;
     if (!targetBrandId) {
       show({ title: uiText('choose_a_destination_brand_14b305e'), variant: 'warning' });
       return;
@@ -1032,6 +1081,7 @@ export function AdminUserList({
   }
 
   async function handleBulkCopy() {
+    if (!workflowScopeReady) return;
     if (!targetBrandId) {
       show({ title: uiText('choose_a_destination_brand_14b305e'), variant: 'warning' });
       return;
@@ -1049,6 +1099,7 @@ export function AdminUserList({
   }
 
   async function handleBulkPromote() {
+    if (!workflowScopeReady) return;
     await runSingleItemBulk({
       actionId: 'workflow-bulk:promote',
       action: 'promote',
@@ -1058,6 +1109,7 @@ export function AdminUserList({
   }
 
   async function handleBulkAssignToBrand() {
+    if (!workflowScopeReady) return;
     if (!targetBrandId) {
       show({ title: uiText('choose_a_destination_brand_14b305e'), variant: 'warning' });
       return;
@@ -1104,7 +1156,17 @@ export function AdminUserList({
         throw new Error(
           await adminEdgeError(error, 'Unable to run first value report smoke test.'),
         );
-      const result = data ?? { status: 'unknown' };
+      if (!data || data.ok !== true || (send && data.sent !== true)) {
+        const result = { ...data, ok: false, status: data?.status ?? 'unknown' };
+        setReportSmokeResult(result);
+        show({
+          title: uiText('report_smoke_test_failed_0c5e576'),
+          description: data?.error ?? data?.missing?.reason ?? uiText('report_outcome_unconfirmed'),
+          variant: 'error',
+        });
+        return;
+      }
+      const result = data;
       setReportSmokeResult(result);
       show({
         title: send ? uiText('smoke_email_sent_0bea2a1') : uiText('m_df2b4e6675'),
@@ -1153,7 +1215,9 @@ export function AdminUserList({
             {uiText('m_88bc3fe3da')}
           </TabsTrigger>
         </TabsList>
-        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+        <div
+          className={`${activeTab === 'users' ? 'grid' : 'hidden'} gap-2 text-xs text-muted-foreground sm:grid-cols-4`}
+        >
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
             <span className="block text-xs uppercase tracking-[0.16em]">
               {uiText('users_6b0cc90')}
@@ -1321,9 +1385,14 @@ export function AdminUserList({
                                     {getUserInitials(user)}
                                   </div>
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-foreground">
+                                    <Button
+                                      variant="ghost"
+                                      className="h-auto max-w-full justify-start p-0 text-sm font-semibold text-foreground"
+                                      aria-label={uiText('manage_user', { email: user.email })}
+                                      onClick={() => setSelectedUserId(user.id)}
+                                    >
                                       {user.name ?? user.email}
-                                    </div>
+                                    </Button>
                                     <p className="truncate text-xs text-muted-foreground">
                                       {user.email}
                                     </p>
@@ -1835,9 +1904,14 @@ export function AdminUserList({
                           </TableCell>
                           <TableCell>
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-foreground">
+                              <Button
+                                variant="ghost"
+                                className="h-auto max-w-full justify-start p-0 text-sm font-semibold text-foreground"
+                                aria-label={uiText('inspect_workflow', { name: workflow.name })}
+                                onClick={() => setFocusedWorkflowId(workflow.id)}
+                              >
                                 {workflow.name}
-                              </div>
+                              </Button>
                               <p className="line-clamp-1 text-xs text-muted-foreground">
                                 {workflow.description ?? uiText('no_description_bcd8cc5')}
                               </p>
@@ -1976,7 +2050,11 @@ export function AdminUserList({
                     <AdminActionConfirmation
                       trigger={
                         <Button
-                          disabled={!targetBrandId || Boolean(pendingActions['workflow-bulk:move'])}
+                          disabled={
+                            !workflowScopeReady ||
+                            !targetBrandId ||
+                            Boolean(pendingActions['workflow-bulk:move'])
+                          }
                         >
                           {uiText.rich('sentence_5296add61fa3', {
                             v0: () =>
@@ -1999,7 +2077,11 @@ export function AdminUserList({
                       trigger={
                         <Button
                           variant="outline"
-                          disabled={!targetBrandId || Boolean(pendingActions['workflow-bulk:copy'])}
+                          disabled={
+                            !workflowScopeReady ||
+                            !targetBrandId ||
+                            Boolean(pendingActions['workflow-bulk:copy'])
+                          }
                         >
                           {uiText.rich('sentence_de01e13eed31', {
                             v0: () =>
@@ -2022,7 +2104,9 @@ export function AdminUserList({
                       trigger={
                         <Button
                           variant="outline"
-                          disabled={Boolean(pendingActions['workflow-bulk:promote'])}
+                          disabled={
+                            !workflowScopeReady || Boolean(pendingActions['workflow-bulk:promote'])
+                          }
                         >
                           {uiText.rich('sentence_c9d678a8466c', {
                             v0: () =>
@@ -2048,7 +2132,11 @@ export function AdminUserList({
                   <AdminActionConfirmation
                     trigger={
                       <Button
-                        disabled={!targetBrandId || Boolean(pendingActions['workflow-bulk:assign'])}
+                        disabled={
+                          !workflowScopeReady ||
+                          !targetBrandId ||
+                          Boolean(pendingActions['workflow-bulk:assign'])
+                        }
                       >
                         {uiText.rich('sentence_30b478ae35ac', {
                           v0: () =>
@@ -2081,6 +2169,12 @@ export function AdminUserList({
         className="min-h-0 space-y-3 overflow-y-auto"
         data-testid="admin-audit-panel"
       >
+        {auditError ? (
+          <Alert variant="destructive">
+            <AlertTitle>{uiText('unable_to_load_audit_log_e9b1584')}</AlertTitle>
+            <AlertDescription>{auditError}</AlertDescription>
+          </Alert>
+        ) : null}
         <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-foreground">
@@ -2165,7 +2259,7 @@ export function AdminUserList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isAuditLoading ? (
+              {auditError ? null : isAuditLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
                     {uiText('loading_audit_log_76ac988')}
