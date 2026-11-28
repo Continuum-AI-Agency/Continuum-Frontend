@@ -2,9 +2,14 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
 
+const passThrough = ({ children }: { children?: ReactNode }) => <>{children}</>;
+
 mock.module('motion/react', () => ({
+  AnimatePresence: passThrough,
+  MotionConfig: passThrough,
   motion: {
     div: ({ children, ...props }: ComponentProps<'div'>) => <div {...props}>{children}</div>,
+    li: ({ children }: ComponentProps<'li'>) => <li>{children}</li>,
   },
 }));
 
@@ -20,31 +25,10 @@ const { JainaEmptyState } = await import('./components/JainaEmptyState');
 afterEach(cleanup);
 
 const CATEGORIES = {
-  'Improve Performance': [
-    'Budget Optimization',
-    'Audience Targeting',
-    'Creative Testing',
-    'Funnel Analysis',
-    'Scaling Opportunities',
-    'Performance Risks',
-  ],
-  'Prep Client Review': [
-    'Weekly Recap',
-    'QBR Story',
-    'Wins & Highlights',
-    'Goal Progress',
-    'Executive Summary',
-    'Talking Points',
-  ],
-  'Reduce Churn Risk': [
-    'Risk Signals',
-    'Underperformance Explainer',
-    'Value Proof',
-    'Renewal Prep',
-    'Objection Handling',
-    'Recovery Plan',
-  ],
-  'Find Growth': ['Scale Headroom', 'New Channel', 'Untapped Audiences'],
+  'Improve Performance': ['Budget Optimization', 'Creative Testing'],
+  'Prep Client Review': ['Weekly Recap', 'Executive Summary'],
+  'Reduce Churn Risk': ['Risk Signals', 'Recovery Plan'],
+  'Find Growth': ['Scale Headroom', 'Untapped Audiences'],
 } as const;
 
 describe('JainaEmptyState starter prompts', () => {
@@ -54,7 +38,7 @@ describe('JainaEmptyState starter prompts', () => {
     for (const [category, cards] of Object.entries(CATEGORIES)) {
       expect(screen.getByRole('heading', { name: category })).toBeTruthy();
       for (const card of cards) {
-        expect(screen.getByRole('button', { name: card })).toBeTruthy();
+        expect(screen.getByRole('button', { name: new RegExp(`^${card}`) })).toBeTruthy();
       }
     }
   });
@@ -63,7 +47,7 @@ describe('JainaEmptyState starter prompts', () => {
     const onExampleClick = mock();
     render(<JainaEmptyState adAccountId="act_123" onExampleClick={onExampleClick} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Budget Optimization' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Budget Optimization/ }));
 
     expect(onExampleClick).toHaveBeenCalledWith(
       'Analyze the current ad account and recommend specific budget reallocations to improve performance.',

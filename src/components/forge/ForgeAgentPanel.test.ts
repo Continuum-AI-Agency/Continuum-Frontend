@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
 import type { ForgeAgentFrame } from '@continuum/contracts';
-import { applyForgeAgentFrame, type ForgeAgentTurn } from './ForgeAgentPanel';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createElement } from 'react';
+import { applyForgeAgentFrame, type ForgeAgentTurn, ForgeSuggestions } from './ForgeAgentPanel';
 
 const envelope = { eventId: 'e', seq: 0, ts: '2026-10-22T00:00:00.000Z' };
 const turn: ForgeAgentTurn = {
@@ -43,5 +45,23 @@ describe('applyForgeAgentFrame', () => {
     ]);
     expect(asked.question?.options.map((o) => o.label)).toEqual(['CTA', 'Badge']);
     expect(fold([{ ...envelope, type: 'error', data: { message: 'Stopped.', code: 'aborted' } }]).status).toBe('stopped');
+  });
+});
+
+describe('ForgeSuggestions', () => {
+  afterEach(cleanup);
+
+  test('a chip sends its full prompt, not its label', () => {
+    const onSend = mock();
+    render(createElement(ForgeSuggestions, { disabled: false, onSend }));
+    fireEvent.click(screen.getByRole('button', { name: 'Blue variant' }));
+    expect(onSend).toHaveBeenCalledWith('Recolour the background blue; keep everything else.');
+  });
+
+  test('the chips are blocked while a turn runs', () => {
+    render(createElement(ForgeSuggestions, { disabled: true, onSend: () => {} }));
+    // happy-dom does not inherit disabled from a fieldset; browsers do, so assert the fieldset.
+    const chip = screen.getByRole('button', { name: 'Bigger headline' });
+    expect(chip.closest('fieldset')?.disabled).toBe(true);
   });
 });

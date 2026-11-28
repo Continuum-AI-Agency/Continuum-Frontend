@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { OrganicCalendarDraft } from '../primitives/types';
 import {
   buildOrganicScopeOptions,
+  OrganicStarterSuggestions,
   organicDraftToMentionSuggestion,
   scopeOrganicPlatformAccounts,
 } from './OrganicAgentPanel';
-import type { OrganicCalendarDraft } from '../primitives/types';
 
 const accountIds = {
   instagram: 'ig-1',
@@ -75,5 +77,23 @@ describe('organicDraftToMentionSuggestion', () => {
         isSelected: true,
       },
     });
+  });
+});
+
+describe('OrganicStarterSuggestions', () => {
+  afterEach(cleanup);
+
+  it('sends the full starter prompt on click', () => {
+    const onSend = mock();
+    render(<OrganicStarterSuggestions disabled={false} onSend={onSend} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Show me trending topics/ }));
+    expect(onSend).toHaveBeenCalledWith('Show me trending topics');
+  });
+
+  it('blocks the starters while the composer is disabled', () => {
+    render(<OrganicStarterSuggestions disabled onSend={() => {}} />);
+    // happy-dom does not inherit disabled from a fieldset; browsers do, so assert the fieldset.
+    const starter = screen.getByRole('button', { name: /^Plan this week's posts/ });
+    expect(starter.closest('fieldset')?.disabled).toBe(true);
   });
 });

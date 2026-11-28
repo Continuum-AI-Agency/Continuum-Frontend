@@ -1,24 +1,33 @@
 'use client';
 
-// Competitors × top angles grid — the per-competitor decomposition of the
-// cross-rollup angle table. CSS-grid matrix adapted from the optimizer
-// AngleMatrix, with a single-hue intensity fill from longevityWeightedShare
-// (the Ad Library exposes no spend, so share-of-longevity is the scale proxy).
+// Competitors × top angles — the per-competitor decomposition of the cross-rollup angle
+// table. Drawn first as a radar (polygon = the cross-competitor rollup, one dot per
+// competitor on each spoke), with the exact figures one toggle away in the original
+// CSS-grid matrix, a single-hue intensity fill from longevityWeightedShare (the Ad Library
+// exposes no spend, so share-of-longevity is the scale proxy).
 
 import type { CompetitorAngleMapRow } from '@continuum/contracts';
+import { useState } from 'react';
+import { RadarChart } from '@/components/ui/radar-chart';
+import { cn } from '@/lib/utils';
 import { humanize, percent } from './gapPresentation';
 
 const MAX_ANGLES = 8;
+// The rollup polygon takes the brand colour, so competitors start after it.
+const COMPETITOR_COLORS = ['#1a9e8c', '#bf5af2', '#b8862b', 'var(--foreground)'];
+
+type View = 'chart' | 'table';
 
 export function CompetitorAngleMatrix({ rows }: { rows: CompetitorAngleMapRow[] }) {
+  const [view, setView] = useState<View>('chart');
   const angleRows = rows.filter((row) => row.dimension === 'angle');
   const crossRows = angleRows.filter((row) => row.competitorId === null);
   const competitorRows = angleRows.filter((row) => row.competitorId !== null);
 
-  const topAngles = [...crossRows]
+  const topRows = [...crossRows]
     .sort((a, b) => b.longevityWeightedShare - a.longevityWeightedShare)
-    .slice(0, MAX_ANGLES)
-    .map((row) => row.value);
+    .slice(0, MAX_ANGLES);
+  const topAngles = topRows.map((row) => row.value);
 
   const competitors = new Map<string, string>();
   for (const row of competitorRows) {
@@ -45,30 +54,81 @@ export function CompetitorAngleMatrix({ rows }: { rows: CompetitorAngleMapRow[] 
     0.01,
   );
 
-  return (
-    <div className="overflow-x-auto">
-      <div
-        className="grid gap-1 text-2xs"
-        style={{ gridTemplateColumns: `9rem repeat(${topAngles.length}, minmax(5rem, 1fr))` }}
-      >
-        <div />
-        {topAngles.map((angle) => (
-          <div className="truncate px-1 pb-1 text-center text-muted-foreground" key={angle}>
-            {humanize(angle)}
-          </div>
-        ))}
+  const share = (competitorId: string, angle: string) =>
+    byKey.get(`${competitorId}::${angle}`)?.longevityWeightedShare ?? 0;
+  const top = topRows[0];
 
-        {[...competitors.entries()].map(([competitorId, competitorName]) => (
-          <MatrixRow
-            angles={topAngles}
-            byKey={byKey}
-            competitorId={competitorId}
-            competitorName={competitorName}
-            key={competitorId}
-            maxShare={maxShare}
-          />
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-end gap-1 text-2xs">
+        {(['chart', 'table'] as const).map((option) => (
+          <button
+            aria-pressed={view === option}
+            className={cn(
+              'rounded-md px-2 py-1 capitalize transition-colors',
+              view === option
+                ? 'bg-muted text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            key={option}
+            onClick={() => setView(option)}
+            type="button"
+          >
+            {option}
+          </button>
         ))}
       </div>
+
+      {view === 'chart' ? (
+        <RadarChart
+          axes={topAngles.map(humanize)}
+          className="mx-auto"
+          format={percent}
+          headline={{
+            value: percent(top.longevityWeightedShare),
+            caption: `${humanize(top.value)} leads`,
+          }}
+          max={Math.min(1, Math.ceil(Math.max(maxShare, top.longevityWeightedShare) * 10) / 10)}
+          members={[...competitors.entries()].map(([competitorId, competitorName], i) => ({
+            id: competitorId,
+            label: competitorName,
+            values: topAngles.map((angle) => share(competitorId, angle)),
+            color: COMPETITOR_COLORS[i % COMPETITOR_COLORS.length],
+          }))}
+          series={{
+            id: 'all-competitors',
+            label: 'All competitors',
+            values: topRows.map((row) => row.longevityWeightedShare),
+          }}
+          subtitle="Share of each competitor's ad longevity"
+          title="Angle share"
+        />
+      ) : (
+        <div className="overflow-x-auto">
+          <div
+            className="grid gap-1 text-2xs"
+            style={{ gridTemplateColumns: `9rem repeat(${topAngles.length}, minmax(5rem, 1fr))` }}
+          >
+            <div />
+            {topAngles.map((angle) => (
+              <div className="truncate px-1 pb-1 text-center text-muted-foreground" key={angle}>
+                {humanize(angle)}
+              </div>
+            ))}
+
+            {[...competitors.entries()].map(([competitorId, competitorName]) => (
+              <MatrixRow
+                angles={topAngles}
+                byKey={byKey}
+                competitorId={competitorId}
+                competitorName={competitorName}
+                key={competitorId}
+                maxShare={maxShare}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -103,7 +103,9 @@ describe('JainaConversationSidebar list rows', () => {
     ...overrides,
   });
 
-  it('reads as titles and times: no role label, the current chat tinted, actions on hover', () => {
+  const row = (title: string) => screen.getByRole('button', { name: new RegExp(`^${title}`) });
+
+  it('reads as titles and times: no role label, the current chat marked, actions on hover', () => {
     render(
       <JainaConversationSidebar
         {...props}
@@ -115,21 +117,15 @@ describe('JainaConversationSidebar list rows', () => {
     );
 
     expect(screen.queryByText(/^(user|assistant|session)$/i)).toBeNull();
+    expect(row('Chat current').getAttribute('aria-current')).toBe('page');
+    expect(row('Chat other').getAttribute('aria-current')).toBeNull();
 
-    const current = screen.getByTestId('jaina-conversation-current');
-    expect(current.getAttribute('aria-current')).toBe('true');
-    expect(current.parentElement?.className).toContain('bg-primary/10');
-    expect(current.parentElement?.className).not.toMatch(/\bborder\b/);
-    expect(screen.getByText('Chat current').className).toContain('text-primary-ink');
-
-    const other = screen.getByTestId('jaina-conversation-other');
-    expect(other.getAttribute('aria-current')).toBeNull();
-    expect(screen.getByText('Chat other').className).toContain('text-foreground');
-
-    const remove = screen.getByLabelText('Delete conversation Chat other');
-    expect(remove.className).toContain('opacity-0');
-    expect(remove.className).toContain('group-hover/conversation:opacity-100');
-    expect(remove.className).toContain('group-focus-within/conversation:opacity-100');
+    const menu = screen.getByRole('button', { name: 'Actions for Chat other' });
+    expect(menu.className).toContain('opacity-0');
+    expect(menu.className).toContain('group-hover:opacity-100');
+    const tag = screen.getByRole('button', { name: 'Edit tags for conversation other' });
+    expect(tag.className).toContain('opacity-0');
+    expect(tag.className).toContain('group-focus-within:opacity-100');
   });
 
   it('marks a chat another agent started with a muted word, and none on a person’s chat', () => {
@@ -144,11 +140,230 @@ describe('JainaConversationSidebar list rows', () => {
       />,
     );
 
-    const agentRow = screen.getByTestId('jaina-conversation-from-organic');
-    expect(agentRow.textContent).toContain('Organic');
-    const personRow = screen.getByTestId('jaina-conversation-mine');
-    expect(personRow.textContent).not.toContain('AI');
-    expect(personRow.textContent).toContain('#q4');
+    expect(row('Chat from-organic').textContent).toContain('Organic');
+    expect(row('Chat mine').textContent).not.toContain('AI');
+  });
+
+  it('shows the chat’s tags on the meta line under its title', () => {
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={[session('tagged', { tags: ['launch', 'q4'] })]}
+      />,
+    );
+
+    const time = screen.getByTestId('jaina-conversation-time-tagged');
+    const meta = time.parentElement as HTMLElement;
+    expect(meta.textContent).toContain('#launch #q4');
+    expect(meta.previousElementSibling?.textContent).toBe('Chat tagged');
+  });
+
+  it('marks a chat the agent is still answering as working', () => {
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        generatingSessionIds={new Set(['busy'])}
+        sessions={[session('busy'), session('idle')]}
+      />,
+    );
+
+    expect(within(row('Chat busy')).getByRole('status').textContent).toBe('Agent working');
+    expect(within(row('Chat idle')).queryByRole('status')).toBeNull();
+  });
+
+  it('opens another chat, but not the open one or while the list is locked', () => {
+    const onSelectConversation = mock(() => {});
+    const { rerender } = render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        activeSessionId="current"
+        onSelectConversation={onSelectConversation}
+        sessions={[session('current'), session('other')]}
+      />,
+    );
+
+    fireEvent.click(row('Chat current'));
+    expect(onSelectConversation).not.toHaveBeenCalled();
+    fireEvent.click(row('Chat other'));
+    expect(onSelectConversation).toHaveBeenCalledWith('other');
+
+    rerender(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        activeSessionId="current"
+        isInteractionDisabled
+        onSelectConversation={onSelectConversation}
+        sessions={[session('current'), session('other')]}
+      />,
+    );
+    fireEvent.click(row('Chat other'));
+    expect(onSelectConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts a new chat from New', () => {
+    const onCreateConversation = mock(() => {});
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        onCreateConversation={onCreateConversation}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create new conversation' }));
+    expect(onCreateConversation).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('JainaConversationSidebar row menu', () => {
+  const session = {
+    sessionId: 'session-2',
+    brandId: null,
+    adAccountId: null,
+    title: 'Weekly recap',
+    lastMessageRole: 'assistant' as const,
+    lastMessagePreview: null,
+    lastMessageAt: '2026-10-31T12:00:00.000Z',
+    createdAt: '2026-10-31T11:00:00.000Z',
+    updatedAt: '2026-10-31T12:00:00.000Z',
+  };
+
+  const openMenu = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Weekly recap' }));
+    return screen.findByRole('menu');
+  };
+
+  it('offers Delete only: Jaina chats have no rename, pin or archive endpoint', async () => {
+    render(<JainaConversationSidebar {...props} goalsAccessEnabled sessions={[session]} />);
+
+    const menu = await openMenu();
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Delete']);
+  });
+
+  it('deletes at once through the existing delete handler, with no undo window', async () => {
+    const onDeleteConversation = mock(() => {});
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={[session]}
+        onDeleteConversation={onDeleteConversation}
+      />,
+    );
+
+    fireEvent.click(within(await openMenu()).getByRole('menuitem', { name: 'Delete' }));
+    expect(onDeleteConversation).toHaveBeenCalledTimes(1);
+    expect(onDeleteConversation).toHaveBeenCalledWith('session-2');
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
+  it('does not delete a chat that is already being deleted', async () => {
+    const onDeleteConversation = mock(() => {});
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={[session]}
+        deletingSessionId="session-2"
+        onDeleteConversation={onDeleteConversation}
+      />,
+    );
+
+    expect(
+      screen.getByTestId('jaina-conversation-time-session-2').parentElement?.textContent,
+    ).toContain('Deleting…');
+    fireEvent.click(within(await openMenu()).getByRole('menuitem', { name: 'Delete' }));
+    expect(onDeleteConversation).not.toHaveBeenCalled();
+  });
+});
+
+describe('JainaConversationSidebar search and facets', () => {
+  const sessions = [
+    {
+      sessionId: 'budget',
+      brandId: null,
+      adAccountId: null,
+      title: 'Budget shift',
+      lastMessageRole: 'assistant' as const,
+      lastMessagePreview: null,
+      lastMessageAt: '2026-10-31T12:00:00.000Z',
+      createdAt: '2026-10-31T11:00:00.000Z',
+      updatedAt: '2026-10-31T12:00:00.000Z',
+      tags: ['budget'],
+    },
+    {
+      sessionId: 'creative',
+      brandId: null,
+      adAccountId: null,
+      title: 'Creative fatigue',
+      lastMessageRole: 'assistant' as const,
+      lastMessagePreview: null,
+      lastMessageAt: '2026-10-30T12:00:00.000Z',
+      createdAt: '2026-10-30T11:00:00.000Z',
+      updatedAt: '2026-10-30T12:00:00.000Z',
+      tags: [],
+    },
+  ];
+
+  it('has a single search box, and it asks the server', async () => {
+    const onSearchConversations = mock(async () => [sessions[1]]);
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={sessions}
+        onSearchConversations={onSearchConversations}
+      />,
+    );
+
+    expect(screen.getAllByRole('searchbox')).toHaveLength(1);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'fatigue' } });
+    await waitFor(() => expect(onSearchConversations).toHaveBeenCalled());
+    expect(onSearchConversations.mock.calls.at(-1)?.[0]).toMatchObject({ q: 'fatigue' });
+    await waitFor(() => expect(screen.queryByText('Budget shift')).toBeNull());
+    expect(screen.getByText('Creative fatigue')).not.toBeNull();
+  });
+
+  it('filters by who started the chat', async () => {
+    const onSearchConversations = mock(async () => [sessions[0]]);
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={sessions}
+        onSearchConversations={onSearchConversations}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Human' }));
+    await waitFor(() => expect(screen.queryByText('Creative fatigue')).toBeNull());
+    expect(onSearchConversations.mock.calls.at(-1)?.[0]).toMatchObject({ initiator: 'user' });
+  });
+
+  it('filters by a tag chip', async () => {
+    const onSearchConversations = mock(async () => [sessions[0]]);
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={sessions}
+        onSearchConversations={onSearchConversations}
+      />,
+    );
+
+    const chip = screen.getByRole('button', { name: '#budget' });
+    fireEvent.click(chip);
+    await waitFor(() => expect(chip.getAttribute('aria-pressed')).toBe('true'));
+    expect(onSearchConversations.mock.calls.at(-1)?.[0]).toMatchObject({ tags: ['budget'] });
+    await waitFor(() => expect(screen.queryByText('Creative fatigue')).toBeNull());
   });
 });
 
@@ -279,11 +494,12 @@ describe('JainaConversationSidebar when a filter fails', () => {
   });
 });
 
-// PP-DT-C-jaina-delete-conversation-target-21px: the row's tag and Delete buttons are size-6
-// icon buttons (21.75 px at the 14.5 px root) without the shared 24 px hit pad, side by side —
-// past the edge of the 21 px Delete target a tap opened the conversation instead.
+// PP-DT-C-jaina-delete-conversation-target-21px: the row's icon buttons were size-6 (21.75 px at
+// the 14.5 px root) without the shared 24 px hit pad. Delete now lives in the row menu; the tag
+// editor still sits on the row and keeps the pad.
 describe('JainaConversationSidebar row actions', () => {
-  it('give Delete and the tag editor the 24 px hit pad, in a row that keeps the pads apart', () => {
+  it('give the tag editor the 24 px hit pad and save the tags it returns', async () => {
+    const onUpdateConversationTags = mock(async (_sessionId: string, tags: string[]) => tags);
     render(
       <JainaConversationSidebar
         {...props}
@@ -299,15 +515,22 @@ describe('JainaConversationSidebar row actions', () => {
             lastMessageAt: '2026-10-31T12:00:00.000Z',
             createdAt: '2026-10-31T11:00:00.000Z',
             updatedAt: '2026-10-31T12:00:00.000Z',
+            tags: ['recap'],
           },
         ]}
-        onUpdateConversationTags={async (_sessionId: string, tags: string[]) => tags}
+        onUpdateConversationTags={onUpdateConversationTags}
       />,
     );
-    const remove = screen.getByRole('button', { name: /^Delete conversation/ });
     const tag = screen.getByRole('button', { name: /^Edit tags for conversation/ });
-    expect(remove.className.split(/\s+/)).toContain('hit-area');
     expect(tag.className.split(/\s+/)).toContain('hit-area');
-    expect(remove.parentElement?.className.split(/\s+/)).toContain('hit-area-row');
+
+    fireEvent.click(tag);
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove tag recap' }));
+    await waitFor(() => expect(onUpdateConversationTags).toHaveBeenCalledWith('session-2', []));
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('jaina-conversation-time-session-2').parentElement?.textContent,
+      ).not.toContain('#recap'),
+    );
   });
 });

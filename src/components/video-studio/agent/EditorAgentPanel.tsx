@@ -24,7 +24,6 @@ import {
   ConversationEmptyState,
 } from '@/components/ai-elements/conversation';
 import { Message } from '@/components/ai-elements/message';
-import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { SlashMenu, useSlashTextarea } from '@/components/chat/slash-menu';
 import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +38,7 @@ import {
 } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { type PromptSuggestion, PromptSuggestions } from '@/components/ui/prompt-suggestions';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
@@ -57,18 +57,47 @@ import {
   withMentionContext,
 } from './turnState';
 
-const SUGGESTIONS = [
-  { label: 'Cut pauses', prompt: 'Cut the pauses and dead air.' },
-  { label: 'Captions', prompt: 'Add word-timed captions.' },
-  { label: 'Cut on beat', prompt: 'Cut the picture to the beat of the music.' },
-  { label: 'Make it TikTok', prompt: 'Make it TikTok.' },
-] as const;
+const CAPTIONS: PromptSuggestion = {
+  id: 'captions',
+  title: 'Captions',
+  prompt: 'Add word-timed captions.',
+};
+
+const SUGGESTIONS: PromptSuggestion[] = [
+  { id: 'cut-pauses', title: 'Cut pauses', prompt: 'Cut the pauses and dead air.' },
+  CAPTIONS,
+];
 
 /** Offered while the timeline has footage and no brief — the fastest way to a first cut. */
-const FIRST_CUT_SUGGESTION = {
-  label: 'First cut: 3 variants',
-  prompt: 'Draft a first cut from this footage: 3 variants, 30 s each, with captions.',
-} as const;
+const FIRST_CUT_SUGGESTIONS: PromptSuggestion[] = [
+  {
+    id: 'first-cut',
+    title: 'First cut: 3 variants',
+    prompt: 'Draft a first cut from this footage: 3 variants, 30 s each, with captions.',
+  },
+  CAPTIONS,
+];
+
+// A disabled fieldset blocks the chips (they dim themselves via :disabled) while a turn runs.
+export function EditorSuggestions({
+  firstCut,
+  disabled,
+  onSend,
+}: {
+  firstCut: boolean;
+  disabled: boolean;
+  onSend: (prompt: string) => void;
+}) {
+  return (
+    <fieldset disabled={disabled} className="min-w-0">
+      <PromptSuggestions
+        variant="chips"
+        data={firstCut ? FIRST_CUT_SUGGESTIONS : SUGGESTIONS}
+        onSelect={(_, prompt) => onSend(prompt)}
+      />
+    </fieldset>
+  );
+}
 
 const HISTORY_TURNS = 10;
 const humanize = (op: string) => op.replaceAll('_', ' ');
@@ -424,22 +453,11 @@ export function EditorAgentPanel({
             ) : null}
           </PopoverContent>
         </Popover>
-        <Suggestions>
-          {(!studio.project.brief && hasFootage(studio.project)
-            ? [FIRST_CUT_SUGGESTION, ...SUGGESTIONS]
-            : SUGGESTIONS
-          ).map((suggestion) => (
-            <Suggestion
-              key={suggestion.label}
-              suggestion={suggestion.prompt}
-              onClick={(prompt) => void send(prompt)}
-              disabled={running}
-              className="h-7 px-3 text-xs"
-            >
-              {suggestion.label}
-            </Suggestion>
-          ))}
-        </Suggestions>
+        <EditorSuggestions
+          firstCut={!studio.project.brief && hasFootage(studio.project)}
+          disabled={running}
+          onSend={(prompt) => void send(prompt)}
+        />
 
         <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
           <PopoverAnchor className="relative">

@@ -370,23 +370,46 @@ describe('JainaToolApprovalCard', () => {
   it('states how many budgets change, and every entity with before, after and difference', () => {
     renderBudget();
     expect(screen.getByText('Change budgets and bids')).toBeTruthy();
+    expect(screen.getByText('Approval required')).toBeTruthy();
+    expect(screen.getByText('Awaiting your approval')).toBeTruthy();
     expect(screen.getByText(/You are about to change 2 budgets\./)).toBeTruthy();
 
-    const table = within(screen.getByRole('table'));
-    expect(table.getByText('Entity')).toBeTruthy();
-    expect(table.getByText('Difference')).toBeTruthy();
-    expect(table.getByText('Daily budget · Prospecting · Broad')).toBeTruthy();
-    // The first row's before and the second row's after are both $100 MXN.
-    expect(table.getAllByText('$100 MXN')).toHaveLength(2);
-    expect(table.getByText('$150 MXN')).toBeTruthy();
-    expect(table.getByText('+$50.00 MXN (+50.0%)')).toBeTruthy();
-    expect(table.getByText('-$100 MXN (-50.0%)')).toBeTruthy();
+    const lines = within(screen.getByRole('list', { name: '' }));
+    expect(lines.getByText('Daily budget · Prospecting · Broad')).toBeTruthy();
+    expect(lines.getByText('Daily budget · Retargeting')).toBeTruthy();
+    // Before sits under each line; after is the line's amount.
+    expect(lines.getByText('Was $100 MXN')).toBeTruthy();
+    expect(lines.getByText('Was $200 MXN')).toBeTruthy();
+    expect(lines.getByText('$150 MXN')).toBeTruthy();
+    expect(lines.getByText('$100 MXN')).toBeTruthy();
+    expect(lines.getByText('+$50.00 MXN (+50.0%)')).toBeTruthy();
+    expect(lines.getByText('-$100 MXN (-50.0%)')).toBeTruthy();
+    // Budgets on different ad sets do not sum to anything being approved.
+    expect(screen.queryByText('Total')).toBeNull();
+    expect(screen.queryByText('Subtotal')).toBeNull();
+  });
+
+  it('tones each difference by direction: a rise positive, a cut negative', () => {
+    renderBudget();
+    expect(screen.getByText('+$50.00 MXN (+50.0%)').className).toContain('text-positive');
+    expect(screen.getByText('-$100 MXN (-50.0%)').className).toContain('text-negative');
+  });
+
+  it('keeps the exact input on the card, collapsed', () => {
+    const { container } = renderBudget();
+    const disclosure = container.querySelector('details');
+    expect(disclosure?.hasAttribute('open')).toBe(false);
+    const list = within(disclosure as HTMLElement);
+    expect(list.getByText('Exact input')).toBeTruthy();
+    expect(list.getByText('changes')).toBeTruthy();
+    expect(list.getByText('idempotency_key')).toBeTruthy();
+    expect(list.getByText('key-0000-0003')).toBeTruthy();
   });
 
   it('names the ad sets a pause for review would stop, and the one it leaves alone', () => {
     renderBudget();
     expect(screen.getByText(/Pausing for review changes no budget or bid/)).toBeTruthy();
-    const list = within(screen.getByRole('list'));
+    const list = within(screen.getByRole('list', { name: 'Ad sets a pause would stop' }));
     expect(list.getByText('Prospecting · Broad')).toBeTruthy();
     expect(list.getByText(/already paused, left as it is/)).toBeTruthy();
   });
@@ -424,5 +447,57 @@ describe('JainaToolApprovalCard', () => {
     expect(screen.queryByRole('button', { name: 'Apply changes' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Pause these ad sets for review' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull();
+    expect(screen.getByText('Approved')).toBeTruthy();
+  });
+
+  it('locks all three buttons while the turn is streaming', () => {
+    render(
+      <JainaToolApprovalCard
+        approval={budgetCard}
+        optimisticDecision={null}
+        isStreaming
+        onDecide={() => {}}
+      />,
+      { wrapper },
+    );
+    for (const name of ['Apply changes', 'Pause these ad sets for review', 'Reject']) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+  });
+
+  it('says nothing ran, and offers no choice, once a budget approval has expired', () => {
+    render(
+      <JainaToolApprovalCard
+        approval={{ ...budgetCard, expiresAt: '2020-01-01T00:00:00.000Z' }}
+        optimisticDecision={null}
+        isStreaming={false}
+        onDecide={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByText('Expired')).toBeTruthy();
+    expect(screen.getByText(/expired, so nothing ran/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Apply changes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull();
+  });
+
+  it('states why a budget change cannot run and offers only a dismiss', () => {
+    const onDecide = mock(() => {});
+    const reason = 'Retargeting has a lifetime budget, so a daily budget cannot be set on it.';
+    const blocked = { ...budgetCard, preview: { ...budgetCard.preview!, blocked: reason } };
+    render(
+      <JainaToolApprovalCard
+        approval={blocked}
+        optimisticDecision={null}
+        isStreaming={false}
+        onDecide={onDecide}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByRole('note').textContent).toBe(reason);
+    expect(screen.queryByRole('button', { name: 'Apply changes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pause these ad sets for review' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(onDecide.mock.calls[0]).toEqual([blocked, 'deny'] as never);
   });
 });

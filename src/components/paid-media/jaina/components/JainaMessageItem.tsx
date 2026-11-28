@@ -550,6 +550,7 @@ function JainaMessageItemImpl({
 
             {!isStreaming && message.status === 'done' ? (
               <MessageActionBar
+                messageId={message.id}
                 content={message.content}
                 onRegenerate={
                   onRegenerate && regeneratePrompt

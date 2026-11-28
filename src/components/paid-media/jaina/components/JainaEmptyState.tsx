@@ -1,10 +1,11 @@
 'use client';
+import { ChartLineUp, Presentation, ShieldWarning, TrendUp } from '@phosphor-icons/react';
 import { Rocket } from 'lucide-react';
 
 import { motion } from 'motion/react';
 import React from 'react';
-import { Suggestion } from '@/components/ai-elements/suggestion';
 import type { Attachment } from '@/components/chat/attachments';
+import { PromptSuggestions } from '@/components/ui/prompt-suggestions';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 
 import { JainaSetupConcierge } from './JainaSetupConcierge';
@@ -12,104 +13,53 @@ import { JainaSetupConcierge } from './JainaSetupConcierge';
 const STARTER_PROMPT_CATEGORIES = [
   {
     title: 'Improve Performance',
+    icon: ChartLineUp,
     cards: [
       {
         label: 'Budget Optimization',
+        hint: 'Move spend to what converts',
         prompt:
           'Analyze the current ad account and recommend specific budget reallocations to improve performance.',
       },
       {
-        label: 'Audience Targeting',
-        prompt:
-          'Analyze audience performance in the current ad account and recommend specific targeting changes.',
-      },
-      {
         label: 'Creative Testing',
+        hint: 'Plan the next creative tests',
         prompt:
           'Review creative performance in the current ad account and propose the next tests, hypotheses, and success metrics.',
-      },
-      {
-        label: 'Funnel Analysis',
-        prompt:
-          'Analyze the current ad account funnel, identify the largest conversion drop-offs, and recommend fixes.',
-      },
-      {
-        label: 'Scaling Opportunities',
-        prompt:
-          'Find campaigns in the current ad account that can scale efficiently and recommend budgets and guardrails.',
-      },
-      {
-        label: 'Performance Risks',
-        prompt:
-          'Identify the highest-priority performance risks in the current ad account and explain what to do next.',
       },
     ],
   },
   {
     title: 'Prep Client Review',
+    icon: Presentation,
     cards: [
       {
         label: 'Weekly Recap',
+        hint: 'Client-ready week in review',
         prompt:
           'Create a client-ready weekly recap for the current ad account with results, changes, and next steps.',
       },
       {
-        label: 'QBR Story',
-        prompt:
-          'Build a QBR narrative for the current ad account that connects performance, decisions, and growth opportunities.',
-      },
-      {
-        label: 'Wins & Highlights',
-        prompt:
-          'Summarize the strongest wins and proof points from the current ad account for a client review.',
-      },
-      {
-        label: 'Goal Progress',
-        prompt:
-          'Assess progress toward the current ad account goals and explain what is on track, behind, and changing.',
-      },
-      {
         label: 'Executive Summary',
+        hint: 'Results, risks and next steps',
         prompt:
           'Write an executive summary of the current ad account performance, key decisions, risks, and next steps.',
-      },
-      {
-        label: 'Talking Points',
-        prompt:
-          'Prepare concise client-meeting talking points for the current ad account, including likely questions and answers.',
       },
     ],
   },
   {
     title: 'Reduce Churn Risk',
+    icon: ShieldWarning,
     cards: [
       {
         label: 'Risk Signals',
+        hint: 'Churn signals by urgency',
         prompt:
           'Find churn-risk signals in the current ad account and rank them by urgency, evidence, and recommended response.',
       },
       {
-        label: 'Underperformance Explainer',
-        prompt:
-          'Explain the current ad account underperformance in client-ready language, including causes and corrective actions.',
-      },
-      {
-        label: 'Value Proof',
-        prompt:
-          'Build a concise value case for the current ad account using measurable outcomes, learning, and avoided risk.',
-      },
-      {
-        label: 'Renewal Prep',
-        prompt:
-          'Prepare a renewal brief for the current ad account with delivered value, open risks, and the next-quarter plan.',
-      },
-      {
-        label: 'Objection Handling',
-        prompt:
-          'Anticipate client objections about the current ad account and draft evidence-based responses to each one.',
-      },
-      {
         label: 'Recovery Plan',
+        hint: 'Owners, milestones, measures',
         prompt:
           'Create a prioritized recovery plan for the current ad account with owners, milestones, and success measures.',
       },
@@ -117,19 +67,17 @@ const STARTER_PROMPT_CATEGORIES = [
   },
   {
     title: 'Find Growth',
+    icon: TrendUp,
     cards: [
       {
         label: 'Scale Headroom',
+        hint: 'Where more spend still pays',
         prompt:
           'Estimate scale headroom in the current ad account and identify where more spend can grow efficiently.',
       },
       {
-        label: 'New Channel',
-        prompt:
-          'Evaluate which new paid channel best complements the current ad account, with evidence and a test plan.',
-      },
-      {
         label: 'Untapped Audiences',
+        hint: 'New audiences worth testing',
         prompt:
           'Find untapped audience opportunities for the current ad account and prioritize concrete tests.',
       },
@@ -200,30 +148,20 @@ export function JainaEmptyState({
       </motion.div>
 
       <div className="mt-6 grid w-full max-w-6xl grid-cols-1 gap-5 px-4 text-left sm:grid-cols-2 xl:grid-cols-4">
-        {STARTER_PROMPT_CATEGORIES.map((category, categoryIndex) => (
+        {STARTER_PROMPT_CATEGORIES.map((category) => (
           <section key={category.title} className="space-y-2">
-            <h4 className="text-sm font-semibold text-foreground">{category.title}</h4>
-            <div className="flex flex-col gap-2">
-              {category.cards.map((card, cardIndex) => (
-                <motion.div
-                  key={card.label}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{
-                    delay: 0.14 + (categoryIndex * 6 + cardIndex) * 0.02,
-                    duration: 0.24,
-                  }}
-                >
-                  <Suggestion
-                    suggestion={card.prompt}
-                    onClick={(query) => onExampleClick?.(query, [])}
-                    className="h-auto w-full justify-start whitespace-normal rounded-lg border-border/70 bg-card/70 px-3 py-2 text-left text-foreground hover:border-primary/40 hover:bg-card"
-                  >
-                    {card.label}
-                  </Suggestion>
-                </motion.div>
-              ))}
-            </div>
+            <h4 className="px-1 text-sm font-semibold text-foreground">{category.title}</h4>
+            <PromptSuggestions
+              className="max-w-none"
+              data={category.cards.map((card) => ({
+                id: card.label,
+                title: card.label,
+                hint: card.hint,
+                prompt: card.prompt,
+                icon: category.icon,
+              }))}
+              onSelect={(_, prompt) => onExampleClick?.(prompt, [])}
+            />
           </section>
         ))}
       </div>

@@ -148,7 +148,6 @@
   --glass-border: rgba(90, 72, 249, 0.08);
   --glass-shadow: 0 18px 40px -16px rgba(15, 23, 42, 0.28);
 
-
   /* Layout and viewport density tokens.
      The dashboard is dense by default, then gently compacts on laptop-sized
      canvases. Keep this balanced: prefer scroll/reflow over tiny controls. */
@@ -1177,7 +1176,12 @@ body {
      moved by position. With box-decoration-clone each line fragment gets its own sweep. */
   .skeleton-glint-inline {
     background-color: var(--skeleton-bone);
-    background-image: linear-gradient(90deg, transparent 30%, var(--skeleton-glint) 50%, transparent 70%);
+    background-image: linear-gradient(
+      90deg,
+      transparent 30%,
+      var(--skeleton-glint) 50%,
+      transparent 70%
+    );
     background-size: 300% 100%;
     background-repeat: no-repeat;
     animation: skeleton-glint-inline 1.6s ease-in-out infinite;
@@ -1458,12 +1462,18 @@ body {
       --scroll-fade-s: 0px;
     }
     to {
-      --scroll-fade-s: var(--_scroll-fade-size-s, var(--scroll-fade-size, min(12%, calc(var(--spacing) * 10))));
+      --scroll-fade-s: var(
+        --_scroll-fade-size-s,
+        var(--scroll-fade-size, min(12%, calc(var(--spacing) * 10)))
+      );
     }
   }
   @keyframes scroll-fade-reveal-e {
     from {
-      --scroll-fade-e: var(--_scroll-fade-size-e, var(--scroll-fade-size, min(12%, calc(var(--spacing) * 10))));
+      --scroll-fade-e: var(
+        --_scroll-fade-size-e,
+        var(--scroll-fade-size, min(12%, calc(var(--spacing) * 10)))
+      );
     }
     to {
       --scroll-fade-e: 0px;
@@ -1548,21 +1558,16 @@ body {
 @utility shimmer {
   --_spread: var(--shimmer-spread, calc(3ch + 40px));
   --_base: currentColor;
-  --_highlight: var(
-    --shimmer-color,
-    oklch(from currentColor l c h / calc(alpha* 0.2))
-  );
+  --_highlight: var(--shimmer-color, oklch(from currentColor l c h / calc(alpha * 0.2)));
 
   background-image: var(
     --shimmer-image,
     linear-gradient(
       calc(90deg + var(--shimmer-angle)),
       var(--_base) calc(50% - var(--_spread)),
-      color-mix(in oklch, var(--_highlight), var(--_base) 50%)
-        calc(50% - var(--_spread) * 0.5),
+      color-mix(in oklch, var(--_highlight), var(--_base) 50%) calc(50% - var(--_spread) * 0.5),
       var(--_highlight) 50%,
-      color-mix(in oklch, var(--_highlight), var(--_base) 50%)
-        calc(50% + var(--_spread) * 0.5),
+      color-mix(in oklch, var(--_highlight), var(--_base) 50%) calc(50% + var(--_spread) * 0.5),
       var(--_base) calc(50% + var(--_spread))
     )
   );
@@ -1786,4 +1791,49 @@ button:focus-visible .mention-inline__label {
   -webkit-mask:
     conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 8px 100%;
   mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 8px 100%;
+}
+
+/* TuffUI layer tokens (tuffui.com theme), only the ones its components read.
+   Surfaces and tones ride our own palette so TuffUI matches the violet/navy theme;
+   `warning` is ours already and deliberately not re-imported. */
+:root {
+  --brand: var(--primary);
+  --brand-foreground: var(--primary-foreground);
+  --positive: var(--success);
+  --negative: var(--destructive);
+  --surface: var(--muted);
+  --surface-inset: var(--background);
+  --surface-raised: color-mix(in oklab, var(--muted), var(--foreground) 7%);
+}
+
+:root,
+[data-theme="light"] {
+  --button: linear-gradient(0deg, #fff 0%, #e6e6e6 100%);
+  --button-hover: linear-gradient(0deg, #fff 0%, #eeeeee 100%);
+  --button-foreground: #111111;
+  --button-edge: rgba(0, 0, 0, 0.1);
+  --button-shadow: 0 0 #0000;
+  --button-secondary: linear-gradient(180deg, #e2e2e2 0%, #ececec 100%);
+  --button-secondary-hover: linear-gradient(180deg, #dadada 0%, #e4e4e4 100%);
+}
+
+.dark,
+[data-theme="dark"] {
+  --button: linear-gradient(0deg, #fff 0%, #ababab 100%);
+  --button-hover: linear-gradient(0deg, #fff 0%, #c2c2c2 100%);
+  --button-foreground: #111111;
+  --button-edge: rgba(255, 255, 255, 0.5);
+  --button-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.1);
+  --button-secondary: linear-gradient(180deg, #1d1d1d 0%, #262626 100%);
+  --button-secondary-hover: linear-gradient(180deg, #242424 0%, #2d2d2d 100%);
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-inset: var(--surface-inset);
+  --color-surface-raised: var(--surface-raised);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
 }

@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { JainaUIMessage } from '@continuum/contracts';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { JainaRunProgress } from '@/lib/jaina/runProgress';
 import {
   JainaRunProgressBar,
@@ -54,6 +54,41 @@ describe('JainaRunProgressBar', () => {
   });
 });
 
+describe('JainaRunProgressBar header', () => {
+  it('reads Jaina · the question · status · elapsed, the elapsed time from the turn itself', () => {
+    render(
+      <JainaRunProgressBar
+        progress={progress({ elapsedSeconds: 72 })}
+        title="¿Por qué bajó el ROAS?"
+      />,
+    );
+    const bar = screen.getByTestId('jaina-run-progress');
+    expect(bar.textContent).toContain('Jaina');
+    expect(bar.textContent).toContain('¿Por qué bajó el ROAS?');
+    expect(bar.textContent).toContain('Revisando posibles causas (2 de 5)');
+    expect(screen.getByTestId('jaina-run-elapsed').textContent).toBe('1:12');
+  });
+
+  it('offers Stop while the turn runs and calls the handler', () => {
+    const onStop = mock(() => undefined);
+    render(<JainaRunProgressBar progress={progress()} onStop={onStop} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no Stop without a handler, nor once the turn is done', () => {
+    const { rerender } = render(<JainaRunProgressBar progress={progress()} />);
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    rerender(
+      <JainaRunProgressBar
+        progress={progress({ stage: 'done', fraction: 1, label: 'Listo' })}
+        onStop={() => undefined}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+  });
+});
+
 describe('JainaRunProgressIndicator', () => {
   const planned = {
     id: 'jaina:run:assistant',
@@ -77,6 +112,7 @@ describe('JainaRunProgressIndicator', () => {
     );
     expect(screen.getByRole('progressbar')).toBeTruthy();
     expect(screen.getByTestId('jaina-run-progress').textContent).toContain('Analizando la cuenta');
+    expect(screen.getByTestId('jaina-run-progress').textContent).toContain('¿Cómo va?');
     act(() => {
       rerender(
         <JainaRunProgressLive

@@ -5,6 +5,8 @@
 
 import type { JainaUIMessage } from '@continuum/contracts';
 import * as React from 'react';
+import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import {
   createRunProgressTracker,
@@ -51,10 +53,28 @@ export function useJainaRunProgress({
   return trackerRef.current.tracker.observe(signals, Math.max(now, Date.now()));
 }
 
-/** The bar and its one line. Renders nothing for a turn too quick to need it. */
-export function JainaRunProgressBar({ progress }: { progress: JainaRunProgress | null }) {
+const clock = (seconds: number) =>
+  `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+
+/**
+ * The bar under a running turn: a header (Jaina · the question · status · elapsed) over the bar.
+ * The status pill carries the tracker's own label, so it stays in the reader's language.
+ * Renders nothing for a turn too quick to need it.
+ */
+export function JainaRunProgressBar({
+  progress,
+  title,
+  onStop,
+}: {
+  progress: JainaRunProgress | null;
+  /** The question this turn answers. */
+  title?: string;
+  /** Ends the run; shown only while it is still going. */
+  onStop?: () => void;
+}) {
   if (!progress?.visible) return null;
   const percent = Math.round(progress.fraction * 100);
+  const done = progress.stage === 'done';
   return (
     <div
       className="mx-auto my-2 w-full max-w-3xl text-sm text-muted-foreground"
@@ -62,19 +82,57 @@ export function JainaRunProgressBar({ progress }: { progress: JainaRunProgress |
       data-stage={progress.stage}
       data-exceeded={progress.exceeded ? 'true' : undefined}
     >
+      <div className="mb-1.5 flex items-center gap-2">
+        <p className="min-w-0 flex-1 truncate">
+          Jaina
+          {title ? (
+            <>
+              <span aria-hidden> · </span>
+              <span className="font-medium text-foreground">{title}</span>
+            </>
+          ) : null}
+        </p>
+        <Pill className="min-w-0 max-w-[60%]">
+          <PillIndicator
+            variant={done ? 'success' : progress.exceeded ? 'warning' : 'info'}
+            pulse={!done}
+          />
+          <span className="truncate" aria-live="polite">
+            {progress.label}
+          </span>
+        </Pill>
+        <span
+          className="shrink-0 font-mono text-xs tabular-nums"
+          data-testid="jaina-run-elapsed"
+          title="Elapsed"
+        >
+          {clock(progress.elapsedSeconds)}
+        </span>
+        {onStop && !done ? (
+          <Button type="button" size="xs" variant="outline" onClick={onStop}>
+            Stop
+          </Button>
+        ) : null}
+      </div>
       <Progress
         value={percent}
         aria-label={progress.label}
         getAriaValueText={() => progress.label}
         className="h-1 bg-muted"
       />
-      <p className="mt-1.5" aria-live="polite">
-        {progress.label}
-      </p>
     </div>
   );
 }
 
-export function JainaRunProgressIndicator(props: Parameters<typeof useJainaRunProgress>[0]) {
-  return <JainaRunProgressBar progress={useJainaRunProgress(props)} />;
+export function JainaRunProgressIndicator({
+  onStop,
+  ...props
+}: Parameters<typeof useJainaRunProgress>[0] & { onStop?: () => void }) {
+  return (
+    <JainaRunProgressBar
+      progress={useJainaRunProgress(props)}
+      title={props.question}
+      onStop={onStop}
+    />
+  );
 }

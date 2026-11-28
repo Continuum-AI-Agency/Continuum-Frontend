@@ -2,9 +2,9 @@
 
 import { DownloadIcon, FileCode2Icon, Share2Icon, Table2Icon } from 'lucide-react';
 import * as React from 'react';
-import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
+import { PromptSuggestions } from '@/components/ui/prompt-suggestions';
 import { useToast } from '@/components/ui/ToastProvider';
 import { type FrontendCheckpointReport, hasReportContent } from '@/lib/jaina/schemas';
 import { JainaProse } from '../blocks/prose';
@@ -214,18 +214,16 @@ export function JainaInlineReport({
       />
 
       {report.follow_up_questions.length > 0 ? (
-        <div className="space-y-2 pt-2">
-          <span className="text-sm font-medium text-foreground/85">Follow-up</span>
-          <Suggestions className="pb-1">
-            {report.follow_up_questions.map((question, index) => (
-              <Suggestion
-                key={`${question}-${index}`}
-                suggestion={question}
-                onClick={onSuggestionClick}
-              />
-            ))}
-          </Suggestions>
-        </div>
+        <PromptSuggestions
+          variant="chips"
+          heading="Follow-up"
+          className="pt-2"
+          data={report.follow_up_questions.map((question, index) => ({
+            id: `${question}-${index}`,
+            title: question,
+          }))}
+          onSelect={(_, prompt) => onSuggestionClick?.(prompt)}
+        />
       ) : null}
 
       <footer className="flex flex-wrap items-center justify-between gap-3">

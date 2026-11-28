@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import {
   MessageScroller,
@@ -40,6 +40,7 @@ mock.module('@/components/ui/SafeMarkdownLazy', () => ({
 }));
 
 const { JainaMessageItem } = await import('./JainaMessageItem');
+const { ClarificationCard } = await import('./ClarificationCard');
 
 afterEach(cleanup);
 
@@ -68,13 +69,36 @@ describe('a Jaina clarification', () => {
     const sent: string[] = [];
     renderTurn((query) => sent.push(query));
 
-    const options = screen.getByTestId('jaina-clarification-options');
-    expect(Array.from(options.querySelectorAll('button')).map((b) => b.textContent)).toEqual(
+    const options = within(screen.getByTestId('jaina-clarification-options'));
+    expect(options.getAllByRole('radio').map((radio) => radio.textContent)).toEqual(
       CLARIFICATION_OPTIONS,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Compras' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Compras' }));
     expect(sent).toEqual(['Compras']);
+  });
+
+  it('replies once per click with the option text, then retires the options', () => {
+    const sent: string[] = [];
+    renderTurn((query) => sent.push(query));
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Leads' }));
+    expect(sent).toEqual(['Leads']);
+    // A sent reply has started the next turn: no second pick, and no Undo to take it back.
+    expect(screen.queryByRole('radio', { name: 'Compras' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
+  it('sends a typed answer down the same path', () => {
+    const sent: string[] = [];
+    renderTurn((query) => sent.push(query));
+
+    fireEvent.click(screen.getByRole('button', { name: /Something else/ }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Your answer' }), {
+      target: { value: 'Ventas en tienda' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }));
+    expect(sent).toEqual(['Ventas en tienda']);
   });
 
   it('renders no report around it: no Evidence fold, no survey, no exports', () => {
@@ -95,5 +119,43 @@ describe('a Jaina clarification', () => {
     expect(screen.getByTestId('jaina-clarification-question').textContent).toBe(
       CLARIFICATION_QUESTION,
     );
+  });
+});
+
+describe('ClarificationCard', () => {
+  it('locks every answer while Jaina is still writing', () => {
+    const sent: string[] = [];
+    render(
+      <ClarificationCard
+        question={CLARIFICATION_QUESTION}
+        options={CLARIFICATION_OPTIONS}
+        onSelectOption={(option) => sent.push(option)}
+        disabled
+      />,
+    );
+
+    for (const radio of screen.getAllByRole('radio')) {
+      expect((radio as HTMLButtonElement).disabled).toBe(true);
+    }
+    expect(
+      (screen.getByRole('button', { name: /Something else/ }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: 'Leads' }));
+    expect(sent).toEqual([]);
+  });
+
+  it('offers to focus the composer when an answer cannot be sent from the card', () => {
+    const onFocusInput = mock(() => {});
+    render(
+      <ClarificationCard
+        question={CLARIFICATION_QUESTION}
+        options={CLARIFICATION_OPTIONS}
+        onFocusInput={onFocusInput}
+      />,
+    );
+
+    expect(screen.queryByRole('radio')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reply to this' }));
+    expect(onFocusInput).toHaveBeenCalledTimes(1);
   });
 });

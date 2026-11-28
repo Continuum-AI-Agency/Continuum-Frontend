@@ -1,11 +1,11 @@
 'use client';
 
 import type { Skill } from '@continuum/contracts';
+import { CalendarBlank, TrendUp } from '@phosphor-icons/react';
 import { AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Suggestion } from '@/components/ai-elements/suggestion';
 import {
   type AgentDataScopeOption,
   AgentDataScopePicker,
@@ -25,6 +25,7 @@ import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import { useCalendarRunStream } from '@/components/organic/hooks/useCalendarRunStream';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
+import { type PromptSuggestion, PromptSuggestions } from '@/components/ui/prompt-suggestions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useOrganicAgentStream } from '@/hooks/useOrganicAgentStream';
@@ -230,12 +231,35 @@ export type OrganicAgentMentionContext = {
   }>;
 };
 
-const STARTER_PROMPTS = [
-  "Plan this week's posts",
-  'Run an AEO snapshot',
-  'Show me trending topics',
-  'Draft an Instagram reel',
+const STARTER_PROMPTS: PromptSuggestion[] = [
+  {
+    id: 'plan-week',
+    title: "Plan this week's posts",
+    hint: 'A week of posts, drafted',
+    icon: CalendarBlank,
+  },
+  {
+    id: 'trending',
+    title: 'Show me trending topics',
+    hint: "What's rising this week",
+    icon: TrendUp,
+  },
 ];
+
+// A disabled fieldset blocks every starter while the composer is busy or sessionless.
+export function OrganicStarterSuggestions({
+  disabled,
+  onSend,
+}: {
+  disabled: boolean;
+  onSend: (prompt: string) => void;
+}) {
+  return (
+    <fieldset disabled={disabled} className="w-full min-w-0 disabled:opacity-50">
+      <PromptSuggestions data={STARTER_PROMPTS} onSelect={(_, prompt) => onSend(prompt)} />
+    </fieldset>
+  );
+}
 
 // Lane-neutral on purpose. The old example ("Plan me 3 posts this week on the beauty trend")
 // was an EXECUTE-lane instruction in English shown to every brand, which primed generation
@@ -1772,17 +1796,10 @@ export function OrganicAgentPanel({
                 Your AI marketing strategist. Start by describing what you need.
               </p>
               <DisabledControl hint={composerHint}>
-                <div className="flex flex-wrap justify-center gap-1.5">
-                  {STARTER_PROMPTS.map((s) => (
-                    <Suggestion
-                      key={s}
-                      suggestion={s}
-                      disabled={inputDisabled}
-                      onClick={(text) => handleSubmit(text)}
-                      className="h-auto px-3 py-1 text-sm font-normal text-muted-foreground"
-                    />
-                  ))}
-                </div>
+                <OrganicStarterSuggestions
+                  disabled={inputDisabled}
+                  onSend={(text) => handleSubmit(text)}
+                />
               </DisabledControl>
               {composerHint ? (
                 <p className="max-w-[240px] text-center text-xs text-muted-foreground/80 text-pretty">

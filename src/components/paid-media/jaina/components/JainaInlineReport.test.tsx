@@ -36,13 +36,6 @@ mock.module('@/components/kibo-ui/pill', () => ({
   Pill: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
-mock.module('@/components/ai-elements/suggestion', () => ({
-  Suggestions: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Suggestion: ({ suggestion }: { suggestion: string }) => (
-    <button type="button">{suggestion}</button>
-  ),
-}));
-
 mock.module('../reportTableUtils', () => ({
   buildJitSnapshotFallbackTables: () => fallbackTables,
 }));
@@ -133,5 +126,24 @@ describe('JainaInlineReport export actions', () => {
           .disabled,
       ).toBe(false),
     );
+  });
+});
+
+describe('JainaInlineReport follow-ups', () => {
+  it('sends the clicked follow-up question', () => {
+    const onSuggestionClick = mock();
+    render(
+      <JainaInlineReport
+        report={{ ...report, follow_up_questions: ['Which campaigns drove the CPA increase?'] }}
+        isStreaming={false}
+        onSuggestionClick={onSuggestionClick}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Which campaigns drove the CPA increase?' }),
+    );
+
+    expect(onSuggestionClick).toHaveBeenCalledWith('Which campaigns drove the CPA increase?');
   });
 });

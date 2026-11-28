@@ -1,29 +1,61 @@
-import { Pill } from '@/components/kibo-ui/pill';
+import { type Stat, StatGrid, type StatTone } from '@/components/ui/stat-grid';
 import type { FrontendCheckpointReport } from '@/lib/jaina/schemas';
+
+type MetricItem = FrontendCheckpointReport['performance_snapshot'][number];
 
 type JainaReportMetricsProps = {
   metrics: FrontendCheckpointReport['performance_snapshot'];
 };
 
+// The legacy snapshot carries scalar changes only, never a series, so no stat gets a sparkline.
 export function JainaReportMetrics({ metrics }: JainaReportMetricsProps) {
   if (!metrics || metrics.length === 0) return null;
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-primary/80">Performance Snapshot</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        {metrics.map((metric, index) => (
-          <MetricCard key={buildMetricKey(metric, index)} item={metric} />
-        ))}
-      </div>
-    </div>
+    <StatGrid
+      title="Performance Snapshot"
+      data={metrics.map(toStat)}
+      className="max-w-none"
+    />
   );
 }
 
-function buildMetricKey(
-  item: FrontendCheckpointReport['performance_snapshot'][number],
-  index: number,
-) {
+const LOWER_IS_BETTER_LABEL = /\b(cpa|cpc|cpm|cpl|cpr|cac|cost|frequency|bounce)\b/i;
+
+const TONE_BY_STATUS_VARIANT: Record<ReturnType<typeof resolveMetricStatusColor>, StatTone | undefined> = {
+  success: 'positive',
+  destructive: 'negative',
+  warning: 'warning',
+  teal: 'neutral',
+  muted: undefined,
+};
+
+export function toStat(item: MetricItem, index: number): Stat {
+  const metric = (item ?? {}) as Record<string, unknown>;
+  const label = String(metric.metric ?? metric.label ?? 'Metric');
+  const change = getMetricChange(item);
+  const numericChange =
+    typeof change === 'number' ? change : Number.parseFloat(String(change ?? ''));
+  const hasChange = !Number.isNaN(numericChange);
+  const hasStatus = typeof metric.status === 'string' && metric.status.trim().length > 0;
+  const hint = [metric.sub_label, metric.context].find(
+    (text): text is string => typeof text === 'string' && text.trim().length > 0,
+  );
+
+  return {
+    id: buildMetricKey(item, index),
+    label,
+    value: formatMetricValue(item),
+    delta: hasChange ? numericChange : undefined,
+    higherIsBetter: !LOWER_IS_BETTER_LABEL.test(label),
+    // A recognised status is the report's own verdict and outranks the sign of the change.
+    tone: hasStatus ? TONE_BY_STATUS_VARIANT[resolveMetricStatusColor(metric.status, 0, false)] : undefined,
+    status: hasStatus ? formatMetricStatusLabel(metric.status) : undefined,
+    hint,
+  };
+}
+
+function buildMetricKey(item: MetricItem, index: number) {
   const metric = (item ?? {}) as Record<string, unknown>;
   return [
     String(metric.metric ?? metric.label ?? 'metric'),
@@ -33,44 +65,7 @@ function buildMetricKey(
   ].join('|');
 }
 
-function MetricCard({ item }: { item: FrontendCheckpointReport['performance_snapshot'][number] }) {
-  const metric = (item ?? {}) as Record<string, unknown>;
-  const change = getMetricChange(item);
-  const numericChange =
-    typeof change === 'number' ? change : Number.parseFloat(String(change ?? ''));
-  const hasChange = !isNaN(numericChange);
-  const hasStatus = typeof metric.status === 'string' && metric.status.trim().length > 0;
-  const statusVariant = resolveMetricStatusColor(metric.status, numericChange, hasChange);
-
-  return (
-    <div className="rounded-xl bg-muted/40 p-4">
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground uppercase tracking-wider">
-          {String(metric.metric ?? metric.label ?? 'Metric')}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-xl font-semibold text-primary-ink">{formatMetricValue(item)}</span>
-          {hasChange || hasStatus ? (
-            <Pill variant={statusVariant} className="text-xs">
-              {hasChange ? (
-                <>
-                  {numericChange > 0 ? '+' : ''}
-                  {numericChange}%
-                </>
-              ) : (
-                formatMetricStatusLabel(metric.status)
-              )}
-            </Pill>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function getMetricChange(
-  item: FrontendCheckpointReport['performance_snapshot'][number],
-): unknown {
+export function getMetricChange(item: MetricItem): unknown {
   const metric = (item ?? {}) as Record<string, unknown>;
   return metric.change ?? metric.trend;
 }
@@ -110,7 +105,7 @@ function formatMetricStatusLabel(status: unknown): string {
   return raw;
 }
 
-function formatMetricValue(item: FrontendCheckpointReport['performance_snapshot'][number]) {
+function formatMetricValue(item: MetricItem) {
   const metric = (item ?? {}) as Record<string, unknown>;
   const value = metric.value;
   const format = typeof metric.format === 'string' ? metric.format : undefined;

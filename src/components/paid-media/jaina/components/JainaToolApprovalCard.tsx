@@ -24,16 +24,10 @@ import {
   ApproveRejectActions,
   StatusLabel,
 } from '@/components/shared/agent-cards/agentCardKit';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Button } from '@/components/ui/action-button';
+import { ConfirmationCard, type ConfirmationItem } from '@/components/ui/confirmation-card';
+import { Inset } from '@/components/ui/surface';
 import { fetchAudienceGroupVersionSummary } from '@/lib/paid-media/audience-group-client';
-import { cn } from '@/lib/utils';
 import { ApprovalChangeTable } from './ApprovalChangeTable';
 
 /**
@@ -56,10 +50,12 @@ import { ApprovalChangeTable } from './ApprovalChangeTable';
  * It fights agentCardKit on both the framing and the actions row, so the kit wins.
  *
  * A tool that declares a CHOICE of approval (contracts `JAINA_APPROVAL_VARIANTS_BY_TOOL` —
- * today only `change_meta_budget_bid`, Ramiro's no-cap rule) gets a confirmation instead: a
- * plain sentence of what is about to change, a table of entity, before → after and the
- * difference, the ad sets a pause would stop, and one button per declared approval plus
- * Reject. Each button sends an ordinary approve carrying its `approval_variant`.
+ * today only `change_meta_budget_bid`, Ramiro's no-cap rule) gets a TuffUI ConfirmationCard
+ * instead: a plain sentence of what is about to change, one line per entity with the after
+ * amount, the before and the coloured difference, the ad sets a pause would stop, the exact
+ * input, and one button per declared approval plus Reject. Each button sends an ordinary
+ * approve carrying its `approval_variant`. Every other gated tool keeps the decision module:
+ * ConfirmationCard models priced line items, and an argument list or a status flip is not one.
  *
  * There is no resolved/denied state here on purpose: the reducer drops an approval
  * from `pendingToolApprovals` the moment it resolves, so a decided card disappears and
@@ -68,6 +64,15 @@ import { ApprovalChangeTable } from './ApprovalChangeTable';
  */
 
 export type ToolApprovalDecision = JainaToolAction['decision'];
+
+type ToolApprovalDecide = (
+  approval: JainaToolApprovalRequiredPayload,
+  decision: ToolApprovalDecision,
+  publicationMode?: JainaPublicationMode,
+  approvalVariant?: JainaApprovalVariant,
+) => void;
+
+type PreviewRow = JainaApprovalPreview['rows'][number];
 
 /**
  * An approval asks for a decision, so it is the answer's decision module: the primary tint,
@@ -171,72 +176,117 @@ const changeNounOf = (input: ChangeMetaBudgetBidInput): string => {
 
 const formatPct = (pct: number): string => `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
 
+/** `+$50.00 MXN (+50.0%)`, toned by direction: a rise reads positive, a cut negative. */
+const deltaOf = (row: PreviewRow): ConfirmationItem['delta'] => {
+  const pct = typeof row.changePct === 'number' ? row.changePct : null;
+  return {
+    label: `${row.difference ?? '—'}${pct === null ? '' : ` (${formatPct(pct)})`}`,
+    tone: pct === null || pct === 0 ? 'neutral' : pct > 0 ? 'positive' : 'negative',
+  };
+};
+
 /**
- * The confirmation a choice-of-approval card shows. The rows are the gated tool's own
- * `previewOf` over the signed input, so every amount here is the one the write refuses to
- * diverge from; the input itself is parsed through the shared contract only to count the
- * changes and name the ad sets a pause would stop.
+ * The confirmation a choice-of-approval card shows, as a TuffUI ConfirmationCard: one line per
+ * entity with the after amount, the before beneath it and the signed difference. The rows are
+ * the gated tool's own `previewOf` over the signed input, so every amount here is the one the
+ * write refuses to diverge from; the input itself is parsed through the shared contract only to
+ * count the changes and name the ad sets a pause would stop. Totals are hidden — budgets on
+ * different ad sets do not add up to anything a person is approving.
  */
 function ChoiceConfirmation({
-  input,
+  approval,
+  title,
+  options,
   preview,
+  blocked,
+  expired,
+  decided,
+  locked,
+  onDecide,
 }: {
-  input: ChangeMetaBudgetBidInput | null;
+  approval: JainaToolApprovalRequiredPayload;
+  title: string;
+  options: readonly JainaApprovalVariantOption[];
   preview: JainaApprovalPreview | null;
+  blocked: string | null;
+  expired: boolean;
+  decided: ToolApprovalDecision | null;
+  locked: boolean;
+  onDecide?: ToolApprovalDecide;
 }) {
+  const parsed = changeMetaBudgetBidInputSchema.safeParse(approval.input);
+  const input: ChangeMetaBudgetBidInput | null = parsed.success ? parsed.data : null;
+  const items: ConfirmationItem[] = (preview?.rows ?? []).map((row) => ({
+    id: row.field,
+    label: row.field,
+    detail: `Was ${formatValue(row.before)}`,
+    amount: 0,
+    amountLabel: formatValue(row.after),
+    delta: deltaOf(row),
+  }));
+  const [primary, ...others] = options;
+
+  const actions = (() => {
+    if (decided || expired || !onDecide) return null;
+    if (blocked) {
+      return (
+        <Button variant="quiet" disabled={locked} onClick={() => onDecide(approval, 'deny')}>
+          Dismiss
+        </Button>
+      );
+    }
+    return (
+      <>
+        <Button variant="quiet" disabled={locked} onClick={() => onDecide(approval, 'deny')}>
+          Reject
+        </Button>
+        {others.map((option) => (
+          <Button
+            key={option.variant}
+            variant="secondary"
+            disabled={locked}
+            title={option.description}
+            onClick={() => onDecide(approval, 'approve', undefined, option.variant)}
+          >
+            {option.label}
+          </Button>
+        ))}
+        {primary ? (
+          <Button
+            variant="primary"
+            disabled={locked}
+            title={primary.description}
+            onClick={() => onDecide(approval, 'approve', undefined, primary.variant)}
+          >
+            {primary.label}
+          </Button>
+        ) : null}
+      </>
+    );
+  })();
+
   return (
-    <div className="mt-3 space-y-3">
+    <ConfirmationCard
+      className="max-w-none"
+      hideTotals
+      data={{ title, subtitle: 'Approval required', items }}
+      aside={<ApprovalStatus decided={decided} expired={expired} />}
+      intro={
+        input ? (
+          <p className="text-muted-foreground">
+            You are about to change {input.changes.length} {changeNounOf(input)}. Nothing changes
+            until you choose below.
+          </p>
+        ) : undefined
+      }
+      actions={actions}
+    >
       {input ? (
-        <AgentCardSummary>
-          You are about to change {input.changes.length} {changeNounOf(input)}. Nothing changes
-          until you choose below.
-        </AgentCardSummary>
-      ) : null}
-      {preview ? (
-        <div className={`px-1 py-1.5 ${VALUES_PANEL}`}>
-          <Table>
-            <TableHeader>
-              <TableRow className="border-foreground/5 hover:bg-transparent">
-                <TableHead className="h-8 px-2 text-xs font-medium">Entity</TableHead>
-                <TableHead className="h-8 px-2 text-xs font-medium">Before</TableHead>
-                <TableHead className="h-8 px-2 text-xs font-medium">After</TableHead>
-                <TableHead className="h-8 px-2 text-right text-xs font-medium">
-                  Difference
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {preview.rows.map((row) => (
-                <TableRow key={row.field} className="border-foreground/5 hover:bg-transparent">
-                  <TableCell className="px-2 py-1.5 text-xs">{row.field}</TableCell>
-                  <TableCell className="px-2 py-1.5 text-muted-foreground text-xs tabular-nums">
-                    {formatValue(row.before)}
-                  </TableCell>
-                  <TableCell className="px-2 py-1.5 font-medium text-xs tabular-nums">
-                    {formatValue(row.after)}
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      'px-2 py-1.5 text-right text-xs tabular-nums',
-                      typeof row.changePct === 'number' && row.changePct < 0
-                        ? 'text-rose-600 dark:text-rose-400'
-                        : 'text-emerald-600 dark:text-emerald-400',
-                    )}
-                  >
-                    {`${row.difference ?? '—'}${typeof row.changePct === 'number' ? ` (${formatPct(row.changePct)})` : ''}`}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : null}
-      {input ? (
-        <div className={`px-3 py-2.5 text-sm ${VALUES_PANEL}`}>
+        <Inset className="px-3 py-2.5 text-sm">
           <p className="text-muted-foreground text-xs">
             Pausing for review changes no budget or bid. It pauses these ad sets:
           </p>
-          <ul className="mt-1.5 space-y-0.5">
+          <ul aria-label="Ad sets a pause would stop" className="mt-1.5 space-y-0.5">
             {input.affected_adset_ids_for_review.map((adset) => (
               <li key={adset.adset_id} className="text-xs">
                 {adset.name}
@@ -246,53 +296,28 @@ function ChoiceConfirmation({
               </li>
             ))}
           </ul>
-        </div>
+        </Inset>
       ) : null}
-    </div>
-  );
-}
-
-/** Reject on the left, then every declared approval, the first (apply) as the primary. */
-function ChoiceActions({
-  options,
-  locked,
-  onChoose,
-  onReject,
-}: {
-  options: readonly JainaApprovalVariantOption[];
-  locked: boolean;
-  onChoose: (variant: JainaApprovalVariant) => void;
-  onReject: () => void;
-}) {
-  const [primary, ...others] = options;
-  return (
-    <AgentActions className="flex-wrap px-4">
-      <AgentButton variant="ghost" disabled={locked} onClick={onReject}>
-        Reject
-      </AgentButton>
-      {others.map((option) => (
-        <AgentButton
-          key={option.variant}
-          variant="ghost"
-          className="bg-background text-foreground"
-          disabled={locked}
-          title={option.description}
-          onClick={() => onChoose(option.variant)}
-        >
-          {option.label}
-        </AgentButton>
-      ))}
-      {primary ? (
-        <AgentButton
-          variant="primary"
-          disabled={locked}
-          title={primary.description}
-          onClick={() => onChoose(primary.variant)}
-        >
-          {primary.label}
-        </AgentButton>
+      {/* The lines summarise; this list IS the call, so it stays on the card, collapsed. */}
+      <Inset className="px-3 py-2">
+        <details>
+          <summary className="cursor-pointer text-muted-foreground text-xs">Exact input</summary>
+          <div className="mt-2">
+            <ProposedInput input={approval.input} />
+          </div>
+        </details>
+      </Inset>
+      {blocked ? (
+        <p className="px-1 text-foreground text-sm" role="note">
+          {blocked}
+        </p>
       ) : null}
-    </AgentActions>
+      {expired && !decided ? (
+        <p className="px-1 text-muted-foreground text-sm">
+          This approval expired, so nothing ran. Ask Jaina to propose it again.
+        </p>
+      ) : null}
+    </ConfirmationCard>
   );
 }
 
@@ -306,12 +331,7 @@ export function JainaToolApprovalCard({
   /** Set between the click and the `tool.approval_resolved` frame that answers it. */
   optimisticDecision: ToolApprovalDecision | null;
   isStreaming: boolean;
-  onDecide?: (
-    approval: JainaToolApprovalRequiredPayload,
-    decision: ToolApprovalDecision,
-    publicationMode?: JainaPublicationMode,
-    approvalVariant?: JainaApprovalVariant,
-  ) => void;
+  onDecide?: ToolApprovalDecide;
 }) {
   const title = TOOL_LABELS[approval.toolName] ?? approval.toolName;
   const expired = Date.parse(approval.expiresAt) < Date.now();
@@ -324,7 +344,22 @@ export function JainaToolApprovalCard({
   // The tool would refuse this call after the click, so the card says why and offers no approve.
   const blocked = approval.preview?.blocked ?? null;
   const choices = approvalVariantsOf(approval.toolName);
-  const choiceInput = choices ? changeMetaBudgetBidInputSchema.safeParse(approval.input) : null;
+
+  if (choices) {
+    return (
+      <ChoiceConfirmation
+        approval={approval}
+        title={title}
+        options={choices}
+        preview={preview}
+        blocked={blocked}
+        expired={expired}
+        decided={optimisticDecision}
+        locked={isStreaming}
+        {...(onDecide ? { onDecide } : {})}
+      />
+    );
+  }
 
   return (
     <AgentDecisionCard className={DECISION_MODULE}>
@@ -339,12 +374,7 @@ export function JainaToolApprovalCard({
 
         {groupVersionId ? <AudienceGroupSummary groupVersionId={groupVersionId} /> : null}
 
-        {choices ? (
-          <ChoiceConfirmation
-            input={choiceInput?.success ? choiceInput.data : null}
-            preview={preview}
-          />
-        ) : preview ? (
+        {preview ? (
           <div className={`mt-3 px-1 py-1.5 ${VALUES_PANEL}`}>
             <ApprovalChangeTable preview={preview} />
           </div>
@@ -393,15 +423,7 @@ export function JainaToolApprovalCard({
           </AgentButton>
         </AgentActions>
       ) : null}
-      {!optimisticDecision && !expired && onDecide && !blocked && choices ? (
-        <ChoiceActions
-          options={choices}
-          locked={isStreaming}
-          onChoose={(variant) => onDecide(approval, 'approve', undefined, variant)}
-          onReject={() => onDecide(approval, 'deny')}
-        />
-      ) : null}
-      {!optimisticDecision && !expired && onDecide && !blocked && !choices ? (
+      {!optimisticDecision && !expired && onDecide && !blocked ? (
         <ApproveRejectActions
           locked={isStreaming}
           approveLabel="Approve"

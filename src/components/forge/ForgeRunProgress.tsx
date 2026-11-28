@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, PauseCircle } from 'lucide-react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { TemplateRunRow } from '@/lib/library/templateSources';
 import { labelForState } from './templateChecks';
@@ -44,29 +45,69 @@ const PHASE_LABELS: Record<string, string> = {
   validate: 'Check everything',
 };
 
-export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
+/**
+ * A Forge run: a header (product · title · status) over its progress and what it found.
+ *
+ * There is no elapsed time: the run row carries no start time (`TemplateRunRow` has no
+ * `started_at`), and a guessed clock is worse than none. There is no Stop either — the forge has
+ * no cancel path — and no Open, because the run already renders on its template's page.
+ */
+export function ForgeRunProgress({
+  run,
+  title,
+  onReview,
+}: {
+  run: TemplateRunRow;
+  title?: string;
+  /** Takes the person to the questions a `needs_input` run is waiting on. */
+  onReview?: () => void;
+}) {
   const { tone, label, Icon, spin } = verdict(run);
   const pct = run.progress?.pct ?? null;
+  // Only a run the engine is still advancing can be "working it out". A stopped run with no
+  // total — failed before its file was read — gets a still bar, never the indeterminate sweep.
+  const indeterminate = pct === null && !run.done;
+  const shownPct = pct ?? (run.ok ? 100 : 0);
+  const detail =
+    run.state === 'failed'
+      ? null
+      : (run.progress?.detail ?? (indeterminate ? 'Working out how much there is to do…' : null));
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Pill>
+      <div className="flex items-center gap-2" data-testid="forge-run-header">
+        <p className="min-w-0 flex-1 truncate text-sm">
+          <span className="text-muted-foreground">Forge</span>
+          {title ? (
+            <>
+              <span className="text-muted-foreground" aria-hidden>
+                {' · '}
+              </span>
+              <span className="font-medium text-foreground">{title}</span>
+            </>
+          ) : null}
+        </p>
+        <Pill className="shrink-0">
           <PillIndicator variant={tone} pulse={spin} />
           <Icon className={`size-3.5 ${spin ? 'animate-spin' : ''}`} aria-hidden />
           {label}
         </Pill>
+        {run.state === 'needs_input' && onReview ? (
+          <Button type="button" size="xs" onClick={onReview}>
+            Review
+          </Button>
+        ) : null}
       </div>
 
       {/*
-        pct === null is INDETERMINATE, not 0%.
+        pct === null while working is INDETERMINATE, not 0%.
 
         Nobody can know how many columns an AEP implies until its Essential Graphics have been
         read, so the forge reports a null total until then. A bar sitting at 0 and a bar that does
         not know yet are different facts, and drawing both as an empty track is exactly how a
         wedged run looks healthy.
       */}
-      {pct === null ? (
+      {indeterminate ? (
         <div
           className="h-2 w-full overflow-hidden rounded-full bg-secondary"
           role="progressbar"
@@ -76,13 +117,10 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
           <div className="h-full w-1/3 animate-[forge-indeterminate_1.4s_ease-in-out_infinite] rounded-full bg-primary motion-reduce:animate-none motion-reduce:w-full motion-reduce:opacity-60" />
         </div>
       ) : (
-        <Progress value={pct} aria-label={`${label}, ${pct}% done`} />
+        <Progress value={shownPct} aria-label={`${label}, ${shownPct}% done`} />
       )}
 
-      <p className="text-xs text-muted-foreground">
-        {run.progress?.detail ??
-          (pct === null ? 'Working out how much there is to do…' : labelForState(run.state))}
-      </p>
+      {detail ? <p className="text-xs text-muted-foreground">{detail}</p> : null}
 
       {run.progress?.phases?.length ? (
         <ol className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">

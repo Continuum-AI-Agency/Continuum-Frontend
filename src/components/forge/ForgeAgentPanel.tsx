@@ -9,20 +9,23 @@ import {
   ConversationEmptyState,
 } from '@/components/ai-elements/conversation';
 import { Message } from '@/components/ai-elements/message';
-import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { type PromptSuggestion, PromptSuggestions } from '@/components/ui/prompt-suggestions';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { streamForgeAgent } from '@/lib/api/forgeAgent.client';
 import { cn } from '@/lib/utils';
 
-const SUGGESTIONS = [
-  { label: 'Bigger headline', prompt: 'Make the headline bigger.' },
-  { label: 'Blue variant', prompt: 'Recolour the background blue; keep everything else.' },
-  { label: 'Tidy layout', prompt: 'Align the text layers to the centre of the composition.' },
-] as const;
+const SUGGESTIONS: PromptSuggestion[] = [
+  { id: 'bigger-headline', title: 'Bigger headline', prompt: 'Make the headline bigger.' },
+  {
+    id: 'blue-variant',
+    title: 'Blue variant',
+    prompt: 'Recolour the background blue; keep everything else.',
+  },
+];
 const HISTORY_TURNS = 10;
 const TOOL_LABEL: Record<ForgeAgentTool, string> = {
   read_template: 'Read the template',
@@ -30,6 +33,25 @@ const TOOL_LABEL: Record<ForgeAgentTool, string> = {
   apply_commands: 'Edit',
   ask_user: 'Question',
 };
+
+// A disabled fieldset blocks the chips (they dim themselves via :disabled) while a turn runs.
+export function ForgeSuggestions({
+  disabled,
+  onSend,
+}: {
+  disabled: boolean;
+  onSend: (prompt: string) => void;
+}) {
+  return (
+    <fieldset disabled={disabled} className="min-w-0">
+      <PromptSuggestions
+        variant="chips"
+        data={SUGGESTIONS}
+        onSelect={(_, prompt) => onSend(prompt)}
+      />
+    </fieldset>
+  );
+}
 
 type ToolChip = { toolCallId: string; tool: ForgeAgentTool; ok?: boolean; summary?: string };
 type Question = Extract<ForgeAgentFrame, { type: 'question' }>['data'];
@@ -264,19 +286,7 @@ export function ForgeAgentPanel({
         </ConversationContent>
       </Conversation>
       <div className="flex flex-col gap-2 border-t p-3">
-        <Suggestions>
-          {SUGGESTIONS.map((suggestion) => (
-            <Suggestion
-              key={suggestion.label}
-              suggestion={suggestion.prompt}
-              onClick={(prompt) => void send(prompt)}
-              disabled={running}
-              className="h-7 px-3 text-xs"
-            >
-              {suggestion.label}
-            </Suggestion>
-          ))}
-        </Suggestions>
+        <ForgeSuggestions disabled={running} onSend={(prompt) => void send(prompt)} />
         <div className="relative">
           <Textarea
             value={draft}
