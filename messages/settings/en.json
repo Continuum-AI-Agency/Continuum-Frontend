@@ -461,7 +461,7 @@
   "m_9dc8357635": "Content language",
   "m_7903c85743": "Every caption, headline and slide for this brand is written in this language. Leave it empty to have it detected from the brand’s existing posts.",
   "brandTimezoneLabel": "Time zone",
-  "brandTimezoneHelp": "Scheduled posts, reports and agent runs for this brand use this clock.",
+  "brandTimezoneHelp": "Scheduled posts, the planner, weekly reports and scheduled agent runs for this brand use this clock.",
   "brandTimezoneSave": "Save time zone",
   "brandTimezoneSaved": "Time zone saved",
   "brandTimezoneSavedDescription": "This brand now runs on {timezone}.",
@@ -1163,5 +1163,7 @@
   "brandDnaReanalyzeNotSaved": "The analysis of {url} finished, but saving it failed, so your Brand DNA has not changed. Run it again; if it fails again, contact support.",
   "displayNameSave": "Save name",
   "displayNameSaved": "Name saved",
-  "displayNameSaveFailed": "Could not save your name"
+  "displayNameSaveFailed": "Could not save your name",
+  "brandTimezoneNotSet": "Not set yet: this brand is still on the UTC default. Pick the zone your audience lives in.",
+  "brandTimezoneUnknown": "Pick a time zone from the list."
 }

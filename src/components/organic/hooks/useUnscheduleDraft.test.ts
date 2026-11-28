@@ -129,6 +129,25 @@ describe('useUnscheduleDraft', () => {
     );
   });
 
+  // The Backend's coded refusals carry an English sentence; the reader's copy replaces it.
+  it('words a coded refusal from the UI copy, not the Backend’s English sentence', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(404, { error: 'draft_not_found', message: 'Draft not found' }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useUnscheduleDraft());
+    await act(async () => {
+      await result.current.unschedule(scheduledDraft);
+    });
+
+    const shown = showMock.mock.calls.at(-1)?.[0] as { description: string };
+    expect(shown.description).toContain('Instagram: This item is no longer available.');
+    expect(shown.description).not.toContain('Draft not found');
+  });
+
   it('does not flip local state on a network error — the post may still be scheduled', async () => {
     const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch'));
     vi.stubGlobal('fetch', fetchMock);

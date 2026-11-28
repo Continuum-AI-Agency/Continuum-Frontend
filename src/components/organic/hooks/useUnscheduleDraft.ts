@@ -46,11 +46,14 @@ export async function patchDraftStatus(
     const payload = (await response.json().catch(() => ({}))) as {
       message?: string;
       code?: string;
+      error?: string;
     };
-    // The Backend's own sentence is shown whole; only a bare code or status is reworded.
-    if (payload.message) return payload.message;
-    if (formatError) return formatError(new ApiError('', response.status, payload.code));
-    return `The server refused the change (${response.status}).`;
+    // A known code is worded in the reader's language; otherwise the Backend's own sentence is
+    // shown whole, and only a bare status gets the generic copy.
+    if (formatError) {
+      return formatError(new ApiError(payload.message ?? '', response.status, payload.code, payload));
+    }
+    return payload.message ?? `The server refused the change (${response.status}).`;
   } catch {
     return formatError?.(new Error('Network error')) ?? 'Network error.';
   }

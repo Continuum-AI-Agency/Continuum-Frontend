@@ -39,21 +39,9 @@ export async function renameBrandProfileAction(brandId: string, name: string): P
 export async function updateBrandContentLanguageAction(
   brandId: string,
   language: string | null,
-): Promise<void> {
-  if (!brandId) throw new Error('Brand is required');
+): Promise<BrandSettingResult> {
   const trimmed = language?.trim() ?? '';
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .schema('brand_profiles')
-    .from('brand_profiles')
-    .update({ content_language: trimmed.length > 0 ? trimmed : null })
-    .eq('id', brandId)
-    .select('id')
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  // RLS lets only owners and admins update: anyone else matches no row and changed nothing.
-  if (!data) throw new Error('Only a brand owner or admin can change its content language');
-  revalidatePath('/settings', 'page');
+  return writeBrandSetting(brandId, { content_language: trimmed.length > 0 ? trimmed : null });
 }
 
 /**
@@ -63,23 +51,45 @@ export async function updateBrandContentLanguageAction(
  * organic chat turn happened to teach it the browser's zone, so an owner who never chatted there
  * saw UTC with no way to change it.
  */
-export async function updateBrandTimezoneAction(brandId: string, timezone: string): Promise<void> {
-  if (!brandId) throw new Error('Brand is required');
-  if (!isValidTimezone(timezone)) throw new Error(`Unknown time zone ${timezone}`);
+export async function updateBrandTimezoneAction(
+  brandId: string,
+  timezone: string,
+): Promise<BrandSettingResult> {
+  if (!isValidTimezone(timezone)) return { ok: false, reason: 'unknown_timezone' };
+  // 'UTC' is the column default, which the Backend reads as "never set" and fills from the
+  // next chat's browser zone. A deliberate UTC is stored as its alias so it stays chosen.
+  return writeBrandSetting(brandId, { timezone: timezone === 'UTC' ? 'Etc/UTC' : timezone });
+}
+
+/**
+ * Why a brand setting did not save, as a code the form words in the reader's language. A thrown
+ * error would not do: production replaces a Server Action's error message with a generic one.
+ */
+export type BrandSettingResult =
+  | { ok: true }
+  | { ok: false; reason: 'not_allowed' | 'unknown_timezone' | 'failed' };
+
+async function writeBrandSetting(
+  brandId: string,
+  update: { timezone: string } | { content_language: string | null },
+): Promise<BrandSettingResult> {
+  if (!brandId) return { ok: false, reason: 'failed' };
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .schema('brand_profiles')
     .from('brand_profiles')
-    // 'UTC' is the column default, which the Backend reads as "never set" and fills from the
-    // next chat's browser zone. A deliberate UTC is stored as its alias so it stays chosen.
-    .update({ timezone: timezone === 'UTC' ? 'Etc/UTC' : timezone })
+    .update(update)
     .eq('id', brandId)
     .select('id')
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error(`[settings] brand ${brandId} setting write failed`, error);
+    return { ok: false, reason: 'failed' };
+  }
   // RLS lets only owners and admins update: anyone else matches no row and changed nothing.
-  if (!data) throw new Error('Only a brand owner or admin can change its time zone');
+  if (!data) return { ok: false, reason: 'not_allowed' };
   revalidatePath('/settings', 'page');
+  return { ok: true };
 }
 
 export async function createBrandProfileAction(name?: string): Promise<void> {

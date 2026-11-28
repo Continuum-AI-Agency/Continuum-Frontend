@@ -13,7 +13,8 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { listTimezones, timezoneLabel } from '@/lib/automations/schedule';
+import { listTimezones } from '@/lib/automations/schedule';
+import { timezoneLabel } from '@/lib/time/timezoneLabel';
 import { cn } from '@/lib/utils';
 
 type TimezoneComboboxProps = {

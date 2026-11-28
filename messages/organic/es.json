@@ -1202,7 +1202,7 @@
   "plannerLookaheadDayAria": "Planificar publicación para {date} · {count, plural, one {# planificada} other {# planificadas}} · disponibles: {platforms}",
   "plannerNoDate": "Sin fecha",
   "plannerNoPlatforms": "ninguna",
-  "plannerWeekSubtitle": "{range} • {channels, plural, one {# canal de programación} other {# canales de programación}} • {timezone}",
+  "plannerWeekSubtitle": "{range} • {channels, plural, one {# canal de programación} other {# canales de programación}} • <zone>{timezone}</zone>",
   "dropChangePlatforms": "Cambia las plataformas en «Cambiar plataformas» de la publicación",
   "dropStoriesInstagram": "Las historias solo se publican en Instagram",
   "dropYoutubeVideo": "YouTube solo acepta reels de video",
@@ -1557,5 +1557,6 @@
   "generate_copy_e0f96b1": "Generar texto",
   "generate_with_ai_0dbd840": "Generar con IA",
   "last_publish_failed_a078eb3": "Falló la última publicación",
-  "linkedin_personal_profile": "{name} — perfil personal"
+  "linkedin_personal_profile": "{name} — perfil personal",
+  "plannerTimezoneChange": "Cambia la zona horaria de la marca en Configuración"
 }

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';
+import { timezoneLabel } from '@/lib/time/timezoneLabel';
 import { SettingsLogoUploader } from '../SettingsLogoUploader';
 
 type BrandProfileMeta = {
@@ -73,31 +74,44 @@ export function BrandIdentitySection({
     setTimezone(initialTimezone);
   }, [initialTimezone]);
 
+  const brandSettingFailure = (reason: 'not_allowed' | 'unknown_timezone' | 'failed') =>
+    reason === 'not_allowed'
+      ? tUi('m_953ebfa711')
+      : reason === 'unknown_timezone'
+        ? tUi('brandTimezoneUnknown')
+        : tUi('m_78f9b86ec5');
+
   const handleTimezoneSave = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     startTransition(async () => {
-      try {
-        await updateBrandTimezoneAction(activeBrandId, timezone);
+      const result = await updateBrandTimezoneAction(activeBrandId, timezone).catch(
+        () => ({ ok: false, reason: 'failed' }) as const,
+      );
+      if (result.ok) {
         show({
           title: tUi('brandTimezoneSaved'),
-          description: tUi('brandTimezoneSavedDescription', { timezone }),
+          description: tUi('brandTimezoneSavedDescription', {
+            timezone: timezoneLabel(timezone, uiLocale),
+          }),
           variant: 'success',
         });
-      } catch (error) {
-        show({
-          title: tUi('brandTimezoneSaveFailed'),
-          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_78f9b86ec5'),
-          variant: 'error',
-        });
+        return;
       }
+      show({
+        title: tUi('brandTimezoneSaveFailed'),
+        description: brandSettingFailure(result.reason),
+        variant: 'error',
+      });
     });
   };
 
   const handleLanguageSave = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     startTransition(async () => {
-      try {
-        await updateBrandContentLanguageAction(activeBrandId, contentLanguage);
+      const result = await updateBrandContentLanguageAction(activeBrandId, contentLanguage).catch(
+        () => ({ ok: false, reason: 'failed' }) as const,
+      );
+      if (result.ok) {
         show({
           title: tUi('m_9953412879'),
           description: contentLanguage.trim()
@@ -105,13 +119,13 @@ export function BrandIdentitySection({
             : tUi('m_1e7cef9323'),
           variant: 'success',
         });
-      } catch (error) {
-        show({
-          title: tUi('m_72bf415ad7'),
-          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_78f9b86ec5'),
-          variant: 'error',
-        });
+        return;
       }
+      show({
+        title: tUi('m_72bf415ad7'),
+        description: brandSettingFailure(result.reason),
+        variant: 'error',
+      });
     });
   };
 
@@ -211,6 +225,9 @@ export function BrandIdentitySection({
           <div>
             <span className="text-sm font-medium">{tUi('brandTimezoneLabel')}</span>
             <p className="text-xs text-muted-foreground">{tUi('brandTimezoneHelp')}</p>
+            {initialTimezone === 'UTC' ? (
+              <p className="text-xs text-warning">{tUi('brandTimezoneNotSet')}</p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-[260px]">
@@ -243,7 +260,18 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 // Suggestions, not a closed list: the field is free text because 'Spanish (Colombia)' and
 // 'Spanish (Argentina, voseo)' are different instructions to the copywriter.
-const SUGGESTED_CONTENT_LANGUAGES = ['es-CO', 'es-MX', 'es', 'en-US', 'en-GB', 'pt-BR', 'pt-PT', 'fr', 'de', 'it'];
+const SUGGESTED_CONTENT_LANGUAGES = [
+  'es-CO',
+  'es-MX',
+  'es',
+  'en-US',
+  'en-GB',
+  'pt-BR',
+  'pt-PT',
+  'fr',
+  'de',
+  'it',
+];
 
 function contentLanguageSuggestions(uiLocale: string): string[] {
   try {

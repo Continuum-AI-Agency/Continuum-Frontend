@@ -31,7 +31,9 @@ describe('brand settings actions', () => {
   });
 
   it('stores a chosen zone as given', async () => {
-    await updateBrandTimezoneAction('brand-1', 'America/Bogota');
+    await expect(updateBrandTimezoneAction('brand-1', 'America/Bogota')).resolves.toEqual({
+      ok: true,
+    });
     expect(writes).toEqual([{ timezone: 'America/Bogota' }]);
   });
 
@@ -42,16 +44,22 @@ describe('brand settings actions', () => {
   });
 
   it('refuses an unknown zone without writing', async () => {
-    await expect(updateBrandTimezoneAction('brand-1', 'America/Cali')).rejects.toThrow(
-      'Unknown time zone',
-    );
+    await expect(updateBrandTimezoneAction('brand-1', 'America/Cali')).resolves.toEqual({
+      ok: false,
+      reason: 'unknown_timezone',
+    });
     expect(writes).toEqual([]);
   });
 
-  it('reports a content language write that RLS matched to no row instead of a false save', async () => {
+  // A thrown message would not survive: production replaces a Server Action's error text.
+  it('reports a write RLS matched to no row as not allowed, never as saved', async () => {
     matchedRow = null;
-    await expect(updateBrandContentLanguageAction('brand-1', 'Español (Colombia)')).rejects.toThrow(
-      'Only a brand owner or admin',
-    );
+    await expect(
+      updateBrandContentLanguageAction('brand-1', 'Español (Colombia)'),
+    ).resolves.toEqual({ ok: false, reason: 'not_allowed' });
+    await expect(updateBrandTimezoneAction('brand-1', 'America/Bogota')).resolves.toEqual({
+      ok: false,
+      reason: 'not_allowed',
+    });
   });
 });
