@@ -29,6 +29,13 @@
   height: auto;
   align-self: flex-start;
 }
+.board [data-board-slot] {
+  align-self: start;
+}
+.board [data-testid="home-board"][data-masonry] {
+  grid-auto-rows: 1px;
+  row-gap: 0;
+}
 .frame > header {
   align-items: center;
   gap: 8px;
@@ -244,9 +251,11 @@
 :where([class~="dark"]) .held {
   color: #b5b9ad;
 }
+/* Wide cards give each group room in proportion to its dots, so no group wraps while another
+   sits half empty; narrow cards fall back to equal thirds below. */
 .checkGroups {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: var(--check-columns, repeat(3, minmax(0, 1fr)));
   gap: 12px;
   align-content: start;
 }
@@ -342,6 +351,9 @@
   }
   .frame {
     padding: 12px 14px;
+  }
+  .legend {
+    padding-inline: 15px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -482,10 +494,6 @@
   opacity: 1;
   filter: saturate(0.15);
 }
-.chart[data-plot-kind="category"] .plot,
-.chart[data-plot-kind="category"] .yAxis {
-  height: 108px;
-}
 .goalBody {
   display: grid;
   grid-template-columns: minmax(10rem, 0.9fr) minmax(0, 2fr);
@@ -545,4 +553,60 @@
   .goalPlot {
     width: 100%;
   }
+}
+/* The ticks are positioned absolutely, so an invisible copy of the widest one sizes the axis column. */
+.yAxis .axisSizer {
+  position: static;
+  display: block;
+  height: 0;
+  visibility: hidden;
+  transform: none;
+}
+.yAxis .axisSizer::before {
+  content: attr(data-label);
+}
+/* A verdict plot is as tall as its lanes, not a fixed trend height. */
+.chart[data-plot-kind="category"] .plot,
+.chart[data-plot-kind="category"] .yAxis {
+  height: calc(var(--lanes, 3) * 36px);
+}
+/* The legend is a quiet cell inside the board: no frame, its text on the cards' text line. */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: start;
+  padding: 12px 17px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--home-dot-muted);
+}
+@media (max-width: 767px) {
+  /* One scrolling row of suggestions instead of four wrapped rows ahead of the first tile. */
+  .board [data-ask-suggestions] {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .board [data-ask-suggestions] > li {
+    flex: none;
+    max-width: 85%;
+  }
+}
+/* Gridlines (2026-11-24). The dots header centres its row, so the actions drop the shared frame's
+   4px lift; and the arrow's viewBox leaves 3px of air right of its ink, so the group pulls out that
+   much past its button padding to end "Open ↗" on the card's trailing line. */
+.frame > header > div:last-child > div {
+  margin-top: 0;
+  margin-right: calc(-0.5rem - 3px);
+}
+/* A ghost toggle at the trailing edge ends its label on the line, not its 44px hit area. */
+.viewToggle {
+  justify-content: flex-end;
+  margin-inline-end: -8px;
+}
+/* Verdict lanes are names, not numbers: they start on the card's text line. */
+.chart[data-plot-kind="category"] .yAxis span {
+  right: auto;
+  left: 0;
 }

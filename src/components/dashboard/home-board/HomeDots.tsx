@@ -1,7 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import { useContext, useEffect, useId, useRef, useState } from 'react';
+import { type CSSProperties, useContext, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -120,6 +120,9 @@ export function HomeDots({
       : high === low
         ? 50
         : 12 + ((high - (item.number ?? 0)) / (high - low)) * 76;
+  const checkGroups = [...new Set(shown.map((item) => item.group ?? item.value))];
+  const groupSize = (group: string) =>
+    shown.filter((item) => (item.group ?? item.value) === group).length;
   const isPlot = !listView && (trend || Boolean(xAxis)) && plotted.length > 0;
   const detail = (item: HomeDot) =>
     [item.detail, item.period, item.freshness ?? uiText('source_freshness_not_reported_60993e2')]
@@ -276,9 +279,20 @@ export function HomeDots({
           </div>
         ) : null}
         {isPlot ? (
-          <div className={styles.chart} data-plot-kind={xAxis ? 'category' : 'trend'}>
+          <div
+            className={styles.chart}
+            data-plot-kind={xAxis ? 'category' : 'trend'}
+            style={xAxis ? ({ '--lanes': ticks.length } as CSSProperties) : undefined}
+          >
             <div className={styles.plotGrid}>
               <div aria-hidden="true" className={styles.yAxis}>
+                <span
+                  className={styles.axisSizer}
+                  data-label={ticks.reduce(
+                    (wide, tick) => (tick.label.length > wide.length ? tick.label : wide),
+                    '',
+                  )}
+                />
                 {ticks.map((tick) => (
                   <span key={tick.label} style={{ top: `${tick.position}%` }}>
                     {tick.label}
@@ -345,14 +359,21 @@ export function HomeDots({
           </fieldset>
         ) : named ? (
           <>
-            <div className={styles.checkGroups}>
-              {[...new Set(shown.map((item) => item.group ?? item.value))].map((group) => (
+            <div
+              className={styles.checkGroups}
+              style={
+                {
+                  '--check-columns': checkGroups
+                    .map((group) => `minmax(7rem, ${groupSize(group)}fr)`)
+                    .join(' '),
+                } as CSSProperties
+              }
+            >
+              {checkGroups.map((group) => (
                 <section className={styles.checkGroup} key={group} aria-label={group}>
                   <h4>
                     {group}
-                    <span>
-                      {shown.filter((item) => (item.group ?? item.value) === group).length}
-                    </span>
+                    <span>{groupSize(group)}</span>
                   </h4>
                   <div className={styles.checkList}>
                     {shown

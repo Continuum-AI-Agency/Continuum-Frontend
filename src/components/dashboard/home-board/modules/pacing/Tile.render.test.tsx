@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HomeBoardTile } from '@continuum/contracts';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { render } from '@/i18n/__tests__/render';
+import { HomePresentationContext } from '../../HomePresentationContext';
 import { homeCtx } from './__fixtures__/ctx';
 import {
   EASY_FIT_FLIGHT,
@@ -19,13 +20,14 @@ import type { PacingRunRead, PortfoliosRead } from './pacingModel';
 let portfolios: PortfoliosRead = { status: 'pending' };
 let runs = new Map<string, PacingRunRead>();
 let retries = 0;
+let today = '2026-11-03';
 const realReads = await import('./usePacingReads');
 mock.module('./usePacingReads', () => ({
   ...realReads,
   usePacingReads: () => ({
     portfolios,
     runs,
-    today: '2026-11-03',
+    today,
     retry: () => {
       retries += 1;
     },
@@ -42,6 +44,7 @@ afterEach(() => {
   portfolios = { status: 'pending' };
   runs = new Map();
   retries = 0;
+  today = '2026-11-03';
 });
 
 describe('PacingTile', () => {
@@ -64,6 +67,24 @@ describe('PacingTile', () => {
     // The other currency stands apart, never added in.
     expect(screen.getByTestId('home-pacing-other-currency').textContent).toContain('$205 USD');
     expect(body).not.toMatch(/projected|landing/i);
+  });
+
+  it('in the dots draft, says how old the spend is once it trails today by more than a day', () => {
+    portfolios = { status: 'ready', rows: [EASY_FIT_FLIGHT] };
+    runs = new Map([[EASY_FIT_FLIGHT.id, ready(EASY_FIT_RUN)]]);
+    const draft = (
+      <HomePresentationContext.Provider value="dots">
+        <PacingTile ctx={ctx} tile={tile} />
+      </HomePresentationContext.Provider>
+    );
+    render(draft);
+    expect(screen.getByTestId('home-tile-pacing').textContent).toContain('Through Nov 2 · MXN');
+    cleanup();
+    today = '2026-11-24';
+    render(draft);
+    expect(screen.getByTestId('home-tile-pacing').textContent).toContain(
+      'Through Nov 2 · 22 days old · MXN',
+    );
   });
 
   it('opens per-portfolio rows, a flight not yet paced said so', async () => {

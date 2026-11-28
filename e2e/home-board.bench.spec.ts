@@ -2406,10 +2406,12 @@ async function benchBrand(
         expect(stored ?? '').toContain(last);
         await page.reload({ waitUntil: 'domcontentloaded' });
         await expect(page.getByTestId('home-board')).toBeVisible({ timeout: 120_000 });
+        // Server HTML has no pins; the stored pin applies once the client hydrates, which a dev
+        // server still compiling another route can hold past 30 s (measured: 5-15 s idle).
         await expect(page.getByTestId('home-board')).toHaveAttribute(
           'data-board-order',
           new RegExp(`^${last}(,|$)`),
-          { timeout: 30_000 },
+          { timeout: 120_000 },
         );
         await page.getByTestId(`home-tile-${last}-pin`).click();
         await expect(page.getByTestId('home-board')).toHaveAttribute(
@@ -2539,14 +2541,26 @@ async function benchBrand(
 
     // 3b. The Ask bar: a suggestion opens Jaina with the question written in; nothing is sent.
     await check(scope, 'an Ask suggestion opens Jaina with the question pre-filled', async () => {
+      // The click navigates to Jaina's /scale, which a dev server compiles on request (2.9 min
+      // under load) and unloads again after about a minute idle, so it is compiled here, just
+      // before the click; a read-only GET, not graded. That rebuild can reload the open board,
+      // so the suggestion is waited for after it.
+      await context.request
+        .get(new URL('/scale?tab=jaina', page.url()).href, { timeout: 300_000 })
+        .catch(() => undefined);
       const suggestions = page.getByTestId('home-ask-suggestion');
+      // The Ask bar is lazy; after a reload it may not have mounted yet.
+      await suggestions
+        .first()
+        .waitFor({ state: 'visible', timeout: 120_000 })
+        .catch(() => {});
       const count = await suggestions.count();
       if (count === 0) throw new Error('the Ask bar offers no suggestion');
       const question = (await suggestions.first().getAttribute('title')) ?? '';
       capture = false;
       guard.outsideBoard = true;
       const start = navigations.length;
-      await suggestions.first().click();
+      await suggestions.first().click({ timeout: 120_000 });
       await expect
         .poll(
           () =>
@@ -2707,7 +2721,9 @@ test('the adaptive Home on one brand per mode: order, figures, sheets, pins, the
   browser,
   baseURL,
 }) => {
-  test.setTimeout(DRAFT_BENCH ? 2 * 600_000 : 6 * 600_000);
+  // The draft run compiles every route it touches on a dev server; /scale alone took 2.9 min
+  // under load, so its budget carries that on top of the ~5 min a quiet run takes.
+  test.setTimeout(DRAFT_BENCH ? 3 * 600_000 : 6 * 600_000);
   const brands = await chooseBrands(session.userId);
   let first = true;
   for (const facts of brands) {

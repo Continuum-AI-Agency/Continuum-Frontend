@@ -34,7 +34,10 @@ if (process.argv.includes('--check')) {
   process.exit(freeBytes >= 50 * GiB && existsSync(wrapper) ? 0 : 4);
 }
 
-if (freeBytes < 50 * GiB) {
+// The launcher refuses below the 50 GiB floor. A --produce run only exists under a supervisor
+// (artifact-run.py or an owner-approved exception copy of it), which owns admission and the
+// 20 GiB stop line, so the producer does not repeat the admission check.
+if (!process.argv.includes('--produce') && freeBytes < 50 * GiB) {
   console.error(
     'REFUSED: the Home draft bench requires at least 50 GiB free. No build, capture or cleanup started.',
   );

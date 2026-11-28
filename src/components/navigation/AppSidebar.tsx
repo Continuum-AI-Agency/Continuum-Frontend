@@ -536,10 +536,12 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
 
           {/* px-1.5 plus each row's p-2 puts the 18px icons at x 12.7: centred in the 3rem rail. */}
           <SidebarContent className="px-1.5 py-4">
+            {/* The server cannot read the reduced-motion preference, so the first render must not
+                depend on it (a hydration mismatch otherwise); reduced motion makes the fade instant. */}
             <motion.div
-              initial={reduce ? false : { opacity: 0 }}
+              initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
+              transition={reduce ? { duration: 0 } : { duration: 0.2, ease: [0, 0, 0.2, 1] }}
             >
               {APP_NAVIGATION_GROUPS.map((group, index) => (
                 <SidebarGroup
