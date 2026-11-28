@@ -16,6 +16,8 @@ export const API_RENDER_JOBS_ROUTE = '/api/ai-studio/renders/jobs';
 /** Opt-in for audit fields that older strict job clients cannot read. */
 export const API_RENDER_FONT_OVERRIDE_PROFILE = 'render-font-override-v1';
 export const API_RENDER_ADVISORIES_PROFILE = 'render-advisories-v1';
+/** Each job output's `outputId`. Implies the advisories fields; strict clients without it get neither key. */
+export const API_RENDER_OUTPUT_IDENTITY_PROFILE = 'render-output-identity-v1';
 export const API_RENDER_MASTER_DOWNLOADS_ROUTE = '/api/ai-studio/renders/master-downloads';
 export const apiRenderMasterDownloadRequestSchema = z
   .object({
@@ -1472,9 +1474,32 @@ export const apiRenderCreateJobRequestSchema = z
   .strict();
 export type ApiRenderCreateJobRequest = z.infer<typeof apiRenderCreateJobRequestSchema>;
 
+/**
+ * One format a job delivers, frozen on the job at preflight: the contract's outputs, else the
+ * parse's delivery comps. The set a finished file is matched against once, by name, to stamp its
+ * `outputId` — never re-read from a template that may have moved while the render was queued.
+ */
+export const apiRenderJobFormatSchema = z.object({
+  id: z.string().min(1),
+  ratio: z.string().nullable(),
+  label: z.string().optional(),
+  comp: apiRenderTemplateLayoutSchema.shape.comp.nullable().optional(),
+  mediaType: z.string().nullable().optional(),
+});
+export type ApiRenderJobFormat = z.infer<typeof apiRenderJobFormatSchema>;
+
 export const apiRenderOutputSchema = z
   .object({
+    /** This FILE, a hash of its URL. One output can deliver several files (MP4 + MXF). */
     id: z.string().min(1),
+    /**
+     * The contract output this file is — the id a caller sent in `outputIds` and keys `encode` by.
+     * Stamped once, when the render reports the file. Null: the name matched no format or several, so
+     * the file is unclassified and never re-guessed. Absent: a job written before stamping, which a
+     * reader matches by name (`formatOfOutput`). Sent only to a client that asks for
+     * `API_RENDER_OUTPUT_IDENTITY_PROFILE`.
+     */
+    outputId: z.string().min(1).nullable().optional(),
     kind: z.enum(['image', 'video']),
     fileName: z.string().min(1),
     mimeType: z.string().min(1),

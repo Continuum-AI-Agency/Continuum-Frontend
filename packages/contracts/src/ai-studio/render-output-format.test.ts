@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  formatOfOutput,
   matchOutputFormat,
   outputFormatsOfParse,
   type RenderOutputFormatCandidate,
@@ -234,5 +235,30 @@ describe('the formats a parsed template delivers, when its contract publishes no
       }),
     ).toEqual([]);
     expect(outputFormatsOfParse(null)).toEqual([]);
+  });
+});
+
+describe('formatOfOutput', () => {
+  const formats = [
+    { id: 'feed', ratio: '1:1' },
+    { id: 'story', ratio: '9:16' },
+  ];
+
+  test('a stamp is the format, whatever the name reads as', () => {
+    expect(formatOfOutput({ fileName: 'Promo_9_16_a.jpg', outputId: 'feed' }, formats)?.id).toBe(
+      'feed',
+    );
+  });
+
+  test('a null stamp is unclassified and never re-guessed from the name', () => {
+    expect(formatOfOutput({ fileName: 'Promo_9_16_a.jpg', outputId: null }, formats)).toBeNull();
+  });
+
+  test('a stamp the formats no longer name is no format', () => {
+    expect(formatOfOutput({ fileName: 'Promo_9_16_a.jpg', outputId: 'gone' }, formats)).toBeNull();
+  });
+
+  test('a file written before stamping is read off its name', () => {
+    expect(formatOfOutput({ fileName: 'Promo_9_16_a.jpg' }, formats)?.id).toBe('story');
   });
 });

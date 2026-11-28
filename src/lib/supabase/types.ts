@@ -16852,6 +16852,7 @@ export type Database = {
           judge: Json | null
           label: string | null
           label_path: Json
+          output_formats: Json | null
           outputs: Json
           parent_row_id: string | null
           progress_pct: number | null
@@ -16906,6 +16907,7 @@ export type Database = {
           judge?: Json | null
           label?: string | null
           label_path?: Json
+          output_formats?: Json | null
           outputs?: Json
           parent_row_id?: string | null
           progress_pct?: number | null
@@ -16960,6 +16962,7 @@ export type Database = {
           judge?: Json | null
           label?: string | null
           label_path?: Json
+          output_formats?: Json | null
           outputs?: Json
           parent_row_id?: string | null
           progress_pct?: number | null

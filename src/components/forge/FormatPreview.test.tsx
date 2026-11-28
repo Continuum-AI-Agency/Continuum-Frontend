@@ -186,8 +186,10 @@ describe('FormatPreview', () => {
   });
 });
 
-const output = (fileName: string): ApiRenderOutput => ({
+// No `outputId` key by default: a job written before stamping, matched by name.
+const output = (fileName: string, outputId?: string | null): ApiRenderOutput => ({
   id: fileName,
+  ...(outputId === undefined ? {} : { outputId }),
   kind: 'image',
   fileName,
   mimeType: 'image/jpeg',
@@ -206,6 +208,17 @@ const OUTPUTS = [
 ];
 
 describe('fileForFormat', () => {
+  test('a file the Backend stamped is its stamped output, whatever its name reads as', () => {
+    // An opaque PSD name no format answers, and a name that reads as the wrong ratio.
+    const stamped = [output('_ab12cd.jpg', 'square'), output('Promo_9_16_x.jpg', 'wide')];
+    expect(fileForFormat(stamped, FORMATS, 'square')?.fileName).toBe('_ab12cd.jpg');
+    expect(fileForFormat(stamped, FORMATS, 'wide')?.fileName).toBe('Promo_9_16_x.jpg');
+    expect(fileForFormat(stamped, FORMATS, 'story')).toBeNull();
+    // A stamp the template no longer names, or a null one, is no file — never re-guessed by name.
+    expect(fileForFormat([output('Promo_9_16_x.jpg', 'gone')], FORMATS, 'story')).toBeNull();
+    expect(fileForFormat([output('Promo_9_16_x.jpg', null)], FORMATS, 'story')).toBeNull();
+  });
+
   test('finds each format’s file by name, whatever order the job listed them in', () => {
     const formats = previewFormats({ ratios: ['16:9', '1:1', '9:16'] });
     expect(fileForFormat(OUTPUTS, formats, '1:1')?.fileName).toBe(

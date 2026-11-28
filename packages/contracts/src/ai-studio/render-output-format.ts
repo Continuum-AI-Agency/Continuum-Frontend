@@ -83,6 +83,20 @@ export function matchOutputFormat<T extends RenderOutputFormatCandidate>(
   );
 }
 
+/**
+ * The format a job's file is, by the `outputId` the Backend stamped when the render reported it. A
+ * null stamp is a file that matched no format or several: unclassified, never re-guessed. A stamp the
+ * formats no longer name is no format either. Only a job written before stamping — no key at all —
+ * is read off its name.
+ */
+export function formatOfOutput<T extends RenderOutputFormatCandidate>(
+  output: { fileName: string; outputId?: string | null },
+  formats: readonly T[],
+): T | null {
+  if (output.outputId === undefined) return matchOutputFormat(output.fileName, formats);
+  return formats.find((format) => format.id === output.outputId) ?? null;
+}
+
 const isSize = (value: unknown): value is number =>
   Number.isInteger(value) && (value as number) > 0;
 

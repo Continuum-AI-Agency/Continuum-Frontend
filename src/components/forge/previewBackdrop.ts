@@ -1,7 +1,7 @@
 import {
   type ApiRenderJob,
   type ApiRenderOutput,
-  matchOutputFormat,
+  formatOfOutput,
   type RenderOutputFormatCandidate,
 } from '@continuum/contracts';
 
@@ -43,16 +43,14 @@ const finishedAt = (job: ApiRenderJob) => Date.parse(job.finishedAt ?? job.creat
 export const currentTemplateJob = (job: ApiRenderJob, updatedAt: string | null): boolean =>
   !updatedAt || Date.parse(job.createdAt) >= Date.parse(updatedAt);
 
-/** The job's file for one format, by name: its still first, else its video. */
+/** The job's file for one format: its still first, else its video. */
 const fileFor = (
   job: ApiRenderJob,
   formats: readonly RenderOutputFormatCandidate[],
   formatId: string,
 ): ApiRenderOutput | null => {
   if (job.status !== 'finished') return null;
-  const ofFormat = job.outputs.filter(
-    (output) => matchOutputFormat(output.fileName, formats)?.id === formatId,
-  );
+  const ofFormat = job.outputs.filter((output) => formatOfOutput(output, formats)?.id === formatId);
   return (
     ofFormat.find((output) => output.kind === 'image') ??
     ofFormat.find((output) => output.kind === 'video') ??

@@ -3,6 +3,7 @@ import {
   API_RENDER_BATCH_PREFLIGHT_ROUTE,
   API_RENDER_BATCHES_ROUTE,
   API_RENDER_JOBS_ROUTE,
+  API_RENDER_OUTPUT_IDENTITY_PROFILE,
   API_RENDER_PREFLIGHT_ROUTE,
   API_RENDER_SETS_ROUTE,
   type ApiRenderBatch,
@@ -34,6 +35,9 @@ import type { http } from '@/lib/api/http';
 export const RENDER_RETRY_DELAYS_MS: readonly number[] = [1_000, 3_000, 8_000];
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// A job read asks for each output's `outputId` beside the advisories, as one profile list.
+const JOB_ACCEPT = `application/json; profile="${API_RENDER_ADVISORIES_PROFILE} ${API_RENDER_OUTPUT_IDENTITY_PROFILE}"`;
 
 /** 429, a gateway or closing 502/503 that carries no backend error, or `fetch` itself failing. A
  *  504 may still be running, a timeout already waited its bound, and a TypeError thrown while
@@ -104,7 +108,7 @@ export function renderCallsThrough(
           method: 'POST',
           body: input,
           schema: apiRenderJobSchema,
-          headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+          headers: { Accept: JOB_ACCEPT },
         }),
       );
     },
@@ -135,7 +139,7 @@ export function renderCallsThrough(
             ...(options?.variantId ? { variantId: options.variantId } : {}),
           })}`,
           schema: apiRenderJobListResponseSchema,
-          headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+          headers: { Accept: JOB_ACCEPT },
         }),
       );
     },
@@ -144,7 +148,7 @@ export function renderCallsThrough(
         client.request<ApiRenderJob>({
           path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}?${query({ brandId })}`,
           schema: apiRenderJobSchema,
-          headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+          headers: { Accept: JOB_ACCEPT },
         }),
       );
     },
@@ -195,7 +199,7 @@ export function renderCallsThrough(
           method: 'POST',
           body: input,
           schema: apiRenderBatchSchema,
-          headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+          headers: { Accept: JOB_ACCEPT },
         }),
       );
     },

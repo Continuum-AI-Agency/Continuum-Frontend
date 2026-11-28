@@ -3,7 +3,7 @@
 import {
   type ApiRenderOutput,
   ENCODE_FILE_CONTAINERS,
-  matchOutputFormat,
+  formatOfOutput,
   outputFormatsOfParse,
   type RenderOutputFormatCandidate,
 } from '@continuum/contracts';
@@ -124,7 +124,6 @@ export function previewFormats(source: {
   }));
 }
 
-/** The file a job rendered for this format, read from its name. No match is no file. */
 const containerRank = (output: ApiRenderOutput) => {
   const dot = output.fileName.lastIndexOf('.');
   const ext = dot > 0 ? output.fileName.slice(dot + 1).toLowerCase() : '';
@@ -139,6 +138,7 @@ export const playableFirst = (outputs: readonly ApiRenderOutput[]) =>
   [...outputs].sort((a, b) =>
     Number(Boolean(b.assetId)) - Number(Boolean(a.assetId)) || containerRank(a) - containerRank(b));
 
+/** The file a job rendered for this format. No match is no file. */
 export function fileForFormat(
   outputs: readonly ApiRenderOutput[],
   formats: readonly PreviewFormat[],
@@ -146,7 +146,7 @@ export function fileForFormat(
 ): ApiRenderOutput | null {
   return (
     playableFirst(outputs).find(
-      (output) => matchOutputFormat(output.fileName, formats)?.id === formatId,
+      (output) => formatOfOutput(output, formats)?.id === formatId,
     ) ?? null
   );
 }

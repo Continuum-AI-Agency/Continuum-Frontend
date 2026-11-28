@@ -3,8 +3,8 @@
 import {
   type ApiRenderJob,
   type ApiRenderOutput,
+  formatOfOutput,
   isWebTemplateKey,
-  matchOutputFormat,
   WEB_COMPONENT_BINDING_ID,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -293,7 +293,7 @@ export function RenderJobDetail({
   const files = playableFirst(job.outputs);
   const matched = files.map((file) => ({
     file,
-    format: matchOutputFormat(file.fileName, templateFormats),
+    format: formatOfOutput(file, templateFormats),
   }));
   // A real file remains available even when the template cannot name its format.
   const formats: PreviewFormat[] = [
