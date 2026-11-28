@@ -11,6 +11,7 @@ import { FileText, Loader2, Plus, Upload } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FontUploadReviewDialog } from '@/components/library/FontUploadReviewDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -34,6 +35,7 @@ import {
   filterDocumentsByScope,
   isEphemeral,
 } from './types';
+import { useBrandUploadRouting } from './useBrandUploadRouting';
 import { useDocumentActions } from './useDocumentActions';
 import { useDocumentMutations } from './useDocumentMutations';
 import { useDocuments } from './useDocuments';
@@ -55,7 +57,9 @@ function useNowTicker(enabled: boolean): number {
   return now;
 }
 
-const ACCEPT = '.pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif';
+// Anything brand material can be: useBrandUploadRouting sends each file where it is used.
+const ACCEPT =
+  '.pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif,.svg,.ttf,.otf,.woff,.woff2,.zip';
 
 const PANEL_TRANSITION = { duration: 0.24, ease: ROW_EASE };
 
@@ -130,7 +134,7 @@ export function DocumentManager({
     mutations.uploads.filter((u) => u.status === 'uploading').length;
   const errorCount = scopedDocuments.filter((d) => (d.progressStep ?? d.status) === 'error').length;
 
-  const handleFiles = async (files: File[]) => {
+  const uploadDocuments = async (files: File[]) => {
     if (files.length === 0) return;
     const result = await mutations.uploadFiles(files, onStateChange, uploadCategory);
     if (result.succeeded > 0) {
@@ -151,6 +155,10 @@ export function DocumentManager({
       });
     }
   };
+
+  // Logos, images, SVGs and fonts go where they are used; see useBrandUploadRouting.
+  const routing = useBrandUploadRouting({ brandId, uploadDocuments });
+  const handleFiles = routing.route;
 
   const initialFilesTakenRef = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: upload the handed-over files once, on mount.
@@ -326,6 +334,15 @@ export function DocumentManager({
           </ItemPanel>
         </CardContent>
       </Card>
+      {routing.fontFiles.length > 0 ? (
+        <FontUploadReviewDialog
+          key={routing.fontFiles.map((file) => `${file.name}:${file.size}`).join('|')}
+          brandId={brandId}
+          files={routing.fontFiles}
+          onClose={routing.clearFontFiles}
+          onUploaded={routing.clearFontFiles}
+        />
+      ) : null}
     </section>
   );
 }

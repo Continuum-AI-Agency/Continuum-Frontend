@@ -455,13 +455,15 @@
   "brandLibraryUploadingOne": "Cargando…",
   "brandLibrarySaved": "En tu Biblioteca",
   "brandLibraryTagFailed": "Guardado en tu Biblioteca, pero sin la etiqueta “{tag}”. Agrégala allí.",
-  "brandLibraryNotImage": "No es una imagen. Los archivos de fuentes van en Tipografías, abajo; los documentos, en Documentos de marca.",
   "brandLibraryViewInLibrary": "Ver en la Biblioteca",
   "brandLibraryFontsTitle": "Tipografías",
-  "brandLibraryFontsIntro": "Sube los archivos de tus fuentes (.ttf, .otf, .woff). Las usaremos en todo lo que creemos para ti. Son privadas de tu marca.",
+  "brandLibraryFontsIntro": "Sube los archivos de tus fuentes (.ttf, .otf, .woff o el .zip que te envió tu fundición). Las usaremos en todo lo que creemos para ti. Son privadas de tu marca.",
   "brandLibraryFontsEmpty": "Aún no hay fuentes. Agrega un archivo por cada peso que uses, como Regular y Bold.",
   "brandLibraryFontSaved": "Guardada",
   "brandLibraryBrandLogo": "Logo de la marca",
   "brandLibraryMakeBrandLogo": "Usar como logo de la marca",
-  "brandLibraryBrandLogoFailed": "En tu Biblioteca, pero no quedó como logo de la marca. Inténtalo de nuevo."
+  "brandLibraryBrandLogoFailed": "En tu Biblioteca, pero no quedó como logo de la marca. Inténtalo de nuevo.",
+  "brandLibraryMovedKnowledge": "Movido a Documentos de marca",
+  "brandLibraryMovedFonts": "Movido a Tipografías",
+  "brandLibraryMovedLibrary": "Guardado en tu Biblioteca"
 }

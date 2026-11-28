@@ -1418,6 +1418,10 @@
   "a_project_already_has_that_name_5e57cb0": "Ya existe un proyecto con ese nombre",
   "create_failed_3e05ffc": "Error al crear",
   "fontSpecimenUnreadable": "No se puede previsualizar este archivo. Verifica que sea una fuente .ttf, .otf o .woff.",
+  "routedToLibraryTitle": "{count, plural, one {# archivo se guardó en tu Biblioteca} other {# archivos se guardaron en tu Biblioteca}}",
+  "routedToLibraryBody": "Las imágenes, logos y SVG viven en la Biblioteca, donde Studio y tus agentes los usan.",
+  "routedReadAsText": "{count, plural, one {Leer su texto en su lugar} other {Leer su texto en su lugar}}",
+  "routedToLibraryFailed": "No se guardó en tu Biblioteca: {files}. Inténtalo de nuevo desde la Biblioteca.",
   "linkedin_personal_profile": "{name} — perfil personal",
   "personal_profile": "Perfil personal"
 }
