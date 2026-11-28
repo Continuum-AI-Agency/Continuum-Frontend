@@ -3925,8 +3925,10 @@ export function TemplateLayerEditor({
                     baseVersionId={effectiveVersionId}
                     compId={compId ?? inventoryData?.compId ?? undefined}
                     selectedNodeIds={agentSelection}
+                    parentRevisionId={currentRevision?.id}
                     prepare={prepareAgentTurn}
                     onDraft={adoptAgentDraft}
+                    onVariantSaved={onSaved}
                     onRunningChange={setAgentRunning}
                   />
                 </aside>

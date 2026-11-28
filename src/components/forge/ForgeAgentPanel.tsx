@@ -1,6 +1,11 @@
 'use client';
 
-import type { ForgeAgentFrame, ForgeAgentRequest, ForgeAgentTool } from '@continuum/contracts';
+import type {
+  ForgeAgentFrame,
+  ForgeAgentRequest,
+  ForgeAgentTool,
+  ForgeVariantProposal,
+} from '@continuum/contracts';
 import { Check, Send, Sparkles, Square, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -9,6 +14,7 @@ import {
   ConversationEmptyState,
 } from '@/components/ai-elements/conversation';
 import { Message } from '@/components/ai-elements/message';
+import { ForgeVariantProposalCard } from '@/components/forge/ForgeVariantProposalCard';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,12 +28,14 @@ const SUGGESTIONS = [
   { label: 'Bigger headline', prompt: 'Make the headline bigger.' },
   { label: 'Blue variant', prompt: 'Recolour the background blue; keep everything else.' },
   { label: 'Tidy layout', prompt: 'Align the text layers to the centre of the composition.' },
+  { label: '3 variants', prompt: 'Propose three distinct variants of this template.' },
 ] as const;
 const HISTORY_TURNS = 10;
 const TOOL_LABEL: Record<ForgeAgentTool, string> = {
   read_template: 'Read the template',
   read_tool_result: 'Read more',
   apply_commands: 'Edit',
+  propose_variant: 'Propose a variant',
   ask_user: 'Question',
 };
 
@@ -39,6 +47,8 @@ export type ForgeAgentTurn = {
   text: string;
   tools: ToolChip[];
   question: Question | null;
+  /** Variants the agent proposed this turn; each is saved, or not, by the person. */
+  proposals: ForgeVariantProposal[];
   status: 'running' | 'done' | 'error' | 'stopped';
   error?: string;
   /** Draft revisions this turn saved: one undo step each in the editor. */
@@ -63,6 +73,8 @@ export function applyForgeAgentFrame(turn: ForgeAgentTurn, frame: ForgeAgentFram
       return { ...turn, drafts: turn.drafts + 1 };
     case 'question':
       return { ...turn, question: frame.data };
+    case 'variant_proposal':
+      return { ...turn, proposals: [...turn.proposals, frame.data] };
     case 'done':
       return { ...turn, status: 'done' };
     case 'error':
@@ -108,8 +120,10 @@ export function ForgeAgentPanel({
   baseVersionId,
   compId,
   selectedNodeIds,
+  parentRevisionId,
   prepare,
   onDraft,
+  onVariantSaved,
   onRunningChange,
 }: {
   assetId: string;
@@ -117,10 +131,14 @@ export function ForgeAgentPanel({
   baseVersionId: string;
   compId?: number;
   selectedNodeIds: readonly string[];
+  /** The saved revision on screen: variants the agent proposes branch from it. */
+  parentRevisionId?: string;
   /** Saves pending editor changes; the draft revision the agent starts from, or null to refuse. */
   prepare: () => Promise<number | null>;
   /** The agent saved a new draft revision. */
   onDraft: () => Promise<void>;
+  /** The person saved one of the agent's proposals as a new variant. */
+  onVariantSaved?: () => Promise<void>;
   onRunningChange: (running: boolean) => void;
 }): React.ReactNode {
   const [turns, setTurns] = useState<ForgeAgentTurn[]>([]);
@@ -142,6 +160,7 @@ export function ForgeAgentPanel({
       text: '',
       tools: [],
       question: null,
+      proposals: [],
       status: 'running',
       drafts: 0,
     };
@@ -151,7 +170,16 @@ export function ForgeAgentPanel({
       { role: 'user' as const, text: prior.prompt.slice(0, 8_000) },
       {
         role: 'assistant' as const,
-        text: [prior.text, prior.question?.question, prior.error].filter(Boolean).join('\n').slice(0, 8_000) || '…',
+        text:
+          [
+            prior.text,
+            ...prior.proposals.map((p) => `Proposed variant "${p.name}": ${p.rationale}`),
+            prior.question?.question,
+            prior.error,
+          ]
+            .filter(Boolean)
+            .join('\n')
+            .slice(0, 8_000) || '…',
       },
     ]);
     setTurns((all) => [...all, turn]);
@@ -169,6 +197,7 @@ export function ForgeAgentPanel({
         history,
         selection: { nodeIds: selectedNodeIds.slice(0, 200) },
         ...(compId ? { compId } : {}),
+        ...(parentRevisionId ? { parentRevisionId } : {}),
         baseDraftRevision,
       };
       // Draft reloads run one after another, in frame order.
@@ -203,7 +232,7 @@ export function ForgeAgentPanel({
             <ConversationEmptyState
               icon={<Sparkles className="size-6" />}
               title="Edit by asking"
-              description="Retext, restyle, move, recolour or hide layers. Every change is one undo step in your draft; you review and publish."
+              description="Retext, restyle, move, recolour or hide layers, or ask for variants to compare and save. Every edit is one undo step in your draft; you review and publish."
             />
           ) : (
             turns.map((turn) => (
@@ -244,6 +273,15 @@ export function ForgeAgentPanel({
                         </div>
                       </div>
                     ) : null}
+                    {turn.proposals.map((proposal) => (
+                      <ForgeVariantProposalCard
+                        key={proposal.proposalId}
+                        assetId={assetId}
+                        brandId={brandId}
+                        proposal={proposal}
+                        onSaved={onVariantSaved}
+                      />
+                    ))}
                     {turn.drafts > 0 && turn.status !== 'running' ? (
                       <span className="text-xs text-muted-foreground">
                         Saved to your draft as {turn.drafts} undo step{turn.drafts === 1 ? '' : 's'}.

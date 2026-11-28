@@ -9,6 +9,7 @@ const turn: ForgeAgentTurn = {
   text: '',
   tools: [],
   question: null,
+  proposals: [],
   status: 'running',
   drafts: 0,
 };
@@ -43,5 +44,25 @@ describe('applyForgeAgentFrame', () => {
     ]);
     expect(asked.question?.options.map((o) => o.label)).toEqual(['CTA', 'Badge']);
     expect(fold([{ ...envelope, type: 'error', data: { message: 'Stopped.', code: 'aborted' } }]).status).toBe('stopped');
+  });
+
+  test('each variant proposal is kept, in order, and saves nothing to the draft', () => {
+    const proposal = (name: string) => ({
+      toolCallId: `p-${name}`,
+      proposalId: crypto.randomUUID(),
+      name,
+      rationale: 'For the sale.',
+      parentRevisionId: '00000000-0000-4000-8000-0000000000aa',
+      edits: { layers: [{ compId: 7, layerId: 1, text: name }], slots: [], orders: [] },
+      changes: [{ compId: 7, layerId: 1, layer: 'Headline', field: 'text' as const, from: 'Old', to: name }],
+      svg: '<svg/>',
+      warnings: [],
+    });
+    const folded = fold([
+      { ...envelope, type: 'variant_proposal', data: proposal('A') },
+      { ...envelope, type: 'variant_proposal', data: proposal('B') },
+    ]);
+    expect(folded.proposals.map((p) => p.name)).toEqual(['A', 'B']);
+    expect(folded.drafts).toBe(0);
   });
 });
