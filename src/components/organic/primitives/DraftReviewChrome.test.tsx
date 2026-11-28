@@ -215,6 +215,33 @@ describe('ReviewIdentityRow', () => {
   );
 
   it(
+    'labels a LinkedIn member as a personal profile next to the company Page',
+    () => {
+      renderRow({
+        platform: 'linkedin',
+        accounts: [
+          { ...ACME_A, id: 'li-page', platform: 'linkedin', handle: null, displayName: 'Acme' },
+          {
+            ...ACME_A,
+            id: 'li-member',
+            platform: 'linkedin',
+            handle: null,
+            displayName: 'Ana Pérez',
+            isDefault: false,
+            kind: 'member',
+          },
+        ],
+        selectedAccountId: 'li-page',
+      });
+      fireEvent.click(screen.getByRole('button', { name: /^LinkedIn account:/ }));
+      const group = screen.getByRole('radiogroup', { name: 'LinkedIn account' });
+      expect(within(group).getByText('Acme')).toBeTruthy();
+      expect(within(group).getByText('Ana Pérez — personal profile')).toBeTruthy();
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
     'asks for a choice when the stamp is not one of the candidates',
     () => {
       renderRow({ selectedAccountId: 'some-foreign-uuid' });

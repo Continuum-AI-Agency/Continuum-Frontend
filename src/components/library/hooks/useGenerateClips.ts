@@ -12,7 +12,6 @@ import { useUiErrorMessage } from '@/i18n/errors';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import { cutAndPersistSection, extractAndUploadAudio } from '@/lib/clips/clipClientCut';
 import { type ClipQuality, DEFAULT_CLIP_QUALITY } from '@/lib/clips/clipQuality';
 import { parseNdjson } from '@/lib/streaming/parseNdjson';
 import { checkSpliceSupport } from '@/StudioCanvas/utils/splice/webcodecsSupport';
@@ -118,12 +117,18 @@ export function useGenerateClips(): UseGenerateClipsResult {
             : p,
         );
 
+      // The cutting pipeline (splice, captions, audio extraction) is ~635 KiB that every media
+      // card used to pull into /library's first load. It loads on the first generation instead,
+      // alongside the source download, so it never adds to the wait.
+      const pipeline = import('@/lib/clips/clipClientCut');
+      pipeline.catch(() => {});
       try {
         const sourceBlob = await fetch(asset.signedUrl, { signal: controller.signal }).then((r) => {
           if (!r.ok) throw new Error(`Could not download the source video (${r.status})`);
           return r.blob();
         });
 
+        const { cutAndPersistSection, extractAndUploadAudio } = await pipeline;
         setStage('Extracting audio…');
         const { audioBucket, audioStoragePath } = await extractAndUploadAudio({
           brandId: asset.brandId,

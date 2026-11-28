@@ -2,12 +2,22 @@
 
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
 import { Archive, X } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
-import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetClose, SheetTitle } from '@/components/ui/sheet';
+import { intentProps } from '@/lib/intent';
 import { cn } from '@/lib/utils';
+
+// The panel renders only while the sheet is open, but a static import put its ~700 KiB (the
+// whole library grid stack) into AI Studio's first load. `ssr: false` is what gives it its own
+// Suspense boundary: without one, opening the sheet would suspend the whole route.
+// The launcher warms the same import on intent, so the panel is usually there by the click.
+const loadPanel = () => import('@/components/creative-assets/StudioMediaLibraryPanel');
+const StudioMediaLibraryPanel = dynamic(() => loadPanel().then((m) => m.StudioMediaLibraryPanel), {
+  ssr: false,
+});
 
 type CreativeLibrarySidebarProps = {
   brandProfileId: string;
@@ -32,6 +42,7 @@ export function CreativeLibrarySidebar({
       <div className="pointer-events-auto fixed right-4 top-1/2 z-40 -translate-y-1/2">
         <Button
           className="h-10 w-10 rounded-full shadow-xl bg-slate-900 text-white hover:bg-slate-800"
+          {...intentProps(loadPanel)}
           onClick={() => setOpen(true)}
           aria-label={translateUi('open_creative_library_1a5053db')}
         >

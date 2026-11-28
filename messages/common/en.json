@@ -1445,5 +1445,7 @@
   "inspectorPageShort": "P.{page}",
   "inspectorPreviousPage": "Previous page",
   "inspectorNextPage": "Next page",
-  "inspectorCategory": "{category, select, party {Party} identifiers {Identifiers} table {Table} amount {Amount} annotation {Annotation} heading {Heading} text {Text} figure {Figure} other {Other}}"
+  "inspectorCategory": "{category, select, party {Party} identifiers {Identifiers} table {Table} amount {Amount} annotation {Annotation} heading {Heading} text {Text} figure {Figure} other {Other}}",
+  "linkedin_personal_profile": "{name} — personal profile",
+  "personal_profile": "Personal profile"
 }

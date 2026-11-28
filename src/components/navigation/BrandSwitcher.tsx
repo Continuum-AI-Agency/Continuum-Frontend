@@ -58,7 +58,7 @@ export function BrandSwitcher() {
   const TeamLogo = activeTeam.logo;
 
   return (
-    <SidebarMenu className="group-data-[collapsible=icon]:items-center">
+    <SidebarMenu>
       <SidebarMenuItem>
         {/* Popover, not DropdownMenu: a menu popup runs its own typeahead and swallows every
             character key before cmdk's CommandInput sees it, so brand search never filters.
@@ -69,7 +69,8 @@ export function BrandSwitcher() {
               <SidebarMenuButton
                 size="lg"
                 aria-label={uiText('switch_brand_9ddd1f2')}
-                className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-foreground)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                // px-0.5 centres the 32px logo on the rail's icon column (x 21.7).
+                className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] px-0.5 text-[var(--sidebar-foreground)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-hidden">
                   {typeof TeamLogo === 'string' ? (
@@ -83,15 +84,15 @@ export function BrandSwitcher() {
                     <TeamLogo className="size-4" />
                   )}
                 </div>
-                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:invisible">
                   <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">
                     {activeTeam.name}
                   </span>
                 </div>
                 {isSwitching ? (
-                  <Loader2 className="ml-auto h-4 w-4 animate-spin text-[var(--ring)] group-data-[collapsible=icon]:hidden" />
+                  <Loader2 className="ml-auto h-4 w-4 animate-spin text-[var(--ring)] group-data-[collapsible=icon]:invisible" />
                 ) : (
-                  <ChevronsUpDown className="ml-auto text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-data-[collapsible=icon]:hidden" />
+                  <ChevronsUpDown className="ml-auto text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-data-[collapsible=icon]:invisible" />
                 )}
               </SidebarMenuButton>
             }

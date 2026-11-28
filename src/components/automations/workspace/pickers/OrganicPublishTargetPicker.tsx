@@ -71,6 +71,10 @@ export function OrganicPublishTargetPicker({
   const platformFieldId = useId();
   const { items, isLoading, isError } = useSource(brandId);
   const accountId = isUnsetId(value.accountId) ? null : value.accountId;
+  const optionLabel = (option: OrganicPublishAccountOption) =>
+    option.personalProfile
+      ? uiText('linkedin_personal_profile', { name: option.label })
+      : option.label;
 
   const groups = useMemo(() => {
     return AUTOMATION_PLATFORM_KEYS.map((platform) => ({
@@ -129,7 +133,7 @@ export function OrganicPublishTargetPicker({
   const triggerLabel = isLoading
     ? uiText('loading_accounts_2494bdb')
     : selected
-      ? `${selected.platformLabel} · ${selected.label}`
+      ? `${selected.platformLabel} · ${optionLabel(selected)}`
       : accountId
         ? uiText('m_152924f460', { id: accountId })
         : uiText('m_1d3b2a2fce');
@@ -170,7 +174,7 @@ export function OrganicPublishTargetPicker({
                     return (
                       <CommandItem
                         key={`${option.platform}:${option.accountId}`}
-                        value={`${group.label} ${option.label} ${option.accountId}`}
+                        value={`${group.label} ${optionLabel(option)} ${option.accountId}`}
                         keywords={[option.accountId]}
                         className="cursor-pointer"
                         // Platform AND account move together — that is the point.
@@ -185,7 +189,7 @@ export function OrganicPublishTargetPicker({
                             isSelected ? 'opacity-100' : 'opacity-0',
                           )}
                         />
-                        <span className="truncate text-xs">{option.label}</span>
+                        <span className="truncate text-xs">{optionLabel(option)}</span>
                         <span className="ml-auto truncate text-2xs text-muted-foreground">
                           {option.accountId}
                         </span>

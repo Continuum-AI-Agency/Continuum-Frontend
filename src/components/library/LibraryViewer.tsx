@@ -42,6 +42,7 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import dynamic from 'next/dynamic';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   useCallback,
@@ -53,7 +54,6 @@ import {
   useTransition,
   useMemo as useUiConfigMemo,
 } from 'react';
-import { CompetitorInspirationPanel } from '@/components/competitor-spy/CompetitorInspirationPanel';
 import {
   DesignTemplateImports,
   useDesignTemplateImports,
@@ -73,6 +73,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { toast } from '@/components/ui/toast-imperative';
 import { useRouter } from '@/i18n/navigation';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { intentProps } from '@/lib/intent';
 import {
   createLibraryCollectionOperation,
   mutateCollectionMembershipOperation,
@@ -109,7 +110,6 @@ import { FigmaImportDialog } from './FigmaImportDialog';
 import { FontUploadReviewDialog } from './FontUploadReviewDialog';
 import { useCustomFields } from './fields/useCustomFields';
 import { LibraryBulkToolbar } from './LibraryBulkToolbar';
-import { LibraryElementsGrid } from './LibraryElementsGrid';
 import { LibraryFilterBar } from './LibraryFilterBar';
 import { LibraryRenderQueue } from './LibraryRenderQueue';
 import { LibrarySidebar } from './LibrarySidebar';
@@ -118,12 +118,8 @@ import { partitionLibraryUploadFiles } from './libraryUploadRouting';
 import { McpUploadIntentPanel } from './McpUploadIntentPanel';
 import { MediaGrid } from './MediaGrid';
 import { MediaSearchBar } from './MediaSearchBar';
-import { PipelinePanel } from './PipelinePanel';
 import { PlacementBar } from './PlacementBar';
 import { RatioShelves } from './RatioShelves';
-import { TemplateGrid } from './TemplateGrid';
-import { TypographyPanel } from './TypographyPanel';
-import { TrashView } from './trash/TrashView';
 import { UploadStrip } from './UploadStrip';
 import { useMediaLibrary } from './useMediaLibrary';
 import { useMediaUpload } from './useMediaUpload';
@@ -136,6 +132,35 @@ import { ReelView } from './views/ReelView';
 import { stackDroppedAssets } from './views/stackDrop';
 import { useAssetFieldValues } from './views/useAssetFieldValues';
 import { useLibraryViewPreferences } from './views/useLibraryViewPreferences';
+
+// Views a URL section, filter or tab opens: none is on screen for the default media grid, yet
+// static imports put all of them (~380 KiB) into /library's first load. `loading` gives each its
+// own Suspense boundary, so a pending chunk blanks only that panel, never the whole route.
+// The in-page triggers (Inspiration tab, trash) warm the same import on intent.
+const loadInspiration = () => import('@/components/competitor-spy/CompetitorInspirationPanel');
+const CompetitorInspirationPanel = dynamic(
+  () => loadInspiration().then((m) => m.CompetitorInspirationPanel),
+  { loading: () => null },
+);
+const LibraryElementsGrid = dynamic(
+  () => import('./LibraryElementsGrid').then((m) => m.LibraryElementsGrid),
+  {
+    loading: () => null,
+  },
+);
+const PipelinePanel = dynamic(() => import('./PipelinePanel').then((m) => m.PipelinePanel), {
+  loading: () => null,
+});
+const TemplateGrid = dynamic(() => import('./TemplateGrid').then((m) => m.TemplateGrid), {
+  loading: () => null,
+});
+const TypographyPanel = dynamic(() => import('./TypographyPanel').then((m) => m.TypographyPanel), {
+  loading: () => null,
+});
+const loadTrash = () => import('./trash/TrashView');
+const TrashView = dynamic(() => loadTrash().then((m) => m.TrashView), {
+  loading: () => null,
+});
 
 // The detail stage (zoom, players, waveforms) loads when an asset is opened, not with the grid.
 
@@ -963,6 +988,7 @@ export function LibraryViewer({
             type="button"
             role="tab"
             aria-selected={view === id}
+            {...(id === 'inspiration' ? intentProps(loadInspiration) : {})}
             onClick={() => setView(id)}
             className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium capitalize ${
               view === id
@@ -1065,6 +1091,7 @@ export function LibraryViewer({
                         size="sm"
                         data-testid="library-trash-open"
                         aria-pressed={trashOpen}
+                        {...intentProps(loadTrash)}
                         onClick={() => {
                           setTrashOpen(!trashOpen);
                           setTrashUrl(!trashOpen);
