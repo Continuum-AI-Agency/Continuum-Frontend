@@ -107,7 +107,7 @@ describe('SpendResultsBalance hero', () => {
     const { container } = render(<TemplateExecutive block={block} />);
     const bands = [...container.querySelectorAll('polygon[data-band]')];
     expect(bands.map((band) => band.getAttribute('class'))).toEqual([
-      'text-success',
+      'text-success-ink',
       'text-muted-foreground',
       'text-muted-foreground',
       'text-warning',
