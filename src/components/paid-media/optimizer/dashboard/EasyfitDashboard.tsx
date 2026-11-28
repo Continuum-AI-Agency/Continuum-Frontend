@@ -7,8 +7,8 @@
 // GET /easyfit/config, which also feeds the edit panel for the roles that may write it.
 
 import type { EasyfitDashboardPayload, EasyfitPilotConfig } from '@continuum/contracts';
+import { PencilIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { Pencil } from '@/components/icons';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { ErrorRetryState } from '@/components/shared/state/ErrorRetryState';
 import { Button } from '@/components/ui/button';
@@ -132,7 +132,7 @@ export function EasyfitDashboard({ brandId }: { brandId: string }) {
         type="button"
         variant="secondary"
       >
-        <Pencil aria-hidden="true" className="size-3.5" />
+        <PencilIcon aria-hidden="true" className="size-3.5" />
         {t.config.open}
       </Button>
     ) : null;

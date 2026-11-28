@@ -14,8 +14,8 @@ import {
   type NotificationFrequency,
   type NotificationPreference,
 } from '@continuum/contracts';
+import { BellRing, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { BellRing, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -115,7 +115,7 @@ export function NotificationPreferences() {
   if (!grid) {
     return (
       <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-        <Spinner className="size-4 animate-spin" />
+        <Loader2 className="size-4 animate-spin" />
         {tUi('m_e41958acfe')}
       </div>
     );
@@ -250,7 +250,7 @@ function PushOnThisBrowser() {
           onClick={() => void enable()}
         >
           {state === 'working' ? (
-            <Spinner className="size-3.5 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin" />
           ) : (
             <BellRing className="size-3.5" />
           )}

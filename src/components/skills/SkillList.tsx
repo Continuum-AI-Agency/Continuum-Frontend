@@ -1,9 +1,9 @@
 'use client';
 
 import type { Skill } from '@continuum/contracts';
+import { Archive, Lock, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Archive, Lock, Pencil, Plus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 type Props = {

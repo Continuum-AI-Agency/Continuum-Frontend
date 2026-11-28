@@ -22,23 +22,23 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { useLocale, useTranslations } from 'next-intl';
-import * as React from 'react';
-import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import {
   ChevronLeft,
   ChevronRight,
   Info,
   Library,
+  Loader2,
   Maximize2,
   PencilRuler,
   Replace,
   Send,
-  Spinner,
   Trash2,
   Wand2,
   X,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import * as React from 'react';
+import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import {
   type SlotTarget,
   useDraftMediaPlacement,

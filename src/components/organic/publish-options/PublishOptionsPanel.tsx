@@ -15,8 +15,8 @@ import {
   type PublishOptionsByPlatform,
   type PublishPlatform,
 } from '@continuum/contracts';
+import { ImageUp, Loader2 } from 'lucide-react';
 import * as React from 'react';
-import { ImageUp, Spinner } from '@/components/icons';
 import { resolveDraftMedia } from '@/components/organic/primitives/DraftCardMedia';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { Switch } from '@/components/ui/switch';
@@ -466,7 +466,7 @@ function CoverPicker({
             )}
           >
             {uploading ? (
-              <Spinner className="size-3.5 animate-spin" aria-hidden />
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
             ) : (
               <ImageUp className="size-3.5" aria-hidden />
             )}

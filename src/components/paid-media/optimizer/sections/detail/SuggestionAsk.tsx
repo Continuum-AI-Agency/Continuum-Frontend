@@ -19,7 +19,8 @@ import {
   adhocSuggestionGateFor,
   adhocSuggestionGateNote,
 } from '@continuum/contracts';
-import { ArrowLeftRight, type IconComponent, ImagePlus, Users } from '@/components/icons';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowLeftRightIcon, ImagePlusIcon, UsersIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -34,10 +35,10 @@ type SuggestionAskProps = {
 
 /** Each category's glyph, tinted with the same tone tokens as that category's badge in
  *  Today's read (success / violet / teal), so an ask and the row it produces read as one. */
-const CATEGORY_ICON: Record<AdhocSuggestionCategory, { Icon: IconComponent; tone: string }> = {
-  audience: { Icon: Users, tone: 'bg-success/10 text-emerald-700 dark:text-emerald-300' },
-  budget: { Icon: ArrowLeftRight, tone: 'bg-primary/10 text-primary-ink' },
-  creative: { Icon: ImagePlus, tone: 'bg-secondary/10 text-sky-700 dark:text-sky-300' },
+const CATEGORY_ICON: Record<AdhocSuggestionCategory, { Icon: LucideIcon; tone: string }> = {
+  audience: { Icon: UsersIcon, tone: 'bg-success/10 text-emerald-700 dark:text-emerald-300' },
+  budget: { Icon: ArrowLeftRightIcon, tone: 'bg-primary/10 text-primary-ink' },
+  creative: { Icon: ImagePlusIcon, tone: 'bg-secondary/10 text-sky-700 dark:text-sky-300' },
 };
 
 export function SuggestionAsk({ gates, onAsk, pending, error = null }: SuggestionAskProps) {

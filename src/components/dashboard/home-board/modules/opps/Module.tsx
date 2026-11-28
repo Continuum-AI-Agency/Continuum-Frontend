@@ -7,10 +7,10 @@
 // portfolio's reads at a time. Platform cards (Google, TikTok) ride in as on the Actions page.
 
 import type { AccountCandidate, HomeOpportunitiesData, PlatformId } from '@continuum/contracts';
+import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight } from '@/components/icons';
 import { boardPaletteClass } from '@/components/paid-media/optimizer/sections/board/palette';
 import { OptimizerActionsPortfolioGroup } from '@/components/paid-media/optimizer/sections/OptimizerActionsPortfolioGroup';
 import {
@@ -109,9 +109,9 @@ export default function OppsModule({
                   type="button"
                 >
                   {open ? (
-                    <ChevronDown aria-hidden="true" className="size-4 shrink-0" />
+                    <ChevronDownIcon aria-hidden="true" className="size-4 shrink-0" />
                   ) : (
-                    <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
+                    <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0" />
                   )}
                   <span className="truncate">{waiting.name}</span>
                 </button>

@@ -8,9 +8,9 @@
 // in the markup and `dark:` picks one, which is the same at both ends; after it the JS branch
 // takes over so the toggle keeps its crossfade.
 
+import { Moon, Sun } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { Moon, Sun } from '@/components/icons';
 import { useHydrated } from '@/hooks/useHydrated';
 import type { ThemeAppearance } from '@/lib/theme/themeDom';
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { Position } from '@xyflow/react';
+import { Copy, Layout, Settings, Trash2, Users } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import React, { memo, useCallback } from 'react';
 import {
@@ -10,7 +11,6 @@ import {
   NodeHeader,
   NodeTitle,
 } from '@/components/ai-elements/node';
-import { Copy, Layout, Settings, Trash2, Users } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import {
   ContextMenu,

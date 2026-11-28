@@ -16,9 +16,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useTranslations as useUiTranslations } from 'next-intl';
-import type React from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
 import {
   ChevronDown,
   ChevronsDown,
@@ -27,11 +24,13 @@ import {
   Eye,
   EyeOff,
   GripVertical,
-  type IconComponent,
   Lock,
   LockOpen,
   TriangleAlert,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import type React from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -363,7 +362,7 @@ function LayerRow({
 export const ROW_ORDER_ITEMS: {
   move: LayerMove;
   label: string;
-  Icon: IconComponent;
+  Icon: typeof ChevronsUp;
   chord: string;
 }[] = [
   { move: 'top', label: 'Bring to front', Icon: ChevronsUp, chord: '⇧⌘]' },

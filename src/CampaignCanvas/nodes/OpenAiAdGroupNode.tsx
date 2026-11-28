@@ -1,5 +1,6 @@
 'use client';
 
+import { AlertCircle, CheckCircle2, Copy, Layers, Plus, Trash2, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useCallback, useMemo } from 'react';
 import {
@@ -9,7 +10,6 @@ import {
   NodeHeader,
   NodeTitle,
 } from '@/components/ai-elements/node';
-import { CircleAlert, CircleCheck, CircleX, Copy, Layers2, Plus, Trash2 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import {
   ContextMenu,
@@ -95,7 +95,7 @@ export const OpenAiAdGroupNode = memo(
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="rounded-md bg-emerald-500/10 p-1.5 text-emerald-500">
-                    <Layers2 className="h-4 w-4" />
+                    <Layers className="h-4 w-4" />
                   </div>
                   <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                     {uiText('ad_group_33500c3')}
@@ -103,13 +103,13 @@ export const OpenAiAdGroupNode = memo(
                 </div>
                 <div className="flex items-center gap-1">
                   {data.validationStatus === 'valid' && (
-                    <CircleCheck className="h-4 w-4 text-green-500" />
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
                   )}
                   {data.validationStatus === 'warning' && (
-                    <CircleAlert className="h-4 w-4 text-yellow-500" />
+                    <AlertCircle className="h-4 w-4 text-yellow-500" />
                   )}
                   {data.validationStatus === 'error' && (
-                    <CircleX className="h-4 w-4 text-destructive" />
+                    <XCircle className="h-4 w-4 text-destructive" />
                   )}
                 </div>
               </div>
@@ -169,7 +169,7 @@ export const OpenAiAdGroupNode = memo(
             <ContextMenuSub>
               <ContextMenuSubTrigger>
                 {uiText.rich('sentence_318ff6e0d8bb', {
-                  v0: () => <Layers2 className="mr-2 h-4 w-4" />,
+                  v0: () => <Layers className="mr-2 h-4 w-4" />,
                   v1: () => (
                     <ContextMenuItemInfo
                       className="ml-2 mr-4"

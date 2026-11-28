@@ -1,7 +1,7 @@
 'use client';
 
+import { BookmarkIcon, Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Bookmark, Spinner } from '@/components/icons';
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
 import { MessageScrollerItem } from '@/components/ui/message-scroller';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ export function ChatMarker({ kind, label, icon, id, className }: ChatMarkerProps
       className={cn(isStatus && 'animate-pulse', className)}
     >
       <MarkerIcon>
-        {icon ?? (isStatus ? <Spinner className="animate-spin" /> : <Bookmark />)}
+        {icon ?? (isStatus ? <Loader2 className="animate-spin" /> : <BookmarkIcon />)}
       </MarkerIcon>
       <MarkerContent>{label}</MarkerContent>
     </Marker>

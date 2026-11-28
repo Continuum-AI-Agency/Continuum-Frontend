@@ -2,10 +2,10 @@
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, isTextUIPart, type UIMessage } from 'ai';
+import { Bot, Loader2, Send, Sparkles, User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bot, Send, Sparkles, Spinner, User } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -132,7 +132,7 @@ export const CampaignChat = () => {
           {isLoading && (
             <div className="flex gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <Spinner className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               </div>
               <div className="rounded-lg bg-accent px-3 py-2 text-sm italic opacity-70">
                 {uiText('thinking_b4739a4')}

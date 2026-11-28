@@ -1,8 +1,9 @@
 'use client';
 
+import type { LucideIcon } from 'lucide-react';
+import { XIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps, HTMLAttributes } from 'react';
-import { type IconComponent, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -46,7 +47,7 @@ export const ArtifactClose = ({
       variant={variant}
       {...props}
     >
-      {children ?? <X className="size-4" />}
+      {children ?? <XIcon className="size-4" />}
       <span className="sr-only">{tUi('close_7d9eb7a')}</span>
     </Button>
   );
@@ -73,7 +74,7 @@ export const ArtifactActions = ({ className, ...props }: ArtifactActionsProps) =
 export type ArtifactActionProps = ComponentProps<typeof Button> & {
   tooltip?: string;
   label?: string;
-  icon?: IconComponent;
+  icon?: LucideIcon;
 };
 
 export const ArtifactAction = ({

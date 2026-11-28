@@ -13,7 +13,7 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // no Google member renders nothing.
 
 import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
-import { ArrowRight } from '@/components/icons';
+import { ArrowRightIcon } from 'lucide-react';
 import { TEXT_DISCLOSURE } from '../../../components/disclosure';
 import {
   currencyColumnSuffix,
@@ -108,7 +108,7 @@ function Before({ before, after }: { before: React.ReactNode; after: string | nu
       {before}
       {after ? (
         <span className="inline-flex items-center gap-1 text-primary-ink">
-          <ArrowRight aria-hidden="true" className="size-3" />
+          <ArrowRightIcon aria-hidden="true" className="size-3" />
           {after}
         </span>
       ) : null}

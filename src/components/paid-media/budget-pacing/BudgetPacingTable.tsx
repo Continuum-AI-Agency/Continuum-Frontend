@@ -1,8 +1,8 @@
 'use client';
 
+import { ChevronRight } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
-import { ChevronRight } from '@/components/icons';
 import { Progress } from '@/components/ui/progress';
 import type { BudgetPacingAdSetEntry, BudgetPacingEntry } from '@/lib/schemas/budgetPacing';
 import { cn } from '@/lib/utils';

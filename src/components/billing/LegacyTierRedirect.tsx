@@ -5,8 +5,8 @@ import { useTranslations } from 'next-intl';
 // verbatim. ProductGate renders it while billing is not live (every gated page, exactly as before)
 // and, once live, when a grandfathered brand below tier 3 opens Forge. Keep it at the cutover.
 
+import { ShieldAlert } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { ShieldAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/ToastProvider';

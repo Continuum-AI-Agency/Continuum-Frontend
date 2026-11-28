@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { fireEvent, screen } from '@testing-library/react';
+import { BookOpen } from 'lucide-react';
 import * as React from 'react';
-import { BookOpen } from '@/components/icons';
 import { render } from '@/i18n/__tests__/render';
 
 import {

@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 // Zero state for the Competitive Report: one primary action that kicks off the
 // full discover → pull → analyze → gap pipeline.
 
-import { Radar } from '@/components/icons';
+import { Radar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function ScanLauncher({

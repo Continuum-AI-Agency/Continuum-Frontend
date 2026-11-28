@@ -6,8 +6,8 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { type CreateAppTokenResponse, createAppTokenRequestSchema } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, Copy, Download } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
-import { ArrowDownToLine, Check, Copy } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import {
   AlertDialog,
@@ -327,7 +327,7 @@ export function DriveCliDownloads() {
             rel="noopener noreferrer"
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
-            <ArrowDownToLine aria-hidden />
+            <Download aria-hidden />
             {label}
           </a>
         ))}

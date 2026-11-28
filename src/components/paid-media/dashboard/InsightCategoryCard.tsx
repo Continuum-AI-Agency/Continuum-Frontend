@@ -1,15 +1,15 @@
 'use client';
 
+import type { LucideIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
-import type { IconComponent } from '@/components/icons';
 
 import type { ComputedInsight, InsightSeverity } from '@/lib/paid-media/account-insights.types';
 import { cn } from '@/lib/utils';
 
 type InsightCategoryCardProps = {
   title: string;
-  icon: IconComponent;
+  icon: LucideIcon;
   insights: ComputedInsight[];
   accentColor: string;
 };

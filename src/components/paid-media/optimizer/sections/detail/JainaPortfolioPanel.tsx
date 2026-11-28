@@ -15,8 +15,8 @@ import { useTranslations } from 'next-intl';
 // it without a window.
 
 import type { PortfolioListItem } from '@continuum/contracts';
+import { SendHorizontalIcon } from 'lucide-react';
 import * as React from 'react';
-import { Send } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
@@ -77,7 +77,7 @@ export function JainaPortfolioPanel({
             type="submit"
             variant="outline"
           >
-            <Send aria-hidden className="size-3.5" />
+            <SendHorizontalIcon aria-hidden className="size-3.5" />
             {uiText('ask_b8c209c')}
           </Button>
         </form>

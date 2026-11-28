@@ -1,9 +1,9 @@
 'use client';
 
 import type { VideoEditorOpOutput } from '@continuum/contracts';
+import { Download, RotateCcw } from 'lucide-react';
 import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
-import { ArrowDownToLine, RotateCcw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -137,7 +137,7 @@ export function VariantSwitcher({
         disabled={answeredFor !== projectId}
         onClick={() => setExportOpen(true)}
       >
-        <ArrowDownToLine className="size-3.5" /> {translateUi('export_all_variants_bc8f1f20')}
+        <Download className="size-3.5" /> {translateUi('export_all_variants_bc8f1f20')}
       </Button>
       {readError ? (
         <span role="alert" className="flex items-center gap-1 text-xs text-destructive">

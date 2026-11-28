@@ -1,21 +1,21 @@
 'use client';
 
 import type { DocumentCategory } from '@continuum/contracts';
-import { motion, useReducedMotion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
-import type { IconComponent as LucideIcon } from '@/components/icons';
+import type { LucideIcon } from 'lucide-react';
 import {
-  CircleAlert as AlertCircle,
-  CircleCheck as CheckCircle2,
+  AlertCircle,
+  CheckCircle2,
   FileSpreadsheet,
   FileText,
   FileType,
   Image as ImageIcon,
-  Spinner as Loader2,
+  Loader2,
   Presentation,
   RotateCw,
   X,
-} from '@/components/icons';
+} from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
 import { DocumentPreviewCard } from './DocumentPreviewCard';
@@ -236,7 +236,9 @@ export function DocumentRow({
               {uploadedLabel ? (
                 <>
                   {' · '}
-                  <time dateTime={doc.createdAt}>{uploadedLabel}</time>
+                  <time dateTime={doc.createdAt}>
+                    {uploadedLabel}
+                  </time>
                 </>
               ) : null}
             </span>

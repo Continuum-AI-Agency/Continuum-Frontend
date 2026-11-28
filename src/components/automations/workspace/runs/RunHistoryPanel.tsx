@@ -15,8 +15,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // the spec can drive the panel without a process-wide module mock.
 
 import type { AutomationRun } from '@continuum/contracts';
+import { ChevronDown, ChevronRight, History } from 'lucide-react';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, History } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

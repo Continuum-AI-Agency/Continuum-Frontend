@@ -10,8 +10,6 @@ import {
   type VideoEditorPoolAsset,
   type VideoEditorQuickStart,
 } from '@continuum/contracts';
-import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CircleDollarSign,
   Clapperboard,
@@ -24,7 +22,9 @@ import {
   Rotate3d,
   TriangleAlert,
   WandSparkles,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

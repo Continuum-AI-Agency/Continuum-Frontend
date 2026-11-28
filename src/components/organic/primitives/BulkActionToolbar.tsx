@@ -1,9 +1,9 @@
 'use client';
 
 import { format } from 'date-fns';
+import { Check, Image, SlidersHorizontal, Sparkles, Trash2, Video, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { Check, Image, SlidersHorizontal, Sparkles, Trash2, Video, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';

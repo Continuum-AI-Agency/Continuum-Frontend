@@ -1,10 +1,10 @@
 'use client';
 
+import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { formatBrandDisambiguationLines } from '@/components/admin/adminUserListUtils';
 import type { AdminBrandOption } from '@/components/admin/adminUserTypes';
-import { Check, ChevronsUpDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -82,7 +82,7 @@ export function BrandTransferCombobox({
                 placeholder
               )}
             </span>
-            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+            <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
           </Button>
         }
       />
@@ -107,7 +107,7 @@ export function BrandTransferCombobox({
                       setOpen(false);
                     }}
                   >
-                    <Check
+                    <CheckIcon
                       className={cn(
                         'mt-0.5 mr-2 size-4 shrink-0',
                         brand.id === value ? 'opacity-100' : 'opacity-0',

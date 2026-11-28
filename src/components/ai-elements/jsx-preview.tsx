@@ -1,5 +1,6 @@
 'use client';
 
+import { AlertCircle } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import {
   createContext,
@@ -13,7 +14,6 @@ import {
 } from 'react';
 import type { TProps as JsxParserProps } from 'react-jsx-parser';
 import JsxParser from 'react-jsx-parser';
-import { CircleAlert } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 interface JSXPreviewContextValue {
@@ -233,7 +233,7 @@ export const JSXPreviewError = memo(({ className, children, ...props }: JSXPrevi
         renderChildren(children, error)
       ) : (
         <>
-          <CircleAlert className="size-4 shrink-0" />
+          <AlertCircle className="size-4 shrink-0" />
           <span>{error.message}</span>
         </>
       )}

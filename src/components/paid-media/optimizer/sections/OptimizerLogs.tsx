@@ -17,8 +17,8 @@ import { useLocale, useTranslations } from 'next-intl';
 // actions.
 
 import type { OptimizerFeedWindowDays } from '@continuum/contracts';
+import { ScrollTextIcon } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
-import { ScrollText } from '@/components/icons';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { useOptimizerLogs } from '../useOptimizerData';
 import { FeedFooter, FeedSkeleton, PortfolioFilter } from './feedChrome';
@@ -91,7 +91,7 @@ export function OptimizerLogs({ brandId, windowDays = 7, controls, footer }: Opt
         <FeedToolbar controls={controls} />
         <EmptyState
           headline={uiText('activityNoRuns')}
-          media={<ScrollText aria-hidden="true" />}
+          media={<ScrollTextIcon aria-hidden="true" />}
           description={uiText('cycle_results_skips_and_failures_appear_here__027b174')}
         />
         {footer}

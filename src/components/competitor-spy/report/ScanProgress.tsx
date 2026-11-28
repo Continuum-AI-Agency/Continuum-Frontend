@@ -10,7 +10,7 @@ import { scanCountLabel } from './scanCountPresentation';
 // killing the layout.
 
 import type { CompetitorScanStage } from '@continuum/contracts';
-import { Check, Minus, Spinner } from '@/components/icons';
+import { Check, Loader2, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { humanize } from './gapPresentation';
 import type { CompetitorScanState, ScanStageState } from './scanReducer';
@@ -42,7 +42,7 @@ function StageIcon({ stage }: { stage: ScanStageState | undefined }) {
     return <span aria-hidden="true" className="size-2 rounded-full bg-border" />;
   }
   if (stage.status === 'started') {
-    return <Spinner aria-hidden="true" className="size-3.5 animate-spin text-primary" />;
+    return <Loader2 aria-hidden="true" className="size-3.5 animate-spin text-primary" />;
   }
   if (stage.status === 'skipped') {
     return <Minus aria-hidden="true" className="size-3.5 text-muted-foreground/60" />;

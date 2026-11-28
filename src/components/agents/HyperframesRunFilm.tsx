@@ -5,9 +5,9 @@ import {
   type HyperframesStoragePointer,
   hyperframesAgentEventSchema,
 } from '@continuum/contracts';
+import { Loader2Icon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useAgentRunStream } from '@/hooks/useAgentRunStream';
 import { useAgentRunStore } from '@/lib/agents/runStore';
@@ -59,7 +59,7 @@ export function HyperframesFilmView({ film }: { film: HyperframesFilm }) {
   if (film.state === 'running') {
     return (
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Spinner className="size-3 animate-spin" aria-hidden="true" />
+        <Loader2Icon className="size-3 animate-spin" aria-hidden="true" />
         {film.step ?? tUi('m_3d795f26ad')}
       </p>
     );

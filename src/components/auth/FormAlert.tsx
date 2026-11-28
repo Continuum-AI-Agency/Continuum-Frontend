@@ -1,5 +1,5 @@
 'use client';
-import { CircleCheck, Info, TriangleAlert } from '@/components/icons';
+import { CircleCheck, Info, TriangleAlert } from 'lucide-react';
 
 type FormAlertVariant = 'error' | 'success' | 'warning' | 'info';
 

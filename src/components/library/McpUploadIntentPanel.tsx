@@ -1,9 +1,9 @@
 'use client';
 
+import { CheckCircle2, CloudUpload, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
-import { CircleCheck, CloudUpload, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { useRouter } from '@/i18n/navigation';
@@ -80,7 +80,7 @@ export function McpUploadIntentPanel({ brandId }: Props) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             {state === 'completed' ? (
-              <CircleCheck className="size-4 text-emerald-500" />
+              <CheckCircle2 className="size-4 text-emerald-500" />
             ) : (
               <CloudUpload className="size-4 text-primary" />
             )}
@@ -140,7 +140,7 @@ export function McpUploadIntentPanel({ brandId }: Props) {
             }
             onClick={() => void finish()}
           >
-            {state === 'uploading' ? <Spinner className="size-4 animate-spin" /> : null}
+            {state === 'uploading' ? <Loader2 className="size-4 animate-spin" /> : null}
             {state === 'completed'
               ? translateUi('completed_22a970d2')
               : `Upload ${files.length || ''}`.trim()}

@@ -1,10 +1,10 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Check, SquarePen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, type FieldError, type FieldErrors, type Path, useForm } from 'react-hook-form';
-import { Check, SquarePen } from '@/components/icons';
 import { Pill, type PillProps } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

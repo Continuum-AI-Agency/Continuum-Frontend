@@ -1,7 +1,7 @@
 'use client';
 
+import { Check, CircleDashed, Link2, Target } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Check, CircleDashed, Link2, Target } from '@/components/icons';
 import type { GoalArtifactView, GoalWorkspaceView } from '@/lib/goals/models';
 import { orderArtifactsForManifest } from '@/lib/goals/models';
 import { cn } from '@/lib/utils';

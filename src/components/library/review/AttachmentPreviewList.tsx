@@ -3,8 +3,8 @@
 // anything else as a named file link. Presentational and hook-free, so the
 // Library sidebar and the server-rendered share page render the same thing.
 
+import { FileText } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { FileText } from '@/components/icons';
 
 export type AttachmentPreviewItem = {
   assetId: string;

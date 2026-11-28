@@ -1,7 +1,7 @@
 'use client';
 
+import { ChevronDownIcon, PaperclipIcon } from 'lucide-react';
 import type { ComponentProps } from 'react';
-import { ChevronDown, Paperclip } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -144,7 +144,7 @@ export const QueueItemFile = ({ children, className, ...props }: QueueItemFilePr
     className={cn('flex items-center gap-1 rounded border bg-muted px-2 py-1 text-xs', className)}
     {...props}
   >
-    <Paperclip size={12} />
+    <PaperclipIcon size={12} />
     <span className="max-w-[100px] truncate">{children}</span>
   </span>
 );
@@ -205,7 +205,7 @@ export const QueueSectionLabel = ({
   ...props
 }: QueueSectionLabelProps) => (
   <span className={cn('flex items-center gap-2', className)} {...props}>
-    <ChevronDown className="size-4 transition-transform group-data-[state=closed]:-rotate-90" />
+    <ChevronDownIcon className="size-4 transition-transform group-data-[state=closed]:-rotate-90" />
     {icon}
     <span>
       {count} {label}

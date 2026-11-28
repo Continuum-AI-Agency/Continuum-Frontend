@@ -1,6 +1,7 @@
 'use client';
 
 import type { ForgeAgentFrame, ForgeAgentRequest, ForgeAgentTool } from '@continuum/contracts';
+import { Check, Send, Sparkles, Square, TriangleAlert, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState, useMemo as useUiConfigMemo } from 'react';
 import {
@@ -10,7 +11,6 @@ import {
 } from '@/components/ai-elements/conversation';
 import { Message } from '@/components/ai-elements/message';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
-import { Check, Send, Sparkles, Square, TriangleAlert, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';

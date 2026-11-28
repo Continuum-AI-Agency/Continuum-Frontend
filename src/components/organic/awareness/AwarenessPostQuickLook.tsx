@@ -9,7 +9,7 @@ import { formatDecimal } from '@/lib/format/decimal';
 // live "Open post" permalink. While a detail fetch is in flight we show a light
 // skeleton so the card never looks "empty" on first hover.
 
-import { SquareArrowOutUpRight } from '@/components/icons';
+import { ExternalLink } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { UiLocale } from '@/i18n/config';
 import { hookRateTextColor } from '@/lib/organic/hook-rate-color';
@@ -97,7 +97,7 @@ export function AwarenessPostQuickLook({
           className="inline-flex items-center gap-1 text-xs text-accent transition-colors hover:text-foreground"
         >
           {uiText('open_post_92a0ae1')}
-          <SquareArrowOutUpRight className="size-3" aria-hidden />
+          <ExternalLink className="size-3" aria-hidden />
         </a>
       ) : null}
     </div>

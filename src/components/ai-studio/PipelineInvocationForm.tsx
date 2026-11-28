@@ -10,12 +10,12 @@ import {
   pipelineInvocationRequestSchema,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Box, FileImage, Loader2, Play } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { elementCategoryLabel } from '@/components/ai-studio/elements/elementPresentation';
-import { Box, FileImage, Play, Spinner } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,7 +125,7 @@ function AssetInput({
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {loading ? (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Spinner className="size-3 animate-spin" aria-hidden />{' '}
+          <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
           {translateUi('reading_the_library_c11aab21')}
         </p>
       ) : (
@@ -460,7 +460,7 @@ export function PipelineInvocationForm({
         </p>
       ) : null}
       <Button type="submit" size="sm" disabled={running}>
-        {running ? <Spinner className="size-3.5 animate-spin" aria-hidden /> : null}
+        {running ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
         {running ? translateUi('running_46c54136') : translateUi('run_pipeline_c415e404')}
       </Button>
       {receipt ? <PipelineReceipt capability={capability} receipt={receipt} /> : null}

@@ -1,20 +1,20 @@
 'use client';
 
-import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ChatMediaCarousel, ChatMediaThumb } from '@/components/chat/media/ChatMedia';
-import type { ChatMedia } from '@/components/chat/media/media';
+import type { LucideIcon } from 'lucide-react';
 import {
   ChevronDown,
   Clapperboard,
   GalleryHorizontalEnd,
-  type IconComponent,
-  Image,
+  ImageIcon,
   ImageOff,
   RectangleVertical,
   Sparkles,
   X,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ChatMediaCarousel, ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import type { ChatMedia } from '@/components/chat/media/media';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import { MetaRow, PlatformTag, StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -56,11 +56,11 @@ const FUNNEL_LABELS: Record<string, string> = {
   retention: 'Retention',
 };
 
-const FORMAT_ICONS: Record<string, IconComponent> = {
+const FORMAT_ICONS: Record<string, LucideIcon> = {
   reel: Clapperboard,
   carousel: GalleryHorizontalEnd,
   story: RectangleVertical,
-  post: Image,
+  post: ImageIcon,
 };
 
 // The well takes the shape of the thing it will hold, so a reel is recognisable as a reel
@@ -132,7 +132,7 @@ function MediaWell({
   const cover = media[0];
 
   if (!cover) {
-    const Icon = failed ? ImageOff : (FORMAT_ICONS[format ?? ''] ?? Image);
+    const Icon = failed ? ImageOff : (FORMAT_ICONS[format ?? ''] ?? ImageIcon);
     return (
       <div
         aria-hidden="true"

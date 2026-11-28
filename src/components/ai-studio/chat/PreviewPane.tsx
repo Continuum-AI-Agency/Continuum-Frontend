@@ -1,8 +1,8 @@
 'use client';
+import { RotateCw, Square, SquarePen } from 'lucide-react';
 import Image from 'next/image';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
-import { RotateCw, Square, SquarePen } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Video } from '@/components/ui/video';

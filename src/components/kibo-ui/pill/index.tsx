@@ -1,5 +1,5 @@
+import { ChevronDownIcon, ChevronUpIcon, MinusIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
-import { ChevronDown, ChevronUp, Minus } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -92,18 +92,18 @@ export type PillDeltaProps = {
 
 export const PillDelta = ({ className, delta }: PillDeltaProps) => {
   if (!delta) {
-    return <Minus className={cn('size-3 text-muted-foreground', className)} />;
+    return <MinusIcon className={cn('size-3 text-muted-foreground', className)} />;
   }
 
   if (delta > 0) {
-    return <ChevronUp className={cn('size-3 text-success', className)} />;
+    return <ChevronUpIcon className={cn('size-3 text-success', className)} />;
   }
 
-  return <ChevronDown className={cn('size-3 text-destructive', className)} />;
+  return <ChevronDownIcon className={cn('size-3 text-destructive', className)} />;
 };
 
 export type PillIconProps = {
-  icon: typeof ChevronUp;
+  icon: typeof ChevronUpIcon;
   className?: string;
 };
 

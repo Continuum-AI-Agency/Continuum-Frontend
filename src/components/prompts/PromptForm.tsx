@@ -1,9 +1,9 @@
 'use client';
 
 import type { Prompt } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { createBrandPrompt, updateBrandPrompt } from '@/lib/organic/prompts-api';
 
@@ -125,7 +125,7 @@ export function PromptForm({ brandId, initial, onCancelAction, onSavedAction }: 
           aria-busy={saving || undefined}
           onClick={save}
         >
-          {saving && <Spinner className="h-3.5 w-3.5 animate-spin" />}
+          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {initial ? uiText('save_changes_dd0ae7a') : uiText('m_c2d17a8fdc')}
         </Button>
       </div>

@@ -4,9 +4,9 @@
 // id (from the asset's link list) or by token (from a freshly made share URL).
 
 import type { ShareLinkDetailResponse } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { ShareLinkActivity } from './ShareLinkActivity';
@@ -40,7 +40,7 @@ export function ShareLinkPanel({ by }: { by: { id: string } | { token: string } 
   if (!detail) {
     return (
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Spinner className="size-3.5 animate-spin" aria-hidden />{' '}
+        <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
         {translateUi('loading_link_a58e52a2')}
       </p>
     );

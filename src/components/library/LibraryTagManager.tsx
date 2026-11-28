@@ -1,8 +1,8 @@
 'use client';
 
+import { Tags } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
-import { Tags } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,

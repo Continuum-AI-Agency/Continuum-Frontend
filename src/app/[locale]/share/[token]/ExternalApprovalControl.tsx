@@ -1,8 +1,8 @@
 'use client';
 
+import { Check, RotateCcw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
-import { Check, RotateCcw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';

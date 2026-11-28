@@ -1,9 +1,9 @@
 'use client';
 
+import { Send } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
-import { Send } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { sendVideoProjectAgentTurn } from '@/lib/api/videoProjects.client';

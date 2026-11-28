@@ -20,8 +20,8 @@ import type { UiLocale } from '@/i18n/config';
 //   measurement nobody took.
 
 import type { CommentTriggerRule, TrackedLinkStats } from '@continuum/contracts';
+import { MessageSquare, MousePointerClick, Plus, Power } from 'lucide-react';
 import React from 'react';
-import { MessageSquare, MousePointerClick, Plus, Power } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

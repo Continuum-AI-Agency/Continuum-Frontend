@@ -17,9 +17,9 @@ import type {
   MediaReviewStatus,
   MediaSource,
 } from '@continuum/contracts';
+import { BookmarkPlus, Loader2, Lock, Users } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
-import { BookmarkPlus, Lock, Spinner, Users } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -193,7 +193,7 @@ export function SaveFiltersAsCollection({
           disabled={!name.trim() || saving}
           onClick={() => void save()}
         >
-          {saving ? <Spinner className="size-3.5 animate-spin" /> : null}{' '}
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}{' '}
           {translateUi('save_collection_bca66b42')}
         </Button>
       </PopoverContent>

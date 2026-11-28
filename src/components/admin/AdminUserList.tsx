@@ -7,6 +7,27 @@ import {
   adminAccessUpdateResponseSchema,
   type ProductCode,
 } from '@continuum/contracts';
+import {
+  ArrowRightLeft,
+  Building2,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Globe2,
+  History,
+  Library,
+  Loader2,
+  Lock,
+  Mail,
+  PlayCircle,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Trash2,
+  UserCog,
+  XCircle,
+} from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
@@ -43,27 +64,6 @@ import type {
 import { BrandAccessEditor } from '@/components/admin/BrandAccessEditor';
 import { BrandTransferCombobox } from '@/components/admin/BrandTransferCombobox';
 import { BrandsTab } from '@/components/admin/tabs/BrandsTab';
-import {
-  ArrowLeftRight,
-  Building2,
-  ChevronDown,
-  ChevronRight,
-  CircleCheck,
-  CircleX,
-  Copy,
-  Earth,
-  History,
-  Library,
-  Lock,
-  Mail,
-  PlayCircle,
-  RefreshCw,
-  Search,
-  ShieldAlert,
-  Spinner,
-  Trash2,
-  UserCog,
-} from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -1279,7 +1279,7 @@ export function AdminUserList({
                 </Label>
                 <div className="relative">
                   {isDirectoryUpdating ? (
-                    <Spinner className="absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    <Loader2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
                   ) : (
                     <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   )}
@@ -1307,7 +1307,7 @@ export function AdminUserList({
                         commitSearch('');
                       }}
                     >
-                      <CircleX className="size-3.5" />
+                      <XCircle className="size-3.5" />
                     </Button>
                   ) : null}
                 </div>
@@ -1440,7 +1440,7 @@ export function AdminUserList({
                                   {uiText.rich('sentence_8fe535707c22', {
                                     v0: () =>
                                       pendingActions[`impersonate:${user.id}`] ? (
-                                        <Spinner className="size-4 animate-spin" />
+                                        <Loader2 className="size-4 animate-spin" />
                                       ) : null,
                                   })}
                                 </Button>
@@ -1554,7 +1554,7 @@ export function AdminUserList({
                       {uiText.rich('sentence_8fe535707c22', {
                         v0: () =>
                           pendingActions[`impersonate:${selectedUser.id}`] ? (
-                            <Spinner className="size-4 animate-spin" />
+                            <Loader2 className="size-4 animate-spin" />
                           ) : null,
                       })}
                     </Button>
@@ -1566,7 +1566,7 @@ export function AdminUserList({
                           disabled={Boolean(pendingActions[`admin:${selectedUser.id}`])}
                         >
                           {pendingActions[`admin:${selectedUser.id}`] ? (
-                            <Spinner className="size-4 animate-spin" />
+                            <Loader2 className="size-4 animate-spin" />
                           ) : null}
                           {selectedUser.isAdmin ? uiText('m_14652b698d') : uiText('m_84ec1c9afa')}
                         </Button>
@@ -1598,7 +1598,7 @@ export function AdminUserList({
                           {uiText.rich('sentence_3485728deb6d', {
                             v0: () =>
                               pendingActions[`full-access:${selectedUser.id}`] ? (
-                                <Spinner className="size-4 animate-spin" />
+                                <Loader2 className="size-4 animate-spin" />
                               ) : null,
                           })}
                         </Button>
@@ -1627,9 +1627,9 @@ export function AdminUserList({
                           className="flex items-start gap-1.5"
                         >
                           {result.ok ? (
-                            <CircleCheck className="mt-px size-3.5 shrink-0 text-emerald-500" />
+                            <CheckCircle2 className="mt-px size-3.5 shrink-0 text-emerald-500" />
                           ) : (
-                            <CircleX className="mt-px size-3.5 shrink-0 text-destructive" />
+                            <XCircle className="mt-px size-3.5 shrink-0 text-destructive" />
                           )}
                           <span className="min-w-0">
                             <span className="text-foreground">{result.brandName}</span>{' '}
@@ -1759,7 +1759,7 @@ export function AdminUserList({
                                     {uiText.rich('sentence_3a3421e4f359', {
                                       v0: () =>
                                         pendingActions[removeActionId] ? (
-                                          <Spinner className="size-4 animate-spin" />
+                                          <Loader2 className="size-4 animate-spin" />
                                         ) : (
                                           <Trash2 className="size-4" />
                                         ),
@@ -1920,7 +1920,7 @@ export function AdminUserList({
                           <TableCell>
                             {workflow.visibility === 'global' ? (
                               <Badge variant="secondary" className="gap-1">
-                                <Earth className="size-3" />
+                                <Globe2 className="size-3" />
                                 {uiText('m_5f1184f7df')}
                               </Badge>
                             ) : (
@@ -1949,7 +1949,7 @@ export function AdminUserList({
                   <div>
                     <div className="flex items-center gap-2">
                       {focusedWorkflow.visibility === 'global' ? (
-                        <Earth className="size-4 text-brand-primary" />
+                        <Globe2 className="size-4 text-brand-primary" />
                       ) : (
                         <Library className="size-4 text-brand-primary" />
                       )}
@@ -2002,9 +2002,9 @@ export function AdminUserList({
                   {transferResults.map((result) => (
                     <li key={result.workflowId} className="flex items-start gap-2 text-xs">
                       {result.status === 'success' ? (
-                        <CircleCheck className="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
+                        <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
                       ) : (
-                        <CircleX className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                        <XCircle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
                       )}
                       <div className="min-w-0">
                         <p className="truncate text-foreground">{result.workflowName}</p>
@@ -2059,9 +2059,9 @@ export function AdminUserList({
                           {uiText.rich('sentence_5296add61fa3', {
                             v0: () =>
                               pendingActions['workflow-bulk:move'] ? (
-                                <Spinner className="size-4 animate-spin" />
+                                <Loader2 className="size-4 animate-spin" />
                               ) : (
-                                <ArrowLeftRight className="size-4" />
+                                <ArrowRightLeft className="size-4" />
                               ),
                           })}
                         </Button>
@@ -2086,7 +2086,7 @@ export function AdminUserList({
                           {uiText.rich('sentence_de01e13eed31', {
                             v0: () =>
                               pendingActions['workflow-bulk:copy'] ? (
-                                <Spinner className="size-4 animate-spin" />
+                                <Loader2 className="size-4 animate-spin" />
                               ) : (
                                 <Copy className="size-4" />
                               ),
@@ -2111,9 +2111,9 @@ export function AdminUserList({
                           {uiText.rich('sentence_c9d678a8466c', {
                             v0: () =>
                               pendingActions['workflow-bulk:promote'] ? (
-                                <Spinner className="size-4 animate-spin" />
+                                <Loader2 className="size-4 animate-spin" />
                               ) : (
-                                <Earth className="size-4" />
+                                <Globe2 className="size-4" />
                               ),
                           })}
                         </Button>
@@ -2141,7 +2141,7 @@ export function AdminUserList({
                         {uiText.rich('sentence_30b478ae35ac', {
                           v0: () =>
                             pendingActions['workflow-bulk:assign'] ? (
-                              <Spinner className="size-4 animate-spin" />
+                              <Loader2 className="size-4 animate-spin" />
                             ) : (
                               <Building2 className="size-4" />
                             ),
@@ -2239,7 +2239,7 @@ export function AdminUserList({
               {uiText.rich('sentence_33ac68602e96', {
                 v0: () =>
                   isAuditLoading ? (
-                    <Spinner className="size-4 animate-spin" />
+                    <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <RefreshCw className="size-4" />
                   ),
@@ -2333,7 +2333,7 @@ export function AdminUserList({
                             className="gap-1"
                           >
                             {entry.status === 'success' ? (
-                              <CircleCheck className="size-3" />
+                              <CheckCircle2 className="size-3" />
                             ) : (
                               <ShieldAlert className="size-3" />
                             )}
@@ -2519,7 +2519,7 @@ export function AdminUserList({
                   {uiText.rich('sentence_d3d8d23c6043', {
                     v0: () =>
                       isReportSmokeLoading ? (
-                        <Spinner className="size-4 animate-spin" />
+                        <Loader2 className="size-4 animate-spin" />
                       ) : (
                         <PlayCircle className="size-4" />
                       ),
@@ -2533,7 +2533,7 @@ export function AdminUserList({
                   {uiText.rich('sentence_ad906f311213', {
                     v0: () =>
                       isReportSmokeLoading ? (
-                        <Spinner className="size-4 animate-spin" />
+                        <Loader2 className="size-4 animate-spin" />
                       ) : (
                         <Mail className="size-4" />
                       ),
@@ -2572,7 +2572,7 @@ export function AdminUserList({
                 </Alert>
               ) : (
                 <Alert className="border-emerald-200 bg-emerald-50/60 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-                  <CircleCheck className="size-4" />
+                  <CheckCircle2 className="size-4" />
                   <AlertTitle>
                     {reportSmokeResult.sent
                       ? uiText('smoke_email_sent_0bea2a1')

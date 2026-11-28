@@ -45,7 +45,6 @@ import { pickerProviderStatusLabel } from './platformPickerModel';
 import type { OptimizationObjective, PortfolioLevel } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -53,7 +52,8 @@ import {
   SearchX,
   ServerCrash,
   TriangleAlert,
-} from '@/components/icons';
+} from 'lucide-react';
+import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';

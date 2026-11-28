@@ -9,10 +9,10 @@
 // Motion: the slots come in with a short stagger, and a slot the reading moves slides to its new
 // place (a shared layout, FLIP). Both are off under reduced motion.
 
+import { CircleAlertIcon } from 'lucide-react';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { type ReactNode, Suspense } from 'react';
-import { CircleAlert } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { JainaEntryChips } from '../JainaEntryChips';
 import type { JainaEntry } from '../jainaEntryModel';
@@ -68,7 +68,7 @@ export function AdaptiveBoard({ ctx, loading = false, toggle, asks = [] }: Adapt
               className="flex items-start gap-1.5 text-muted-foreground text-xs"
               key={`${notice.module}:${notice.reason}`}
             >
-              <CircleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+              <CircleAlertIcon aria-hidden="true" className="mt-px size-3.5 shrink-0" />
               <span>{notice.reason}</span>
             </li>
           ))}

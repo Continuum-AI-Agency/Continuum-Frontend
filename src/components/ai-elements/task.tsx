@@ -1,7 +1,14 @@
 'use client';
 
+import {
+  AlertCircleIcon,
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  CircleIcon,
+  FileIcon,
+  Loader2Icon,
+} from 'lucide-react';
 import type { ComponentProps, ReactElement } from 'react';
-import { ChevronDown, Circle, CircleAlert, CircleCheck, File, Spinner } from '@/components/icons';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
@@ -17,7 +24,7 @@ export const TaskItemFile = ({ children, className, ...props }: TaskItemFileProp
     )}
     {...props}
   >
-    <File className="size-3 text-muted-foreground" />
+    <FileIcon className="size-3 text-muted-foreground" />
     {children}
   </div>
 );
@@ -86,7 +93,7 @@ export const TaskTrigger = ({
               {progress.current}/{progress.total}
             </span>
           )}
-          <ChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+          <ChevronDownIcon className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
         </button>
       )
     }
@@ -96,13 +103,13 @@ export const TaskTrigger = ({
 function StatusIcon({ status }: { status: TaskStatus }) {
   switch (status) {
     case 'completed':
-      return <CircleCheck className="size-4 text-indigo-500 shrink-0" />;
+      return <CheckCircle2Icon className="size-4 text-indigo-500 shrink-0" />;
     case 'in_progress':
-      return <Spinner className="size-4 text-indigo-400 animate-spin shrink-0" />;
+      return <Loader2Icon className="size-4 text-indigo-400 animate-spin shrink-0" />;
     case 'error':
-      return <CircleAlert className="size-4 text-red-500 shrink-0" />;
+      return <AlertCircleIcon className="size-4 text-red-500 shrink-0" />;
     default:
-      return <Circle className="size-4 text-muted-foreground/40 shrink-0" />;
+      return <CircleIcon className="size-4 text-muted-foreground/40 shrink-0" />;
   }
 }
 

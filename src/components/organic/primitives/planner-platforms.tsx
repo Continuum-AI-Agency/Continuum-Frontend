@@ -1,5 +1,5 @@
 import { PLATFORM_CAPABILITIES, PUBLISH_PLATFORM_ORDER } from '@continuum/contracts';
-import { CircleDashed } from '@/components/icons';
+import { CircleDashed } from 'lucide-react';
 
 import {
   FacebookIcon,

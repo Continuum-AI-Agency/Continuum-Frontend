@@ -4,9 +4,10 @@ import type {
   AutomationWorkflowDefinition,
   ListAutomationTemplatesResponse,
 } from '@continuum/contracts';
+import { ArrowRight, LoaderCircle, Plus, Sparkles } from 'lucide-react';
+
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
-import { ArrowRight, Plus, Sparkles, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { useRouter } from '@/i18n/navigation';
@@ -101,7 +102,7 @@ export function AutomationTemplateGallery({ brandId }: { brandId: string }) {
             {uiText.rich('sentence_45d022a6a89e', {
               v0: () =>
                 creatingId === 'blank' ? (
-                  <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <Plus className="mr-1.5 h-3.5 w-3.5" />
                 ),
@@ -130,7 +131,7 @@ export function AutomationTemplateGallery({ brandId }: { brandId: string }) {
               {uiText.rich('sentence_162ef5d3b999', {
                 v0: () =>
                   creatingId === template.id ? (
-                    <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <ArrowRight className="mr-1.5 h-3.5 w-3.5" />
                   ),

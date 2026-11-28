@@ -3,10 +3,10 @@ import { beforeEach, expect, test, vi } from 'bun:test';
 import type { AdminPagination, AdminUser, PermissionRow } from '@/components/admin/adminUserTypes';
 import { renderToStaticMarkup } from '@/i18n/__tests__/render';
 
-// The icon set used to be mocked here with a hand-written allowlist of glyph names. That
+// lucide-react used to be mocked here with a hand-written allowlist of glyph names. That
 // allowlist could only ever be a snapshot: every icon a new child component reached for
 // resolved against the real CJS bundle instead and threw `Export named 'X' not found`,
-// which failed the whole file before a single assertion ran. The real module renders
+// which failed the whole file before a single assertion ran. The real package renders
 // fine under renderToStaticMarkup, so there is nothing to mock.
 
 const routerPushSpy = vi.fn<(path: string) => void>();

@@ -9,10 +9,10 @@ import {
   type MediaAsset,
   type TransformOutputMode,
 } from '@continuum/contracts';
+import { Crop, Expand, Loader2, Scaling } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type { ReactElement } from 'react';
 import { useCallback, useState } from 'react';
-import { Crop, Expand, Scaling, Spinner } from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -124,7 +124,7 @@ export function QuickReformatMenu({
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="flex items-center gap-2">
           {running ? (
-            <Spinner className="size-3.5 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin" />
           ) : (
             <Scaling className="size-3.5" />
           )}{' '}

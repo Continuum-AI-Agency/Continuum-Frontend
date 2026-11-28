@@ -1,10 +1,10 @@
 'use client';
 
+import { Loader2, RefreshCw, Search, Workflow } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { ACCESS_PRODUCTS, formatDate } from '@/components/admin/adminUserListUtils';
 import type { AdminBrandOption } from '@/components/admin/adminUserTypes';
-import { RefreshCw, Search, Spinner, Workflow } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,7 +75,7 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
             {uiText.rich('sentence_33ac68602e96', {
               v0: () =>
                 isLoading ? (
-                  <Spinner className="size-4 animate-spin" />
+                  <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <RefreshCw className="size-4" />
                 ),

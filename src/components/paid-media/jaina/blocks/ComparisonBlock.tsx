@@ -1,7 +1,7 @@
 'use client';
 
+import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { ArrowDown as ArrowDownIcon, ArrowUp as ArrowUpIcon } from '@/components/icons';
 import {
   Table,
   TableBody,

@@ -1,8 +1,9 @@
 'use client';
 
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+
 import * as React from 'react';
-import { ChevronLeft, ChevronRight } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatDayId, startOfWeek } from './calendar-utils';

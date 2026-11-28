@@ -1,10 +1,10 @@
 'use client';
 
+import { GaugeCircleIcon, RotateCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { persistCampaignInsightsSnapshot } from '@/app/[locale]/_actions/paidMediaInsights';
-import { GaugeCircle, RotateCw } from '@/components/icons';
 import { BudgetPacingWidget } from '@/components/paid-media/budget-pacing/BudgetPacingWidget';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -164,7 +164,7 @@ export function CampaignPerformanceTab({
       <div className="grid h-full min-h-[24rem] place-items-center rounded-lg border border-dashed border-border/70 bg-muted/10 p-8">
         <div className="max-w-sm text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-border/70 bg-card text-muted-foreground">
-            <GaugeCircle className="h-5 w-5" />
+            <GaugeCircleIcon className="h-5 w-5" />
           </div>
           <h2 className="mt-3 text-sm font-semibold tracking-tight">
             {uiText('pick_an_ad_account_ae46c35')}

@@ -9,13 +9,13 @@ import {
   plannerDayIdInZone,
   resolvePlannerTimeZone,
 } from '@continuum/contracts';
+import { ChevronLeft, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { ChevronLeft, X } from '@/components/icons';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';

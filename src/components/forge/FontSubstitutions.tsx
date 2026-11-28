@@ -1,9 +1,9 @@
 'use client';
 
 import type { TemplateFontCandidatesResponse } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -127,7 +127,7 @@ export function FontSubstitutions({
             )
           }
         >
-          {busy ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}{' '}
+          {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
           {translateUi('use_these_fonts_9a011288')}
         </Button>
         <Button type="button" size="xs" variant="outline" disabled={busy} onClick={onUpload}>

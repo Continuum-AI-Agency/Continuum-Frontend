@@ -16,11 +16,11 @@ import {
   useNodeId,
   useReactFlow,
 } from '@xyflow/react';
+import { Copy, Layers, SquarePen, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { Copy, Layers2, SquarePen, Trash2 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -200,7 +200,7 @@ export function LayerEditorBlock({
                     />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-3 text-center">
-                      <Layers2 className="h-6 w-6 text-muted-foreground" />
+                      <Layers className="h-6 w-6 text-muted-foreground" />
                       <p className="text-2xs text-muted-foreground">
                         {inputConnections === 0
                           ? translateUi('connect_images_to_stack_them_15abb035')

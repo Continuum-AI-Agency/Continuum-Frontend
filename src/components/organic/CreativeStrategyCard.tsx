@@ -12,8 +12,8 @@ import { useLocale, useTranslations } from 'next-intl';
 // placeholder while assembling).
 
 import type { CreativeLeaderboardEntry } from '@continuum/contracts';
+import { TrendingUp } from 'lucide-react';
 import * as React from 'react';
-import { TrendingUp } from '@/components/icons';
 
 import { Pill, type PillProps, PillStatus } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

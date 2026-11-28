@@ -8,9 +8,9 @@
 // so the confirm overwrites the bytes in place and read URLs are signed per-mint.
 
 import type { MediaAsset } from '@continuum/contracts';
+import { Aperture, Check, Loader2 } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
-import { Aperture, Check, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
@@ -131,7 +131,7 @@ export function PosterFramePicker({ brandId, asset, src, onPosterChanged }: Prop
             {formatDecimal(scrubMs / 1000, 1, decimalLocale)}s
           </span>
           <Button type="button" size="sm" onClick={() => void confirm()} disabled={busy}>
-            {busy ? <Spinner className="size-4 animate-spin" /> : <Check className="size-4" />}{' '}
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{' '}
             {translateUi('set_poster_b258b95c')}
           </Button>
         </div>

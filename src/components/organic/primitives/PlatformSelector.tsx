@@ -14,8 +14,8 @@ import {
   PUBLISH_PLATFORM_ORDER,
   type PublishPlatform,
 } from '@continuum/contracts';
+import { ChevronDown } from 'lucide-react';
 import * as React from 'react';
-import { ChevronDown } from '@/components/icons';
 import {
   FacebookIcon,
   type IconComponent,

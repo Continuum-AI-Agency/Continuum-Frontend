@@ -12,7 +12,7 @@ import { useTranslations } from 'next-intl';
 // there is no pointer-capture code here to get wrong.
 
 import { NumberField as NumberFieldPrimitive } from '@base-ui/react/number-field';
-import { ChevronDown, ChevronUp } from '@/components/icons';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { fractionDigitsForStep } from './number-flow-value';

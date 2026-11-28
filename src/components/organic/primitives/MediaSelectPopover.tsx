@@ -3,9 +3,9 @@
 
 import type { MediaAsset, PublishFormat } from '@continuum/contracts';
 import { creativeRefFromAsset, findMultiVideoSelectionError } from '@continuum/contracts';
+import { ImageOff, Loader2, PencilRuler, Play, Search, Wand2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { ImageOff, PencilRuler, Play, Search, Spinner, Wand2 } from '@/components/icons';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { AssetStill } from '@/components/media/AssetStill';
 import { Button } from '@/components/ui/button';
@@ -219,7 +219,7 @@ export function MediaSelectPopover({
                 {uiText.rich('sentence_2ff2fbd2390b', {
                   v0: () =>
                     isEnriching ? (
-                      <Spinner className="h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
                       <PencilRuler className="h-3.5 w-3.5" />
                     ),
@@ -238,7 +238,7 @@ export function MediaSelectPopover({
                 {uiText.rich('sentence_c92d2db48b68', {
                   v0: () =>
                     isGenerating ? (
-                      <Spinner className="h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
                       <Wand2 className="h-3.5 w-3.5" />
                     ),

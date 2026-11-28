@@ -3,8 +3,6 @@ import { useTranslations } from 'next-intl';
 
 type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
 
-import { motion } from 'motion/react';
-import { Task, TaskContent, type TaskStatus, TaskTrigger } from '@/components/ai-elements/task';
 import {
   Ban,
   Circle,
@@ -12,10 +10,12 @@ import {
   CircleDashed,
   CircleMinus,
   CircleX,
-  Clock,
-  type IconComponent,
-  Spinner,
-} from '@/components/icons';
+  Clock3,
+  LoaderCircle,
+  type LucideIcon,
+} from 'lucide-react';
+import { motion } from 'motion/react';
+import { Task, TaskContent, type TaskStatus, TaskTrigger } from '@/components/ai-elements/task';
 import type { JainaObjective, JainaObjectiveStatus } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import {
@@ -29,7 +29,7 @@ type ObjectivesQueueProps = {
   isStreaming: boolean;
 };
 
-type StatusLook = { icon: IconComponent; iconClassName: string; titleClassName?: string };
+type StatusLook = { icon: LucideIcon; iconClassName: string; titleClassName?: string };
 
 const STATUS_LOOK: Readonly<Record<JainaObjectiveStatus, StatusLook>> = {
   completed: {
@@ -38,12 +38,12 @@ const STATUS_LOOK: Readonly<Record<JainaObjectiveStatus, StatusLook>> = {
     titleClassName: 'line-through text-muted-foreground opacity-65',
   },
   in_progress: {
-    icon: Spinner,
+    icon: LoaderCircle,
     iconClassName: 'text-indigo-400 animate-spin',
     titleClassName: 'text-foreground',
   },
   partial: { icon: CircleDashed, iconClassName: 'text-amber-500' },
-  deferred: { icon: Clock, iconClassName: 'text-muted-foreground/70' },
+  deferred: { icon: Clock3, iconClassName: 'text-muted-foreground/70' },
   blocked: { icon: Ban, iconClassName: 'text-amber-600' },
   failed: { icon: CircleX, iconClassName: 'text-destructive', titleClassName: 'text-destructive' },
   cancelled: {

@@ -9,9 +9,9 @@
 // control in the header, not a value anyone can overwrite from a select.
 
 import type { AssetFieldValue, CustomField, CustomFieldValue } from '@continuum/contracts';
+import { Loader2, Settings2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
-import { Settings2, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
@@ -166,7 +166,7 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-medium text-muted-foreground">{field.name}</span>
                 {savingFieldId === field.id ? (
-                  <Spinner className="size-3 animate-spin text-muted-foreground" />
+                  <Loader2 className="size-3 animate-spin text-muted-foreground" />
                 ) : null}
               </div>
               <CustomFieldValueEditor

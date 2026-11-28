@@ -1,9 +1,9 @@
 'use client';
 
 import type { ClientRenderJob } from '@continuum/contracts';
+import { Cpu, ExternalLink, Loader2, RotateCcw, Square, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Cpu, RotateCcw, Spinner, Square, SquareArrowOutUpRight, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -112,7 +112,7 @@ export function ClientRenderInbox() {
                           aria-label={uiText('m_31a7604a3c')}
                           onClick={() => window.location.assign(job.executionSpec.origin.viewHref)}
                         >
-                          <SquareArrowOutUpRight />
+                          <ExternalLink />
                         </Button>
                         {job.state === 'ready' ? (
                           <Button
@@ -194,7 +194,7 @@ export function ClientRenderInbox() {
               {uiText('cancel_19766ed')}
             </Button>
             <Button type="button" disabled={starting} onClick={() => void confirm()}>
-              {starting ? <Spinner className="animate-spin" /> : <Cpu />}
+              {starting ? <Loader2 className="animate-spin" /> : <Cpu />}
               {uiText('m_6d2c0923ec')}
             </Button>
           </DialogFooter>

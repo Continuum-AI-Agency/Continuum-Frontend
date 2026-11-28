@@ -11,10 +11,17 @@
 // tab's rows read it — the same query keys, so the lanes cost no read the tab did not make.
 
 import type { PortfolioListItem } from '@continuum/contracts';
+import {
+  CheckIcon,
+  ClockIcon,
+  type LucideIcon,
+  PlusIcon,
+  TargetIcon,
+  TriangleAlertIcon,
+} from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
-import { Check, Clock, type IconComponent, Plus, Target, TriangleAlert } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
@@ -96,12 +103,12 @@ function GoogleLanes({ ctx, slot }: BoardModuleProps) {
   );
 }
 
-const STATUS_STYLE: Record<LaneStatus, { icon: IconComponent; tone: string }> = {
-  'on-track': { icon: Check, tone: 'border-success/30 text-success-ink' },
-  'above-goal': { icon: TriangleAlert, tone: 'border-destructive/30 text-destructive-ink' },
-  'no-goal': { icon: Target, tone: 'border-border text-muted-foreground' },
-  'lost-ad-sets': { icon: TriangleAlert, tone: 'border-destructive/30 text-destructive-ink' },
-  unread: { icon: Clock, tone: 'border-border text-muted-foreground' },
+const STATUS_STYLE: Record<LaneStatus, { icon: LucideIcon; tone: string }> = {
+  'on-track': { icon: CheckIcon, tone: 'border-success/30 text-success-ink' },
+  'above-goal': { icon: TriangleAlertIcon, tone: 'border-destructive/30 text-destructive-ink' },
+  'no-goal': { icon: TargetIcon, tone: 'border-border text-muted-foreground' },
+  'lost-ad-sets': { icon: TriangleAlertIcon, tone: 'border-destructive/30 text-destructive-ink' },
+  unread: { icon: ClockIcon, tone: 'border-border text-muted-foreground' },
 };
 
 function applyModeLabel(portfolio: PortfolioListItem): string {
@@ -138,7 +145,7 @@ function LanesView({
             onClick={ctx.onCreatePortfolio}
             type="button"
           >
-            <Plus aria-hidden="true" className="size-3.5" />
+            <PlusIcon aria-hidden="true" className="size-3.5" />
             {uiText('create_a_portfolio_2283fad')}
           </button>
         </p>

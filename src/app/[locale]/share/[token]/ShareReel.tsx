@@ -5,8 +5,8 @@ import { useTranslations } from 'next-intl';
 // Reel layout: one asset at a time, full width, with previous/next and the
 // arrow keys. Every slide is server-rendered; this only chooses which shows.
 
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 export function ShareReel({ slides, labels }: { slides: ReactNode[]; labels: string[] }) {

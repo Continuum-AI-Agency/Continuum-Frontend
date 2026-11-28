@@ -1,8 +1,8 @@
 'use client';
 
+import { FileText, Layers, Video } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type ReactNode, useState } from 'react';
-import { FileText, Layers2, Video } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import { cn } from '@/lib/utils';
@@ -40,7 +40,7 @@ export function SessionContentTray({ items, onInsert, renderPreview }: Props) {
             aria-label={tUi('m_ae3c3affa4')}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
           >
-            <Layers2 className="h-3.5 w-3.5" />
+            <Layers className="h-3.5 w-3.5" />
             {tUi('m_f7f1997c6c')}
             <span className="rounded bg-muted px-1 text-2xs tabular-nums">{items.length}</span>
           </button>

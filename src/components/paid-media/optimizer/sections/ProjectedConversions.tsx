@@ -15,8 +15,8 @@ import { useLocale, useTranslations } from 'next-intl';
 // expanded, so an account with twenty CBO campaigns fires zero previews on mount.
 
 import type { CycleItemRow } from '@continuum/contracts';
+import { ChevronDownIcon, Loader2Icon, SparklesIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { ChevronDown, Sparkles, Spinner } from '@/components/icons';
 
 import { Badge } from '@/components/ui/badge';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
@@ -128,12 +128,12 @@ function ProjectedConversionCard({
         >
           {uiText.rich('sentence_d938f59aa386', {
             v0: () => (
-              <ChevronDown
+              <ChevronDownIcon
                 className={`size-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
                 aria-hidden="true"
               />
             ),
-            v1: () => <Sparkles className="size-3.5 text-primary-ink" aria-hidden="true" />,
+            v1: () => <SparklesIcon className="size-3.5 text-primary-ink" aria-hidden="true" />,
             v2: () => (
               <span className="font-normal text-muted-foreground">
                 {uiText('what_the_optimizer_would_do_600f2e8')}
@@ -171,7 +171,7 @@ function ProjectedCycleBody({
   if (isPending || outcome == null) {
     return (
       <p className="flex items-center gap-2 text-muted-foreground text-sm" role="status">
-        <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
+        <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
         {uiText('running_the_optimizer_over_the_projected_ad_s_d686cd9')}
       </p>
     );

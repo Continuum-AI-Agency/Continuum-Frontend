@@ -65,9 +65,9 @@ import {
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Archive, ChevronDown, Loader2, Pause, Play, SparklesIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type Control, useController, useForm } from 'react-hook-form';
-import { Archive, ChevronDown, Pause, Play, Sparkles, Spinner } from '@/components/icons';
 import { DateRangeField } from '@/components/shared/DateRangeField';
 import {
   AlertDialog,
@@ -1384,7 +1384,7 @@ export function PortfolioManagePanel({
                     }
                   >
                     {setPaused.isPending ? (
-                      <Spinner className="size-3.5 animate-spin" />
+                      <Loader2 className="size-3.5 animate-spin" />
                     ) : isPaused ? (
                       <Play className="size-3.5" />
                     ) : (
@@ -1641,7 +1641,7 @@ export function PortfolioManagePanel({
                 disabled={!hasChanges || saving}
                 onClick={() => void submit()}
               >
-                {saving ? <Spinner className="size-3.5 animate-spin" /> : null}
+                {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
                 {saving ? uiText('saving_23e3929') : uiText('save_changes_dd0ae7a')}
               </Button>
             </div>
@@ -1848,9 +1848,9 @@ function ArmAutopilot({
           }
         >
           {cyclePreview.isPending ? (
-            <Spinner className="size-3 animate-spin" />
+            <Loader2 className="size-3 animate-spin" />
           ) : (
-            <Sparkles aria-hidden="true" className="size-3" />
+            <SparklesIcon aria-hidden="true" className="size-3" />
           )}
           {cyclePreview.isPending
             ? uiText('running_the_engine_b3ef1f3')

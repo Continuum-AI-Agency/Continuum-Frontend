@@ -18,9 +18,9 @@ import {
   psdStaticExportRequestSchema,
   psdStaticExportResponseSchema,
 } from '@continuum/contracts';
+import { Download, Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
-import { ArrowDownToLine, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -133,9 +133,9 @@ export function AssetDownloadButton({
       });
     });
   const icon = busy ? (
-    <Spinner className="size-3.5 animate-spin" />
+    <Loader2 className="size-3.5 animate-spin" />
   ) : (
-    <ArrowDownToLine className="size-3.5" />
+    <Download className="size-3.5" />
   );
 
   if (variant === 'icon') {

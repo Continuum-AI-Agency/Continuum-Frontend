@@ -1,8 +1,6 @@
-import { useLocale } from 'next-intl';
-import React from 'react';
 import {
+  AlertCircle,
   Banknote,
-  CircleAlert,
   Image as ImageIcon,
   Maximize,
   PauseCircle,
@@ -11,7 +9,9 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useLocale } from 'next-intl';
+import React from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { TimelineEvent, TimelineEventType } from '@/types/timeline';
 
@@ -36,7 +36,7 @@ export const getEventIcon = (type: TimelineEventType, size = 16) => {
     case 'audience_expand':
       return <Maximize size={size} className="text-purple-500" />;
     default:
-      return <CircleAlert size={size} className="text-muted-foreground" />;
+      return <AlertCircle size={size} className="text-muted-foreground" />;
   }
 };
 

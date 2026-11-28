@@ -11,9 +11,9 @@
 // its visual language rather than its component.
 
 import type { MediaComment } from '@continuum/contracts';
+import { MessageSquarePlus, SquareDashedBottom, X } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
-import { MessageSquarePlus, SquareDashedBottom, X } from '@/components/icons';
 import { formatTimecode } from '@/components/library/detail/annotationGeometry';
 import { CommentComposer } from '@/components/library/detail/CommentComposer';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';

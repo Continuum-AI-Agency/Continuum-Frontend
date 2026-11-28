@@ -1,8 +1,8 @@
 'use client';
 
 import { Select as SelectPrimitive } from '@base-ui/react/select';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import type * as React from 'react';
-import { Check, ChevronDown, ChevronUp } from '@/components/icons';
 
 import { cn } from '@/lib/utils';
 

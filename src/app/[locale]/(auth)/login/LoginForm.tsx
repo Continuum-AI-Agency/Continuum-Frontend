@@ -1,5 +1,6 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -8,7 +9,6 @@ import { useForm } from 'react-hook-form';
 import { EmailSent } from '@/components/auth/EmailSent';
 import { FormAlert } from '@/components/auth/FormAlert';
 import { FormInput } from '@/components/auth/FormInput';
-import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useValidationErrorMap } from '@/i18n/validation';
@@ -170,7 +170,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
           >
             {isPending ? (
               <span className="flex items-center justify-center gap-2">
-                <Spinner className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 {usePassword ? tUi('m_6ca8910ee6') : tUi('m_0351c1e78f')}
               </span>
             ) : usePassword ? (
@@ -209,7 +209,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
         >
           {isGooglePending ? (
             <>
-              <Spinner className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               <span className="truncate">{tUi('m_c1f3b71fdf')}</span>
             </>
           ) : (

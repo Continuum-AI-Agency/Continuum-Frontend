@@ -5,6 +5,7 @@ import type {
   ApiRenderSlackChannel,
   ApiRenderSlackChannelListResponse,
 } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import {
@@ -13,7 +14,6 @@ import {
   type SlackRoomRole,
 } from '@/components/forge/slackRoomCopy';
 import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
-import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -101,7 +101,7 @@ export function AddSlackRoom({
     <div className="space-y-2 rounded-md border bg-muted/20 p-2 text-xs">
       {channels === null ? (
         <p className="flex items-center gap-1.5 text-muted-foreground">
-          <Spinner className="size-3 animate-spin" aria-hidden />{' '}
+          <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
           {translateUi('loading_this_brand_s_slack_channels_5f3e90b6')}
         </p>
       ) : channels.channels.length ? (
@@ -189,7 +189,7 @@ export function AddSlackRoom({
           disabled={!channelId || saving}
           onClick={() => void add()}
         >
-          {saving ? <Spinner className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
           {translateUi('add_channel_62f66a6a')}
         </Button>
       </div>

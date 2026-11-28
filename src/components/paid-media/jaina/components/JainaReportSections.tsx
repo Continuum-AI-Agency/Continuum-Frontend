@@ -1,7 +1,7 @@
 'use client';
 
+import { AlertCircleIcon, CheckCircle2Icon, InfoIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { CircleAlert, CircleCheck, Info } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import type { FrontendCheckpointReport } from '@/lib/jaina/schemas';
@@ -47,10 +47,10 @@ function SectionCard({
   } as const;
 
   const severityIcon = {
-    positive: CircleCheck,
-    neutral: Info,
-    watch: CircleAlert,
-    risk: CircleAlert,
+    positive: CheckCircle2Icon,
+    neutral: InfoIcon,
+    watch: AlertCircleIcon,
+    risk: AlertCircleIcon,
   };
 
   const sectionCharts = Array.isArray(section.graphs)

@@ -1,8 +1,14 @@
 'use client';
 
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  MinusIcon,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Minus } from '@/components/icons';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -53,9 +59,9 @@ function DeltaGlyph({
   tone: 'positive' | 'negative' | 'flat';
   size?: number;
 }) {
-  if (tone === 'positive') return <ArrowUp width={size} height={size} aria-hidden />;
-  if (tone === 'negative') return <ArrowDown width={size} height={size} aria-hidden />;
-  return <Minus width={size} height={size} aria-hidden />;
+  if (tone === 'positive') return <ArrowUpIcon width={size} height={size} aria-hidden />;
+  if (tone === 'negative') return <ArrowDownIcon width={size} height={size} aria-hidden />;
+  return <MinusIcon width={size} height={size} aria-hidden />;
 }
 
 export function CampaignMetricHeatmap({
@@ -139,9 +145,9 @@ export function CampaignMetricHeatmap({
             })}
           >
             {density === 'comfortable' ? (
-              <ChevronUp className="h-3 w-3" />
+              <ChevronUpIcon className="h-3 w-3" />
             ) : (
-              <ChevronDown className="h-3 w-3" />
+              <ChevronDownIcon className="h-3 w-3" />
             )}
             <span className="font-mono uppercase tracking-[0.08em]">
               {density === 'comfortable' ? uiText('comfy_74e9e5e') : uiText('compact_9945264')}
@@ -183,9 +189,9 @@ export function CampaignMetricHeatmap({
                 >
                   <span>{metric.shortLabel}</span>
                   {metric.direction === 'lower' ? (
-                    <ArrowDown className="h-3 w-3 opacity-70" />
+                    <ArrowDownIcon className="h-3 w-3 opacity-70" />
                   ) : metric.direction === 'higher' ? (
-                    <ArrowUp className="h-3 w-3 opacity-70" />
+                    <ArrowUpIcon className="h-3 w-3 opacity-70" />
                   ) : null}
                 </button>
               );

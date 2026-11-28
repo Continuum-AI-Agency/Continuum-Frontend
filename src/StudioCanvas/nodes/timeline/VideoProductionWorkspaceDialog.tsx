@@ -6,9 +6,9 @@ import {
   editorRenderBlockers,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
+import { ArrowLeft, Check, ImageIcon, Loader2, Scissors, Sparkles, Waves } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Check, Image, Scissors, Sparkles, Spinner, Waves } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -129,7 +129,7 @@ export function VideoStudioWorkspace({
   if (!project) {
     return (
       <div className="flex h-[var(--app-content-h)] items-center justify-center text-xs text-muted-foreground">
-        <Spinner className="mr-2 size-4 animate-spin" />{' '}
+        <Loader2 className="mr-2 size-4 animate-spin" />{' '}
         {translateUi('opening_the_editor_cc472a43')}
       </div>
     );
@@ -371,7 +371,7 @@ function ProductionStages({
                 disabled={Boolean(busy)}
               >
                 {busy === `${generationKind}:${shot.id}` ? (
-                  <Spinner className="animate-spin" />
+                  <Loader2 className="animate-spin" />
                 ) : (
                   <Sparkles />
                 )}
@@ -617,7 +617,7 @@ function ProductionStages({
                     onClick={() => void generate('style_extract')}
                   >
                     {busy === 'style_extract:project' ? (
-                      <Spinner className="animate-spin" />
+                      <Loader2 className="animate-spin" />
                     ) : (
                       <Sparkles />
                     )}{' '}
@@ -677,7 +677,7 @@ function ProductionStages({
                   </p>
                 </div>
                 <Button variant="outline" onClick={addShot} disabled={Boolean(busy)}>
-                  <Image /> {translateUi('add_shot_bcfd3d07')}
+                  <ImageIcon /> {translateUi('add_shot_bcfd3d07')}
                 </Button>
               </div>
               {takeGrid('frame', 'frame')}

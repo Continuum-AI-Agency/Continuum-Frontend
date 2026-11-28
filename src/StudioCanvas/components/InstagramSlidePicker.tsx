@@ -1,8 +1,8 @@
 'use client';
 
 import type { InstagramMediaItem, InstagramPost } from '@continuum/contracts';
+import { ArrowLeft } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { ArrowLeft } from '@/components/icons';
 import { VideoStill } from '@/components/media/VideoStill';
 import { Button } from '@/components/ui/button';
 import { setInstagramMediaDragData } from './instagramMediaDrag';

@@ -1,7 +1,7 @@
 'use client';
 
+import { InfoIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Info } from '@/components/icons';
 
 import { cn } from '@/lib/utils';
 
@@ -37,7 +37,7 @@ export function ContextMenuItemInfo({ description, className }: ContextMenuItemI
                 className,
               )}
             >
-              <Info className="h-3 w-3" />
+              <InfoIcon className="h-3 w-3" />
             </button>
           }
         />

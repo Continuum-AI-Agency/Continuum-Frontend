@@ -2,10 +2,10 @@
 
 import type { HeadlessBatchFormat, HeadlessBatchItemState } from '@continuum/contracts';
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowUpRight, Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Fragment, type RefObject, useEffect, useRef, useState } from 'react';
 import { MediaStrip, mediaStripTileWidth } from '@/components/chat/media/MediaStrip';
-import { ArrowUpRight, Check } from '@/components/icons';
 import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/errors';

@@ -1,8 +1,9 @@
 'use client';
 
+import { Backpack, Component, SlidersHorizontal, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+
 import { BrandQuestionsList } from '@/components/brand-insights/BrandQuestionsList';
-import { Backpack, Component, SlidersHorizontal, Zap } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';

@@ -1,7 +1,8 @@
 'use client';
+import { Check, RotateCw, SquarePen, Trash2, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+
 import React from 'react';
-import { Check, RotateCw, SquarePen, Trash2, X } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import {

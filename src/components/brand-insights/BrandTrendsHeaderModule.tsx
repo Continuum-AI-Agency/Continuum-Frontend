@@ -1,12 +1,13 @@
 'use client';
 
+import { LineChart } from 'lucide-react';
+
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { BrandInsightsGenerateButton } from '@/components/brand-insights/BrandInsightsGenerateButton';
 import { BrandTrendsPanel } from '@/components/brand-insights/BrandTrendsPanel';
 import { BrandTrendsPeek } from '@/components/brand-insights/BrandTrendsPeek';
 import { countQuestions } from '@/components/brand-insights/questions-utils';
-import { ChartLine } from '@/components/icons';
 import { PillIndicator } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -122,7 +123,7 @@ export function BrandTrendsHeaderModule({
                   data-tour-id="organic-metrics-brand-trends"
                   className={cn('h-8 gap-1.5 px-2 text-xs', className)}
                 >
-                  <ChartLine className="size-3.5" aria-hidden />
+                  <LineChart className="size-3.5" aria-hidden />
                   {tUi('trends_e856c6c')}
                   {/* The badge counts trends, so it is gated on trends. Gating it on the
                   wider signal count (trends + events + questions) rendered a literal

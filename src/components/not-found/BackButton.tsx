@@ -1,7 +1,7 @@
 'use client';
 
+import { ArrowLeft } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft } from '@/components/icons';
 
 export function BackButton() {
   const uiText = useTranslations('public');

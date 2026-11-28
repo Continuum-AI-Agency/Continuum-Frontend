@@ -1,10 +1,10 @@
 'use client';
 
+import { Repeat2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type React from 'react';
 import type { JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Repeat } from '@/components/icons';
 import { demoLinkedInPost } from './demo/social';
 
 /** Reaction type for LinkedIn posts */
@@ -492,7 +492,7 @@ export function LinkedInPost({ data, appearance }: LinkedInPostProps) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 hover:bg-muted rounded-md transition-colors text-sm text-muted-foreground"
           >
-            <Repeat className="h-5 w-5" />
+            <Repeat2 className="h-5 w-5" />
             <span>{tUi('m_98dd47501a')}</span>
           </a>
         </div>

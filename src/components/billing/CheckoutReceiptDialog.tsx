@@ -8,9 +8,9 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import type { BillingCheckoutReceipt } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { CircleCheck, Download, Loader2, TriangleAlert, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { ArrowDownToLine, CircleCheck, Spinner, TriangleAlert, X } from '@/components/icons';
 import { ContinuumWordmark } from '@/components/shared/ContinuumWordmark';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -30,11 +30,11 @@ const getSTATUS = (
 ): Record<ReceiptPhase, { label: string; icon: ReactNode }> => ({
   processing: {
     label: tUi('m_e2ada0127b'),
-    icon: <Spinner className="size-4 animate-spin motion-reduce:animate-none" />,
+    icon: <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />,
   },
   printing: {
     label: tUi('m_fe8fd87bd2'),
-    icon: <Spinner className="size-4 animate-spin motion-reduce:animate-none" />,
+    icon: <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />,
   },
   complete: { label: tUi('m_cd00866a63'), icon: <CircleCheck className="size-4 text-success" /> },
   delayed: {
@@ -202,7 +202,7 @@ export function CheckoutReceiptDialog({
               rel="noopener"
               className={cn(buttonVariants({ variant: 'outline' }), 'flex-1')}
             >
-              <ArrowDownToLine />
+              <Download />
               {uiText('m_992261388e')}
             </a>
           ) : null}

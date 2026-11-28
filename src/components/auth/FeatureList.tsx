@@ -1,4 +1,4 @@
-import { CircleCheck } from '@/components/icons';
+import { CheckCircle } from 'lucide-react';
 
 interface Feature {
   title: string;
@@ -50,7 +50,7 @@ export function FeatureList({
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center ${checkBgClass}`}
                 >
-                  <CircleCheck className="w-5 h-5 text-emerald-400" />
+                  <CheckCircle className="w-5 h-5 text-emerald-400" />
                 </div>
               </div>
               <div>

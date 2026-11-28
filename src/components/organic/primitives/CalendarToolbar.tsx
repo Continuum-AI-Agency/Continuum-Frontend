@@ -1,11 +1,8 @@
 'use client';
 
 import { endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek } from 'date-fns';
-import { useLocale, useTranslations } from 'next-intl';
-import * as React from 'react';
-import type { DateRange } from 'react-day-picker';
 import {
-  Calendar as CalendarIcon,
+  CalendarIcon,
   Check,
   EyeOff,
   Plus,
@@ -14,7 +11,10 @@ import {
   TriangleAlert,
   X,
   Zap,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import * as React from 'react';
+import type { DateRange } from 'react-day-picker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';

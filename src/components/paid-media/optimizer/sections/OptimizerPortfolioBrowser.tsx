@@ -13,7 +13,7 @@ import { useTranslations } from 'next-intl';
 // not openable, because switching to an id the picker does not list would strand the user.
 
 import type { PortfolioListItem } from '@continuum/contracts';
-import { ArrowLeftRight, Maximize2, ShieldQuestion } from '@/components/icons';
+import { ArrowRightLeftIcon, Maximize2, ShieldQuestionIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -83,7 +83,7 @@ function PortfolioBrowserRow({
           variant="ghost"
         >
           {crossAccount ? (
-            <ArrowLeftRight className="size-3.5" aria-hidden />
+            <ArrowRightLeftIcon className="size-3.5" aria-hidden />
           ) : (
             <Maximize2 className="size-3.5" aria-hidden />
           )}
@@ -91,7 +91,7 @@ function PortfolioBrowserRow({
         </Button>
       ) : (
         <span className="inline-flex shrink-0 items-center gap-1.5 text-muted-foreground text-xs">
-          <ShieldQuestion className="size-3.5" aria-hidden />
+          <ShieldQuestionIcon className="size-3.5" aria-hidden />
           {uiText('account_not_assigned_0c5096a')}
         </span>
       )}

@@ -9,9 +9,9 @@
 // public share page posts from its guest form and only needs to know the draft.
 
 import type { DrawingShape } from '@continuum/contracts';
+import { Eye, EyeOff, ImageOff } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useReducer, useState } from 'react';
-import { Eye, EyeOff, ImageOff } from '@/components/icons';
 import {
   AnnotationOverlay,
   draftToSpatialAnnotation,

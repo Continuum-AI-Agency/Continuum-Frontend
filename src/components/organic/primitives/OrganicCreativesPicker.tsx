@@ -3,9 +3,9 @@
 
 import type { MediaAsset } from '@continuum/contracts';
 import { creativeRefFromAsset, shapeUserSuppliedMedia } from '@continuum/contracts';
+import { ImageOff, Play, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { ImageOff, Play, Search } from '@/components/icons';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { AssetStill } from '@/components/media/AssetStill';
 import { Button } from '@/components/ui/button';

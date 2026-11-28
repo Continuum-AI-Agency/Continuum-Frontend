@@ -5,11 +5,11 @@ import {
   upsertGoalCapabilityRouteRequestSchema,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Settings2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import type { z } from 'zod';
-import { Settings2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,

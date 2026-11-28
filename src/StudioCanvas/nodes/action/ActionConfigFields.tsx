@@ -2,8 +2,8 @@
 // cannot be represented by one primitive field route to a focused panel below.
 
 import type { ActionId, ShaderEffectV1, ShaderStackV1 } from '@continuum/contracts';
+import { X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';

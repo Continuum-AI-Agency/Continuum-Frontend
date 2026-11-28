@@ -46,8 +46,8 @@ import {
   titleFigure,
   titleText,
 } from '@continuum/contracts';
+import { AlertTriangleIcon, ChevronDownIcon, SparklesIcon } from 'lucide-react';
 import { useState } from 'react';
-import { ChevronDown, Sparkles, TriangleAlert } from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
@@ -304,7 +304,7 @@ function RecommendationCard({
             data-testid="account-card-jaina"
             href={jainaPromptHref(jainaPrompt(titleLine, names))}
           >
-            <Sparkles aria-hidden className="size-3.5" />
+            <SparklesIcon aria-hidden className="size-3.5" />
             {uiText('ask_jaina_0d70d16')}
           </a>
         </footer>
@@ -375,7 +375,7 @@ export function AccountRead({
           data-guard={guard.detector}
           key={guard.id}
         >
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+          <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-warning" />
           <div className="min-w-0 space-y-1">
             <h3 className="font-semibold text-foreground text-sm">
               {accountDetectorLabel(guard.detector, uiText)}
@@ -416,7 +416,9 @@ export function AccountRead({
           type="button"
           variant="ghost"
         >
-          <ChevronDown className={cn('size-3.5 transition-transform', showRest && 'rotate-180')} />
+          <ChevronDownIcon
+            className={cn('size-3.5 transition-transform', showRest && 'rotate-180')}
+          />
           {showRest
             ? uiText('hide_the_rest_0868c8a')
             : uiText('template_a575b1f6148e', {

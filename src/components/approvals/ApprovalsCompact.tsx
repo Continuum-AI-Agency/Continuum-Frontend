@@ -1,8 +1,8 @@
 'use client';
 
+import { ArrowUpRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { ArrowUpRight } from '@/components/icons';
 import { Link } from '@/i18n/navigation';
 
 import { useDryRunMode, usePendingActions } from '@/lib/approvals/queries';

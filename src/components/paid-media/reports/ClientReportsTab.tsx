@@ -13,18 +13,18 @@ import {
   type ClientReportSummary,
   type WeeklyClientReport,
 } from '@continuum/contracts';
-import { useLocale, useTranslations } from 'next-intl';
-import * as React from 'react';
 import {
-  TriangleAlert as AlertTriangle,
-  ArrowDownToLine as Download,
+  AlertTriangle,
+  Download,
   FileText,
   Link2,
   Mail,
   RefreshCw,
   Target,
   Undo2,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { Panel } from '@/components/shared/Panel';

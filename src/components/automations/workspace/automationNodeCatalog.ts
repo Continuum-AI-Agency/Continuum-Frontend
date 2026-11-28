@@ -4,31 +4,31 @@ import {
   type AutomationCapabilityLifecycle,
   type AutomationWorkflowNode,
 } from '@continuum/contracts';
-import type { useTranslations } from 'next-intl';
+import type { LucideIcon } from 'lucide-react';
 import {
   BellRing,
   Bot,
   Braces,
   CalendarClock,
   ChartNoAxesCombined,
-  Clock,
+  Clock3,
   Database,
-  Earth,
   FileOutput,
   FileText,
   GitBranch,
   GitFork,
-  type IconComponent,
+  Globe2,
   Images,
   Library,
   Mail,
   Merge,
   Play,
-  Repeat,
+  Repeat2,
   Send,
   Share2,
   SlidersHorizontal,
-} from '@/components/icons';
+} from 'lucide-react';
+import type { useTranslations } from 'next-intl';
 import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
 
 export type AutomationNodeCategory = 'trigger' | 'context' | 'intelligence' | 'logic' | 'outcome';
@@ -38,7 +38,7 @@ export type AutomationNodeCatalogItem = {
   label: string;
   description: string;
   category: AutomationNodeCategory;
-  icon: IconComponent;
+  icon: LucideIcon;
 };
 
 export const AUTOMATION_NODE_CATALOG: ReadonlyArray<{
@@ -64,7 +64,7 @@ export const AUTOMATION_NODE_CATALOG: ReadonlyArray<{
         label: 'Schedule',
         description: 'Run on a recurring cadence.',
         category: 'trigger',
-        icon: Clock,
+        icon: Clock3,
       },
       {
         type: 'trigger.event',
@@ -85,7 +85,7 @@ export const AUTOMATION_NODE_CATALOG: ReadonlyArray<{
         label: 'Inbound webhook',
         description: 'Accept a signed, typed request from another system.',
         category: 'trigger',
-        icon: Earth,
+        icon: Globe2,
       },
     ],
   },
@@ -113,7 +113,7 @@ export const AUTOMATION_NODE_CATALOG: ReadonlyArray<{
         label: 'MCP read',
         description: 'Call an approved read-only Continuum MCP tool.',
         category: 'context',
-        icon: Earth,
+        icon: Globe2,
       },
       {
         type: 'instruction',
@@ -190,7 +190,7 @@ export const AUTOMATION_NODE_CATALOG: ReadonlyArray<{
         label: 'Repeat',
         description: 'Run a connected branch a fixed number of times.',
         category: 'logic',
-        icon: Repeat,
+        icon: Repeat2,
       },
     ],
   },

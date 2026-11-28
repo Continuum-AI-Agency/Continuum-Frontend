@@ -1,7 +1,7 @@
 import type { ReadinessCriterionMet, ReadinessCriterionResult } from '@continuum/contracts';
+import { CircleCheck, CircleQuestionMark, CircleX, Contrast, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentType } from 'react';
-import { CircleCheck, CircleQuestionMark, CircleX, Contrast, X } from '@/components/icons';
 import { Badge, badgeVariants } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ReadinessAnalysis, ReadinessDimension } from '@/lib/onboarding/agentClient';

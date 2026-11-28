@@ -1,7 +1,7 @@
 'use client';
 
+import { Circle, CircleCheck, CircleX } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Circle, CircleCheck, CircleX } from '@/components/icons';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Spinner } from '@/components/ui/Loading';

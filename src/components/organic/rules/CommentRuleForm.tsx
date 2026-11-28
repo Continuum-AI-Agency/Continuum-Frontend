@@ -36,9 +36,9 @@ import {
   MAX_REPLY_MESSAGE_LENGTH,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Check, Copy, Plus, X } from 'lucide-react';
 import React from 'react';
 import { type Control, useForm } from 'react-hook-form';
-import { Check, Copy, Plus, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Form,

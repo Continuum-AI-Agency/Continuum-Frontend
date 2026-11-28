@@ -10,9 +10,9 @@ import {
   motionAnimationWindow,
   staggerOffsets,
 } from '@continuum/contracts';
+import { ChevronRight } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type PointerEvent as ReactPointerEvent, useState } from 'react';
-import { ChevronRight } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { EasingCurveEditor } from '@/StudioCanvas/nodes/timeline/motion/EasingCurveEditor';
 import { KeyframeDiamond } from '@/StudioCanvas/nodes/timeline/motion/KeyframeDiamond';

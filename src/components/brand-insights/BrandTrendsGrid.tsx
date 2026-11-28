@@ -1,12 +1,12 @@
 'use client';
 
+import { Sparkles } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useMemo } from 'react';
 import {
   BrandInsightsDataTable,
   type BrandInsightsTableRow,
 } from '@/components/brand-insights/BrandInsightsDataTable';
-import { Sparkles } from '@/components/icons';
 import { useRouter } from '@/i18n/navigation';
 import { type BrandInsightsTrend, brandInsightsTrendSchema } from '@/lib/schemas/brandInsights';
 

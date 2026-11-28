@@ -1,8 +1,8 @@
 'use client';
 
 import { type EditorClip, sampleNumericTrack } from '@continuum/contracts';
+import { AudioLines, Copy, Scissors, Trash2, VolumeX, Waves } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
-import { AudioLines, Copy, Scissors, Trash2, VolumeOff, Waves } from '@/components/icons';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -298,7 +298,7 @@ export function TimelineClipView({
         </ContextMenuItem>
         {isVideo ? (
           <ContextMenuItem onClick={() => actions.toggleClipAudio(clip.id)}>
-            <VolumeOff />{' '}
+            <VolumeX />{' '}
             {clip.kind === 'video' && clip.audioEnabled
               ? translateUi('mute_clip_audio_9fd36760')
               : translateUi('unmute_clip_audio_e5771f89')}

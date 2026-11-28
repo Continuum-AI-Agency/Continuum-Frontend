@@ -1,9 +1,9 @@
 'use client';
 
+import { Share2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { GrantToBrandDialog } from '@/app/[locale]/(post-auth)/integrations/_components/GrantToBrandDialog';
-import { Share2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 type ShareConnectionButtonProps = {

@@ -5,10 +5,10 @@
 // Optimizer's "Ask Jaina" chips use: /scale?tab=jaina&new=1&prompt=…); Jaina pre-fills it and
 // waits for the person to send it. Nothing is asked, and no model runs, from the Home.
 
+import { ArrowRightIcon, SparklesIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { type FormEvent, useMemo, useState } from 'react';
-import { ArrowRight, Sparkles } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
@@ -41,7 +41,7 @@ export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
       data-testid="home-ask"
     >
       <form className="flex min-w-0 items-center gap-2" onSubmit={onSubmit}>
-        <Sparkles aria-hidden className="size-4 shrink-0 text-primary" />
+        <SparklesIcon aria-hidden className="size-4 shrink-0 text-primary" />
         <Input
           aria-label={uiText('ask_jaina_about_this_brand_92fd972')}
           className="h-9 min-w-0 flex-1"
@@ -50,7 +50,7 @@ export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
           value={question}
         />
         <Button aria-label={uiText('ask_jaina_0d70d16')} disabled={!typed} size="sm" type="submit">
-          {uiText('ask_b8c209c')} <ArrowRight aria-hidden className="size-3.5" />
+          {uiText('ask_b8c209c')} <ArrowRightIcon aria-hidden className="size-3.5" />
         </Button>
       </form>
       {suggestions.length > 0 ? (

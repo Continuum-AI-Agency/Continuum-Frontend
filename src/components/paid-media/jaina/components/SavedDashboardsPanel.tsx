@@ -15,8 +15,8 @@ import { uiDateFormat } from '@/lib/paid-media/uiDateFormat';
 // that re-runs it is not here yet.
 
 import { type DashboardBlockSpec, type JainaDashboard, rangeSpecLabel } from '@continuum/contracts';
+import { ChevronDownIcon, ChevronRightIcon, RefreshCwIcon, Trash2Icon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, RefreshCw, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useJainaBrandScope } from '@/lib/jaina/brandScope';
 import { orderDashboardBlocks } from '@/lib/jaina/dashboardBlocks';
@@ -130,9 +130,9 @@ export function SavedDashboardsPanel() {
         {uiText.rich('sentence_375df8af6920', {
           v0: () =>
             expanded ? (
-              <ChevronDown className="size-4 text-muted-foreground" />
+              <ChevronDownIcon className="size-4 text-muted-foreground" />
             ) : (
-              <ChevronRight className="size-4 text-muted-foreground" />
+              <ChevronRightIcon className="size-4 text-muted-foreground" />
             ),
           v1: () => <span className="text-muted-foreground text-xs">({dashboards.length})</span>,
         })}
@@ -176,7 +176,7 @@ export function SavedDashboardsPanel() {
                     className="inline-flex items-center gap-1 text-primary-ink text-xs hover:underline"
                     href={jainaPromptHref(refreshPrompt)}
                   >
-                    <RefreshCw className="size-3" />
+                    <RefreshCwIcon className="size-3" />
                     {uiText('ask_jaina_to_refresh_8e49228')}
                   </a>
                   <Button
@@ -186,7 +186,7 @@ export function SavedDashboardsPanel() {
                     type="button"
                     variant="ghost"
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2Icon className="size-3.5" />
                   </Button>
                 </div>
                 {isOpen ? (

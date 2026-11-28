@@ -1,4 +1,4 @@
-import { BarChart3, Sparkles } from '@/components/icons';
+import { BarChart3, Sparkles } from 'lucide-react';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
   AmazonIcon,
@@ -46,7 +46,7 @@ export const PLATFORM_ICONS: Record<PlatformKey | 'tiktokAds', IconComponent> = 
   dv360: BarChart3,
   googleAnalytics: GoogleIcon,
   threads: ThreadsIcon,
-  // A plain glyph rather than a brand mark, the same compromise dv360 makes above:
+  // A lucide glyph rather than a brand mark, the same compromise dv360 makes above:
   // @/lib/brand-icons carries no OpenAI artwork yet. Swap it in there when it does.
   openai: Sparkles,
   tiktokAds: TikTokIcon,

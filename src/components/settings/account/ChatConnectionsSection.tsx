@@ -1,7 +1,5 @@
 'use client';
 
-import { useFormatter, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   MessageSquareText,
   Radio,
@@ -10,7 +8,10 @@ import {
   TriangleAlert,
   Unplug,
   Users,
-} from '@/components/icons';
+} from 'lucide-react';
+
+import { useFormatter, useTranslations } from 'next-intl';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { AddToSlackButton } from '@/components/slack/AddToSlackButton';
 import {

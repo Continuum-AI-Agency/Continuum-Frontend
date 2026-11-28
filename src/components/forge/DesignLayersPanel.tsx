@@ -12,10 +12,10 @@ import type {
   TemplateRevision,
 } from '@continuum/contracts';
 import { readableLayerName } from '@continuum/contracts';
+import { ChevronDown, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { type StackRow, TemplateLayerList } from '@/components/forge/TemplateLayerList';
-import { ChevronDown, Plus, RotateCcw, Spinner, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
@@ -154,7 +154,7 @@ export function DesignLayersPanel({
           </p>
         ) : (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Spinner className="size-3.5 animate-spin" aria-hidden />{' '}
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
             {translateUi('reading_the_file_s_layers_46466344')}
           </p>
         )}
@@ -388,7 +388,7 @@ function Arrangements({
           disabled={!draft.length || saving || (!variantId && !name.trim())}
           onClick={() => void save()}
         >
-          {saving ? <Spinner className="animate-spin" data-icon="inline-start" /> : null}
+          {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
           {variantId
             ? translateUi('save_arrangement_revision_e0db84d4')
             : translateUi('save_as_immutable_variant_0ea0dbcc')}

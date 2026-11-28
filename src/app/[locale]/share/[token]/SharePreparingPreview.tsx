@@ -6,8 +6,8 @@ import { useTranslations } from 'next-intl';
 // (library-share asks for it when the link becomes protected), say so — in the
 // link's own colours — and look again on a short, bounded schedule. Never the original.
 
+import { Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { RefreshCw, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useRouter } from '@/i18n/navigation';
 
@@ -67,7 +67,7 @@ export function SharePreparingPreview({
         title={uiText('sharePreparingTitle', { label })}
         className="flex size-16 flex-col items-center justify-center gap-1 rounded-md border border-border bg-muted/40 text-2xs text-muted-foreground"
       >
-        <Spinner className="size-4 animate-spin text-primary" aria-hidden />
+        <Loader2 className="size-4 animate-spin text-primary" aria-hidden />
         {uiText('preparing_5d1fa38')}
       </button>
     );
@@ -86,7 +86,7 @@ export function SharePreparingPreview({
           className="absolute inset-0 size-full object-contain opacity-30"
         />
       ) : null}
-      <Spinner className="relative size-6 animate-spin text-primary" aria-hidden />
+      <Loader2 className="relative size-6 animate-spin text-primary" aria-hidden />
       <p className="relative text-sm font-medium text-foreground">
         {uiText('preparing_preview_11e66e1')}
       </p>

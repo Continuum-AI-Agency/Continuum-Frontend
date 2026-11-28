@@ -23,9 +23,9 @@ import {
   readFlashJobResult,
 } from '@continuum/contracts';
 import { useQueries } from '@tanstack/react-query';
+import { ImageOffIcon, Loader2Icon, PencilIcon, SparklesIcon, UploadIcon } from 'lucide-react';
 import * as React from 'react';
 import { ElementsPanel } from '@/components/ai-studio/elements/ElementsPanel';
-import { ArrowUpFromLine, ImageOff, Pencil, Sparkles, Spinner } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -197,9 +197,9 @@ function ImplementMenu({
             {uiText.rich('sentence_b9499c243b21', {
               v0: () =>
                 busy ? (
-                  <Spinner className="size-3.5 animate-spin" />
+                  <Loader2Icon className="size-3.5 animate-spin" />
                 ) : (
-                  <ArrowUpFromLine className="size-3.5" />
+                  <UploadIcon className="size-3.5" />
                 ),
             })}
           </Button>
@@ -279,7 +279,7 @@ function SubjectAdThumb({
         className="flex aspect-square w-full items-center justify-center rounded-md border border-border/60 border-dashed"
         data-testid="subject-ad-placeholder"
       >
-        <ImageOff className="size-4 text-muted-foreground" />
+        <ImageOffIcon className="size-4 text-muted-foreground" />
       </div>
     );
   }
@@ -512,7 +512,7 @@ export function CreativeRecommendationCard({
             <Skeleton className="size-20 rounded-lg" />
           ) : subjects.length === 0 ? (
             <p className="flex items-center gap-2 text-muted-foreground text-xs">
-              <ImageOff className="size-4" />
+              <ImageOffIcon className="size-4" />
               {uiText('no_creative_could_be_loaded_for_this_ad_set_6821129')}
             </p>
           ) : (
@@ -601,7 +601,7 @@ export function CreativeRecommendationCard({
             </p>
           ) : null}
           <p className={`${typeScale.label} flex items-center gap-1.5 text-muted-foreground`}>
-            <Sparkles className="size-3.5" />
+            <SparklesIcon className="size-3.5" />
             {uiText('flash_creatives_a8dddbb')}
           </p>
           <ul className="grid grid-cols-3 gap-2">
@@ -666,9 +666,9 @@ export function CreativeRecommendationCard({
                   ) : (
                     <div className="flex aspect-square w-full items-center justify-center rounded border border-border/60 border-dashed">
                       {status === 'queued' || status === 'generating' || status === 'publishing' ? (
-                        <Spinner className="size-4 animate-spin text-muted-foreground" />
+                        <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
                       ) : (
-                        <ImageOff className="size-4 text-muted-foreground" />
+                        <ImageOffIcon className="size-4 text-muted-foreground" />
                       )}
                     </div>
                   )}
@@ -740,7 +740,7 @@ export function CreativeRecommendationCard({
                         rel="noreferrer"
                         target="_blank"
                       >
-                        <Pencil className="size-3.5" />
+                        <PencilIcon className="size-3.5" />
                         {uiText('edit_464c4ff')}
                       </a>
                     ) : null}

@@ -1,10 +1,10 @@
 'use client';
 
+import { ArrowDown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 // House-modified: diverged from the upstream ai-elements component of the same name.
 // Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
 import * as React from 'react';
-import { ArrowDown } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

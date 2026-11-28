@@ -11,9 +11,9 @@ import { useTranslations } from 'next-intl';
 // library. All inner controls stopPropagation: the wrapping drop zone treats a
 // bare click as "open the library", which must not fire for these actions.
 
+import { Library, Loader2, Maximize2, Wand2 } from 'lucide-react';
 import Image from 'next/image';
 import type * as React from 'react';
-import { Library, Maximize2, Spinner, Wand2 } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarDraft } from './types';
 
@@ -160,7 +160,7 @@ export function BlueprintStoryboard({
         >
           {isGenerating ? (
             <>
-              <Spinner className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               {uiText('generating_final_media_fda0be7')}
             </>
           ) : (

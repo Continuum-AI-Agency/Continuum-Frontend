@@ -13,8 +13,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // optimizer_add_portfolio_members, the wizard's path, and removals through
 // optimizer_unenroll_entity. Until the members read answers, the group is a list only.
 
+import { Loader2 } from 'lucide-react';
 import { type ReactNode, useRef, useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
@@ -213,7 +213,7 @@ export function PlatformGroupView({
             variant="outline"
           >
             {uiText.rich('sentence_5080fd437121', {
-              v0: () => (saving ? <Spinner className="size-3.5 animate-spin" /> : null),
+              v0: () => (saving ? <Loader2 className="size-3.5 animate-spin" /> : null),
             })}
           </Button>
           {add.length > 0 || remove.length > 0 ? (

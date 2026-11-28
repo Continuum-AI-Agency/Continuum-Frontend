@@ -6,8 +6,8 @@ import { useTranslations } from 'next-intl';
 // deep-links here to manage them, exactly as skills do.
 
 import type { Prompt } from '@continuum/contracts';
+import { ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
-import { ChevronLeft } from '@/components/icons';
 import { PromptForm } from '@/components/prompts/PromptForm';
 import { PromptList } from '@/components/prompts/PromptList';
 import { archiveBrandPrompt, useBrandPrompts } from '@/lib/organic/prompts-api';

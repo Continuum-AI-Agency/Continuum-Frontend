@@ -12,10 +12,10 @@ import {
   type PinnedRenderAsset,
 } from '@continuum/contracts';
 import { Handle, Position } from '@xyflow/react';
+import { Check, ImageIcon, Library, Lock, Video, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
-import { Check, Image, Library, Lock, Video, X } from '@/components/icons';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -197,7 +197,7 @@ function MediaVariableField({
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1 text-2xs text-muted-foreground">
           {variable.kind === 'image' ? (
-            <Image className="size-3" aria-hidden />
+            <ImageIcon className="size-3" aria-hidden />
           ) : (
             <Video className="size-3" aria-hidden />
           )}

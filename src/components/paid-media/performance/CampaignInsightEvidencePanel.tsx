@@ -1,7 +1,7 @@
 'use client';
 
+import { AlertTriangleIcon, SparklesIcon, TargetIcon, ZapIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Sparkles, Target, TriangleAlert, Zap } from '@/components/icons';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatDecimal } from '@/lib/format/decimal';
 import { formatMetric, getMetric, localizeHeatmapLabel } from '@/lib/paid-media/heatmap';
@@ -37,10 +37,10 @@ const severityKeys = {
 } as const satisfies Record<Severity, string>;
 
 function severityIcon(severity: Severity) {
-  if (severity === 'opportunity') return <Sparkles className="h-3.5 w-3.5" aria-hidden />;
-  if (severity === 'critical') return <Zap className="h-3.5 w-3.5" aria-hidden />;
-  if (severity === 'warning') return <TriangleAlert className="h-3.5 w-3.5" aria-hidden />;
-  return <Target className="h-3.5 w-3.5" aria-hidden />;
+  if (severity === 'opportunity') return <SparklesIcon className="h-3.5 w-3.5" aria-hidden />;
+  if (severity === 'critical') return <ZapIcon className="h-3.5 w-3.5" aria-hidden />;
+  if (severity === 'warning') return <AlertTriangleIcon className="h-3.5 w-3.5" aria-hidden />;
+  return <TargetIcon className="h-3.5 w-3.5" aria-hidden />;
 }
 
 export function CampaignInsightEvidencePanel({ insights }: CampaignInsightEvidencePanelProps) {

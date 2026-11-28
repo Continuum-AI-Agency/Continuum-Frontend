@@ -1,6 +1,7 @@
 'use client';
 
 import type { OrganicWinner, PromoteOrganicWinnerResponse } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 // "Run as ad" from the Home, on the existing promote route (POST /api/organic/winners/promote via
 // usePromoteWinner): the ORIGINAL post goes into the chosen ad set as a PAUSED ad. Nothing goes
 // live. Variations stay with the full winners table on the Organic page; the Home makes only the
@@ -8,7 +9,6 @@ import type { OrganicWinner, PromoteOrganicWinnerResponse } from '@continuum/con
 // one over the same two hooks.
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -67,7 +67,7 @@ export function PromoteWinnerDialog({
           </p>
         ) : adsets.isLoading ? (
           <p className="flex items-center gap-2 text-muted-foreground text-xs">
-            <Spinner aria-hidden="true" className="size-3 animate-spin" />{' '}
+            <Loader2 aria-hidden="true" className="size-3 animate-spin" />{' '}
             {uiText('loading_ad_sets_6efe89e')}
           </p>
         ) : refused ? (
@@ -118,7 +118,7 @@ export function PromoteWinnerDialog({
               }
             >
               {promote.isPending ? (
-                <Spinner aria-hidden="true" className="size-3 animate-spin" />
+                <Loader2 aria-hidden="true" className="size-3 animate-spin" />
               ) : null}
               {uiText('create_paused_ad_fc58d2d')}
             </Button>

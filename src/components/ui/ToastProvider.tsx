@@ -1,11 +1,11 @@
 'use client';
 
 import { Toast as ToastPrimitive } from '@base-ui/react/toast';
+import { CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
-import { CircleCheck, Info, TriangleAlert, X } from '@/components/icons';
 import { registerToastSink } from './toast-imperative';
 
 export const TOAST_VARIANTS = ['success', 'info', 'warning', 'error'] as const;

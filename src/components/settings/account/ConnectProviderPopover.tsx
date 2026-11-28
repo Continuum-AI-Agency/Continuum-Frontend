@@ -1,9 +1,9 @@
 'use client';
 
+import { Plus, RefreshCw, TriangleAlert, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
-import { Plus, RefreshCw, TriangleAlert, UserPlus } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { FigmaIcon } from '@/components/shared/icons';
 import { Badge } from '@/components/ui/badge';

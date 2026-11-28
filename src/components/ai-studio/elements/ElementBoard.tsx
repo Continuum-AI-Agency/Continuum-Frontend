@@ -15,11 +15,11 @@ import {
   elementStyleSlugSchema,
   isElementBoardCategory,
 } from '@continuum/contracts';
+import { Loader2, Plus, X } from 'lucide-react';
 import { useLocale, useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { elementCategoryLabel } from '@/components/ai-studio/elements/elementPresentation';
 import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from '@/components/chat/slash-menu';
-import { Plus, Spinner, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -320,7 +320,7 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
             })
           }
         >
-          {update.isPending ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}{' '}
+          {update.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{' '}
           {translateUi('save_board_3bbd889c')}
         </Button>
         {saveError ? (

@@ -23,13 +23,8 @@ import React, {
 } from 'react';
 import '@xyflow/react/dist/style.css';
 
-import { Canvas } from '@/components/ai-elements/canvas';
-import { Connection } from '@/components/ai-elements/connection';
-import { Controls } from '@/components/ai-elements/controls';
-import { Edge } from '@/components/ai-elements/edge';
-import { Panel } from '@/components/ai-elements/panel';
 import {
-  ArrowDownToLine,
+  Download,
   MousePointer2,
   Plus,
   Redo,
@@ -37,7 +32,12 @@ import {
   ShieldCheck,
   Trash2,
   Undo,
-} from '@/components/icons';
+} from 'lucide-react';
+import { Canvas } from '@/components/ai-elements/canvas';
+import { Connection } from '@/components/ai-elements/connection';
+import { Controls } from '@/components/ai-elements/controls';
+import { Edge } from '@/components/ai-elements/edge';
+import { Panel } from '@/components/ai-elements/panel';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -468,7 +468,7 @@ export const CampaignCanvas = ({
           <Redo className="h-4 w-4" />
         </Button>
         <Button variant="ghost" size="icon" onClick={handleExport} className="h-8 w-8 ml-2">
-          <ArrowDownToLine className="h-4 w-4" />
+          <Download className="h-4 w-4" />
         </Button>
       </Panel>
 
@@ -670,7 +670,7 @@ export const CampaignCanvas = ({
             {uiText('validate_structure_b3a79fd')}
           </ContextMenuItem>
           <ContextMenuItem inset onClick={handleExport}>
-            <ArrowDownToLine className="mr-2 h-4 w-4" />
+            <Download className="mr-2 h-4 w-4" />
             {uiText('export_schema_json_1b4b72d')}
           </ContextMenuItem>
 

@@ -1,18 +1,17 @@
 'use client';
 
+import {
+  BarChart3Icon,
+  LayoutGridIcon,
+  MapPinIcon,
+  PaletteIcon,
+  RotateCw,
+  UsersIcon,
+  WalletIcon,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useMemo } from 'react';
-import {
-  BarChart3,
-  type IconComponent,
-  LayoutGrid,
-  MapPin,
-  Palette,
-  RotateCw,
-  Users,
-  Wallet,
-} from '@/components/icons';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -54,38 +53,38 @@ export function AccountInsightsPanel({
   const CATEGORY_CONFIG: ReadonlyArray<{
     key: InsightCategory;
     title: string;
-    icon: IconComponent;
+    icon: typeof BarChart3Icon;
     accent: string;
   }> = useMemo(
     () => [
       {
         key: 'formats',
         title: uiText('formats_9f01769'),
-        icon: LayoutGrid,
+        icon: LayoutGridIcon,
         accent: 'bg-violet-500/90',
       },
       {
         key: 'placements',
         title: uiText('placement_platform_b564342'),
-        icon: MapPin,
+        icon: MapPinIcon,
         accent: 'bg-blue-500/90',
       },
       {
         key: 'audiences',
         title: uiText('audiences_9e3922b'),
-        icon: Users,
+        icon: UsersIcon,
         accent: 'bg-amber-500/90',
       },
       {
         key: 'creative',
         title: uiText('creative_visual_bad9617'),
-        icon: Palette,
+        icon: PaletteIcon,
         accent: 'bg-rose-500/90',
       },
       {
         key: 'budget',
         title: uiText('budget_pace_d212d0e'),
-        icon: Wallet,
+        icon: WalletIcon,
         accent: 'bg-emerald-500/90',
       },
     ],
@@ -111,7 +110,7 @@ export function AccountInsightsPanel({
       <SectionHeader
         title={
           <span className="flex items-center gap-2">
-            <BarChart3 className="size-4 text-muted-foreground" />
+            <BarChart3Icon className="size-4 text-muted-foreground" />
             {uiText('account_insights_0c870a9')}
           </span>
         }

@@ -8,8 +8,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // the operator confirms with a real apply (dryRun:false → optimizer-apply-run → service).
 // Observe portfolios hard-refuse on the service; this control only mounts in recommend.
 
+import { Loader2Icon, TriangleAlertIcon, WandSparklesIcon } from 'lucide-react';
 import * as React from 'react';
-import { Spinner, TriangleAlert, WandSparkles } from '@/components/icons';
 
 import {
   AlertDialog,
@@ -140,7 +140,7 @@ export function ApplyReallocationDialog({
             variant="outline"
             className="h-7 shrink-0 gap-1.5 px-2 text-xs"
           >
-            <WandSparkles className="size-3.5" />
+            <WandSparklesIcon className="size-3.5" />
             {uiText('apply_budgets_5dcf3c1')}
           </Button>
         }
@@ -155,7 +155,7 @@ export function ApplyReallocationDialog({
 
         {phase === 'applying' ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-            <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
+            <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
             {uiText('writing_budgets_to_meta_1938e4f')}
           </p>
         ) : phase === 'done' || phase === 'error' ? (
@@ -166,7 +166,7 @@ export function ApplyReallocationDialog({
                 : 'rounded-md border border-success/40 bg-success/10 px-3 py-2 text-xs text-success'
             }
           >
-            {phase === 'error' ? <TriangleAlert className="mt-0.5 size-4 shrink-0" /> : null}
+            {phase === 'error' ? <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" /> : null}
             <span>{resultNote}</span>
           </p>
         ) : (
@@ -189,7 +189,7 @@ export function ApplyReallocationDialog({
               {uiText.rich('sentence_c3a808da5d6d', {
                 icon: () =>
                   phase === 'applying' ? (
-                    <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
+                    <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
                   ) : null,
                 count: would.length,
               })}
@@ -221,7 +221,7 @@ function ApplyPreviewBody({
   if (isPending) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-        <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
+        <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
         {uiText('computing_the_budget_moves_3203b0b')}
       </p>
     );
@@ -292,7 +292,7 @@ function ApplyPreviewBody({
 function InlineError({ children }: { children: React.ReactNode }) {
   return (
     <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-      <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+      <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
       <span>{children}</span>
     </p>
   );

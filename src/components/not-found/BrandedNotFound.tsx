@@ -1,5 +1,5 @@
+import { Home } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { House } from '@/components/icons';
 import { Link } from '@/i18n/navigation';
 import { BackButton } from './BackButton';
 
@@ -54,7 +54,7 @@ export function BrandedNotFound() {
             href="/"
             className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-zinc-100 px-3 text-sm font-medium text-zinc-950 transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-[#7c6fff]"
           >
-            <House aria-hidden="true" className="size-4" />
+            <Home aria-hidden="true" className="size-4" />
             {uiText('goHome')}
           </Link>
         </div>

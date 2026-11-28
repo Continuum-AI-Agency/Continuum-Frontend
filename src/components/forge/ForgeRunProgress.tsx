@@ -1,7 +1,7 @@
 'use client';
 
+import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, PauseCircle } from 'lucide-react';
 import { type useTranslations, useTranslations as useUiTranslations } from 'next-intl';
-import { CircleCheck, CircleDashed, PauseCircle, Spinner, TriangleAlert } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Progress } from '@/components/ui/progress';
 import type { TemplateRunRow } from '@/lib/library/templateSources';
@@ -21,26 +21,26 @@ function verdict(
 ): {
   tone: 'success' | 'error' | 'warning' | 'info';
   label: string;
-  Icon: typeof Spinner;
+  Icon: typeof Loader2;
   spin?: boolean;
 } {
   if (run.state === 'failed')
-    return { tone: 'error', label: translate('failed_031a8f0f'), Icon: TriangleAlert };
+    return { tone: 'error', label: translate('failed_031a8f0f'), Icon: AlertTriangle };
   // `warning` and not `error`: nothing has gone wrong, the run is waiting for a person. Colouring
   // it red would make an ordinary step of the flow read as a fault.
   if (run.state === 'needs_input') {
     return { tone: 'warning', label: translate('needs_your_answer_84ec74aa'), Icon: PauseCircle };
   }
   if (run.state === 'published')
-    return { tone: 'success', label: translate('published_2ef42ec2'), Icon: CircleCheck };
+    return { tone: 'success', label: translate('published_2ef42ec2'), Icon: CheckCircle2 };
   if (run.done) {
     // draft_ready / review_ready: finished a stage cleanly and is waiting to be moved on.
-    return { tone: 'info', label: templateStateLabel(run.state, translate), Icon: CircleCheck };
+    return { tone: 'info', label: templateStateLabel(run.state, translate), Icon: CheckCircle2 };
   }
   return {
     tone: 'info',
     label: templateStateLabel(run.state, translate),
-    Icon: Spinner,
+    Icon: Loader2,
     spin: true,
   };
 }
@@ -114,7 +114,7 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
             return (
               <li key={phase.name} className="flex items-center gap-1">
                 {complete ? (
-                  <CircleCheck className="size-3 text-emerald-500" aria-hidden />
+                  <CheckCircle2 className="size-3 text-emerald-500" aria-hidden />
                 ) : (
                   <CircleDashed className="size-3" aria-hidden />
                 )}

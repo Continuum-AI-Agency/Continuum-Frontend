@@ -6,28 +6,28 @@
 // foreground tokens.
 
 import type { AdAccountMode, AdAccountReading } from '@continuum/contracts';
+import {
+  BotIcon,
+  ListChecksIcon,
+  type LucideIcon,
+  PlusIcon,
+  TargetIcon,
+  TriangleAlertIcon,
+  UsersIcon,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
-import {
-  Bot,
-  type IconComponent,
-  ListChecks,
-  Plus,
-  Target,
-  TriangleAlert,
-  Users,
-} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../format';
 import { formatResultCount } from './modules/resultHeroModel';
 
-const MODE_ICON: Record<AdAccountMode, IconComponent> = {
-  fix: TriangleAlert,
-  operate: Bot,
-  approve: Users,
-  recommend: ListChecks,
-  setup: Plus,
+const MODE_ICON: Record<AdAccountMode, LucideIcon> = {
+  fix: TriangleAlertIcon,
+  operate: BotIcon,
+  approve: UsersIcon,
+  recommend: ListChecksIcon,
+  setup: PlusIcon,
 };
 
 /** The band's tint and the badge, per mode: a fix reads as a problem, autopilot as running,
@@ -96,7 +96,7 @@ export function BoardHeader({
           data-testid="board-result-chip"
           title={uiText('the_result_that_counts_on_this_account_99311da')}
         >
-          <Target aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+          <TargetIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">
             {resultChipText(reading.result, (label, goal) =>
               uiText('label_goal_goal_85aaad8', { label, goal }),

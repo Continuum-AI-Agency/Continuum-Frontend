@@ -1,18 +1,11 @@
 'use client';
 
 import { isDocumentLayoutMimeType } from '@continuum/contracts';
+import { AlertCircle, Check, FileText, Loader2, RefreshCw, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromAttachment } from '@/components/chat/media/media';
 import { useOpenDocumentInspector } from '@/components/documents/inspector/DocumentInspectorProvider';
-import {
-  CircleAlert as AlertCircle,
-  Check,
-  FileText,
-  Spinner as Loader2,
-  RefreshCw,
-  X,
-} from '@/components/icons';
 import {
   AttachmentAction,
   AttachmentActions,

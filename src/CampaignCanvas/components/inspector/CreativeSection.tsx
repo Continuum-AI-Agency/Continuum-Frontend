@@ -28,19 +28,19 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
   Film,
   GalleryHorizontal,
   GripVertical,
-  Image as ImageIcon,
-  Library as LibraryBig,
+  ImageIcon,
+  LibraryBig,
   Sparkles,
   Trash2,
-  ArrowUpFromLine as Upload,
-} from '@/components/icons';
+  Upload,
+} from 'lucide-react';
+import { useRef, useState } from 'react';
 import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';

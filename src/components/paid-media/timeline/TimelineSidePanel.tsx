@@ -1,6 +1,6 @@
+import { X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import React, { useState } from 'react';
-import { X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { TimelineEvent } from '@/types/timeline';

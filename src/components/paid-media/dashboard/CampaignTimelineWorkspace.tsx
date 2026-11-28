@@ -10,6 +10,7 @@ import {
 
 type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
 
+import { ChevronDown, RotateCw, Search, SquareArrowOutUpRight } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useMemo } from 'react';
@@ -30,7 +31,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ChevronDown, RotateCw, Search, SquareArrowOutUpRight } from '@/components/icons';
 import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

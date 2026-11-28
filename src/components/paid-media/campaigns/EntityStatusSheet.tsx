@@ -12,8 +12,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // READ BACK, not what was asked for.
 
 import type { JainaOperatorAction } from '@continuum/contracts';
+import { ArrowRight, CircleCheck, CircleSlash, TriangleAlert } from 'lucide-react';
 import * as React from 'react';
-import { ArrowRight, CircleCheck, CircleSlash, TriangleAlert } from '@/components/icons';
 import { JainaToolApprovalCard } from '@/components/paid-media/jaina/components/JainaToolApprovalCard';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';

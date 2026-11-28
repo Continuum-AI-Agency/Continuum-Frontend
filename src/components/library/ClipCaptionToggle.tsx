@@ -1,7 +1,7 @@
 'use client';
 
+import { Captions, CaptionsOff } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { Captions, CaptionsOff } from '@/components/icons';
 
 import { cn } from '@/lib/utils';
 

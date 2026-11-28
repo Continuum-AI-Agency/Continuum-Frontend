@@ -5,8 +5,8 @@ import {
   type PipelineManifest,
   pipelineBlockedReason,
 } from '@continuum/contracts';
+import { CircleAlert } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { CircleAlert } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { cn } from '@/lib/utils';
 

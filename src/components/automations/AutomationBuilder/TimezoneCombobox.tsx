@@ -1,8 +1,8 @@
 'use client';
 
+import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
-import { Check, ChevronsUpDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -41,7 +41,7 @@ export function TimezoneCombobox({ value, onChange, disabled = false }: Timezone
             className="w-full justify-between font-normal"
           >
             <span className="truncate">{value || uiText('pick_a_timezone_4c5e74c')}</span>
-            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+            <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
           </Button>
         }
       />
@@ -60,7 +60,7 @@ export function TimezoneCombobox({ value, onChange, disabled = false }: Timezone
                     setOpen(false);
                   }}
                 >
-                  <Check
+                  <CheckIcon
                     className={cn('mr-2 size-4', timezone === value ? 'opacity-100' : 'opacity-0')}
                   />
                   {timezone}

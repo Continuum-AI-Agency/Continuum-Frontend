@@ -37,9 +37,7 @@
         "m_da5793a532",
         "m_f955d78044",
         "refresh_0e91610",
-        "save",
         "saving",
-        "search",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
         "this_tab_is_running_an_older_version_c391508",
         "validationDateEarlier",
@@ -63,9 +61,6 @@
         "validationRequired",
         "validationUnknownFields",
         "validationUrl"
-      ],
-      "navigation": [
-        "search"
       ]
     },
     "app/[locale]/(post-auth)/admin/layout.tsx": {
@@ -599,7 +594,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -3639,7 +3633,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -7422,7 +7415,6 @@
         "retry_942087c",
         "review_jobs_5ae2aa8",
         "running_f4ccae2",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -10459,7 +10451,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -13536,7 +13527,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -17286,7 +17276,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -23067,7 +23056,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -26146,7 +26134,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -29610,7 +29597,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -32644,7 +32630,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -35698,7 +35683,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -40085,7 +40069,6 @@
         "retry_942087c",
         "review_jobs_5ae2aa8",
         "running_f4ccae2",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -45367,7 +45350,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -49608,7 +49590,6 @@
         "resourceNotFound",
         "retry_942087c",
         "review_jobs_5ae2aa8",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -57633,7 +57614,6 @@
         "routedToLibraryBody",
         "routedToLibraryFailed",
         "routedToLibraryTitle",
-        "save",
         "save_1509f56",
         "save_changes_dd0ae7a",
         "saving",
@@ -61809,7 +61789,6 @@
         "retry_942087c",
         "review_jobs_5ae2aa8",
         "rotation_57b5e2f",
-        "save",
         "saving",
         "scale_f102986",
         "search",
@@ -65627,13 +65606,8 @@
         "m_da5793a532",
         "m_f955d78044",
         "refresh_0e91610",
-        "save",
-        "search",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
         "this_tab_is_running_an_older_version_c391508"
-      ],
-      "navigation": [
-        "search"
       ],
       "public": [
         "goBack"
@@ -65644,13 +65618,8 @@
         "m_da5793a532",
         "m_f955d78044",
         "refresh_0e91610",
-        "save",
-        "search",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
         "this_tab_is_running_an_older_version_c391508"
-      ],
-      "navigation": [
-        "search"
       ],
       "public": [
         "authentication_failed_1a19525",
@@ -65696,17 +65665,12 @@
         "requestCancelled",
         "requestTimedOut",
         "resourceNotFound",
-        "save",
-        "search",
         "serviceUnavailable",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
         "this_tab_is_running_an_older_version_c391508",
         "unexpectedError",
         "unknown",
         "validationFailed"
-      ],
-      "navigation": [
-        "search"
       ],
       "settings": [
         "billingContractReason",
@@ -65797,17 +65761,12 @@
         "requestCancelled",
         "requestTimedOut",
         "resourceNotFound",
-        "save",
-        "search",
         "serviceUnavailable",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
         "this_tab_is_running_an_older_version_c391508",
         "unexpectedError",
         "unknown",
         "validationFailed"
-      ],
-      "navigation": [
-        "search"
       ],
       "public": [
         "access_scope_4a51fa6",
@@ -65865,13 +65824,8 @@
         "m_da5793a532",
         "m_f955d78044",
         "refresh_0e91610",
-        "save",
-        "search",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
         "this_tab_is_running_an_older_version_c391508"
-      ],
-      "navigation": [
-        "search"
       ],
       "public": [
         "goBack"
@@ -66227,11 +66181,9 @@
         "routedToLibraryBody",
         "routedToLibraryFailed",
         "routedToLibraryTitle",
-        "save",
         "save_1509f56",
         "saving",
         "saving_23e3929",
-        "search",
         "serviceUnavailable",
         "shortcuts_46e978d",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
@@ -66313,9 +66265,6 @@
         "typography_cab94aba",
         "used_by_value0_value1_94988fdb",
         "weight_optional_79b22a8e"
-      ],
-      "navigation": [
-        "search"
       ],
       "onboarding": [
         "a_few_sentences_is_plenty_what_you_sell_and_w_8b3581e",
@@ -66940,8 +66889,6 @@
         "m_da5793a532",
         "m_f955d78044",
         "refresh_0e91610",
-        "save",
-        "search",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
         "this_tab_is_running_an_older_version_c391508",
         "unknown"
@@ -66968,9 +66915,6 @@
         "resolve_comment_4ea5c8c9",
         "timeline_starts_at_3579fbaa",
         "value0_fps_starts_value1_value2_2c11bb3f"
-      ],
-      "navigation": [
-        "search"
       ]
     },
     "app/[locale]/privacy/layout.tsx": {
@@ -66989,8 +66933,6 @@
         "m_da5793a532",
         "m_f955d78044",
         "refresh_0e91610",
-        "save",
-        "search",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
         "this_tab_is_running_an_older_version_c391508",
         "unknown"
@@ -67063,9 +67005,6 @@
         "zoom_in_4949ad25",
         "zoom_out_0b9aa910",
         "zoom_out_bc7b631a"
-      ],
-      "navigation": [
-        "search"
       ],
       "public": [
         "addFeedback",
@@ -67168,15 +67107,10 @@
         "m_ffbea8bc06",
         "open_slack_settings_d46e621",
         "refresh_0e91610",
-        "save",
-        "search",
         "sign_in_bfd402b",
         "some_buttons_can_t_respond_until_it_reloads_r_dabdf79",
         "this_brand_c31b658",
         "this_tab_is_running_an_older_version_c391508"
-      ],
-      "navigation": [
-        "search"
       ],
       "settings": [
         "billingContractReason",
@@ -67498,7 +67432,6 @@
         "requestTimedOut",
         "resourceNotFound",
         "retire_da8597f",
-        "save",
         "saving",
         "search",
         "search_the_library_ec8e720",
@@ -72180,9 +72113,7 @@
         "requestCancelled",
         "requestTimedOut",
         "resourceNotFound",
-        "save",
         "saving",
-        "search",
         "serviceUnavailable",
         "unexpectedError",
         "unknown",
@@ -72479,9 +72410,6 @@
         "the_linked_frame_is_ready_to_import_9ac90aa",
         "value0_selected_975acbfe"
       ],
-      "navigation": [
-        "search"
-      ],
       "settings": [
         "billingContractReason",
         "billingIncludedCredits",
@@ -72534,7 +72462,6 @@
         "requestCancelled",
         "requestTimedOut",
         "resourceNotFound",
-        "save",
         "search",
         "serviceUnavailable",
         "unexpectedError",

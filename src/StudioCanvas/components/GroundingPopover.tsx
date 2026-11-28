@@ -23,13 +23,13 @@
 
 import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@continuum/contracts';
 import { isShortcutSkill } from '@continuum/contracts';
+import { Check, Wand2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import {
   BrandBookPiecePreview,
   SkillConfigPreview,
 } from '@/components/brand/GenerationConfigPreview';
-import { Check, Wand2 } from '@/components/icons';
 import {
   Accordion,
   AccordionContent,

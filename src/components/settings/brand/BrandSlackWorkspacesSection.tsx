@@ -2,8 +2,8 @@
 
 import type { BrandSlackWorkspace } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { MessageSquareText, RefreshCw, TriangleAlert, Unplug } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { MessageSquareText, RefreshCw, TriangleAlert, Unplug } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { AddToSlackButton } from '@/components/slack/AddToSlackButton';
 import {

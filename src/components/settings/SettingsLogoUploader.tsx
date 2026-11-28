@@ -1,10 +1,10 @@
 'use client';
 
+import { Loader2, Upload, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpFromLine, Spinner, X } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -132,13 +132,13 @@ export function SettingsLogoUploader({
           className="object-cover"
         />
         <AvatarFallback className="text-2xl font-semibold bg-transparent text-muted-foreground">
-          {isUploading ? <Spinner className="w-6 h-6 animate-spin" /> : initials}
+          {isUploading ? <Loader2 className="w-6 h-6 animate-spin" /> : initials}
         </AvatarFallback>
       </Avatar>
 
       {!disabled && (
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-full cursor-pointer pointer-events-none">
-          <ArrowUpFromLine className="w-6 h-6 text-white" />
+          <Upload className="w-6 h-6 text-white" />
         </div>
       )}
 

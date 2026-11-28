@@ -9,8 +9,8 @@ import { useLocale, useTranslations } from 'next-intl';
 // history exist). The full deep dive still lives in the side panel that opens
 // on click.
 
+import { ExternalLink } from 'lucide-react';
 import * as React from 'react';
-import { SquareArrowOutUpRight } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
@@ -123,7 +123,7 @@ export function PostQuickLook({
                 aria-label={uiText('open_post_on_platform_9c31e55')}
                 className="text-muted-foreground transition-colors hover:text-foreground"
               >
-                <SquareArrowOutUpRight className="size-3.5" aria-hidden />
+                <ExternalLink className="size-3.5" aria-hidden />
               </a>
             ) : null}
           </div>

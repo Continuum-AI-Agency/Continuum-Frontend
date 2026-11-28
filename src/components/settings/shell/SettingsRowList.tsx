@@ -4,8 +4,8 @@
 // glance under shared column headers and open to the rest. How-to text sits behind a
 // SettingsInfoHint in the section header instead of under the list.
 
+import { ChevronRight, Info } from 'lucide-react';
 import { type ComponentProps, createContext, type ReactNode, useContext } from 'react';
-import { ChevronRight, Info } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';

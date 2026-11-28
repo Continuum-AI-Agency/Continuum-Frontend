@@ -9,11 +9,11 @@
 // compiler. The form refuses first, where the user can still answer the question.
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2, Plus, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Plus, Spinner, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -233,7 +233,7 @@ export function ElementCreateForm({
               className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-md border border-dashed border-border/60 text-muted-foreground hover:bg-muted/40"
             >
               {uploading ? (
-                <Spinner className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Plus className="h-4 w-4" />
               )}
@@ -299,7 +299,7 @@ export function ElementCreateForm({
           {translateUi('cancel_19766ed6')}
         </Button>
         <Button type="submit" size="sm" disabled={!canSubmit}>
-          {isSaving ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           {needsRights
             ? translateUi('create_and_make_character_sheet_fd9c5449')
             : translateUi('create_element_635864da')}

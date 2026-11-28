@@ -1,7 +1,7 @@
 'use client';
 
+import { Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Plus } from '@/components/icons';
 
 import { Pill, type PillProps } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';

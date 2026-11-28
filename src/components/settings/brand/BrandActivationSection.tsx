@@ -1,15 +1,15 @@
-import Link from 'next/link';
-import { useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
 import {
   ArrowUpRight,
   BookOpen,
-  type IconComponent,
   Library,
   Link2,
+  type LucideIcon,
   Plug,
   Target,
-} from '@/components/icons';
+} from 'lucide-react';
+import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
 
 import { GlossaryTooltip } from '@/components/shared/glossary';
 
@@ -19,7 +19,7 @@ import { GlossaryTooltip } from '@/components/shared/glossary';
 // the existing section; nothing here duplicates those surfaces or their data.
 
 type ActivationTarget = {
-  icon: IconComponent;
+  icon: LucideIcon;
   title: string;
   description: ReactNode;
   href: string;

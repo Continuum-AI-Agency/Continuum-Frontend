@@ -1,9 +1,9 @@
 'use client';
 
+import { ChevronDownIcon, ExternalLinkIcon, MessageCircleIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps, ReactElement } from 'react';
 import { createContext, useContext } from 'react';
-import { ChevronDown, MessageCircle, SquareArrowOutUpRight } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -144,7 +144,7 @@ const providers = {
       `https://t3.chat/new?${new URLSearchParams({
         q,
       })}`,
-    icon: <MessageCircle />,
+    icon: <MessageCircleIcon />,
     titleKey: 'm_65f53db788' as const,
   },
   v0: {
@@ -214,7 +214,7 @@ export const OpenInTrigger = ({ children, ...props }: OpenInTriggerProps) => {
         (children as ReactElement) ?? (
           <Button type="button" variant="outline">
             {tUi('m_756b7a12e4')}
-            <ChevronDown className="size-4" />
+            <ChevronDownIcon className="size-4" />
           </Button>
         )
       }
@@ -239,7 +239,7 @@ export const OpenInChatGPT = (props: OpenInChatGPTProps) => {
         >
           <span className="shrink-0">{providers.chatgpt.icon}</span>
           <span className="flex-1">{tUi(providers.chatgpt.titleKey)}</span>
-          <SquareArrowOutUpRight className="size-4 shrink-0" />
+          <ExternalLinkIcon className="size-4 shrink-0" />
         </a>
       }
     />
@@ -263,7 +263,7 @@ export const OpenInClaude = (props: OpenInClaudeProps) => {
         >
           <span className="shrink-0">{providers.claude.icon}</span>
           <span className="flex-1">{tUi(providers.claude.titleKey)}</span>
-          <SquareArrowOutUpRight className="size-4 shrink-0" />
+          <ExternalLinkIcon className="size-4 shrink-0" />
         </a>
       }
     />
@@ -287,7 +287,7 @@ export const OpenInT3 = (props: OpenInT3Props) => {
         >
           <span className="shrink-0">{providers.t3.icon}</span>
           <span className="flex-1">{tUi(providers.t3.titleKey)}</span>
-          <SquareArrowOutUpRight className="size-4 shrink-0" />
+          <ExternalLinkIcon className="size-4 shrink-0" />
         </a>
       }
     />
@@ -311,7 +311,7 @@ export const OpenInScira = (props: OpenInSciraProps) => {
         >
           <span className="shrink-0">{providers.scira.icon}</span>
           <span className="flex-1">{tUi(providers.scira.titleKey)}</span>
-          <SquareArrowOutUpRight className="size-4 shrink-0" />
+          <ExternalLinkIcon className="size-4 shrink-0" />
         </a>
       }
     />
@@ -335,7 +335,7 @@ export const OpenInv0 = (props: OpenInv0Props) => {
         >
           <span className="shrink-0">{providers.v0.icon}</span>
           <span className="flex-1">{tUi(providers.v0.titleKey)}</span>
-          <SquareArrowOutUpRight className="size-4 shrink-0" />
+          <ExternalLinkIcon className="size-4 shrink-0" />
         </a>
       }
     />
@@ -359,7 +359,7 @@ export const OpenInCursor = (props: OpenInCursorProps) => {
         >
           <span className="shrink-0">{providers.cursor.icon}</span>
           <span className="flex-1">{tUi(providers.cursor.titleKey)}</span>
-          <SquareArrowOutUpRight className="size-4 shrink-0" />
+          <ExternalLinkIcon className="size-4 shrink-0" />
         </a>
       }
     />

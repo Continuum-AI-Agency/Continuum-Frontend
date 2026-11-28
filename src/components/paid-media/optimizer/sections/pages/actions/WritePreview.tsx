@@ -8,9 +8,16 @@
 // is the queue's own (approve → optimizer_request_apply_item, apply → the confirm and its
 // drain, undo → ActionRevertControl's action-revert path); nothing here writes on its own.
 
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  Clock3Icon,
+  MinusIcon,
+  SendIcon,
+  TriangleAlertIcon,
+} from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowRight, Check, Clock, Minus, Send, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import type { UiLocale } from '@/i18n/config';
 import { cn } from '@/lib/utils';
@@ -110,7 +117,7 @@ function BarRow({
         <span className="text-muted-foreground">
           {formatCurrency(bar.before, currency, uiLocale)}
         </span>
-        <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+        <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
         <span className="font-semibold text-foreground">
           {formatCurrency(bar.after, currency, uiLocale)}
         </span>
@@ -193,11 +200,11 @@ export function BarLegend({
   );
 }
 
-const CHECK_ICON: Record<GuardrailState, typeof Check> = {
-  pass: Check,
-  wait: Clock,
-  fail: TriangleAlert,
-  off: Minus,
+const CHECK_ICON: Record<GuardrailState, typeof CheckIcon> = {
+  pass: CheckIcon,
+  wait: Clock3Icon,
+  fail: TriangleAlertIcon,
+  off: MinusIcon,
 };
 
 const CHECK_TONE: Record<GuardrailState, string> = {
@@ -281,7 +288,7 @@ function WriteStateFooter({
             size="sm"
             type="button"
           >
-            <Send aria-hidden="true" className="size-3.5" />
+            <SendIcon aria-hidden="true" className="size-3.5" />
             {uiText('writePreviewApprove', { count: state.keys.length })}
           </Button>
           {state.approved > 0 ? (
@@ -293,7 +300,7 @@ function WriteStateFooter({
       ) : (
         <>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 font-medium text-foreground text-xs">
-            <Clock aria-hidden="true" className="size-3.5" />
+            <Clock3Icon aria-hidden="true" className="size-3.5" />
             {uiText('queued_approved_not_written_yet_aad9cfb')}
           </span>
           <Button
@@ -327,7 +334,7 @@ function AutopilotRunLine({ run, now }: { run: AutopilotRun; now: Date }) {
       data-testid="write-autopilot-run"
     >
       <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
-        <Clock aria-hidden="true" className="size-3.5" />
+        <Clock3Icon aria-hidden="true" className="size-3.5" />
         {uiText('writePreviewQueuedFor', {
           when: RUN_WHEN_CODES.has(when) ? when : 'date',
           date: new Date(run.at).toLocaleDateString(uiLocale, { month: 'short', day: 'numeric' }),
@@ -489,7 +496,10 @@ export function AppliedWriteRow({
               <span className="text-muted-foreground">
                 {formatCurrency(bars[0].before, currency, uiLocale)}
               </span>
-              <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+              <ArrowRightIcon
+                aria-hidden="true"
+                className="size-3 shrink-0 text-muted-foreground"
+              />
               <span className="font-semibold text-foreground">
                 {formatCurrency(bars[0].after, currency, uiLocale)}
               </span>
@@ -508,7 +518,7 @@ export function AppliedWriteRow({
             <span className="text-muted-foreground">
               {printChangeValue(change, change.before, currency, uiLocale)}
             </span>
-            <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+            <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
             <span className="font-semibold text-foreground">
               {printChangeValue(change, change.after, currency, uiLocale)}
             </span>

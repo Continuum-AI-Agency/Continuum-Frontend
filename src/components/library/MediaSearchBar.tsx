@@ -12,9 +12,9 @@ import {
   type MediaSearchResultItem,
   type MediaSource,
 } from '@continuum/contracts';
+import { Loader2, Search, X } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
-import { Search, Spinner, X } from '@/components/icons';
 import type { UiLocale } from '@/i18n/config';
 import { http } from '@/lib/api/http';
 import {
@@ -347,7 +347,7 @@ export function MediaSearchBar({
         className="relative flex items-center gap-2 rounded-lg border border-border/60 bg-muted/50 px-3 transition-colors focus-within:border-border focus-within:bg-background"
       >
         {searching ? (
-          <Spinner className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
         ) : (
           <Search className="size-4 shrink-0 text-muted-foreground" />
         )}

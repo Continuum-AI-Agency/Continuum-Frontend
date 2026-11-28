@@ -9,21 +9,21 @@ import { formatDecimal } from '@/lib/format/decimal';
 type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
 
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  DownloadIcon,
+  Edit2Icon,
+  FileTextIcon,
+  Loader2Icon,
+  PlayIcon,
+  SaveIcon,
+  Trash2Icon,
+  XIcon,
+} from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import React from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
-import {
-  ArrowDownToLine as DownloadIcon,
-  Pencil as Edit2Icon,
-  FileText as FileTextIcon,
-  Spinner as Loader2Icon,
-  Play as PlayIcon,
-  Save as SaveIcon,
-  Trash2 as Trash2Icon,
-  X as XIcon,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useUiErrorMessage } from '@/i18n/errors';

@@ -1,4 +1,11 @@
 import { format, subDays } from 'date-fns';
+import {
+  Calendar as CalendarIcon,
+  Maximize2,
+  Minimize2,
+  PanelRightClose,
+  PanelRightOpen,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -10,13 +17,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import {
-  Calendar as CalendarIcon,
-  Maximize2,
-  Minimize2,
-  PanelRightClose,
-  PanelRightOpen,
-} from '@/components/icons';
 import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';

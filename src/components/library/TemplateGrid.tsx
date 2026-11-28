@@ -5,19 +5,19 @@ import {
   type TemplateSourceSummary,
   templateNameProblem,
 } from '@continuum/contracts';
+import {
+  AlertTriangle,
+  Clock3,
+  Layers,
+  Loader2,
+  PackageOpen,
+  Send,
+  Type,
+  Upload,
+} from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
-import {
-  ArrowUpFromLine,
-  Clock,
-  Layers2,
-  PackageOpen,
-  Send,
-  Spinner,
-  TriangleAlert,
-  Type,
-} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
@@ -139,7 +139,7 @@ function TemplateCard({
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Layers2 className="size-3.5" />
+              <Layers className="size-3.5" />
               {translateUi('sourceSlotCount', { count: source.slotCount ?? 0 })}
             </span>
             <span className="flex items-center gap-1">
@@ -148,7 +148,7 @@ function TemplateCard({
             </span>
             {parse?.comps.some((comp) => comp.durationSec) ? (
               <span className="flex items-center gap-1 tabular-nums">
-                <Clock className="size-3.5" />
+                <Clock3 className="size-3.5" />
                 {Math.round(
                   parse.comps.find((comp) => comp.isDelivery && comp.durationSec)?.durationSec ?? 0,
                 )}
@@ -161,7 +161,7 @@ function TemplateCard({
               back a frame in a fallback face that looks exactly like success. */}
           {fonts && fonts.missing > 0 ? (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
-              <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 {fonts.missing} {translateUi('of_28391d3b')} {fonts.fonts.length}{' '}
                 {translateUi('fonts_are_not_in_the_engine_renders_b55e5031')}
@@ -211,7 +211,7 @@ function TemplateCard({
           disabled={sending || source.parseState !== 'parsed'}
           onClick={() => void sendToForge()}
         >
-          {sending ? <Spinner className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}{' '}
+          {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}{' '}
           {translateUi('send_to_forge_27b7284f')}
         </Button>
       </div>
@@ -278,13 +278,13 @@ export function TemplateGrid({
           </p>
         </div>
         <Button type="button" onClick={onChooseFiles} className="shrink-0">
-          <ArrowUpFromLine className="size-4" /> {translateUi('choose_template_43fcd78f')}
+          <Upload className="size-4" /> {translateUi('choose_template_43fcd78f')}
         </Button>
       </section>
 
       {loading && sources.length === 0 ? (
         <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
-          <Spinner className="size-4 animate-spin" /> {translateUi(
+          <Loader2 className="size-4 animate-spin" /> {translateUi(
             'loading_templates_3800ee71',
           )}{' '}
         </div>

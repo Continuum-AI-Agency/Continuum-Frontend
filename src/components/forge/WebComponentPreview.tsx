@@ -5,9 +5,9 @@ import type {
   ApiRenderTemplateContract,
   WebComponentOverride,
 } from '@continuum/contracts';
+import { AlertCircle } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
-import { CircleAlert } from '@/components/icons';
 import {
   applyPreviewOverrides,
   ForgePreviewBridge,
@@ -148,7 +148,7 @@ export function WebComponentPreview({
             role="alert"
             className="absolute inset-x-3 top-3 flex items-start gap-2 rounded-md border border-destructive/50 bg-background p-2.5 text-xs text-destructive"
           >
-            <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             {error}
           </div>
         ) : null}

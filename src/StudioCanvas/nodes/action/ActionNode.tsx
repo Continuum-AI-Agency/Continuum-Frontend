@@ -22,10 +22,10 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
+import { ChevronDown, ChevronUp, Loader2, Wand2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { ChevronDown, ChevronUp, Spinner, Wand2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useStudioMetadata } from '../../hooks/useStudioMetadata';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
@@ -211,7 +211,7 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={() => void run()}
               >
-                {data.isExecuting ? <Spinner className="mr-1 size-3 animate-spin" /> : null}{' '}
+                {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}{' '}
                 {translateUi('run_00d60e31')}
               </Button>
               {/* Every op that lands an image or a clip carries the save; the text ops

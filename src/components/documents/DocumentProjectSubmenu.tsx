@@ -1,8 +1,8 @@
 'use client';
 
 import type { Project } from '@continuum/contracts';
+import { Check, FolderOpen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Check, FolderOpen } from '@/components/icons';
 import {
   DropdownMenuItem,
   DropdownMenuSub,

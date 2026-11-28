@@ -24,9 +24,9 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Maximize2, Plus, Replace, X } from 'lucide-react';
 import Image from 'next/image';
 import * as React from 'react';
-import { Maximize2, Plus, Replace, X } from '@/components/icons';
 import { VideoStill } from '@/components/media/VideoStill';
 import type { UseDraftMediaPlacementResult } from '@/components/organic/hooks/useDraftMediaPlacement';
 import { cn } from '@/lib/utils';

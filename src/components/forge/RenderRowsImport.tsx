@@ -19,9 +19,9 @@ import {
   type SheetTable,
   sheetTable,
 } from '@continuum/contracts';
+import { FileSpreadsheet, FolderOpen, Loader2, Sparkles, TriangleAlert } from 'lucide-react';
 import { type useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { FileSpreadsheet, FolderOpen, Sparkles, Spinner, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -841,7 +841,7 @@ export function RenderRowsImport({
                 onClick={() => fileRef.current?.click()}
               >
                 {busy ? (
-                  <Spinner className="animate-spin" data-icon="inline-start" />
+                  <Loader2 className="animate-spin" data-icon="inline-start" />
                 ) : (
                   <FileSpreadsheet data-icon="inline-start" />
                 )}{' '}
@@ -961,7 +961,7 @@ export function RenderRowsImport({
                     }
                   >
                     {suggesting ? (
-                      <Spinner className="animate-spin" data-icon="inline-start" />
+                      <Loader2 className="animate-spin" data-icon="inline-start" />
                     ) : (
                       <Sparkles data-icon="inline-start" />
                     )}
@@ -1172,7 +1172,7 @@ export function RenderRowsImport({
               ) : null}
               {checking ? (
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Spinner className="size-3 animate-spin" />{' '}
+                  <Loader2 className="size-3 animate-spin" />{' '}
                   {translateUi('importing_links_and_checking_librar_f0132e1b')}
                 </p>
               ) : null}
@@ -1267,7 +1267,7 @@ export function RenderRowsImport({
           <Button type="button" disabled={!canImport} onClick={() => void importRows()}>
             {uploading ? (
               <>
-                <Spinner className="animate-spin" data-icon="inline-start" />{' '}
+                <Loader2 className="animate-spin" data-icon="inline-start" />{' '}
                 {translateUi('uploading_pictures_d0cccd0b')} {uploading.done}/{uploading.total}…
               </>
             ) : (

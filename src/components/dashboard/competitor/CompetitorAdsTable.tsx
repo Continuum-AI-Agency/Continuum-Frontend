@@ -1,6 +1,7 @@
 'use client';
 
 import type { TimelineEntry } from '@continuum/contracts';
+import { ExternalLink } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { CompetitorSearchBar } from '@/components/competitors/CompetitorSearchBar';
@@ -12,7 +13,6 @@ import {
   type InsightColumn,
   InsightDataTable,
 } from '@/components/dashboard/datatable/InsightDataTable';
-import { SquareArrowOutUpRight } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -295,7 +295,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
                   'w-fit px-0 text-muted-foreground hover:text-foreground',
                 )}
               >
-                <SquareArrowOutUpRight className="size-3" />
+                <ExternalLink className="size-3" />
                 {uiText('m_e0c329c016')}
               </a>
             ) : null}

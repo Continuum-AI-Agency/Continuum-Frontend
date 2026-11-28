@@ -1,20 +1,20 @@
 'use client';
 
 import { isDocumentLayoutMimeType } from '@continuum/contracts';
-import { useTranslations } from 'next-intl';
-import { useRef, useState } from 'react';
 import {
   ArchiveRestore,
   BookmarkPlus,
-  ArrowDownToLine as Download,
-  SquareArrowOutUpRight as ExternalLink,
+  Download,
+  ExternalLink,
   MoreHorizontal,
   Pencil,
   RefreshCw,
   ScanSearch,
   Trash2,
   Undo2,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,

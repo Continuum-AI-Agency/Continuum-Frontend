@@ -45,7 +45,7 @@ describe('DeltaBadge', () => {
   it('keeps the arrow pointing the way the number moved, whatever the colour', () => {
     // Direction is a fact; judgement is an opinion. The arrow must never lie about the fact.
     const { container } = render(<DeltaBadge goodWhenDown value={-7} />);
-    // every glyph renders its name onto the svg's class list
+    // lucide renders the icon name onto the svg's class list
     expect(container.querySelector('svg')?.getAttribute('class')).toContain('arrow-down-right');
   });
 

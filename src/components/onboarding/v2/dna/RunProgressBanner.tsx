@@ -1,6 +1,12 @@
+import {
+  ArrowsCounterClockwise,
+  CheckCircle,
+  CircleNotch,
+  MinusCircle,
+  WarningCircle,
+} from '@phosphor-icons/react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
-import { CircleAlert, CircleCheck, CircleMinus, RotateCcw, Spinner } from '@/components/icons';
 import { previewSectionSchema } from '@/lib/onboarding/agentClient';
 import type { AgentPreviewBuckets } from '../state/agentPreview';
 
@@ -27,7 +33,7 @@ export function RunProgressBanner({ buckets, running, error, onRetry }: RunProgr
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
       {running ? (
         <span className="inline-flex items-center gap-1.5 text-foreground">
-          <Spinner className="h-3 w-3 animate-spin text-[var(--primary)]" />
+          <CircleNotch className="h-3 w-3 animate-spin text-[var(--primary)]" />
           {tUi('m_3509043a38')}
           {counts.done + counts.running}
           {tUi('m_607f2de6ce')}
@@ -35,7 +41,7 @@ export function RunProgressBanner({ buckets, running, error, onRetry }: RunProgr
         </span>
       ) : (
         <span className="inline-flex items-center gap-1.5 text-foreground">
-          <CircleCheck className="h-3 w-3 text-[var(--success)]" />
+          <CheckCircle className="h-3 w-3 text-[var(--success)]" />
           {counts.done}
           {tUi('m_607f2de6ce')}
           {TOTAL}
@@ -44,21 +50,21 @@ export function RunProgressBanner({ buckets, running, error, onRetry }: RunProgr
       )}
       {counts.skipped > 0 ? (
         <span className="inline-flex items-center gap-1.5">
-          <CircleMinus className="h-3 w-3 text-muted-foreground/60" />
+          <MinusCircle className="h-3 w-3 text-muted-foreground/60" />
           {counts.skipped}
           {tUi('m_eeff07ed6d')}
         </span>
       ) : null}
       {counts.error > 0 ? (
         <span className="inline-flex items-center gap-1.5">
-          <CircleAlert className="h-3 w-3 text-[var(--cs-warning,#cb8e00)]" />
+          <WarningCircle className="h-3 w-3 text-[var(--cs-warning,#cb8e00)]" />
           {counts.error}
           {tUi('m_724d3e6cbf')}
         </span>
       ) : null}
       {error && !running ? (
         <span role="alert" className="inline-flex items-center gap-1.5 text-foreground">
-          <CircleAlert className="h-3 w-3 text-[var(--cs-warning,#cb8e00)]" />
+          <WarningCircle className="h-3 w-3 text-[var(--cs-warning,#cb8e00)]" />
           {error}
         </span>
       ) : null}
@@ -68,7 +74,7 @@ export function RunProgressBanner({ buckets, running, error, onRetry }: RunProgr
           onClick={onRetry}
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm transition-colors hover:border-muted-foreground/30"
         >
-          <RotateCcw className="h-3 w-3" />
+          <ArrowsCounterClockwise className="h-3 w-3" />
           {tUi('m_15ceaf8667')}
         </button>
       ) : null}

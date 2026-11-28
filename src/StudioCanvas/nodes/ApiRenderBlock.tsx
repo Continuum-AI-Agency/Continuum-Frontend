@@ -23,10 +23,10 @@ import {
   type Node as ReactFlowNode,
   useUpdateNodeInternals,
 } from '@xyflow/react';
+import { Check, ChevronsUpDown, Clapperboard } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { Check, ChevronsUpDown, Clapperboard } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

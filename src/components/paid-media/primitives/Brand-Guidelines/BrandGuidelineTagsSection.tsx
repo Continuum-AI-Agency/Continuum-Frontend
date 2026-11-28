@@ -1,8 +1,9 @@
 'use client';
 
+import { Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+
 import { type Control, Controller, type FieldArrayPath, useFieldArray } from 'react-hook-form';
-import { Plus, Trash2 } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

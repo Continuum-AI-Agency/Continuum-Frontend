@@ -3,9 +3,9 @@
 import { isStudioNodeType, studioNodeDefinition } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useReactFlow } from '@xyflow/react';
+import { BookOpen, LayoutTemplate, RefreshCw } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
-import { BookOpen, LayoutTemplate, RefreshCw } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';

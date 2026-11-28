@@ -6,6 +6,7 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
+import { Copy, Sparkles, Trash2, Unlink, Wand2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -16,7 +17,6 @@ import {
   NodeTitle,
 } from '@/components/ai-elements/node';
 import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from '@/components/chat/slash-menu';
-import { Copy, Sparkles, Trash2, Unlink, Wand2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,

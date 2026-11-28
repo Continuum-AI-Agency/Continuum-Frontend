@@ -16,8 +16,8 @@ import { useTranslations } from 'next-intl';
 
 import { Radio as RadioPrimitive } from '@base-ui/react/radio';
 import { PUBLISH_PLATFORM_LABELS, type PublishPlatform } from '@continuum/contracts';
+import { Check, ChevronDown, CircleCheck, Loader2, X } from 'lucide-react';
 import * as React from 'react';
-import { Check, ChevronDown, CircleCheck, Spinner, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup } from '@/components/ui/radio-group';
@@ -506,7 +506,7 @@ function ActionButton({
       onClick={action.onClick}
       className={cn('min-w-0', variant === 'cta' ? 'w-full' : 'shrink-0')}
     >
-      {action.busy ? <Spinner className="animate-spin" aria-hidden /> : action.icon}
+      {action.busy ? <Loader2 className="animate-spin" aria-hidden /> : action.icon}
       <span className="truncate">{action.busy ? action.busyLabel : action.label}</span>
     </Button>
   );

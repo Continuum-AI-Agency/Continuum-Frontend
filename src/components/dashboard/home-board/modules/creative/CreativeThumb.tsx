@@ -1,12 +1,12 @@
 'use client';
 
+import { ImageIcon } from 'lucide-react';
 // An ad's thumbnail on the Home: the stored URL, then a second stored copy when one is given, then
 // a placeholder. Stored Meta CDN URLs are signed and expire, so a failed load is normal: the
 // placeholder says the preview expired rather than draw a broken image. The Home never re-resolves
 // a thumbnail from the Graph (that is a live read per ad).
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Image } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 export function CreativeThumb({
@@ -40,7 +40,7 @@ export function CreativeThumb({
         data-expired={expired || undefined}
         data-testid="creative-thumb-placeholder"
       >
-        <Image className="size-4" />
+        <ImageIcon className="size-4" />
         {expired && !compact ? (
           <span className="px-1 text-center text-[0.6rem]">
             {uiText('preview_expired_3ce6831')}

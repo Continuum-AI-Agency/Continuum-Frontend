@@ -12,8 +12,8 @@ import { formatDecimal } from '@/lib/format/decimal';
 // the Optimizer.
 
 import type { OrganicWinner, PromoteOrganicWinnerResponse } from '@continuum/contracts';
+import { Loader2, Megaphone } from 'lucide-react';
 import * as React from 'react';
-import { Megaphone, Spinner } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -109,7 +109,7 @@ function PromoteDialog({
           </div>
         ) : adsets.isLoading ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Spinner className="size-3 animate-spin" aria-hidden="true" />
+            <Loader2 className="size-3 animate-spin" aria-hidden="true" />
             {uiText('loading_ad_sets_6efe89e')}
           </div>
         ) : refused ? (
@@ -176,7 +176,7 @@ function PromoteDialog({
               {uiText.rich('sentence_7b7ec520d080', {
                 v0: () =>
                   promote.isPending ? (
-                    <Spinner className="size-3 animate-spin" aria-hidden="true" />
+                    <Loader2 className="size-3 animate-spin" aria-hidden="true" />
                   ) : null,
               })}
             </Button>

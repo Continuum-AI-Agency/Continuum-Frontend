@@ -1,9 +1,9 @@
 'use client';
 
 import { formatPlannerTimeOfDay, parsePlannerTimeOfDay } from '@continuum/contracts';
+import { Check } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
-import { Check } from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,

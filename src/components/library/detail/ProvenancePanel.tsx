@@ -1,10 +1,10 @@
 'use client';
 
 import { canvasDeepLink, type ForgeProvenance } from '@continuum/contracts';
+import { ExternalLink, RefreshCw, Workflow } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
-import { RefreshCw, SquareArrowOutUpRight, Workflow } from '@/components/icons';
 import { Link } from '@/i18n/navigation';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -200,8 +200,9 @@ function ForgeSection({ provenance }: { provenance: ForgeProvenance }) {
           href={forgeDeepLinkHref(link)}
           className="inline-flex items-center gap-1 text-primary hover:underline"
         >
-          <SquareArrowOutUpRight className="size-3" aria-hidden />{' '}
-          {translateUi('open_in_forge_37cf02a0')}{' '}
+          <ExternalLink className="size-3" aria-hidden /> {translateUi(
+            'open_in_forge_37cf02a0',
+          )}{' '}
         </Link>
         {/* Re-render needs the row it came from; it opens that row selected, ready for Render. */}
         {link.templateAssetId && link.renderSetId && link.rowId ? (

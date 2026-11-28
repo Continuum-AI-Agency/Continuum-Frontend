@@ -31,9 +31,9 @@ import {
   isUnderperformingRanking,
   META_REPORTED_ATTRIBUTION_NOTE,
 } from '@continuum/contracts';
+import { ExternalLink, TriangleAlert } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
-import { SquareArrowOutUpRight, TriangleAlert } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUiErrorMessage } from '@/i18n/errors';
 import {
@@ -480,7 +480,7 @@ function PostDeploymentCard({
             className="inline-flex shrink-0 items-center gap-1 text-2xs text-muted-foreground hover:text-foreground"
           >
             {' '}
-            {translateUi('view_post_fe9715bc')} <SquareArrowOutUpRight className="size-3" />
+            {translateUi('view_post_fe9715bc')} <ExternalLink className="size-3" />
           </a>
         )}
       </div>

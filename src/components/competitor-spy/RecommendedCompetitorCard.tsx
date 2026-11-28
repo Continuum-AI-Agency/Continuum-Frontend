@@ -1,8 +1,8 @@
 'use client';
 
 import type { RecommendedCompetitor } from '@continuum/contracts';
+import { Check, Plus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Check, Plus, X } from '@/components/icons';
 import { initials, tileStyle } from './brandVisuals';
 
 export function RecommendedCompetitorCard({

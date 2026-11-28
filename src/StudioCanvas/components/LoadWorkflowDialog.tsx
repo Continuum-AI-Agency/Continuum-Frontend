@@ -1,9 +1,9 @@
 import type { PipelineManifest } from '@continuum/contracts';
+import { Download, Ellipsis, Pencil, RotateCw, Trash2, X } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { PipelineContract } from '@/components/ai-studio/PipelineContract';
 import { useApplyLibraryWorkflow, WorkflowCard } from '@/components/ai-studio/WorkflowLibrary';
-import { ArrowDownToLine, Ellipsis, Pencil, RotateCw, Trash2, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -275,8 +275,9 @@ function WorkflowRow({
           <DropdownMenuContent align="end" className="w-44">
             {onAttachWorkflow && (
               <DropdownMenuItem onSelect={() => void onApplyWorkflow(workflow)}>
-                <ArrowDownToLine className="mr-2 h-3.5 w-3.5" />{' '}
-                {translateUi('load_onto_canvas_08aab4ef')}{' '}
+                <Download className="mr-2 h-3.5 w-3.5" /> {translateUi(
+                  'load_onto_canvas_08aab4ef',
+                )}{' '}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onSelect={() => onRenameRequest(workflow)}>
@@ -463,7 +464,7 @@ function EmptyState({ tab, query }: { tab: WorkflowTab; query: string }) {
   if (query) {
     return (
       <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-        <ArrowDownToLine className="h-8 w-8 text-muted-foreground/40" />
+        <Download className="h-8 w-8 text-muted-foreground/40" />
         <p className="text-sm font-medium text-muted-foreground">
           {translateUi('nothing_matches_fd6075a1')}
           {query}”
@@ -476,7 +477,7 @@ function EmptyState({ tab, query }: { tab: WorkflowTab; query: string }) {
   }
   return (
     <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-      <ArrowDownToLine className="h-8 w-8 text-muted-foreground/40" />
+      <Download className="h-8 w-8 text-muted-foreground/40" />
       <p className="text-sm font-medium text-muted-foreground">
         {tab === 'pipeline'
           ? translateUi('no_pipelines_published_yet_81994b22')
@@ -742,7 +743,7 @@ export function LoadWorkflowDialog({
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <ArrowDownToLine className="mr-2 h-4 w-4" /> {translateUi('my_workflows_a749a3fd')}
+            <Download className="mr-2 h-4 w-4" /> {translateUi('my_workflows_a749a3fd')}
           </Button>
         }
       />

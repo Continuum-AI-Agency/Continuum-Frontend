@@ -1,8 +1,8 @@
 'use client';
 
+import { TriangleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
-import { TriangleAlert } from '@/components/icons';
 import { BrandGuidelinesEditor } from '@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesEditor';
 import { BrandGuidelinesLibrary } from '@/components/paid-media/primitives/Brand-Guidelines/BrandGuidelinesLibrary';
 import { Alert, AlertDescription } from '@/components/ui/alert';

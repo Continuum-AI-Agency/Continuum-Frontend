@@ -2,6 +2,7 @@
 
 import type { RenderApprovalDestination } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { Hash, MessageCircle } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -9,7 +10,6 @@ import {
   DestinationApproversPanel,
 } from '@/components/forge/DestinationApproversPanel';
 import { FORGE_STALE_MS } from '@/components/forge/queryKeys';
-import { Hash, MessageCircle } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';

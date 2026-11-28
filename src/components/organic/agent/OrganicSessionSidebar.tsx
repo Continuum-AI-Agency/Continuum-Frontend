@@ -1,6 +1,7 @@
 'use client';
 
 import type { AgentSessionListFilters } from '@continuum/contracts';
+import { Loader2Icon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import { AgentInitiatorPill } from '@/components/chat/AgentInitiatorPill';
@@ -12,7 +13,6 @@ import {
 import { SessionSearchFailureNotice } from '@/components/chat/SessionSearchFailureNotice';
 import { SessionTagEditor } from '@/components/chat/SessionTagEditor';
 import { useSessionSearch } from '@/components/chat/useSessionSearch';
-import { Plus, Spinner, Trash2 } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -135,7 +135,7 @@ export function OrganicSessionSidebar({
           disabled={isInteractionDisabled}
           className="h-6 gap-1 px-2 text-xs"
         >
-          <Plus className="size-3" />
+          <PlusIcon className="size-3" />
           {uiText('new_18fdd54')}
         </Button>
       </div>
@@ -221,7 +221,7 @@ export function OrganicSessionSidebar({
                   <div className="flex w-full items-center justify-between gap-2" translate="no">
                     {isWorking ? (
                       <span className="inline-flex items-center gap-1 text-2xs uppercase tracking-wide text-primary">
-                        <Spinner className="size-3 animate-spin" />
+                        <Loader2Icon className="size-3 animate-spin" />
                         {uiText('working_a92f044')}
                       </span>
                     ) : (
@@ -262,7 +262,7 @@ export function OrganicSessionSidebar({
                     disabled={isInteractionDisabled}
                     className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2Icon className="size-3.5" />
                   </button>
                 </div>
               </div>

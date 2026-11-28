@@ -25,13 +25,13 @@ import {
   useNodeId,
   useUpdateNodeInternals,
 } from '@xyflow/react';
+import { Copy, Download, Image, Play, Trash2, TriangleAlert } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
 import { BillingErrorAction } from '@/components/billing/BillingErrorAction';
-import { ArrowDownToLine, Copy, Image, Play, Trash2, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -625,7 +625,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                             value0: String(index + 1),
                           })}
                         >
-                          <ArrowDownToLine className="h-3 w-3" />
+                          <Download className="h-3 w-3" />
                         </Button>
                       </div>
                     ))}
@@ -651,7 +651,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                       title={translateUi('download_output_b86e2324')}
                       aria-label={translateUi('download_generated_image_97d5a3bf')}
                     >
-                      <ArrowDownToLine className="h-4 w-4" />
+                      <Download className="h-4 w-4" />
                     </Button>
                   </div>
                 ) : (
@@ -829,7 +829,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={handleDownload} disabled={!previewImage}>
-          <ArrowDownToLine className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
+          <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem

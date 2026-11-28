@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 // window. Writes a RangeSpec; the caller resolves it (rangeModel) and threads the
 // resolved dates into every panel, so there is exactly one period on screen.
 
-import { CalendarRange } from '@/components/icons';
+import { CalendarRangeIcon } from 'lucide-react';
 import { DateRangeField } from '@/components/shared/DateRangeField';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
@@ -57,7 +57,7 @@ export function DateRangeControl({ value, onChange, hasFlight, className }: Date
           custom ? 'border-primary/50 text-foreground' : 'text-muted-foreground',
         )}
       >
-        <CalendarRange aria-hidden className="size-3.5" />
+        <CalendarRangeIcon aria-hidden className="size-3.5" />
         <DateRangeField
           className="h-6 border-0 px-1 text-xs shadow-none"
           clearable={false}

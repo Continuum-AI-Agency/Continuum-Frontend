@@ -1,10 +1,10 @@
 'use client';
 
+import { ArrowRightLeftIcon, BotIcon, BrainIcon, WrenchIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
-import { ArrowLeftRight, Bot, Brain, Wrench } from '@/components/icons';
 import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Trace } from '@/components/ui/trace';
@@ -117,7 +117,7 @@ function AgentStatusLine({
   return (
     <TraceStep
       status={agent.completeStatus === 'failed' ? 'error' : isDone ? undefined : 'running'}
-      icon={<Bot />}
+      icon={<BotIcon />}
       title={formatAgentLabel(agent.agentId, uiText, agent.agentLabel)}
       description={description || undefined}
     />
@@ -149,7 +149,7 @@ function ToolEntryLine({ entry, isStreaming }: { entry: ResolvedToolEntry; isStr
   return (
     <TraceStep
       status={status}
-      icon={<Wrench />}
+      icon={<WrenchIcon />}
       title={formatToolLabel(entry.name, uiText, entry.toolCall?.display_name)}
       description={description || undefined}
     >
@@ -186,7 +186,7 @@ function SegmentSteps({
     return (
       <TraceStep
         status={isStreaming && isLast ? 'running' : undefined}
-        icon={<Brain />}
+        icon={<BrainIcon />}
         title={uiText('reasoning_d8211e2')}
         defaultOpen
       >
@@ -219,7 +219,7 @@ function SegmentSteps({
               ? 'running'
               : undefined
         }
-        icon={<ArrowLeftRight />}
+        icon={<ArrowRightLeftIcon />}
         title={
           segment.status === 'started'
             ? uiText('template_abf12bf9e46d', { v0: agent })
@@ -253,7 +253,7 @@ function SegmentSteps({
               ? 'running'
               : undefined
         }
-        icon={<ArrowLeftRight />}
+        icon={<ArrowRightLeftIcon />}
         title={uiText('template_dd8a75cfb856', {
           v0: formatAgentLabel(segment.agentId, uiText, segment.agentLabel),
         })}
@@ -296,7 +296,7 @@ function SegmentSteps({
           <TraceStep
             key={cluster.key}
             status={status}
-            icon={<Wrench />}
+            icon={<WrenchIcon />}
             title={formatToolLabel(
               cluster.name,
               uiText,

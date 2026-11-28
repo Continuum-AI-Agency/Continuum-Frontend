@@ -1,10 +1,10 @@
 'use client';
 
 import { normalizeTemplateFontFamily, type TemplateSourceSummary } from '@continuum/contracts';
+import { Loader2, Type, Upload } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { NoSpecimenText, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
-import { ArrowUpFromLine, Spinner, Type } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { type BrandFontSummary, fetchBrandFonts } from '@/lib/library/templateSources';
@@ -75,7 +75,7 @@ export function TypographyPanel({
           </p>
         </div>
         <Button size="sm" onClick={() => inputRef.current?.click()}>
-          <ArrowUpFromLine className="size-4" /> {translateUi('add_fonts_420422d6')}
+          <Upload className="size-4" /> {translateUi('add_fonts_420422d6')}
         </Button>
         <input
           ref={inputRef}
@@ -102,7 +102,7 @@ export function TypographyPanel({
 
       {fonts === null ? (
         <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
-          <Spinner className="size-4 animate-spin" /> {translateUi('loading_fonts_59a92bbd')}
+          <Loader2 className="size-4 animate-spin" /> {translateUi('loading_fonts_59a92bbd')}
         </div>
       ) : fonts.length === 0 && neededBy.size === 0 ? (
         <div className="rounded-lg border border-dashed border-border/60 p-8 text-center">

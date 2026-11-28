@@ -1,5 +1,5 @@
+import { Calendar, Clock3, Globe2, LineChart } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Calendar, ChartLine, Clock, Earth } from '@/components/icons';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -142,7 +142,7 @@ export function BrandTrendsPanel({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-baseline gap-2">
             <p className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs font-semibold tracking-wide uppercase">
-              <ChartLine className="h-3 w-3" />
+              <LineChart className="h-3 w-3" />
               {tUi('m_ed14eb9a90')}
             </p>
             <CardTitle className="truncate text-sm tracking-tight">{tUi('m_ce1343aef9')}</CardTitle>
@@ -152,7 +152,7 @@ export function BrandTrendsPanel({
             {actionSlot}
             {country ? (
               <Badge variant="outline" className="h-6 text-xs">
-                <Earth className="mr-1 h-3 w-3" />
+                <Globe2 className="mr-1 h-3 w-3" />
                 {country}
               </Badge>
             ) : null}
@@ -188,7 +188,7 @@ export function BrandTrendsPanel({
             ) : null}
             {generatedLabel ? (
               <Badge variant="outline" className="h-6 text-xs">
-                <Clock className="mr-1 h-3 w-3" />
+                <Clock3 className="mr-1 h-3 w-3" />
                 {generatedLabel}
               </Badge>
             ) : null}

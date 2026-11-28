@@ -1,12 +1,8 @@
 'use client';
 
+import { CheckIcon, CopyIcon, RefreshCwIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import {
-  Check as CheckIcon,
-  Copy as CopyIcon,
-  RefreshCw as RefreshCwIcon,
-} from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

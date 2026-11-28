@@ -1,11 +1,10 @@
 import { useTranslations } from 'next-intl';
-
 // Error state with an inline retry (mirrors the proven message+retry pattern in
 // organic/primitives/CalendarToolbar.tsx). role="alert" announces the failure;
 // the retry button appears only when a handler is supplied.
 
+import { RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { RefreshCw, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -42,7 +41,7 @@ export function ErrorRetryState({
     <Empty role="alert" className={cn('gap-3', className)}>
       <EmptyHeader>
         <EmptyMedia variant="icon" className="bg-destructive/10 text-destructive">
-          {media !== undefined ? media : <TriangleAlert aria-hidden="true" />}
+          {media !== undefined ? media : <TriangleAlertIcon aria-hidden="true" />}
         </EmptyMedia>
         <EmptyTitle>{title}</EmptyTitle>
         <EmptyDescription>{message}</EmptyDescription>
@@ -50,7 +49,7 @@ export function ErrorRetryState({
       {onRetry !== undefined ? (
         <EmptyContent>
           <Button type="button" size="sm" variant="outline" onClick={onRetry}>
-            <RefreshCw aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+            <RefreshCwIcon aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
             {retryLabel}
           </Button>
         </EmptyContent>

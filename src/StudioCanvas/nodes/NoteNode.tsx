@@ -1,11 +1,11 @@
 'use client';
 
 import { type NodeProps, NodeResizer, type Node as ReactFlowNode } from '@xyflow/react';
+import { Copy, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { Copy, Trash2 } from '@/components/icons';
 import {
   ContextMenu,
   ContextMenuContent,

@@ -5,19 +5,19 @@ import {
   onboardingIntakeSchema,
   onboardingSocialInputSchema,
 } from '@continuum/contracts';
-import { useTranslations } from 'next-intl';
-import { type ReactNode, useId, useRef, useState } from 'react';
 import {
   ArrowRight,
-  ChevronDown,
-  CircleAlert,
+  CaretDown,
+  CircleNotch,
   Files,
   Globe,
   Paperclip,
-  Spinner,
-  TextAlignStart,
+  TextAlignLeft,
+  WarningCircle,
   X,
-} from '@/components/icons';
+} from '@phosphor-icons/react';
+import { useTranslations } from 'next-intl';
+import { type ReactNode, useId, useRef, useState } from 'react';
 import { FacebookIcon, InstagramIcon } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -53,11 +53,7 @@ function getModeOptions(
   return [
     { mode: 'website', label: tUi('m_2e8a57cc5c'), icon: <Globe aria-hidden /> },
     { mode: 'social', label: tUi('m_ab88a9270a'), icon: <InstagramIcon aria-hidden /> },
-    {
-      mode: 'description',
-      label: tUi('description_526e008'),
-      icon: <TextAlignStart aria-hidden />,
-    },
+    { mode: 'description', label: tUi('description_526e008'), icon: <TextAlignLeft aria-hidden /> },
     { mode: 'documents', label: tUi('m_5552971562'), icon: <Files aria-hidden /> },
   ];
 }
@@ -336,7 +332,7 @@ export function UrlScreen({
               >
                 {busy ? (
                   <>
-                    <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
+                    <CircleNotch className="size-4 animate-spin motion-reduce:animate-none" />
                     {tUi('m_684d0f51f0')}
                   </>
                 ) : (
@@ -380,7 +376,7 @@ export function UrlScreen({
 
           {message ? (
             <div id={errorId} role="alert" className="flex gap-2.5 text-sm">
-              <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+              <WarningCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
               <div className="min-w-0 space-y-2">
                 <p className="text-foreground">{message}</p>
                 {error && !fieldError ? (
@@ -450,7 +446,7 @@ function SourceChip({
             {icon}
             <span className="text-foreground">{label}</span>
             {detail ? <span className="min-w-0 truncate">{detail}</span> : null}
-            <ChevronDown aria-hidden />
+            <CaretDown aria-hidden />
             <span className="sr-only">{tUi('change_source_type_75b58d9')}</span>
           </button>
         }
@@ -504,10 +500,6 @@ function describeSource(
     return { icon: <InstagramIcon aria-hidden />, label: tUi('m_ab88a9270a'), detail: null };
   }
   if (mode === 'description')
-    return {
-      icon: <TextAlignStart aria-hidden />,
-      label: tUi('description_526e008'),
-      detail: null,
-    };
+    return { icon: <TextAlignLeft aria-hidden />, label: tUi('description_526e008'), detail: null };
   return { icon: <Globe aria-hidden />, label: tUi('detects_as_you_type_18d2fc3'), detail: null };
 }

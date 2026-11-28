@@ -16,7 +16,7 @@ import { useTranslations } from 'next-intl';
 // seven-column ad-set table was expected to fit. That was the single biggest cause of the
 // cramping. Onboarding is now full-width and full-height, and owns exactly one scroll region.
 
-import { GaugeCircle } from '@/components/icons';
+import { GaugeCircleIcon } from 'lucide-react';
 
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { PortfolioSetup } from './PortfolioSetup';
@@ -41,7 +41,7 @@ export function OptimizerOnboarding({
       {/* One line, laid out horizontally. The hero used to be a 6rem-tall centered block that
           ate the fold before the user saw a single ad set. */}
       <header className="flex shrink-0 items-center gap-3 border-border/60 border-b px-4 py-3">
-        <GaugeCircle className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <GaugeCircleIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0">
           <h2 className="font-semibold text-sm tracking-tight">
             {uiText('put_ad_sets_under_the_optimizer_d652a07')}

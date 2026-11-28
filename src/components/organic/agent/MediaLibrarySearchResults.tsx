@@ -1,10 +1,10 @@
 'use client';
 
 import type { MediaSearchResultsFrame } from '@continuum/contracts';
+import { Images } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromLibraryAsset } from '@/components/chat/media/media';
-import { Images } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

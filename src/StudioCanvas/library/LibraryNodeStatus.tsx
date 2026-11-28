@@ -14,16 +14,9 @@
 
 import type { CanvasLibraryAssetContext, PinnedLibraryAssetRef } from '@continuum/contracts';
 import { canvasLibraryDrift } from '@continuum/contracts';
+import { CheckCircle2, GitBranchPlus, Info, Loader2, MessageSquare, RefreshCw } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useId, useMemo, useState } from 'react';
-import {
-  CircleCheck,
-  GitBranchPlus,
-  Info,
-  MessageSquare,
-  RefreshCw,
-  Spinner,
-} from '@/components/icons';
 import { useAssetComments } from '@/components/library/detail/useAssetComments';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -212,7 +205,7 @@ export function LibraryNodeStatus({ nodeId, data }: { nodeId: string; data: unkn
           )}
         >
           {busy ? (
-            <Spinner className="size-3 animate-spin" aria-hidden />
+            <Loader2 className="size-3 animate-spin" aria-hidden />
           ) : (
             <RefreshCw className="size-3" aria-hidden />
           )}
@@ -231,7 +224,7 @@ export function LibraryNodeStatus({ nodeId, data }: { nodeId: string; data: unkn
             'bg-violet-500/15 text-violet-800 hover:bg-violet-500/25 dark:text-violet-200',
           )}
         >
-          <CircleCheck className="size-3" aria-hidden /> {translateUi('decision_changed_5628ae50')}{' '}
+          <CheckCircle2 className="size-3" aria-hidden /> {translateUi('decision_changed_5628ae50')}{' '}
           {statusLabel}
         </button>
       ) : null}
@@ -496,7 +489,7 @@ function SaveAsRevision({
                   className="justify-start"
                 >
                   {saving === source.version_id ? (
-                    <Spinner className="size-3 animate-spin" aria-hidden />
+                    <Loader2 className="size-3 animate-spin" aria-hidden />
                   ) : null}
                   <span className="truncate">
                     {translateUi('revise_f1323f09')} {name}

@@ -1,9 +1,9 @@
 'use client';
 
 import type { MediaCollection } from '@continuum/contracts';
+import { ChevronRight } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type { DragEvent } from 'react';
-import { ChevronRight } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { collectionTrail } from './collectionTrail';
 

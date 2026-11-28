@@ -1,6 +1,6 @@
+import { PencilSimple } from '@phosphor-icons/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Pencil } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -52,7 +52,7 @@ export function EditableProse({
             <span className="text-muted-foreground/60">{placeholder ?? tUi('m_a133eb007d')}</span>
           )}
         </span>
-        <Pencil
+        <PencilSimple
           aria-hidden
           className="absolute right-0 top-0 h-3 w-3 text-muted opacity-0 transition-opacity group-hover/edit:opacity-100"
         />

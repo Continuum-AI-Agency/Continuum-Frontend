@@ -1,9 +1,9 @@
 'use client';
 
+import { ArrowLeftIcon, ArrowRightIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import type { CarouselApi } from '@/components/ui/carousel';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
@@ -182,7 +182,7 @@ export const InlineCitationCarouselPrev = ({
       type="button"
       {...props}
     >
-      <ArrowLeft className="size-4 text-muted-foreground" />
+      <ArrowLeftIcon className="size-4 text-muted-foreground" />
     </button>
   );
 };
@@ -210,7 +210,7 @@ export const InlineCitationCarouselNext = ({
       type="button"
       {...props}
     >
-      <ArrowRight className="size-4 text-muted-foreground" />
+      <ArrowRightIcon className="size-4 text-muted-foreground" />
     </button>
   );
 };

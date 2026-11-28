@@ -6,8 +6,6 @@ import {
   type VideoEditorPoolAsset,
   videoEditorPoolAssetSchema,
 } from '@continuum/contracts';
-import { useTranslations as useUiTranslations } from 'next-intl';
-import { memo, useRef, useState } from 'react';
 import {
   AudioLines,
   Captions,
@@ -17,15 +15,17 @@ import {
   Film,
   Image as ImageIcon,
   Lock,
-  LockOpen,
   Magnet,
   Plus,
   Scissors,
   Trash2,
   Type,
+  Unlock,
   Volume2,
-  VolumeOff,
-} from '@/components/icons';
+  VolumeX,
+} from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { memo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -626,7 +626,7 @@ export const EditTimeline = memo(function EditTimeline({
                         onClick={() => onTrackState(track, { muted: !trackIsMuted(track) })}
                       >
                         {trackIsMuted(track) ? (
-                          <VolumeOff className="size-3" />
+                          <VolumeX className="size-3" />
                         ) : (
                           <Volume2 className="size-3" />
                         )}
@@ -641,11 +641,7 @@ export const EditTimeline = memo(function EditTimeline({
                         className="text-muted-foreground hover:text-foreground"
                         onClick={() => onTrackState(track, { locked: !track.locked })}
                       >
-                        {track.locked ? (
-                          <Lock className="size-3" />
-                        ) : (
-                          <LockOpen className="size-3" />
-                        )}
+                        {track.locked ? <Lock className="size-3" /> : <Unlock className="size-3" />}
                       </button>
                     </ContextMenuTrigger>
                     <ContextMenuContent className="w-52">
@@ -660,7 +656,7 @@ export const EditTimeline = memo(function EditTimeline({
                       <ContextMenuItem
                         onClick={() => onTrackState(track, { muted: !trackIsMuted(track) })}
                       >
-                        {trackIsMuted(track) ? <Volume2 /> : <VolumeOff />}{' '}
+                        {trackIsMuted(track) ? <Volume2 /> : <VolumeX />}{' '}
                         {trackIsMuted(track)
                           ? translateUi('unmute_ce4ee4ef')
                           : translateUi('mute_8dd6857b')}
@@ -668,7 +664,7 @@ export const EditTimeline = memo(function EditTimeline({
                       <ContextMenuItem
                         onClick={() => onTrackState(track, { locked: !track.locked })}
                       >
-                        {track.locked ? <LockOpen /> : <Lock />}{' '}
+                        {track.locked ? <Unlock /> : <Lock />}{' '}
                         {track.locked
                           ? translateUi('unlock_4ac709aa')
                           : translateUi('lock_db44b8db')}

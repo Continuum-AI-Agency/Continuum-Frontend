@@ -9,8 +9,8 @@ import { useTranslations } from 'next-intl';
 // the feature is reachable by a human.
 
 import { isoToday, type Project, projectTimeState } from '@continuum/contracts';
+import { Archive, ArchiveRestore, ChevronLeft, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
-import { Archive, ArchiveRestore, ChevronLeft, Pencil, Plus } from '@/components/icons';
 import { ProjectChip } from '@/components/projects';
 import { Button } from '@/components/ui/button';
 import { useCurrentUserAvatar } from '@/hooks/useCurrentUserAvatar';

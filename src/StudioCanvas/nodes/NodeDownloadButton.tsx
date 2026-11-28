@@ -10,8 +10,8 @@
 // It renders NOTHING when the node holds no media. A node that has not produced is not
 // missing an affordance; a node that HAS produced and offers no way to save it is.
 
+import { Download } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { ArrowDownToLine } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { downloadAsset } from '../utils/downloadAsset';
@@ -62,7 +62,7 @@ export function NodeDownloadButton({ nodeType, data, baseName, label, className 
       title={translateUi('download_output_b86e2324')}
       aria-label={accessibleName}
     >
-      <ArrowDownToLine className="h-4 w-4" />
+      <Download className="h-4 w-4" />
     </Button>
   );
 }
