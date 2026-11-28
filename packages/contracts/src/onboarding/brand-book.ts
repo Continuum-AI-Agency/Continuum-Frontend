@@ -73,6 +73,9 @@ export const brandBookReportLayerSchema = z
     brand_md: z.string().nullable().default(null),
     brand_tokens: brandMdTokensSchema.nullable().default(null),
     brand_md_is_edited: z.boolean().default(false),
+    // The composite row's updated_at when the book was assembled: a save sends it back as
+    // `expected_updated_at`, so an edit made against an older doc is refused, not merged.
+    brand_md_version: z.string().nullable().default(null),
     // Lean DNA (positioning thesis + pillars) the compose worker copies from the
     // report pipeline. Typed here rather than leaking through .passthrough().
     dna: brandDnaSchema.nullable().default(null),
@@ -127,5 +130,7 @@ export const brandMdSaveResultSchema = z.object({
   brand_md: z.string().nullable().default(null),
   brand_md_is_edited: z.boolean().default(false),
   brand_tokens: brandMdTokensSchema.nullable().default(null),
+  // The new brand_md_version, for the next save.
+  version: z.string().nullable().default(null),
 });
 export type BrandMdSaveResult = z.infer<typeof brandMdSaveResultSchema>;

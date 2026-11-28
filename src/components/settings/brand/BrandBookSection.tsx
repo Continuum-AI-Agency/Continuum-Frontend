@@ -18,9 +18,11 @@ export type BrandBookGeneration = {
 export function BrandBookSection({
   brandBook,
   generation,
+  canEdit,
 }: {
   brandBook: BrandBookResponse | null;
   generation?: BrandBookGeneration | null;
+  canEdit: boolean;
 }) {
   const tUi = useTranslations('settings');
 
@@ -43,5 +45,5 @@ export function BrandBookSection({
     generation?.brandName ??
     tUi('m_cd3f1b0802');
 
-  return <BrandBookView brandBook={brandBook} brandName={brandName} />;
+  return <BrandBookView brandBook={brandBook} brandName={brandName} canEdit={canEdit} />;
 }

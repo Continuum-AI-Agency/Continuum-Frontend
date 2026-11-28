@@ -143,6 +143,8 @@ export function parseBrandMd(input: string): ParsedBrandMd {
 export const brandMdSaveRequestSchema = z
   .object({
     brand_md: z.string().min(1).max(200_000),
+    // The brand_md_version the edit started from; the save is refused if the doc moved since.
+    expected_updated_at: z.string().min(1).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
