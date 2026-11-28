@@ -1,4 +1,5 @@
-import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import { deriveSiblingClientKey } from '@continuum/contracts';
+import { type Browser, type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   buildOrganicPostContextBlock,
@@ -7,7 +8,13 @@ import {
 import { formatDayId, startOfWeek } from '../src/components/organic/primitives/calendar-utils';
 import { createDefaultOnboardingState } from '../src/lib/onboarding/state';
 import { mintSessionWithPassword } from './support/auth';
+import { createBenchRecorder } from './support/benchRecorder';
 import { type LocalBackend, startLocalBackend } from './support/localBackend';
+import {
+  type ApprovalBenchActor,
+  assertPlannerApprovalEnvironment,
+  seedPlannerApprovalBench,
+} from './support/plannerApprovalBench';
 
 // Planner status + agent-chat speaker bench (WP-D: bugs #182 and #177).
 //
@@ -998,5 +1005,254 @@ test.describe('organic planner R2 media render proof', () => {
       .toBe(true);
 
     await page.screenshot({ path: `${SCREENSHOT_DIR}/planner-r2-durable-media.png` });
+  });
+});
+
+test.describe('Bug #415 isolated brand-member scheduling', () => {
+  test.describe.configure({ mode: 'serial', timeout: 180_000 });
+  type Fixture = Awaited<ReturnType<typeof seedPlannerApprovalBench>>;
+  let fixture: Fixture | undefined;
+  const completed = new Set<string>();
+  const successCases = (['list', 'month'] as const).flatMap((view) =>
+    (['owner', 'member'] as const).flatMap((actor) =>
+      (['instagram', 'linkedin'] as const).map((platform) => ({
+        view,
+        actor,
+        platform,
+        name: `#415 ${view} ${actor} schedules ${platform}`,
+      })),
+    ),
+  );
+  const extraCases = [
+    '#415 schedules a mixed-ownership Instagram and LinkedIn group',
+    '#415 a scheduled retry does not write or change its date',
+    '#415 a noncreator can cancel the scheduled post',
+    '#415 a nonmember cannot modify this brand or a missing draft',
+    '#415 a missing account blocks approval without scheduling',
+  ] as const;
+  const recorder = createBenchRecorder('planner:415:e2e:bench', [
+    'Real local Auth, Storage, DB, backend HTTP and planner UI; no mocked responses.',
+    'External Instagram/LinkedIn delivery is UNRUN: future-dated fixtures stop at scheduling.',
+    'Run-owned fixture records and media are retained; no broad-prefix cleanup or customer writes.',
+  ]);
+
+  const current = (): Fixture => {
+    if (!fixture) throw new Error('#415 local fixture did not initialize.');
+    return fixture;
+  };
+
+  test.beforeAll(async () => {
+    assertPlannerApprovalEnvironment();
+    fixture = await seedPlannerApprovalBench(admin());
+  });
+
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright requires destructured fixtures.
+  test.afterEach(async ({}, testInfo) => {
+    completed.add(testInfo.title);
+    recorder.record(
+      testInfo.title,
+      testInfo.status === 'passed' ? 'PASS' : 'FAIL',
+      testInfo.errors[0]?.message?.split('\n')[0],
+    );
+  });
+
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright requires destructured fixtures.
+  test.afterAll(async ({}, testInfo) => {
+    const names = [...successCases.map((entry) => entry.name), ...extraCases];
+    for (const name of names) {
+      if (!completed.has(name))
+        recorder.record(name, 'SKIP', 'Not executed; local setup or an earlier case failed.');
+    }
+    if (completed.size !== names.length)
+      recorder.record(
+        'required #415 coverage',
+        'FAIL',
+        'All thirteen cases must execute; skips are not green.',
+      );
+    if (fixture) {
+      await testInfo.attach('bug415-fixture-identities', {
+        body: JSON.stringify({
+          runId: fixture.runId,
+          brandId: fixture.brandId,
+          userIds: Object.values(fixture.actors).map((actor) => actor.id),
+          draftIds: fixture.draftIds,
+        }),
+        contentType: 'application/json',
+      });
+    }
+    recorder.print();
+  });
+
+  async function withActor(
+    browser: Browser,
+    actor: ApprovalBenchActor,
+    run: (page: Page) => Promise<void>,
+  ) {
+    const context = await browser.newContext({
+      storageState: actor.session.state,
+      viewport: { width: 1600, height: 950 },
+    });
+    try {
+      await run(await context.newPage());
+    } finally {
+      await context.close();
+    }
+  }
+
+  async function open(page: Page, id: string, view: 'list' | 'month') {
+    await page.goto(`/organic?tab=planner&view=${view}&draftId=${id}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await expect(page).not.toHaveURL(/\/login|\/set-password/, { timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Planner', exact: true }).first()).toBeVisible({
+      timeout: 90_000,
+    });
+    await page
+      .getByRole('button', { name: view === 'list' ? 'List' : 'Month', exact: true })
+      .first()
+      .click();
+    await expect(page.locator(`[data-planner-content="${view}"]`)).toBeVisible();
+    const preview = page.getByRole('complementary', { name: 'Draft preview' });
+    await expect(preview).toBeVisible({ timeout: 60_000 });
+    return preview;
+  }
+
+  async function clickApprove(page: Page, id: string, view: 'list' | 'month') {
+    const preview = await open(page, id, view);
+    const button = preview.getByRole('button', { name: /^Approve/ }).first();
+    await expect(button).toBeEnabled({ timeout: 30_000 });
+    const responsePromise = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/calendar/drafts/${id}/group/approve`) &&
+        response.request().method() === 'POST',
+    );
+    await button.click();
+    const response = await responsePromise;
+    expect(response.status()).toBe(200);
+    expect(response.request().postData()).toBeNull();
+    return preview;
+  }
+
+  async function request(actor: ApprovalBenchActor, id: string, status?: 'scheduled' | 'draft') {
+    if (!backend) throw new Error('The bench-owned local backend is unavailable.');
+    return fetch(
+      `${backend.url}/api/organic/calendar/drafts/${id}${status ? '' : '/group/approve'}`,
+      {
+        method: status ? 'PATCH' : 'POST',
+        headers: {
+          Authorization: `Bearer ${actor.session.accessToken}`,
+          ...(status ? { 'Content-Type': 'application/json' } : {}),
+        },
+        ...(status ? { body: JSON.stringify({ status }) } : {}),
+      },
+    );
+  }
+
+  for (const entry of successCases) {
+    test(entry.name, async ({ browser }) => {
+      const f = current();
+      const row = await f.seedDraft(
+        entry.platform,
+        f.actors.owner.id,
+        `${entry.view}-${entry.actor}`,
+      );
+      await withActor(browser, f.actors[entry.actor], async (page) => {
+        const preview = await clickApprove(page, row.id, entry.view);
+        await expect.poll(async () => (await f.readDraft(row.id)).status).toBe('scheduled');
+        await expect(preview).toContainText('Scheduled');
+        const saved = await f.readDraft(row.id);
+        expect(saved).toMatchObject({
+          user_id: f.actors.owner.id,
+          scheduled_date: row.scheduledDate,
+          platform: entry.platform,
+          platform_account_id: f.accountIds[entry.platform],
+          content_json: row.content,
+        });
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await expect(page.locator(`[data-planner-content="${entry.view}"]`)).toBeVisible({
+          timeout: 60_000,
+        });
+        await expect(page.getByRole('complementary', { name: 'Draft preview' })).toContainText(
+          'Scheduled',
+        );
+      });
+    });
+  }
+
+  test(extraCases[0], async ({ browser }) => {
+    const f = current();
+    const groupId = crypto.randomUUID();
+    const key = `${f.runId}-mixed-group`;
+    const source = await f.seedDraft('instagram', f.actors.owner.id, 'mixed group', {
+      groupId,
+      clientKey: key,
+    });
+    const sibling = await f.seedDraft('linkedin', f.actors.member.id, 'mixed group', {
+      groupId,
+      clientKey: deriveSiblingClientKey(key, 'linkedin'),
+    });
+    await withActor(browser, f.actors.member, async (page) => {
+      await clickApprove(page, source.id, 'list');
+      for (const row of [source, sibling]) {
+        await expect.poll(async () => (await f.readDraft(row.id)).status).toBe('scheduled');
+        expect((await f.readDraft(row.id)).scheduled_date).toBe(row.scheduledDate);
+      }
+      expect((await f.readDraft(source.id)).user_id).toBe(f.actors.owner.id);
+      expect((await f.readDraft(sibling.id)).user_id).toBe(f.actors.member.id);
+    });
+  });
+
+  test(extraCases[1], async ({ browser }) => {
+    const f = current();
+    const row = await f.seedDraft('instagram', f.actors.owner.id, 'retry');
+    await withActor(browser, f.actors.member, async (page) => {
+      await clickApprove(page, row.id, 'month');
+      await expect.poll(async () => (await f.readDraft(row.id)).status).toBe('scheduled');
+      const first = await f.readDraft(row.id);
+      const retry = await request(f.actors.member, row.id, 'scheduled');
+      expect(retry.status).toBe(200);
+      expect((await f.readDraft(row.id)).updated_at).toBe(first.updated_at);
+      expect((await f.readDraft(row.id)).scheduled_date).toBe(row.scheduledDate);
+    });
+  });
+
+  test(extraCases[2], async ({ browser }) => {
+    const f = current();
+    const row = await f.seedDraft('linkedin', f.actors.owner.id, 'cancel');
+    await withActor(browser, f.actors.member, async (page) => {
+      await clickApprove(page, row.id, 'list');
+      await expect.poll(async () => (await f.readDraft(row.id)).status).toBe('scheduled');
+      expect((await request(f.actors.member, row.id, 'draft')).status).toBe(200);
+      expect((await f.readDraft(row.id)).status).toBe('draft');
+      expect((await f.readDraft(row.id)).scheduled_date).toBe(row.scheduledDate);
+      const preview = await open(page, row.id, 'list');
+      await expect(preview.getByRole('button', { name: /^Approve/ }).first()).toBeEnabled({
+        timeout: 30_000,
+      });
+    });
+  });
+
+  test(extraCases[3], async () => {
+    const f = current();
+    const row = await f.seedDraft('instagram', f.actors.owner.id, 'forbidden');
+    const before = await f.readDraft(row.id);
+    expect((await request(f.actors.outsider, row.id, 'scheduled')).status).toBe(403);
+    expect((await request(f.actors.outsider, crypto.randomUUID(), 'draft')).status).toBe(404);
+    expect(await f.readDraft(row.id)).toEqual(before);
+  });
+
+  test(extraCases[4], async ({ browser }) => {
+    const f = current();
+    const row = await f.seedDraft('linkedin', f.actors.owner.id, 'missing account', {
+      accountId: crypto.randomUUID(),
+    });
+    await withActor(browser, f.actors.member, async (page) => {
+      const preview = await open(page, row.id, 'list');
+      await expect(preview.getByRole('button', { name: /^Approve/ }).first()).toBeDisabled({
+        timeout: 30_000,
+      });
+      expect((await request(f.actors.member, row.id)).status).toBe(422);
+      expect((await f.readDraft(row.id)).status).toBe('draft');
+    });
   });
 });
