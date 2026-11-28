@@ -1416,5 +1416,7 @@
   "list_price_expected_for_one_pass_cap_cap_7529472": "Preço de tabela {expected} por uma passada, limite {cap}.",
   "creating_c79ed94": "Criando…",
   "a_project_already_has_that_name_5e57cb0": "Já existe um projeto com esse nome",
-  "create_failed_3e05ffc": "Falha ao criar"
+  "create_failed_3e05ffc": "Falha ao criar",
+  "linkedin_personal_profile": "{name} — perfil pessoal",
+  "personal_profile": "Perfil pessoal"
 }

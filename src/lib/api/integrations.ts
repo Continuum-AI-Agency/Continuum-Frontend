@@ -581,7 +581,7 @@ export async function fetchUserTikTokAccountIds(): Promise<string[]> {
 }
 
 export async function fetchUserLinkedInAccountIds(options?: {
-  type?: 'linkedin_ad_account' | 'linkedin_organization';
+  type?: 'linkedin_ad_account' | 'linkedin_organization' | 'linkedin_member';
 }): Promise<string[]> {
   const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
   const { getSessionUser } = await import('@/lib/supabase/sessionUser');

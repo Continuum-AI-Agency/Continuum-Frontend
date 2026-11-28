@@ -9,6 +9,7 @@
     "choosing_an_account_sets_the_platform_with_it_5d88825": "Choosing an account sets the platform with it, so the two can never disagree.",
     "connected_account_id_032e336": "Connected account ID",
     "connected_account_id_45a838d": "Connected account id",
+    "linkedin_personal_profile": "{name} — personal profile",
     "loading_accounts_2494bdb": "Loading accounts…",
     "m_1298860b3f": "Connected accounts could not be loaded. The stored target stays editable here — check that the platform matches the account.",
     "m_152924f460": "Unavailable account ({id})",
