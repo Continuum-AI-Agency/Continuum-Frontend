@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import {
   renameBrandProfileAction,
   updateBrandContentLanguageAction,
+  updateBrandTimezoneAction,
 } from '@/app/[locale]/(post-auth)/settings/actions';
+import { TimezoneCombobox } from '@/components/automations/AutomationBuilder/TimezoneCombobox';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -28,6 +30,7 @@ type BrandIdentitySectionProps = {
   /** Null when nothing is pinned yet — the backend then detects it from the brand's
    *  own posts on the next generation and writes the answer back here. */
   contentLanguage?: string | null;
+  timezone?: string;
 };
 
 export function BrandIdentitySection({
@@ -36,6 +39,7 @@ export function BrandIdentitySection({
   profile,
   canEdit,
   contentLanguage: initialLanguage = null,
+  timezone: initialTimezone = 'UTC',
 }: BrandIdentitySectionProps) {
   const uiLocale = useLocale();
 
@@ -48,6 +52,7 @@ export function BrandIdentitySection({
   const [isPending, startTransition] = useTransition();
   const [brandName, setBrandName] = useState(initialName);
   const [contentLanguage, setContentLanguage] = useState(initialLanguage ?? '');
+  const [timezone, setTimezone] = useState(initialTimezone);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -61,6 +66,30 @@ export function BrandIdentitySection({
   useEffect(() => {
     setContentLanguage(initialLanguage ?? '');
   }, [initialLanguage]);
+
+  useEffect(() => {
+    setTimezone(initialTimezone);
+  }, [initialTimezone]);
+
+  const handleTimezoneSave = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    startTransition(async () => {
+      try {
+        await updateBrandTimezoneAction(activeBrandId, timezone);
+        show({
+          title: tUi('brandTimezoneSaved'),
+          description: tUi('brandTimezoneSavedDescription', { timezone }),
+          variant: 'success',
+        });
+      } catch (error) {
+        show({
+          title: tUi('brandTimezoneSaveFailed'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_78f9b86ec5'),
+          variant: 'error',
+        });
+      }
+    });
+  };
 
   const handleLanguageSave = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -164,6 +193,23 @@ export function BrandIdentitySection({
             />
             <Button type="submit" variant="outline" disabled={isPending || !canEdit}>
               {tUi('m_af5a1075cf')}
+            </Button>
+          </div>
+        </div>
+      </form>
+
+      <form onSubmit={handleTimezoneSave}>
+        <div className="flex flex-col gap-2">
+          <div>
+            <span className="text-sm font-medium">{tUi('brandTimezoneLabel')}</span>
+            <p className="text-xs text-muted-foreground">{tUi('brandTimezoneHelp')}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-[260px]">
+              <TimezoneCombobox value={timezone} onChange={setTimezone} disabled={!canEdit} />
+            </div>
+            <Button type="submit" variant="outline" disabled={isPending || !canEdit}>
+              {tUi('brandTimezoneSave')}
             </Button>
           </div>
         </div>

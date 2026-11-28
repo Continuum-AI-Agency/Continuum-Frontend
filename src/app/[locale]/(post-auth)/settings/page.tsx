@@ -139,6 +139,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             profile={brandProfile ?? undefined}
             canEdit={canEdit}
             contentLanguage={brandProfile?.contentLanguage ?? null}
+            timezone={brandProfile?.timezone ?? 'UTC'}
           />
         </SettingsSection>
         <SettingsSection title={tUi('m_1cb449c112')} description={tUi('m_944da61507')}>

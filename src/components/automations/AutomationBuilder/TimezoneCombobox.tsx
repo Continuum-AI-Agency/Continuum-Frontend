@@ -19,9 +19,10 @@ import { cn } from '@/lib/utils';
 type TimezoneComboboxProps = {
   value: string;
   onChange: (timezone: string) => void;
+  disabled?: boolean;
 };
 
-export function TimezoneCombobox({ value, onChange }: TimezoneComboboxProps) {
+export function TimezoneCombobox({ value, onChange, disabled = false }: TimezoneComboboxProps) {
   const uiText = useTranslations('automations');
   const [open, setOpen] = useState(false);
   const timezones = useMemo(() => listTimezones(), []);
@@ -36,6 +37,7 @@ export function TimezoneCombobox({ value, onChange }: TimezoneComboboxProps) {
             role="combobox"
             aria-expanded={open}
             aria-label={uiText('timezone_4ceca1d')}
+            disabled={disabled}
             className="w-full justify-between font-normal"
           >
             <span className="truncate">{value || uiText('pick_a_timezone_4c5e74c')}</span>
