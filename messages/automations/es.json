@@ -758,5 +758,6 @@
   "it_has_not_woken_yet_56bd076": "Todavía no se ha ejecutado.",
   "calls_plural_one_call_other_calls_cost_haswal_d1cd1ec": "{calls, plural, one {# llamada} other {# llamadas}} · {cost}{hasWall, select, yes { · {seconds} s} other {}}",
   "duration_ms_743886b": "{duration} ms",
-  "the_brand_s_always_on_agent_what_it_may_do_on_ae852ae": "El agente siempre activo de la marca: lo que puede hacer por su cuenta, lo que espera tu aprobación y cada ejecución con sus llamadas y su costo. Solo para administradores de la marca."
+  "the_brand_s_always_on_agent_what_it_may_do_on_ae852ae": "El agente siempre activo de la marca: lo que puede hacer por su cuenta, lo que espera tu aprobación y cada ejecución con sus llamadas y su costo. Solo para administradores de la marca.",
+  "linkedin_personal_profile": "{name} — perfil personal"
 }

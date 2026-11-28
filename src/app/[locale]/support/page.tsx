@@ -32,10 +32,10 @@ export default function SupportPage() {
         <h2 className="text-2xl font-semibold">{uiText('connecting_continuum_07e8aa5')}</h2>
         <p>{uiText('sign_in_with_your_continuum_account_and_choos_edf1491')}</p>
         <nav aria-label={uiText('policies_d3ad1f1')} className="flex gap-6 text-secondary">
-          <Link className="underline" href="/privacy">
+          <Link className="underline" href="/privacy" prefetch={false}>
             {uiText('privacy_policy_ba445cf')}
           </Link>
-          <Link className="underline" href="/terms">
+          <Link className="underline" href="/terms" prefetch={false}>
             {uiText('terms_of_service_e69e061')}
           </Link>
         </nav>
