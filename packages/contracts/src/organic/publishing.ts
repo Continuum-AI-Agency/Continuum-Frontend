@@ -130,6 +130,8 @@ export interface PublishOptionCapability {
   readonly aiGeneratedLabel: boolean;
   /** A trial reel, shown to non-followers first. Video (REEL) posts only. */
   readonly trialReel: boolean;
+  /** Whether an Instagram reel also appears in the main profile grid and feed. */
+  readonly shareToFeed: boolean;
 }
 
 export interface PlatformCapability {
@@ -159,6 +161,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailOffset: true,
       aiGeneratedLabel: false,
       trialReel: true,
+      shareToFeed: true,
     },
   },
   facebook: {
@@ -177,6 +180,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailOffset: false,
       aiGeneratedLabel: false,
       trialReel: false,
+      shareToFeed: false,
     },
   },
   linkedin: {
@@ -194,6 +198,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailOffset: false,
       aiGeneratedLabel: false,
       trialReel: false,
+      shareToFeed: false,
     },
   },
   youtube: {
@@ -216,6 +221,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailOffset: false,
       aiGeneratedLabel: false,
       trialReel: false,
+      shareToFeed: false,
     },
   },
   tiktok: {
@@ -242,6 +248,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailOffset: true,
       aiGeneratedLabel: true,
       trialReel: false,
+      shareToFeed: false,
     },
   },
   x: {
@@ -263,6 +270,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailOffset: false,
       aiGeneratedLabel: false,
       trialReel: false,
+      shareToFeed: false,
     },
   },
 };

@@ -45,6 +45,8 @@ export const publishOptionsSchema = z
       ])
       .optional(),
     aiGenerated: z.boolean().optional(),
+    /** Instagram reels: false keeps the reel off the main profile grid and feed. Defaults to true. */
+    shareToFeed: z.boolean().optional(),
     /**
      * Publish as an Instagram TRIAL reel: shown to non-followers only, then graduated to
      * followers by the owner in the app (MANUAL) or by Instagram on performance (SS_PERFORMANCE).
@@ -86,14 +88,17 @@ export function unsupportedPublishOptions(
   platform: PublishPlatform,
   format: PublishFormat,
   options: PublishOptions | null | undefined,
-): Array<'firstComment' | 'thumbnail' | 'trial'> {
+): Array<'firstComment' | 'thumbnail' | 'trial' | 'shareToFeed'> {
   const can = PLATFORM_CAPABILITIES[platform].publishOptions;
-  const unsupported: Array<'firstComment' | 'thumbnail' | 'trial'> = [];
+  const unsupported: Array<'firstComment' | 'thumbnail' | 'trial' | 'shareToFeed'> = [];
   // Graph has no comment edge on a story.
   if (options?.firstComment && !(can.firstComment && format !== 'STORY')) {
     unsupported.push('firstComment');
   }
   if (options?.trial && !(format === 'REEL' && can.trialReel)) unsupported.push('trial');
+  if (options?.shareToFeed !== undefined && !(format === 'REEL' && can.shareToFeed)) {
+    unsupported.push('shareToFeed');
+  }
   const thumbnail = options?.thumbnail;
   if (thumbnail) {
     const supported =
@@ -245,7 +250,7 @@ interface ReelPublishBody extends PublishTarget {
   videoUrl?: string;
   coverUrl?: string;
   caption?: string;
-  shareToFeed: true;
+  shareToFeed: boolean;
 }
 
 export type CarouselPublishItem =
@@ -423,7 +428,7 @@ export function buildPublishBody(
       ...(first ? { videoUrl: mediaUrl(first) } : {}),
       ...(coverUrl ? { coverUrl } : {}),
       caption,
-      shareToFeed: true,
+      shareToFeed: plan.options.shareToFeed ?? true,
       ...target,
     };
   }
