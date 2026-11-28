@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { CurrentUserAvatar } from '@/components/current-user-avatar';
 import { LanguageSelector } from '@/components/i18n/LanguageSelector';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useCurrentUserAvatar } from '@/hooks/useCurrentUserAvatar';
 import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type UserProfileSectionProps = {
@@ -28,6 +30,10 @@ export function UserProfileSection({ email, name, lastSignIn }: UserProfileSecti
   const { user, avatarUrl, initials, refresh } = useCurrentUserAvatar();
   const [isUploading, setIsUploading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
+  const [displayName, setDisplayName] = useState(name ?? '');
+  const [isSavingName, setIsSavingName] = useState(false);
+  const trimmedName = displayName.trim();
 
   useEffect(() => {
     setMounted(true);
@@ -61,6 +67,27 @@ export function UserProfileSection({ email, name, lastSignIn }: UserProfileSecti
     }
   };
 
+  const handleSaveName = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!trimmedName || trimmedName === name) return;
+    setIsSavingName(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ data: { full_name: trimmedName } });
+      if (error) throw error;
+      await refresh();
+      router.refresh();
+      show({ title: tUi('displayNameSaved'), variant: 'success' });
+    } catch (error) {
+      show({
+        title: tUi('displayNameSaveFailed'),
+        description: error instanceof Error ? uiErrorMessage(error) : undefined,
+        variant: 'error',
+      });
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
   const formattedLastSignIn =
     mounted && lastSignIn ? new Date(lastSignIn).toLocaleString(uiLocale) : '—';
 
@@ -90,10 +117,33 @@ export function UserProfileSection({ email, name, lastSignIn }: UserProfileSecti
           <span className="text-xs text-muted-foreground">{tUi('m_8437665d25')}</span>
         </div>
       </div>
+      <form onSubmit={handleSaveName} className="flex flex-col gap-2">
+        <label htmlFor="settings-display-name" className="text-sm font-medium">
+          {tUi('m_709a23220f')}
+        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            id="settings-display-name"
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            placeholder={initials ?? undefined}
+            autoComplete="name"
+            maxLength={120}
+            className="min-w-[260px] max-w-sm"
+            disabled={!user || isSavingName}
+          />
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={!user || isSavingName || !trimmedName || trimmedName === name}
+          >
+            {tUi('displayNameSave')}
+          </Button>
+        </div>
+      </form>
       <LanguageSelector scope="account" />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Detail label={tUi('m_84add5b295')} value={email} />
-        <Detail label={tUi('m_709a23220f')} value={name ?? initials ?? '—'} />
         <Detail label={tUi('m_a21f88b1fd')} value={formattedLastSignIn} />
       </div>
     </div>

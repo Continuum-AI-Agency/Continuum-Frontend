@@ -1,12 +1,13 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 
 type PlannerHeaderProps = {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   onPreviousWeek: () => void;
   onToday: () => void;
   onNextWeek: () => void;

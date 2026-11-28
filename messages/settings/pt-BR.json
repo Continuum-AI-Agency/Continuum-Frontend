@@ -461,7 +461,7 @@
   "m_9dc8357635": "Idioma do conteúdo",
   "m_7903c85743": "Todas as legendas, títulos e slides desta marca são escritos neste idioma. Deixe vazio para detectar o idioma nas publicações existentes da marca.",
   "brandTimezoneLabel": "Fuso horário",
-  "brandTimezoneHelp": "As publicações agendadas, os relatórios e as execuções de agentes desta marca usam este horário.",
+  "brandTimezoneHelp": "As publicações agendadas, o planejador, os relatórios semanais e as execuções agendadas de agentes desta marca usam este horário.",
   "brandTimezoneSave": "Salvar fuso horário",
   "brandTimezoneSaved": "Fuso horário salvo",
   "brandTimezoneSavedDescription": "Esta marca agora usa {timezone}.",
@@ -1160,5 +1160,10 @@
   "brandDnaReanalyzeAudienceHint": "Com suas próprias palavras. A nova análise monta o público a partir disso em vez de deduzi-lo do site.",
   "brandDnaReanalyzeFinished": "Análise concluída",
   "brandDnaReanalyzeDoneEditKept": "A nova análise de {url} foi salva, mas uma edição salva enquanto ela rodava foi mantida em vez de substituída. Suas edições continuam com prioridade; redefina-as no editor abaixo para ver a nova análise.",
-  "brandDnaReanalyzeNotSaved": "A análise de {url} terminou, mas não foi possível salvá-la, então seu Brand DNA não mudou. Execute de novo; se falhar outra vez, fale com o suporte."
+  "brandDnaReanalyzeNotSaved": "A análise de {url} terminou, mas não foi possível salvá-la, então seu Brand DNA não mudou. Execute de novo; se falhar outra vez, fale com o suporte.",
+  "displayNameSave": "Salvar nome",
+  "displayNameSaved": "Nome salvo",
+  "displayNameSaveFailed": "Não foi possível salvar seu nome",
+  "brandTimezoneNotSet": "Ainda não configurado: esta marca continua no padrão UTC. Escolha o fuso horário do seu público.",
+  "brandTimezoneUnknown": "Escolha um fuso horário da lista."
 }

@@ -1,6 +1,6 @@
 'use client';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useId, useMemo, useState, useTransition } from 'react';
 import {
   renameBrandProfileAction,
   updateBrandContentLanguageAction,
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';
+import { timezoneLabel } from '@/lib/time/timezoneLabel';
 import { SettingsLogoUploader } from '../SettingsLogoUploader';
 
 type BrandProfileMeta = {
@@ -42,6 +43,8 @@ export function BrandIdentitySection({
   timezone: initialTimezone = 'UTC',
 }: BrandIdentitySectionProps) {
   const uiLocale = useLocale();
+  const languageListId = useId();
+  const languageSuggestions = useMemo(() => contentLanguageSuggestions(uiLocale), [uiLocale]);
 
   const uiErrorMessage = useUiErrorMessage();
 
@@ -71,31 +74,44 @@ export function BrandIdentitySection({
     setTimezone(initialTimezone);
   }, [initialTimezone]);
 
+  const brandSettingFailure = (reason: 'not_allowed' | 'unknown_timezone' | 'failed') =>
+    reason === 'not_allowed'
+      ? tUi('m_953ebfa711')
+      : reason === 'unknown_timezone'
+        ? tUi('brandTimezoneUnknown')
+        : tUi('m_78f9b86ec5');
+
   const handleTimezoneSave = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     startTransition(async () => {
-      try {
-        await updateBrandTimezoneAction(activeBrandId, timezone);
+      const result = await updateBrandTimezoneAction(activeBrandId, timezone).catch(
+        () => ({ ok: false, reason: 'failed' }) as const,
+      );
+      if (result.ok) {
         show({
           title: tUi('brandTimezoneSaved'),
-          description: tUi('brandTimezoneSavedDescription', { timezone }),
+          description: tUi('brandTimezoneSavedDescription', {
+            timezone: timezoneLabel(timezone, uiLocale),
+          }),
           variant: 'success',
         });
-      } catch (error) {
-        show({
-          title: tUi('brandTimezoneSaveFailed'),
-          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_78f9b86ec5'),
-          variant: 'error',
-        });
+        return;
       }
+      show({
+        title: tUi('brandTimezoneSaveFailed'),
+        description: brandSettingFailure(result.reason),
+        variant: 'error',
+      });
     });
   };
 
   const handleLanguageSave = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     startTransition(async () => {
-      try {
-        await updateBrandContentLanguageAction(activeBrandId, contentLanguage);
+      const result = await updateBrandContentLanguageAction(activeBrandId, contentLanguage).catch(
+        () => ({ ok: false, reason: 'failed' }) as const,
+      );
+      if (result.ok) {
         show({
           title: tUi('m_9953412879'),
           description: contentLanguage.trim()
@@ -103,13 +119,13 @@ export function BrandIdentitySection({
             : tUi('m_1e7cef9323'),
           variant: 'success',
         });
-      } catch (error) {
-        show({
-          title: tUi('m_72bf415ad7'),
-          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_78f9b86ec5'),
-          variant: 'error',
-        });
+        return;
       }
+      show({
+        title: tUi('m_72bf415ad7'),
+        description: brandSettingFailure(result.reason),
+        variant: 'error',
+      });
     });
   };
 
@@ -190,7 +206,13 @@ export function BrandIdentitySection({
               placeholder={tUi('m_a2fd122ff6')}
               className="min-w-[260px]"
               disabled={!canEdit}
+              list={languageListId}
             />
+            <datalist id={languageListId}>
+              {languageSuggestions.map((language) => (
+                <option key={language} value={language} />
+              ))}
+            </datalist>
             <Button type="submit" variant="outline" disabled={isPending || !canEdit}>
               {tUi('m_af5a1075cf')}
             </Button>
@@ -203,6 +225,9 @@ export function BrandIdentitySection({
           <div>
             <span className="text-sm font-medium">{tUi('brandTimezoneLabel')}</span>
             <p className="text-xs text-muted-foreground">{tUi('brandTimezoneHelp')}</p>
+            {initialTimezone === 'UTC' ? (
+              <p className="text-xs text-warning">{tUi('brandTimezoneNotSet')}</p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-[260px]">
@@ -231,4 +256,28 @@ function Detail({ label, value }: { label: string; value: string }) {
       <span className="text-sm">{value}</span>
     </div>
   );
+}
+
+// Suggestions, not a closed list: the field is free text because 'Spanish (Colombia)' and
+// 'Spanish (Argentina, voseo)' are different instructions to the copywriter.
+const SUGGESTED_CONTENT_LANGUAGES = [
+  'es-CO',
+  'es-MX',
+  'es',
+  'en-US',
+  'en-GB',
+  'pt-BR',
+  'pt-PT',
+  'fr',
+  'de',
+  'it',
+];
+
+function contentLanguageSuggestions(uiLocale: string): string[] {
+  try {
+    const names = new Intl.DisplayNames([uiLocale], { type: 'language' });
+    return SUGGESTED_CONTENT_LANGUAGES.map((code) => names.of(code) ?? code);
+  } catch {
+    return SUGGESTED_CONTENT_LANGUAGES;
+  }
 }

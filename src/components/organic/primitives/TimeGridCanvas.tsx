@@ -33,7 +33,7 @@ type TimeGridCanvasProps = {
   /** The published post open in the preview, if any; its chip reads as pressed. */
   selectedPostId?: string | null;
   rangeTitle: string;
-  rangeSubtitle?: string;
+  rangeSubtitle?: React.ReactNode;
   onPreviousWeek: () => void;
   onToday: () => void;
   onNextWeek: () => void;

@@ -30,6 +30,7 @@ const errorKeys: Record<string, UiErrorKey> = {
   permission_denied: 'permissionDenied',
   rate_limited: 'rateLimited',
   network_error: 'networkError',
+  draft_not_found: 'resourceNotFound',
 };
 
 /** An application message translated at its origin, never an external provider's diagnostic. */

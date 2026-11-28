@@ -29,6 +29,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { Link } from '@/i18n/navigation';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
 import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
@@ -44,6 +45,7 @@ import { resolveDraftSelection } from '@/lib/organic/resolveDraftSelection';
 import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
 import { getLocalStorageJSON, removeLocalStorage, setLocalStorageJSON } from '@/lib/storage';
+import { timezoneLabel } from '@/lib/time/timezoneLabel';
 import { cn } from '@/lib/utils';
 import { buildCalendarPlanRequest } from '../calendar-plan/buildCalendarPlanRequest';
 import { CalendarPlanCard } from '../calendar-plan/CalendarPlanCard';
@@ -1042,14 +1044,28 @@ function OrganicCalendarWorkspaceInner({
     [weekStart, uiLocale],
   );
   // The zone every scheduled time in this planner is expressed in. The app displayed it
-  // nowhere, which left every "9:00 AM" ambiguous to anyone not in the brand's zone.
-  const plannerTimeZone = React.useMemo(() => resolvePlannerTimeZone(null), []);
+  // nowhere, which left every "9:00 AM" ambiguous to anyone not in the brand's zone. It is the
+  // brand's zone, like the cards: naming the browser's put a header and its times in two zones.
+  const plannerTimeZone = React.useMemo(
+    () => resolvePlannerTimeZone(brandTimeZone),
+    [brandTimeZone],
+  );
+  // The zone links to where it is changed: the planner is where a client notices it is wrong.
   const weekSubtitle = React.useMemo(
     () =>
-      uiText('plannerWeekSubtitle', {
+      uiText.rich('plannerWeekSubtitle', {
         range: formatWeekRange(weekStart, uiLocale),
         channels: schedulableChannels,
-        timezone: plannerTimeZone,
+        timezone: timezoneLabel(plannerTimeZone, uiLocale),
+        zone: (chunks) => (
+          <Link
+            href="/settings?section=general"
+            title={uiText('plannerTimezoneChange')}
+            className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+          >
+            {chunks}
+          </Link>
+        ),
       }),
     [plannerTimeZone, schedulableChannels, weekStart, uiText, uiLocale],
   );
