@@ -214,7 +214,9 @@
     ".next/media-delivery-bench/types/**/*.ts",
     ".next/media-delivery-bench/dev/types/**/*.ts",
     ".next/media-delivery-prod/types/**/*.ts",
-    ".next/media-delivery-prod/dev/types/**/*.ts"
+    ".next/media-delivery-prod/dev/types/**/*.ts",
+    ".next/client-reports-e2e/types/**/*.ts",
+    ".next/client-reports-e2e/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
