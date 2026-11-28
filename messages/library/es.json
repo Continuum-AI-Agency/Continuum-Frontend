@@ -1178,5 +1178,21 @@
   "commentsWord": "{count, plural, one {comentario} other {comentarios}}",
   "below_average_35_d9769d8": "por debajo del promedio 35",
   "below_average_20_b098009": "por debajo del promedio 20",
-  "below_average_10_ca06a68": "por debajo del promedio 10"
+  "below_average_10_ca06a68": "por debajo del promedio 10",
+  "setAsBrandLogo": "Usar como logo de la marca",
+  "setAsBrandLogoHint": "Usar esta imagen como logo de la marca en todas partes, incluido el contenido generado",
+  "brandLogoSetTitle": "Logo de la marca actualizado",
+  "brandLogoSetDescription": "El contenido nuevo usará este logo.",
+  "brandLogoSetFailedTitle": "No se pudo establecer el logo de la marca",
+  "brandLogoSetFailedDescription": "Inténtalo de nuevo.",
+  "brandIdentity": "Identidad de marca",
+  "brandReference": "Referencia de marca",
+  "logoVariant": "Variante del logo",
+  "logoVariantPrimary": "Principal",
+  "logoVariantWhite": "Blanco, para fondos oscuros",
+  "logoVariantDark": "Oscuro, para fondos claros",
+  "logoVariantIcon": "Icono o símbolo",
+  "logoVariantHorizontal": "Horizontal",
+  "brandIdentityTagFailed": "No se pudo actualizar la etiqueta. Inténtalo de nuevo.",
+  "brandReferencesFilter": "Referencias de marca"
 }

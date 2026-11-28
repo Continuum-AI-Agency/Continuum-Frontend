@@ -9,6 +9,8 @@
 // the app's own typeface while the label underneath says the brand's name. That draws a
 // typeface the brand never chose and tells the customer we detected theirs. Drawing
 // nothing is the honest output; the family NAME plus what we hold is the useful one.
+// The one exception is a file the person just picked on their own machine: FontSpecimen
+// draws that from local bytes, which serves nothing and shows their real face.
 //
 // The two surfaces that use this keep their own LAYOUT, because they answer different
 // questions: settings renders one row per family per weight against the font store

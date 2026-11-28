@@ -16,6 +16,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrganicWinners } from '@/hooks/useOrganicWinners';
 import { cn } from '@/lib/utils';
+import { HOME_DRAFT_READ_ONLY, useHomeDraft } from '../../HomePresentationContext';
 import { CREATIVE_LINKS, type CreativeCard } from '../creative/creativeModel';
 import { STANDING_LABEL_KEYS } from '../creative/standingLabel';
 import {
@@ -99,6 +100,7 @@ function WinnerItem({ winner, action }: { winner: OrganicWinner; action: ReactNo
 
 function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refreshCandidates'>) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const winners = useOrganicWinners(brandId);
   const [promoting, setPromoting] = useState<OrganicWinner | null>(null);
 
@@ -130,7 +132,16 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
     }
     if (mode === 'operate') {
       return (
-        <Button onClick={() => setPromoting(winner)} size="xs" type="button" variant="outline">
+        <Button
+          disabled={draft}
+          title={draft ? uiText(HOME_DRAFT_READ_ONLY) : undefined}
+          onClick={() => {
+            if (!draft) setPromoting(winner);
+          }}
+          size="xs"
+          type="button"
+          variant="outline"
+        >
           {verbLabel}
         </Button>
       );
@@ -149,7 +160,7 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
           <WinnerItem action={actionFor(winner)} key={winner.mediaId} winner={winner} />
         ))}
       </ul>
-      {promoting ? (
+      {!draft && promoting ? (
         <PromoteWinnerDialog
           brandId={brandId}
           onClose={() => setPromoting(null)}

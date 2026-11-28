@@ -7,12 +7,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';
-import { PreviewRateLimitedError, runOnboardingPreview } from '@/lib/onboarding/agentClient';
+import {
+  approveOnboardingBrandProfile,
+  PreviewRateLimitedError,
+  runOnboardingPreview,
+} from '@/lib/onboarding/agentClient';
 import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import {
   type BrandBookGenerationPayload,
+  BrandBookRunIncompleteError,
   brandBookGenerationStatus,
   canGenerateBrandBook,
+  runBrandBookGeneration,
 } from './brandBookGeneration';
 
 /**
@@ -80,13 +86,15 @@ export function BrandBookEmptyState({
     setStatusLine(tUi('m_f132df62c3'));
 
     try {
-      await runOnboardingPreview({
+      await runBrandBookGeneration({
         payload,
         signal: controller.signal,
         onEvent: (event) => {
           const line = brandBookGenerationStatus(event, tUi);
           if (line) setStatusLine(line);
         },
+        runPreview: runOnboardingPreview,
+        approve: approveOnboardingBrandProfile,
       });
       show({
         title: tUi('m_a85c9517e3'),
@@ -99,9 +107,11 @@ export function BrandBookEmptyState({
       const description =
         error instanceof PreviewRateLimitedError
           ? tUi('brandPreviewRateLimited', { seconds: error.retryAfterSeconds })
-          : error instanceof Error
-            ? uiErrorMessage(error)
-            : tUi('m_83a6fd7b78');
+          : error instanceof BrandBookRunIncompleteError
+            ? tUi('brandBookRunIncomplete')
+            : error instanceof Error
+              ? uiErrorMessage(error)
+              : tUi('m_83a6fd7b78');
       show({
         title: tUi('m_6e1ce07f14'),
         description,

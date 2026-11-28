@@ -13,12 +13,14 @@ import type { AgentPreviewBuckets } from '../state/agentPreview';
 type RunProgressBannerProps = {
   buckets: AgentPreviewBuckets | null;
   running: boolean;
+  /** Why the latest attempt failed; the results shown are the previous ones. */
+  error?: string | null;
   onRetry?: () => void;
 };
 
 const TOTAL = previewSectionSchema.options.length;
 
-export function RunProgressBanner({ buckets, running, onRetry }: RunProgressBannerProps) {
+export function RunProgressBanner({ buckets, running, error, onRetry }: RunProgressBannerProps) {
   const tUi = useTranslations('onboarding');
 
   const counts = useMemo(() => tally(buckets), [buckets]);
@@ -60,7 +62,13 @@ export function RunProgressBanner({ buckets, running, onRetry }: RunProgressBann
           {tUi('m_724d3e6cbf')}
         </span>
       ) : null}
-      {thin && onRetry ? (
+      {error && !running ? (
+        <span role="alert" className="inline-flex items-center gap-1.5 text-foreground">
+          <WarningCircle className="h-3 w-3 text-[var(--cs-warning,#cb8e00)]" />
+          {error}
+        </span>
+      ) : null}
+      {(thin || error) && !running && onRetry ? (
         <button
           type="button"
           onClick={onRetry}

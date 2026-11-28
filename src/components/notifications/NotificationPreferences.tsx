@@ -228,7 +228,7 @@ function PushOnThisBrowser() {
   };
 
   return (
-    <section className="rounded-lg border border-border p-4">
+    <section className="rounded-lg border border-border p-3">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-sm font-medium">{tUi('m_ec73d164ea')}</h2>

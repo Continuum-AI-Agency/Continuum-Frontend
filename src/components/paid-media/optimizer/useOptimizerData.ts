@@ -112,7 +112,7 @@ import {
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
-import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
+import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelineQueryKeys';
 import { PLATFORM_READ_TIMEOUT_MS, READ_TIMEOUT_MS, withTimeout } from '@/lib/api/timeout';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { isAdsManagerAccount } from '@/lib/paid-media/adsManager';
@@ -452,7 +452,7 @@ export const OPTIMIZER_FEED_PAGE_SIZE = 50;
 const OptimizerActionFeedRowSchema = OptimizerActionRowSchema.extend({ op: z.string() });
 export type OptimizerActionFeedRow = z.infer<typeof OptimizerActionFeedRowSchema>;
 
-const OptimizerActionFeedPageSchema = z.object({
+export const OptimizerActionFeedPageSchema = z.object({
   actions: z.array(OptimizerActionFeedRowSchema),
   next_before: z.string().nullable().optional(),
 });
@@ -2676,18 +2676,22 @@ export function usePrefetchOptimizerOverview(brandId: string, _adAccountId: stri
   const queryClient = useQueryClient();
 
   return useCallback(() => {
-    if (!brandId) return;
-    void queryClient.prefetchQuery({
-      queryKey: optimizerQueryKeys.portfolios(brandId),
-      queryFn: () => withReadTimeout(fetchPortfolios(brandId)),
-      staleTime: FIVE_MINUTES,
-    });
-    void queryClient.prefetchQuery({
+    void prefetchOptimizerOverview(queryClient, brandId);
+  }, [brandId, queryClient]);
+}
+
+/** The Optimizer's route loader: also run from the sidebar on intent, before /scale mounts.
+ *  The portfolio read uses the exact options its hook reads with, so both share one entry. */
+export function prefetchOptimizerOverview(queryClient: QueryClient, brandId: string) {
+  if (!brandId) return Promise.resolve();
+  return Promise.all([
+    queryClient.prefetchQuery(brandPortfoliosQuery(brandId)),
+    queryClient.prefetchQuery({
       queryKey: optimizerQueryKeys.renewals(brandId),
       queryFn: () => withReadTimeout(fetchRenewals(brandId)),
       staleTime: FIVE_MINUTES,
-    });
-  }, [brandId, queryClient]);
+    }),
+  ]);
 }
 
 /** Warm a portfolio's detail-workspace reads before it opens — fired from a card's

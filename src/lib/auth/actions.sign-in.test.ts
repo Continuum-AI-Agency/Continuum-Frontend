@@ -99,8 +99,11 @@ const { sendMagicLinkAction, signInWithPasswordAction, verifyEmailCodeAction } =
   './actions'
 );
 
-const EMAIL_SEND_FAILED =
-  "We couldn't send the sign-in email right now. Please try again in a few minutes.";
+const EMAIL_SEND_REFUSED = {
+  success: false,
+  error: "We couldn't send the sign-in email. Continue with Google instead, or try again later.",
+  retryLater: true,
+};
 
 beforeEach(() => {
   state.signInCalls = [];
@@ -259,7 +262,7 @@ describe('sendMagicLinkAction', () => {
 
     const result = await sendMagicLinkAction({ email: 'founder@test.com' });
 
-    expect(result).toEqual({ success: false, error: EMAIL_SEND_FAILED });
+    expect(result).toEqual(EMAIL_SEND_REFUSED);
     expect(state.logCalls).toEqual([
       {
         level: 'error',
@@ -287,7 +290,7 @@ describe('sendMagicLinkAction', () => {
 
     const result = await sendMagicLinkAction({ email: 'founder@test.com' });
 
-    expect(result).toEqual({ success: false, error: EMAIL_SEND_FAILED });
+    expect(result).toEqual(EMAIL_SEND_REFUSED);
     expect(state.logCalls[0]?.args[0]).toBe('auth.email_send_failed');
   });
 
@@ -296,7 +299,7 @@ describe('sendMagicLinkAction', () => {
 
     const result = await sendMagicLinkAction({ email: 'founder@test.com' });
 
-    expect(result).toEqual({ success: false, error: EMAIL_SEND_FAILED });
+    expect(result).toEqual(EMAIL_SEND_REFUSED);
   });
 
   it('explains the email rate limit and logs it as a warning', async () => {
@@ -309,7 +312,7 @@ describe('sendMagicLinkAction', () => {
 
     const result = await sendMagicLinkAction({ email: 'founder@test.com' });
 
-    expect(result).toEqual({ success: false, error: EMAIL_SEND_FAILED });
+    expect(result).toEqual(EMAIL_SEND_REFUSED);
     expect(state.logCalls).toEqual([
       {
         level: 'warn',
@@ -324,6 +327,42 @@ describe('sendMagicLinkAction', () => {
         ],
       },
     ]);
+  });
+
+  // The custom SMTP sender answering 550 (daily quota spent) reaches auth as this 500.
+  it('asks the user to wait or use Google when the SMTP quota is spent', async () => {
+    state.otpError = {
+      name: 'AuthApiError',
+      message: 'Error sending magic link email',
+      status: 500,
+      code: 'unexpected_failure',
+    };
+
+    const result = await sendMagicLinkAction({ email: 'founder@test.com' });
+
+    expect(result).toEqual(EMAIL_SEND_REFUSED);
+  });
+
+  it('treats the per-IP sign-in limit as a refused send, not an unexpected error', async () => {
+    state.otpError = {
+      name: 'AuthApiError',
+      message: 'Request rate limit reached',
+      status: 429,
+      code: 'over_request_rate_limit',
+    };
+
+    const result = await sendMagicLinkAction({ email: 'founder@test.com' });
+
+    expect(result).toEqual(EMAIL_SEND_REFUSED);
+    expect(state.logCalls[0]?.level).toBe('warn');
+  });
+
+  it('treats a 429 with no error code as a refused send', async () => {
+    state.otpError = { name: 'AuthApiError', message: '{}', status: 429 };
+
+    const result = await sendMagicLinkAction({ email: 'founder@test.com' });
+
+    expect(result).toEqual(EMAIL_SEND_REFUSED);
   });
 
   // The provider's message can carry the recipient, so the event records the classification only.
@@ -345,7 +384,7 @@ describe('sendMagicLinkAction', () => {
 
     const result = await sendMagicLinkAction({ email: 'founder@test.com' });
 
-    expect(result).toEqual({ success: false, error: EMAIL_SEND_FAILED });
+    expect(result).toEqual(EMAIL_SEND_REFUSED);
   });
 
   it('leaves errors that are not send failures to the generic mapping', async () => {
@@ -358,7 +397,7 @@ describe('sendMagicLinkAction', () => {
 
     const result = await sendMagicLinkAction({ email: 'founder@test.com' });
 
-    expect(result).toEqual({
+    expect(result).toStrictEqual({
       success: false,
       error: 'An unexpected error occurred. Please try again',
     });
@@ -370,7 +409,7 @@ describe('sendMagicLinkAction', () => {
 
     const result = await sendMagicLinkAction({ email: 'founder@test.com' });
 
-    expect(result).toEqual({
+    expect(result).toStrictEqual({
       success: false,
       error: 'Network error. Please check your connection and try again',
     });

@@ -20,7 +20,10 @@ import { useOptimizerPortfolios } from '@/components/paid-media/optimizer/useOpt
 import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { HomeDots } from '../../HomeDots';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
+import { opportunityDotItems } from '../../homeDotItems';
 import { readyDataOf } from '../../homeRead';
 import type { HomeTileProps } from '../../types';
 import { useHomeGoalRead } from '../../useHomeGoalRead';
@@ -34,6 +37,7 @@ const ROWS_AT_SIZE = { l: 4, m: 2, s: 0 } as const;
 
 export default function OppsTile({ ctx, tile }: HomeTileProps) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const waitingLine = useWaitingLine();
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const { hasAnswer, isError, refetch, brandPortfolios } = portfolios;
@@ -67,9 +71,11 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
     return (
       <HomeTileFrame state="missing" tile={tile}>
         <TileMissing>{uiText('no_portfolio_groups_these_campaigns_yet_creat_b9ae8d3')}</TileMissing>
-        <Link className={cn(ROW_LINK, 'mt-2 inline-block text-xs')} href={OPTIMIZER_LINKS.create}>
-          {uiText('create_a_portfolio_2283fad')}
-        </Link>
+        {!draft ? (
+          <Link className={cn(ROW_LINK, 'mt-2 inline-block text-xs')} href={OPTIMIZER_LINKS.create}>
+            {uiText('create_a_portfolio_2283fad')}
+          </Link>
+        ) : null}
       </HomeTileFrame>
     );
   }
@@ -100,6 +106,13 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
             })}
           </span>
         </p>
+        {draft && view.portfolios.length > 0 ? (
+          <HomeDots
+            rows
+            label={uiText('portfolios_with_decisions_waiting_8b7fe22')}
+            items={opportunityDotItems(view.portfolios, uiText)}
+          />
+        ) : null}
         {lead ? (
           <p
             className="min-w-0 text-xs leading-snug"
@@ -118,7 +131,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
           <p className="text-muted-foreground text-xs">
             {uiText('nothing_waits_for_a_decision_right_now_e5b7556')}
           </p>
-        ) : rows.length > 0 ? (
+        ) : draft ? null : rows.length > 0 ? (
           <ul className={ROW_LINK_LIST} data-testid="home-tile-opps-portfolios">
             {rows.map((portfolio) => (
               <li
@@ -142,15 +155,17 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
             {uiText('name_waiting_05e70dd', { name: first.name, waiting: waitingLine(first) })}
           </p>
         ) : null}
-        <div>
-          <Link
-            className={buttonVariants({ size: 'sm', variant: 'outline' })}
-            data-testid="home-tile-opps-review"
-            href={OPTIMIZER_LINKS.actions}
-          >
-            {uiText('review_decisions_5f2eb70')}
-          </Link>
-        </div>
+        {!draft ? (
+          <div>
+            <Link
+              className={buttonVariants({ size: 'sm', variant: 'outline' })}
+              data-testid="home-tile-opps-review"
+              href={OPTIMIZER_LINKS.actions}
+            >
+              {uiText('review_decisions_5f2eb70')}
+            </Link>
+          </div>
+        ) : null}
       </div>
     </HomeTileFrame>
   );

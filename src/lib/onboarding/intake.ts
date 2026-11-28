@@ -1,10 +1,24 @@
+import type { OnboardingIntake } from '@continuum/contracts';
 import type { OnboardingState } from './state';
 
-export function readyIntakeDocuments(state: OnboardingState) {
+/**
+ * The link to read for an intake. A website or profile intake must be read; a link typed
+ * beside files or a description is extra evidence, so a failed read of it does not stop
+ * the analysis the files or description can still drive.
+ */
+export function intakeSourceUrl(
+  intake: OnboardingIntake,
+): { url: string; required: boolean } | null {
+  if (intake.url) return { url: intake.url, required: true };
+  return intake.reference_url ? { url: intake.reference_url, required: false } : null;
+}
+
+export function readyIntakeDocuments(state: OnboardingState, now = Date.now()) {
   return state.documents.filter(
     (doc) =>
       doc.status === 'ready' &&
       !doc.archivedAt &&
+      (!doc.expiresAt || Date.parse(doc.expiresAt) > now) &&
       (!doc.retention || doc.retention === 'permanent'),
   );
 }

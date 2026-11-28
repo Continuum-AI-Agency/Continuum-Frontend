@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { deriveDashboardSetup, hasAnyAccount } from '@/components/dashboard/first-run/setupState';
 import { HomeBaseDashboard } from '@/components/dashboard/HomeBaseDashboard';
+import { resolveHomePresentation } from '@/components/dashboard/home-board/homePresentation';
 import { AllDashboardDataWrapper } from '@/components/dashboard/server/AllDashboardDataWrapper';
 import { HomeBoardDataWrapper } from '@/components/dashboard/server/HomeBoardDataWrapper';
 import { OrganicDashboardDataWrapper } from '@/components/dashboard/server/OrganicDashboardDataWrapper';
@@ -18,7 +19,7 @@ import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import { fetchUserIntegrationSummary } from '@/lib/integrations/userIntegrations';
 
 type DashboardPageProps = {
-  searchParams?: Promise<{ view?: string | string[] }>;
+  searchParams?: Promise<{ view?: string | string[]; homeDraft?: string | string[] }>;
 };
 
 function resolveDashboardView(value: string | string[] | undefined) {
@@ -27,6 +28,7 @@ function resolveDashboardView(value: string | string[] | undefined) {
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
+  const presentation = resolveHomePresentation(params?.homeDraft, process.env.NODE_ENV);
   const { activeBrandId, brandSummaries, user } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect('/onboarding');
@@ -69,6 +71,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ) : (
       <Suspense fallback={<HomeBoardSkeleton />}>
         <HomeBoardDataWrapper
+          presentation={presentation}
           brandBookRefreshedAt={brandBook?.refreshed_at ?? null}
           brandId={activeBrandId}
           brandName={brandName}

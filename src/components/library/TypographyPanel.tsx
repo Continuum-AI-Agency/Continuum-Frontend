@@ -3,11 +3,12 @@
 import { normalizeTemplateFontFamily, type TemplateSourceSummary } from '@continuum/contracts';
 import { Loader2, Type, Upload } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { NoSpecimenText, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { type BrandFontSummary, fetchBrandFonts } from '@/lib/library/templateSources';
+import { withFontArchivesExpanded } from '@/lib/uploads/brandUploadRouting';
 import { partitionLibraryUploadFiles } from './libraryUploadRouting';
 
 // Typography is a panel, not a browse filter, and that is a licensing decision rather than a
@@ -18,16 +19,24 @@ import { partitionLibraryUploadFiles } from './libraryUploadRouting';
 //
 // No specimen is drawn. See typefaceHonesty.tsx for why that is the honest output.
 
-const FONT_ACCEPT = '.ttf,.otf,.woff,.woff2';
+const FONT_ACCEPT = '.ttf,.otf,.woff,.woff2,.zip';
+
+/** Plain-language wording for a surface outside the Library, such as onboarding. */
+export type TypographyPanelCopy = { title: string; intro: string; empty: string; held: string };
 
 export function TypographyPanel({
   brandId,
   templateSources,
   onReviewFiles,
+  copy,
+  renderSpecimen,
 }: {
   brandId: string;
   templateSources: TemplateSourceSummary[];
   onReviewFiles: (files: File[]) => void;
+  copy?: TypographyPanelCopy;
+  /** A specimen for a held face, when the caller has its local file (never a served one). */
+  renderSpecimen?: (font: BrandFontSummary) => ReactNode;
 }) {
   const translateUi = useUiTranslations('library');
 
@@ -58,9 +67,11 @@ export function TypographyPanel({
     <div className="flex flex-col gap-4 p-1">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold">{translateUi('typography_cab94aba')}</h2>
+          <h2 className="text-lg font-semibold">
+            {copy?.title ?? translateUi('typography_cab94aba')}
+          </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            <NoSpecimenText />
+            {copy?.intro ?? <NoSpecimenText />}
           </p>
         </div>
         <Button size="sm" onClick={() => inputRef.current?.click()}>
@@ -73,9 +84,12 @@ export function TypographyPanel({
           accept={FONT_ACCEPT}
           className="hidden"
           onChange={(event) => {
-            const { fonts } = partitionLibraryUploadFiles(Array.from(event.target.files ?? []));
-            if (fonts.length > 0) onReviewFiles(fonts);
+            const picked = Array.from(event.target.files ?? []);
             event.target.value = '';
+            void withFontArchivesExpanded(picked).then((files) => {
+              const { fonts } = partitionLibraryUploadFiles(files);
+              if (fonts.length > 0) onReviewFiles(fonts);
+            });
           }}
         />
       </div>
@@ -93,12 +107,18 @@ export function TypographyPanel({
       ) : fonts.length === 0 && neededBy.size === 0 ? (
         <div className="rounded-lg border border-dashed border-border/60 p-8 text-center">
           <Type className="mx-auto size-6 text-muted-foreground" />
-          <p className="mt-2 text-sm font-medium">
-            {translateUi('no_fonts_in_the_engine_82813310')}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {translateUi('add_the_faces_your_templates_use_th_ecf5e7f3')}
-          </p>
+          {copy ? (
+            <p className="mt-2 text-sm text-muted-foreground">{copy.empty}</p>
+          ) : (
+            <>
+              <p className="mt-2 text-sm font-medium">
+                {translateUi('no_fonts_in_the_engine_82813310')}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {translateUi('add_the_faces_your_templates_use_th_ecf5e7f3')}
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-border/50 rounded-lg border border-border/60">
@@ -122,8 +142,9 @@ export function TypographyPanel({
                         })
                       : ''}
                   </span>
+                  {renderSpecimen?.(font)}
                 </div>
-                <TypefaceHoldBadge held />
+                {copy ? <Badge variant="success">{copy.held}</Badge> : <TypefaceHoldBadge held />}
               </div>
             );
           })}

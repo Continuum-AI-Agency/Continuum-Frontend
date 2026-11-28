@@ -30,6 +30,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
     signInWithGooglePopup,
     isPending,
     isGooglePending,
+    isEmailSendHeld,
     error,
     clearError,
   } = useAuth({ initialError });
@@ -164,7 +165,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
             type="submit"
             size="lg"
             variant="cta"
-            disabled={isPending}
+            disabled={isPending || (isEmailSendHeld && !usePassword)}
             className="w-full min-h-11 rounded-xl py-3 font-semibold shadow-[0_14px_28px_-14px_rgba(17,24,39,0.55)] hover:shadow-[0_18px_36px_-16px_rgba(17,24,39,0.65)] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPending ? (
@@ -242,6 +243,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
               terms: (chunks) => (
                 <Link
                   href="/terms"
+                  prefetch={false}
                   className="underline transition-opacity hover:opacity-80"
                   style={{ color: 'var(--primary)' }}
                 >
@@ -251,6 +253,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
               privacy: (chunks) => (
                 <Link
                   href="/privacy"
+                  prefetch={false}
                   className="underline transition-opacity hover:opacity-80"
                   style={{ color: 'var(--primary)' }}
                 >
@@ -273,6 +276,7 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
         email={submittedEmail}
         onVerifyCode={handleVerifyCode}
         onResend={handleResend}
+        isResendHeld={isEmailSendHeld}
         isPending={isPending}
         error={error}
       />

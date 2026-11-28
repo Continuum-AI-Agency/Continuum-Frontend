@@ -1,7 +1,7 @@
 import { ArrowsCounterClockwise, MinusCircle, WarningCircle } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
+import { createContext, type ReactNode, useContext } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { SectionStatus } from '../state/agentPreview';
 import { BreathingDot } from './BreathingDot';
+
+/** Why the whole analysis failed, shown by any card the failure left without content. */
+export const AnalysisErrorContext = createContext<string | null>(null);
 
 type CardSurfaceProps = {
   title: string;
@@ -69,6 +72,7 @@ export function CardSurface({
   className,
 }: CardSurfaceProps) {
   const tUi = useTranslations('onboarding');
+  const analysisError = useContext(AnalysisErrorContext);
   const phase = phaseOf(status, isEmpty, settled);
 
   let body: ReactNode;
@@ -78,7 +82,7 @@ export function CardSurface({
         icon={
           <WarningCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--cs-warning,#cb8e00)]" />
         }
-        message={errorMessage ?? tUi('sectionFailed')}
+        message={errorMessage ?? analysisError ?? tUi('sectionFailed')}
         onRetry={onRetry}
       />
     );

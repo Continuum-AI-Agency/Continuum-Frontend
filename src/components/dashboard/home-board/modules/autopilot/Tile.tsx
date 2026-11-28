@@ -15,7 +15,10 @@ import {
   useOptimizerPortfolios,
 } from '@/components/paid-media/optimizer/useOptimizerData';
 import { Skeleton } from '@/components/ui/skeleton';
+import { HomeDots } from '../../HomeDots';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
+import { overnightDotItems } from '../../homeDotItems';
 import type { HomeTileProps } from '../../types';
 import { useHomeRead } from '../../useHomeRead';
 import { TileReadError } from '../opps/tileParts';
@@ -37,6 +40,7 @@ const ROWS_AT_SIZE = { l: 3, m: 1, s: 0 } as const;
 
 export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const [now] = useState(() => new Date());
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const logLoad = useHomeRead<HomeOvernightLogData>({
@@ -153,7 +157,13 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
         >
           {said}
         </p>
-        {shown.length > 0 ? (
+        {draft && allRows.length > 0 ? (
+          <HomeDots
+            rows
+            label={uiText('recorded_actions_in_the_last_24_hours_0461825')}
+            items={overnightDotItems(allRows, uiText)}
+          />
+        ) : shown.length > 0 ? (
           <ul className="flex min-w-0 flex-col gap-2">
             {shown.map((row) => (
               <OvernightRowItem compact key={row.id} row={row} />

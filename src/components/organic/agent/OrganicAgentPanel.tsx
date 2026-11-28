@@ -23,6 +23,7 @@ import { PromptInput } from '@/components/chat/prompt-input';
 import { SessionContentTray } from '@/components/chat/SessionContentTray';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { useEarlierHistory } from '@/components/chat/useEarlierHistory';
+import { DocumentInspectorProvider } from '@/components/documents/inspector/DocumentInspectorProvider';
 import { useCalendarRunStream } from '@/components/organic/hooks/useCalendarRunStream';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -1754,237 +1755,243 @@ export function OrganicAgentPanel({
   });
 
   return (
-    <div data-tour-id="organic-agent-panel" className="flex h-full min-h-0">
-      <OrganicSessionSidebar
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        isLoading={isLoadingSessions}
-        isInteractionDisabled={false}
-        streamingSessionIds={streamingSessionIds}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapsed={toggleSidebarCollapsed}
-        onNewSession={handleNewSession}
-        onSelectSession={handleSelectSession}
-        onDeleteSession={handleDeleteSession}
-        onSearchSessions={searchSessions}
-        onUpdateSessionTags={updateSessionTags}
-      />
-      {/* min-w-0: without it this column is sized by its widest child, and PromptInput (skill and
+    <DocumentInspectorProvider brandId={brandId} scopeKey={attachments.scopeKey}>
+      <div data-tour-id="organic-agent-panel" className="flex h-full min-h-0">
+        <OrganicSessionSidebar
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          isLoading={isLoadingSessions}
+          isInteractionDisabled={false}
+          streamingSessionIds={streamingSessionIds}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapsed={toggleSidebarCollapsed}
+          onNewSession={handleNewSession}
+          onSelectSession={handleSelectSession}
+          onDeleteSession={handleDeleteSession}
+          onSearchSessions={searchSessions}
+          onUpdateSessionTags={updateSessionTags}
+        />
+        {/* min-w-0: without it this column is sized by its widest child, and PromptInput (skill and
           prompt pickers, attachment chips, mention pills) cannot shrink below its content width —
           so the composer grew past the panel instead of the pickers collapsing. */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-3">
-        {activeSession ? (
-          <ChatProvenanceBanner
-            initiator={activeSession.initiator}
-            initiatorAgent={activeSession.initiatorAgent}
-            callerSessionId={activeSession.callerSessionId}
-            callerRunId={activeSession.callerRunId}
-            className="rounded-md border"
-          />
-        ) : null}
-        <ChatTranscript
-          anchors={anchors}
-          hasEarlier={hasEarlier}
-          isLoadingEarlier={isLoadingEarlier}
-          onLoadEarlier={loadEarlier}
-          className="min-h-0 flex-1"
-        >
-          {isLoadingMessages ? (
-            <div className="space-y-3 p-3">
-              <Skeleton className="h-10 w-3/4" />
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-10 w-1/2" />
-            </div>
-          ) : state.messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-4 px-4">
-              <p className="max-w-[220px] text-center text-sm text-muted-foreground/70 text-pretty">
-                {uiText('your_ai_marketing_strategist_start_by_describ_2bd495a')}
-              </p>
-              <DisabledControl hint={composerHint}>
-                <div className="flex flex-wrap justify-center gap-1.5">
-                  {STARTER_PROMPTS.map((s, index) => (
-                    <Suggestion
-                      key={s}
-                      suggestion={s}
-                      disabled={inputDisabled}
-                      onClick={(text) => handleSubmit(text)}
-                      className="h-auto px-3 py-1 text-sm font-normal text-muted-foreground"
-                    >
-                      {uiText(STARTER_PROMPT_LABELS[index])}
-                    </Suggestion>
-                  ))}
-                </div>
-              </DisabledControl>
-              {composerHint ? (
-                <p className="max-w-[240px] text-center text-xs text-muted-foreground/80 text-pretty">
-                  {composerHint.reason}
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <>
-              {state.messages.map((msg) => {
-                const isStreamingRow = msg.id === state.streamingMessageId;
-                return (
-                  <MessageRowBoundary key={msg.id} messageId={msg.id}>
-                    <OrganicMessageRow
-                      msg={msg}
-                      brandId={brandId}
-                      isStreamingRow={isStreamingRow}
-                      activeStages={isStreamingRow ? activeStages : NO_ACTIVE_STAGES}
-                      autoRetryPending={state.pendingAutoRetry === msg.id}
-                      isStreaming={isStreaming}
-                      inputDisabled={inputDisabled}
-                      {...rowRunState(msg, runState)}
-                      actions={rowActions}
-                    />
-                  </MessageRowBoundary>
-                );
-              })}
-              {state.pendingToolApprovals.length > 0 && (
-                <div className="flex gap-3 overflow-x-auto pb-1 pl-1">
-                  {state.pendingToolApprovals.map((approval) => (
-                    <ToolApprovalCard
-                      key={approval.approvalId}
-                      approval={approval}
-                      brandId={brandId}
-                      disabled={composerBusy}
-                      onApproveAction={() => handleToolApproval(approval, true)}
-                      onDenyAction={() => handleToolApproval(approval, false)}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </ChatTranscript>
-
-        <div className="relative shrink-0">
-          <AnimatePresence>
-            {composerBusy ? (
-              <AgentWorkingIndicator
-                variant="pinned"
-                // response.retrying: subtle text swap on the existing indicator — the
-                // Backend is retrying a transient hiccup, the turn is still going.
-                label={state.streamRetrying ? uiText('hit_a_snag_retrying_1f6b9fa') : undefined}
-              />
-            ) : null}
-          </AnimatePresence>
-          {state.mediaResolution && state.mediaResolution.failed.length > 0 ? (
-            <div
-              role="status"
-              className="mb-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-medium">
-                    {uiText.rich('sentence_d9eb70b8b57e', {
-                      count: state.mediaResolution.failed.length,
-                    })}
-                  </p>
-                  <ul className="mt-1 list-inside list-disc text-amber-900/80 dark:text-amber-100/80">
-                    {state.mediaResolution.failed.slice(0, 4).map((fail) => (
-                      <li key={`${fail.refId}:${fail.reason}`}>
-                        {fail.type}: {fail.reason.replace(/_/g, ' ')}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-1 text-amber-900/70 dark:text-amber-100/70">
-                    {uiText.rich('sentence_23d90e6f74ab', {
-                      images: state.mediaResolution.resolvedImages,
-                      hasVideos: state.mediaResolution.resolvedVideos > 0 ? 'yes' : 'no',
-                      videos: state.mediaResolution.resolvedVideos,
-                    })}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="shrink-0 rounded px-1.5 py-0.5 text-2xs uppercase tracking-wide hover:bg-amber-500/20"
-                  onClick={() => dispatch({ type: 'CLEAR_MEDIA_RESOLUTION' })}
-                >
-                  {uiText('dismiss_48845bf')}
-                </button>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-3">
+          {activeSession ? (
+            <ChatProvenanceBanner
+              initiator={activeSession.initiator}
+              initiatorAgent={activeSession.initiatorAgent}
+              callerSessionId={activeSession.callerSessionId}
+              callerRunId={activeSession.callerRunId}
+              className="rounded-md border"
+            />
+          ) : null}
+          <ChatTranscript
+            anchors={anchors}
+            hasEarlier={hasEarlier}
+            isLoadingEarlier={isLoadingEarlier}
+            onLoadEarlier={loadEarlier}
+            className="min-h-0 flex-1"
+          >
+            {isLoadingMessages ? (
+              <div className="space-y-3 p-3">
+                <Skeleton className="h-10 w-3/4" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-10 w-1/2" />
               </div>
-            </div>
-          ) : null}
-          <PromptInput
-            onSubmit={(value, submitted, references) => handleSubmit(value, submitted, references)}
-            attachments={attachments}
-            inlinePastedText
-            attachmentOnlyPrompt="Use the attached media as context for this organic task."
-            disabled={inputDisabled}
-            isStreaming={composerBusy}
-            onStop={handleStop}
-            ariaLabel={uiText('organicComposerAria')}
-            className="px-0"
-            mentionProvider={mentionProviderObj}
-            slashSkills={allBrandSkills}
-            queuedMentionSuggestions={queuedMentionSuggestions}
-            onQueuedMentionSuggestionsConsumed={() => setQueuedMentionSuggestions([])}
-            queuedText={queuedPromptText}
-            onQueuedTextConsumed={() => setQueuedPromptText(null)}
-            expandPackSuggestion={expandPackSuggestion}
-            mentionAnalytics={{
-              brandId,
-              integrationAccountId: primaryInsightsAccount?.integrationAccountId ?? null,
-              platform:
-                primaryInsightsAccount?.platform === 'instagram' ||
-                primaryInsightsAccount?.platform === 'facebook' ||
-                primaryInsightsAccount?.platform === 'tiktok' ||
-                primaryInsightsAccount?.platform === 'youtube' ||
-                primaryInsightsAccount?.platform === 'linkedin'
-                  ? primaryInsightsAccount.platform
-                  : null,
-            }}
-            mentionPlatforms={mentionPlatformOptions}
-            mentionPlatform={activeMentionPlatform}
-            onMentionPlatformChange={setMentionPlatform}
-            actions={
+            ) : state.messages.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-4 px-4">
+                <p className="max-w-[220px] text-center text-sm text-muted-foreground/70 text-pretty">
+                  {uiText('your_ai_marketing_strategist_start_by_describ_2bd495a')}
+                </p>
+                <DisabledControl hint={composerHint}>
+                  <div className="flex flex-wrap justify-center gap-1.5">
+                    {STARTER_PROMPTS.map((s, index) => (
+                      <Suggestion
+                        key={s}
+                        suggestion={s}
+                        disabled={inputDisabled}
+                        onClick={(text) => handleSubmit(text)}
+                        className="h-auto px-3 py-1 text-sm font-normal text-muted-foreground"
+                      >
+                        {uiText(STARTER_PROMPT_LABELS[index])}
+                      </Suggestion>
+                    ))}
+                  </div>
+                </DisabledControl>
+                {composerHint ? (
+                  <p className="max-w-[240px] text-center text-xs text-muted-foreground/80 text-pretty">
+                    {composerHint.reason}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
               <>
-                <AgentDataScopePicker
-                  label={uiText('organic_accounts_7d57a82')}
-                  options={accountScopeOptions}
-                  selectedIds={selectedAccountPlatforms}
-                  onChange={setSelectedAccountPlatforms}
-                  disabled={inputDisabled}
-                />
-                <SessionContentTray
-                  items={sessionContent}
-                  onInsert={(item) => setQueuedMentionSuggestions((current) => [...current, item])}
-                  renderPreview={(item) =>
-                    item.type === 'draft' ? (
-                      <DraftTrayPreview brandId={brandId} item={item} />
-                    ) : null
-                  }
-                />
-                <SkillPickerButton
-                  skills={brandSkills}
-                  templates={brandSkillTemplates}
-                  isError={brandSkillsError}
-                  onPickAction={(skill) =>
-                    setQueuedMentionSuggestions((current) => [
-                      ...current,
-                      skillToMentionSuggestion(skill),
-                    ])
-                  }
-                />
-                <PromptPickerButton
-                  prompts={brandPrompts}
-                  isError={brandPromptsError}
-                  onPickAction={(prompt) => setQueuedPromptText(prompt.body)}
-                />
+                {state.messages.map((msg) => {
+                  const isStreamingRow = msg.id === state.streamingMessageId;
+                  return (
+                    <MessageRowBoundary key={msg.id} messageId={msg.id}>
+                      <OrganicMessageRow
+                        msg={msg}
+                        brandId={brandId}
+                        isStreamingRow={isStreamingRow}
+                        activeStages={isStreamingRow ? activeStages : NO_ACTIVE_STAGES}
+                        autoRetryPending={state.pendingAutoRetry === msg.id}
+                        isStreaming={isStreaming}
+                        inputDisabled={inputDisabled}
+                        {...rowRunState(msg, runState)}
+                        actions={rowActions}
+                      />
+                    </MessageRowBoundary>
+                  );
+                })}
+                {state.pendingToolApprovals.length > 0 && (
+                  <div className="flex gap-3 overflow-x-auto pb-1 pl-1">
+                    {state.pendingToolApprovals.map((approval) => (
+                      <ToolApprovalCard
+                        key={approval.approvalId}
+                        approval={approval}
+                        brandId={brandId}
+                        disabled={composerBusy}
+                        onApproveAction={() => handleToolApproval(approval, true)}
+                        onDenyAction={() => handleToolApproval(approval, false)}
+                      />
+                    ))}
+                  </div>
+                )}
               </>
-            }
-            placeholder={uiText('agentComposerPlaceholder')}
-          />
-          {composerHint ? (
-            <p className="mt-1 px-1 text-xs text-muted-foreground/80 text-pretty">
-              {composerHint.reason}
-            </p>
-          ) : null}
+            )}
+          </ChatTranscript>
+
+          <div className="relative shrink-0">
+            <AnimatePresence>
+              {composerBusy ? (
+                <AgentWorkingIndicator
+                  variant="pinned"
+                  // response.retrying: subtle text swap on the existing indicator — the
+                  // Backend is retrying a transient hiccup, the turn is still going.
+                  label={state.streamRetrying ? uiText('hit_a_snag_retrying_1f6b9fa') : undefined}
+                />
+              ) : null}
+            </AnimatePresence>
+            {state.mediaResolution && state.mediaResolution.failed.length > 0 ? (
+              <div
+                role="status"
+                className="mb-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      {uiText.rich('sentence_d9eb70b8b57e', {
+                        count: state.mediaResolution.failed.length,
+                      })}
+                    </p>
+                    <ul className="mt-1 list-inside list-disc text-amber-900/80 dark:text-amber-100/80">
+                      {state.mediaResolution.failed.slice(0, 4).map((fail) => (
+                        <li key={`${fail.refId}:${fail.reason}`}>
+                          {fail.type}: {fail.reason.replace(/_/g, ' ')}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1 text-amber-900/70 dark:text-amber-100/70">
+                      {uiText.rich('sentence_23d90e6f74ab', {
+                        images: state.mediaResolution.resolvedImages,
+                        hasVideos: state.mediaResolution.resolvedVideos > 0 ? 'yes' : 'no',
+                        videos: state.mediaResolution.resolvedVideos,
+                      })}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded px-1.5 py-0.5 text-2xs uppercase tracking-wide hover:bg-amber-500/20"
+                    onClick={() => dispatch({ type: 'CLEAR_MEDIA_RESOLUTION' })}
+                  >
+                    {uiText('dismiss_48845bf')}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            <PromptInput
+              onSubmit={(value, submitted, references) =>
+                handleSubmit(value, submitted, references)
+              }
+              attachments={attachments}
+              inlinePastedText
+              attachmentOnlyPrompt="Use the attached media as context for this organic task."
+              disabled={inputDisabled}
+              isStreaming={composerBusy}
+              onStop={handleStop}
+              ariaLabel={uiText('organicComposerAria')}
+              className="px-0"
+              mentionProvider={mentionProviderObj}
+              slashSkills={allBrandSkills}
+              queuedMentionSuggestions={queuedMentionSuggestions}
+              onQueuedMentionSuggestionsConsumed={() => setQueuedMentionSuggestions([])}
+              queuedText={queuedPromptText}
+              onQueuedTextConsumed={() => setQueuedPromptText(null)}
+              expandPackSuggestion={expandPackSuggestion}
+              mentionAnalytics={{
+                brandId,
+                integrationAccountId: primaryInsightsAccount?.integrationAccountId ?? null,
+                platform:
+                  primaryInsightsAccount?.platform === 'instagram' ||
+                  primaryInsightsAccount?.platform === 'facebook' ||
+                  primaryInsightsAccount?.platform === 'tiktok' ||
+                  primaryInsightsAccount?.platform === 'youtube' ||
+                  primaryInsightsAccount?.platform === 'linkedin'
+                    ? primaryInsightsAccount.platform
+                    : null,
+              }}
+              mentionPlatforms={mentionPlatformOptions}
+              mentionPlatform={activeMentionPlatform}
+              onMentionPlatformChange={setMentionPlatform}
+              actions={
+                <>
+                  <AgentDataScopePicker
+                    label={uiText('organic_accounts_7d57a82')}
+                    options={accountScopeOptions}
+                    selectedIds={selectedAccountPlatforms}
+                    onChange={setSelectedAccountPlatforms}
+                    disabled={inputDisabled}
+                  />
+                  <SessionContentTray
+                    items={sessionContent}
+                    onInsert={(item) =>
+                      setQueuedMentionSuggestions((current) => [...current, item])
+                    }
+                    renderPreview={(item) =>
+                      item.type === 'draft' ? (
+                        <DraftTrayPreview brandId={brandId} item={item} />
+                      ) : null
+                    }
+                  />
+                  <SkillPickerButton
+                    skills={brandSkills}
+                    templates={brandSkillTemplates}
+                    isError={brandSkillsError}
+                    onPickAction={(skill) =>
+                      setQueuedMentionSuggestions((current) => [
+                        ...current,
+                        skillToMentionSuggestion(skill),
+                      ])
+                    }
+                  />
+                  <PromptPickerButton
+                    prompts={brandPrompts}
+                    isError={brandPromptsError}
+                    onPickAction={(prompt) => setQueuedPromptText(prompt.body)}
+                  />
+                </>
+              }
+              placeholder={uiText('agentComposerPlaceholder')}
+            />
+            {composerHint ? (
+              <p className="mt-1 px-1 text-xs text-muted-foreground/80 text-pretty">
+                {composerHint.reason}
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
-    </div>
+    </DocumentInspectorProvider>
   );
 }
 

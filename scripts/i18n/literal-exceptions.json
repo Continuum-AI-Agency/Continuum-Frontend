@@ -538,5 +538,11 @@
     "kind": "dynamic text",
     "text": "All steps complete",
     "reason": "uiarc registry English default; every Continuum caller passes translated labels for it."
+  },
+  {
+    "file": "src/components/brand/FontSpecimen.tsx",
+    "kind": "dynamic text",
+    "text": "Aa Bb Cc Gg Rr 0123 &?!",
+    "reason": "Type specimen: the same Latin glyph sample in every locale, so faces compare letter for letter."
   }
 ]

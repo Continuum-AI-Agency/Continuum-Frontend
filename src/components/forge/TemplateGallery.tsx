@@ -23,7 +23,13 @@ import {
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import { ForgeProjectDrop } from '@/components/forge/ForgeProjectDrop';
-import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import {
+  FORGE_STALE_MS,
+  forgeQueryKeys,
+  revisionVariantsQuery,
+  templateVariantsQuery,
+  variantDefaultsQuery,
+} from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,11 +54,6 @@ import {
 import { formatDecimal } from '@/lib/format/decimal';
 import { pluralize } from '@/lib/format/pluralize';
 import { parseErrorSentence } from '@/lib/library/sceneTemplates';
-import {
-  fetchTemplateRevisionVariants,
-  fetchTemplateVariantDefaults,
-  fetchTemplateVariants,
-} from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
@@ -432,26 +433,14 @@ export function TemplateGallery({
     data: catalog,
     error: catalogError,
     refetch: reloadCatalog,
-  } = useQuery({
-    queryKey: forgeQueryKeys.templateVariants(brandId),
-    queryFn: () => fetchTemplateVariants(brandId),
-    staleTime: FORGE_STALE_MS.active,
-  });
+  } = useQuery(templateVariantsQuery(brandId));
   const {
     data: canonicalVariants,
     error: variantsError,
     isPending: variantsPending,
     refetch: reloadVariants,
-  } = useQuery({
-    queryKey: forgeQueryKeys.revisionVariants(brandId, 'all'),
-    queryFn: () => fetchTemplateRevisionVariants(brandId),
-    staleTime: FORGE_STALE_MS.active,
-  });
-  const { data: defaults } = useQuery({
-    queryKey: forgeQueryKeys.variantDefaults(brandId),
-    queryFn: () => fetchTemplateVariantDefaults(brandId),
-    staleTime: FORGE_STALE_MS.lists,
-  });
+  } = useQuery(revisionVariantsQuery(brandId));
+  const { data: defaults } = useQuery(variantDefaultsQuery(brandId));
   // The registry's template families, keyed by the original upload's asset id. Every other upload
   // in a family — a named variant, a later revision — is a card under that original, never a row.
   const families = new Map<string, TemplateRevisionVariant[]>();
@@ -705,7 +694,7 @@ export function TemplateGallery({
         <Table aria-label={translateUi('templates_56b564b7')} className="text-xs">
           <TableHeader>
             <TableRow>
-              <SortHead column="name" sort={sort} onSort={sortBy} className="min-w-64" />
+              <SortHead column="name" sort={sort} onSort={sortBy} className="min-w-64 pl-9" />
               <SortHead column="type" sort={sort} onSort={sortBy} />
               <TableHead>{translateUi('formats_9f01769a')}</TableHead>
               <SortHead column="status" sort={sort} onSort={sortBy} />

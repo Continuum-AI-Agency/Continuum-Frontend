@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { OrganicWinners } from '@continuum/contracts';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { render } from '@/i18n/__tests__/render';
+import { englishMessages, render } from '@/i18n/__tests__/render';
+import { HOME_DRAFT_READ_ONLY, HomePresentationContext } from '../../HomePresentationContext';
 import { EASY_FIT_ACCOUNT, EASY_FIT_REPORT } from '../creative/__fixtures__/creativeReport';
 import { NO_WINNERS, TWO_WINNERS } from './__fixtures__/organicWinners';
 
@@ -59,6 +60,27 @@ const BRAND = '148583e0-5538-462b-8d3a-acd25b80344e';
 const lane = (name: RegExp) => fireEvent.click(screen.getByRole('tab', { name }));
 
 describe('Flywheel', () => {
+  it('lets a draft inspect winners without opening promotion or writing an ad', () => {
+    render(
+      <HomePresentationContext value="dots">
+        <Flywheel
+          brandId={BRAND}
+          mode="operate"
+          refreshCandidates={candidates}
+          verbLabel="Create paused"
+        />
+      </HomePresentationContext>,
+    );
+    const button = within(screen.getAllByTestId('flywheel-winner')[0]).getByRole('button', {
+      name: 'Create paused',
+    });
+    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(button.getAttribute('title')).toBe(englishMessages.dashboard[HOME_DRAFT_READ_ONLY]);
+    fireEvent.click(button);
+    expect(screen.queryByLabelText('Ad set')).toBeNull();
+    expect(promote).not.toHaveBeenCalled();
+  });
+
   it('counts each lane from its own read, and marks the third one not available', () => {
     render(
       <Flywheel

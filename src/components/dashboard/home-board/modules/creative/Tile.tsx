@@ -18,13 +18,16 @@ import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePaidCreativeReport } from '@/hooks/usePaidCreativeReport';
+import { HomeDots } from '../../HomeDots';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
+import { creativeDotItems, SPOTLIGHT_VERDICT_KEYS, spotlightDotItems } from '../../homeDotItems';
 import { readyDataOf } from '../../homeRead';
 import type { HomeTileProps } from '../../types';
 import { useHomeRead } from '../../useHomeRead';
 import { CreativeThumb } from './CreativeThumb';
 import { type CreativeSpotlight, creativeTileState, standingLine } from './creativeModel';
-import { spotlightName, spotlightVerdictLine } from './spotlightRead';
+import { spotlightAgeLine, spotlightName, spotlightVerdictLine } from './spotlightRead';
 
 const CreativeModule = lazy(() => import('./Module'));
 
@@ -32,6 +35,7 @@ const THUMBS_BY_SIZE = { s: 0, m: 4, l: 5 } as const;
 
 function SpotlightLine({ data }: { data: HomeCreativeSpotlightData }) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   return (
     <p
       className="text-muted-foreground text-xs leading-snug"
@@ -42,6 +46,12 @@ function SpotlightLine({ data }: { data: HomeCreativeSpotlightData }) {
         count: data.ads.length,
         verdicts: spotlightVerdictLine(data),
       })}
+      {draft ? (
+        <>
+          {' '}
+          · {data.window} · {spotlightAgeLine(data)}
+        </>
+      ) : null}
     </p>
   );
 }
@@ -54,6 +64,7 @@ function SpotlightOnlyBody({
   size: 's' | 'm' | 'l';
 }) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div
@@ -69,7 +80,9 @@ function SpotlightOnlyBody({
           })}
         </small>
       </div>
-      {THUMBS_BY_SIZE[size] > 0 ? (
+      {draft ? (
+        <SpotlightDots data={data} />
+      ) : THUMBS_BY_SIZE[size] > 0 ? (
         <div className="flex min-w-0 gap-1.5">
           {data.ads.slice(0, THUMBS_BY_SIZE[size]).map((ad) => (
             <CreativeThumb
@@ -87,6 +100,24 @@ function SpotlightOnlyBody({
   );
 }
 
+function SpotlightDots({ data }: { data: HomeCreativeSpotlightData }) {
+  const uiText = useTranslations('dashboard');
+  const present = new Set(data.ads.map((ad) => ad.verdict));
+  return (
+    <HomeDots
+      label={uiText('ads_by_recorded_verdict_and_share_of_spend_524c602')}
+      items={spotlightDotItems(data, uiText)}
+      groups={Object.entries(SPOTLIGHT_VERDICT_KEYS)
+        .filter(([verdict]) => present.has(verdict as keyof typeof SPOTLIGHT_VERDICT_KEYS))
+        .map(([, key]) => uiText(key))}
+      xAxis={{
+        label: uiText('share_of_spend_in_this_window_d9224df'),
+        format: (value) => `${Math.round(value * 100)}%`,
+      }}
+    />
+  );
+}
+
 function ReadyBody({
   spotlight,
   read,
@@ -97,6 +128,7 @@ function ReadyBody({
   size: 's' | 'm' | 'l';
 }) {
   const uiText = useTranslations('dashboard');
+  const draft = useHomeDraft();
   const thumbs = spotlight.cards.slice(0, THUMBS_BY_SIZE[size]);
   const readThumb = (adId: string) =>
     read?.ads.find((ad) => ad.adId === adId)?.thumbnailUrl ?? null;
@@ -114,7 +146,16 @@ function ReadyBody({
           })}
         </small>
       </div>
-      {thumbs.length > 0 ? (
+      {draft ? (
+        read ? (
+          <SpotlightDots data={read} />
+        ) : (
+          <HomeDots
+            label={uiText('ads_judged_in_the_stored_creative_report_7a145d3')}
+            items={creativeDotItems(spotlight, uiText)}
+          />
+        )
+      ) : thumbs.length > 0 ? (
         <div className="flex min-w-0 gap-1.5">
           {thumbs.map((card) => (
             <CreativeThumb

@@ -107,6 +107,27 @@ describe('buildAssignmentSections', () => {
     expect(tiktok.rows.map((r) => r.selectionId)).toEqual(['tt-1']);
   });
 
+  test('lists a LinkedIn personal profile as a tickable row in the LinkedIn section', () => {
+    const sections = buildAssignmentSections(
+      response([
+        asset({ asset_pk: 'li-org', type: 'linkedin_organization', name: 'MindPraxis' }),
+        asset({
+          asset_pk: 'li-member',
+          type: 'linkedin_member',
+          name: 'Ana Pérez',
+          external_id: 'urn:li:person:abc',
+        }),
+      ]),
+      null,
+    );
+    const linkedin = sectionByKey(sections, 'platform:linkedin');
+
+    expect(linkedin.rows.map((r) => [r.selectionId, r.label, r.personalProfile])).toEqual([
+      ['li-org', 'MindPraxis', false],
+      ['li-member', 'Ana Pérez', true],
+    ]);
+  });
+
   test('ignores Meta types in the flat list so they are never double-listed', () => {
     const sections = buildAssignmentSections(
       response([asset({ asset_pk: 'pg-flat', type: 'meta_page', name: 'Flat Page' })]),

@@ -19,7 +19,11 @@ async function resolveRuntimeSiteUrl(): Promise<string> {
   return resolveHeadersOrigin(headerStore, fallback);
 }
 
-type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
+// `retryLater` marks a send the email provider refused (quota spent, rate limit): an immediate
+// retry cannot succeed, so the form holds its send button instead of letting it be hammered.
+type ActionResult<T = void> =
+  | { success: true; data: T }
+  | { success: false; error: string; retryLater?: true };
 
 const SAFE_ERROR_MESSAGES = {
   'Invalid login credentials': 'invalidCredentials',
@@ -57,10 +61,12 @@ type AuthErrorLike = { name?: string; message?: string; status?: number; code?: 
 
 // A failed send (SMTP quota spent, provider down) reaches auth-js as a 5xx whose body may be empty,
 // leaving a message of just '{}' (2026-11-09), so status and code are what identify it. Only the
-// send action asks: a 5xx from sign-out or password sign-in has nothing to do with email.
+// send action asks: a 5xx from sign-out or password sign-in has nothing to do with email. A 429 is
+// either the project's email budget or the per-IP sign-in limit (a whole office behind one NAT).
 async function emailSendFailureMessage(error: unknown): Promise<string | null> {
   const { name, message = '', status, code } = (error ?? {}) as AuthErrorLike;
-  const rateLimited = code === 'over_email_send_rate_limit';
+  const rateLimited =
+    status === 429 || code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit';
   const sendFailed =
     code === 'unexpected_failure' ||
     (status !== undefined && status >= 500) ||
@@ -80,6 +86,13 @@ async function emailSendFailureMessage(error: unknown): Promise<string | null> {
 
   const t = await getTranslations({ locale: await getCookieLocale(), namespace: 'auth' });
   return t('emailSendFailed');
+}
+
+async function sendFailure(error: unknown): Promise<ActionResult> {
+  const refused = await emailSendFailureMessage(error);
+  return refused
+    ? { success: false, error: refused, retryLater: true }
+    : { success: false, error: await getSafeErrorMessage(error as Error) };
 }
 
 // Sign out ends THIS browser's session only. auth-js defaults to 'global', which ended every
@@ -247,22 +260,14 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
       },
     });
 
-    if (error) {
-      return {
-        success: false,
-        error: (await emailSendFailureMessage(error)) ?? (await getSafeErrorMessage(error)),
-      };
-    }
+    if (error) return sendFailure(error);
 
     return {
       success: true,
       data: undefined,
     };
   } catch (error) {
-    return {
-      success: false,
-      error: (await emailSendFailureMessage(error)) ?? (await getSafeErrorMessage(error as Error)),
-    };
+    return sendFailure(error);
   }
 }
 
