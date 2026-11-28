@@ -11,7 +11,12 @@ import type { RowBroadcastSubscription } from '@/lib/supabase/realtime';
 
 let subscription: RowBroadcastSubscription;
 const fetchRun = mock(async (_brandId: string, _assetId: string): Promise<unknown> => null);
-mock.module('@/lib/library/templateSources', () => ({ fetchTemplateRun: fetchRun }));
+// queryKeys reads the module's other exports, so only the run read is replaced.
+const actualTemplateSources = { ...(await import('@/lib/library/templateSources')) };
+mock.module('@/lib/library/templateSources', () => ({
+  ...actualTemplateSources,
+  fetchTemplateRun: fetchRun,
+}));
 mock.module('@/lib/supabase/realtime', () => ({
   subscribeToRowBroadcasts: (options: RowBroadcastSubscription) => {
     subscription = options;

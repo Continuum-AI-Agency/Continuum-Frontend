@@ -40,13 +40,17 @@ describe('hovering the collapsed sidebar', () => {
     const before = reservedWidth();
     expect(before).toBe('var(--shell-sidebar-w-icon)');
 
+    // The hover-open timer re-checks :hover so a pointer that only crossed the rail does not open
+    // it; the DOM here has no real pointer, so the panel reports the hover a real one would.
+    const matches = panel.matches.bind(panel);
+    panel.matches = (selector: string) => selector === ':hover' || matches(selector);
     fireEvent.mouseEnter(panel);
     await waitFor(() => expect(group.getAttribute('data-state')).toBe('expanded'));
 
     expect(reservedWidth()).toBe(before);
     expect(group.getAttribute('data-pinned')).toBe('collapsed');
-    // The spacer's expanded width answers to the pinned state, never to the hover one.
-    expect(spacer.className).toContain('group-data-[pinned=expanded]:w-(--sidebar-width)');
+    // The spacer is as wide as --app-sidebar-width, which follows the pinned state, never the hover.
+    expect(spacer.className).toContain('w-[var(--app-sidebar-width,var(--sidebar-width-icon))]');
     expect(spacer.className).not.toContain('group-data-[state=expanded]:w-(--sidebar-width)');
   });
 
