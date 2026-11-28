@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from 'next-intl';
 
 // The planner's Publish tab: what one destination platform does with this post beyond the
-// caption — the account's first comment, the video cover, an Instagram trial reel, and TikTok's
+// caption — the account's first comment, the video cover, Instagram Reel placement, and TikTok's
 // AI-generated label.
 // Every control is gated by PLATFORM_CAPABILITIES, the same table the publisher refuses on,
 // so the UI never offers an option the publish would reject.
@@ -84,6 +84,7 @@ export function PublishOptionsPanel({
   const can = PLATFORM_CAPABILITIES[platform].publishOptions;
   const label = POST_PLATFORMS[platform].label;
   const saved = publishOptions?.[platform] ?? {};
+  const placementDescriptionId = React.useId();
   const isVideo = format === 'REEL';
   // A story has no comment thread to post into, on any platform.
   const isStory = format === 'STORY';
@@ -157,6 +158,37 @@ export function PublishOptionsPanel({
           <Unsupported>{uiText.rich('sentence_b4b6c1bbd88f', { v0: () => label })}</Unsupported>
         )}
       </Section>
+
+      {can.shareToFeed && (isVideo || saved.shareToFeed !== undefined) && !saved.trial ? (
+        <Section title={uiText('showOnMainGrid')}>
+          {isVideo ? (
+            <div className="flex items-start justify-between gap-3">
+              <p id={placementDescriptionId} className="text-xs text-muted-foreground">
+                {uiText('showOnMainGridDescription')}
+              </p>
+              <Switch
+                aria-label={uiText('showOnMainGrid')}
+                aria-describedby={placementDescriptionId}
+                checked={saved.shareToFeed ?? true}
+                disabled={disabled}
+                onCheckedChange={(shareToFeed) => save({ ...saved, shareToFeed }, 'discrete')}
+              />
+            </div>
+          ) : (
+            <>
+              <Unsupported>{uiText('reelPlacementVideoOnly')}</Unsupported>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => save({ ...saved, shareToFeed: undefined }, 'discrete')}
+                className="self-start rounded-md px-2 py-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {uiText('clearReelPlacement')}
+              </button>
+            </>
+          )}
+        </Section>
+      ) : null}
 
       {can.trialReel && isVideo ? (
         <TrialReelToggle

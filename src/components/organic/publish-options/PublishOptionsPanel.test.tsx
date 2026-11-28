@@ -78,6 +78,105 @@ describe('formatOffset', () => {
 });
 
 describe('PublishOptionsPanel', () => {
+  it('defaults to the main grid and saves Reels-only placement without dropping other options', () => {
+    const onChange = mock();
+    render(
+      <PublishOptionsPanel
+        draft={draft()}
+        publishOptions={{ instagram: { firstComment: 'Keep this' }, tiktok: { aiGenerated: true } }}
+        platform="instagram"
+        format="REEL"
+        onChange={onChange}
+      />,
+    );
+    const placement = screen.getByRole('switch', { name: 'Show on main grid' });
+    expect(placement.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(placement);
+    expect(onChange).toHaveBeenLastCalledWith(
+      {
+        instagram: { firstComment: 'Keep this', shareToFeed: false },
+        tiktok: { aiGenerated: true },
+      },
+      'discrete',
+    );
+  });
+
+  it('restores a saved Reels-only choice and lets it be shared to the grid again', () => {
+    const onChange = mock();
+    render(
+      <PublishOptionsPanel
+        draft={draft()}
+        publishOptions={{ instagram: { shareToFeed: false } }}
+        platform="instagram"
+        format="REEL"
+        onChange={onChange}
+      />,
+    );
+    const placement = screen.getByRole('switch', { name: 'Show on main grid' });
+    expect(placement.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(placement);
+    expect(onChange).toHaveBeenLastCalledWith({ instagram: { shareToFeed: true } }, 'discrete');
+  });
+
+  it('disables grid placement when the draft cannot be edited', () => {
+    const onChange = mock();
+    render(
+      <PublishOptionsPanel
+        draft={draft()}
+        publishOptions={undefined}
+        platform="instagram"
+        format="REEL"
+        disabled
+        onChange={onChange}
+      />,
+    );
+    const placement = screen.getByRole('switch', { name: 'Show on main grid' });
+    expect(placement.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(placement);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('lets a saved Reel placement be cleared after changing to a photo post', () => {
+    const onChange = mock();
+    render(
+      <PublishOptionsPanel
+        draft={draft()}
+        publishOptions={{ instagram: { firstComment: 'Keep this', shareToFeed: false } }}
+        platform="instagram"
+        format="POST"
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Reel placement' }));
+    expect(onChange).toHaveBeenLastCalledWith(
+      { instagram: { firstComment: 'Keep this' } },
+      'discrete',
+    );
+  });
+
+  it('hides grid placement on other formats, platforms, and trial reels', () => {
+    for (const [platform, format, publishOptions] of [
+      ['instagram', 'POST', undefined],
+      ['instagram', 'CAROUSEL', undefined],
+      ['instagram', 'STORY', undefined],
+      ['facebook', 'REEL', undefined],
+      ['tiktok', 'REEL', undefined],
+      ['instagram', 'REEL', { instagram: { trial: { graduationStrategy: 'MANUAL' } } }],
+    ] as const) {
+      render(
+        <PublishOptionsPanel
+          draft={draft()}
+          publishOptions={publishOptions}
+          platform={platform}
+          format={format}
+          onChange={mock()}
+        />,
+      );
+      expect(screen.queryByRole('switch', { name: 'Show on main grid' })).toBeNull();
+      cleanup();
+    }
+  });
+
   it('saves a typed first comment, trimmed, as a coalesced edit of the whole map', () => {
     const onChange = mock();
     render(
