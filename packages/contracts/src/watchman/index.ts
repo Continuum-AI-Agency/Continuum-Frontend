@@ -1,4 +1,23 @@
 import { z } from 'zod';
+import { watchmanCapabilityInputSchema } from './capabilities';
+import {
+  watchmanContinuationSchema,
+  watchmanEvidenceClaimSchema,
+  watchmanExecutionReceiptSchema,
+  watchmanMetricEvidenceSchema,
+  watchmanRoleSchema,
+  watchmanSetupAttemptSchema,
+} from './teammates';
+
+import {
+  watchmanWorkHandoffInputSchema,
+  watchmanWorkProductInputSchema,
+  watchmanWorkRequestInputSchema,
+} from './work-actions';
+
+export * from './capabilities';
+export * from './teammates';
+export * from './work-actions';
 
 // Watchman wire contracts (plans/074). A Watchman is a database row; a wake is a
 // short job. Continuum decides WHEN (schedules, inbox, triage, wake rows) and
@@ -21,7 +40,7 @@ export const WATCHMAN_MESSAGE_KINDS = ['brief', 'proposal', 'question', 'alert']
  * tools are not offered. approve: it proposes the exact call, a brand admin approves it, and only
  * that call runs. auto: it runs within its per-wake caps. Every class starts off.
  */
-export const WATCHMAN_AUTONOMY_CLASSES = ['generate', 'render', 'publish'] as const;
+export const WATCHMAN_AUTONOMY_CLASSES = ['generate', 'render', 'publish', 'optimize'] as const;
 export type WatchmanAutonomyClass = (typeof WATCHMAN_AUTONOMY_CLASSES)[number];
 export const WATCHMAN_AUTONOMY_LEVELS = ['off', 'approve', 'auto'] as const;
 export type WatchmanAutonomyLevel = (typeof WATCHMAN_AUTONOMY_LEVELS)[number];
@@ -30,6 +49,7 @@ export const watchmanAutonomySchema = z
     generate: z.enum(WATCHMAN_AUTONOMY_LEVELS).optional(),
     render: z.enum(WATCHMAN_AUTONOMY_LEVELS).optional(),
     publish: z.enum(WATCHMAN_AUTONOMY_LEVELS).optional(),
+    optimize: z.enum(['off', 'approve']).optional(),
   })
   .strict();
 export type WatchmanAutonomy = z.infer<typeof watchmanAutonomySchema>;
@@ -58,6 +78,7 @@ export type WatchmanProposalStatus = (typeof WATCHMAN_PROPOSAL_STATUSES)[number]
 export const watchmanApprovedProposalSchema = z
   .object({
     id: z.string(),
+    wake_id: z.string().nullable().optional(),
     kind: z.enum(WATCHMAN_AUTONOMY_CLASSES),
     tool: z.string(),
     input: z.record(z.string(), z.unknown()),
@@ -93,6 +114,8 @@ export type WatchmanModels = z.infer<typeof watchmanModelsSchema>;
 /** The signed body Continuum POSTs to the runtime's /wake. The token is the bot's, for MCP only — never model context. */
 export const watchmanWakeRequestSchema = z.object({
   wake_id: z.string().min(1),
+  /** Current lease claim. An older signed request cannot finish its replacement. */
+  attempt: z.number().int().positive(),
   watchman_id: z.string().min(1),
   brand_id: z.string().min(1),
   mcp_url: z.string().url(),
@@ -171,6 +194,31 @@ export const watchmanTaskInputSchema = z.object({
 });
 export type WatchmanTaskInput = z.infer<typeof watchmanTaskInputSchema>;
 
+/** Self-service setup. The request id also identifies the paused teammate on retries. */
+export const watchmanCreateInputSchema = z.object({
+  request_id: z.string().uuid(),
+  kind: z.enum(WATCHMAN_KINDS),
+  role: watchmanRoleSchema.optional(),
+  first_assignment: z.string().trim().min(1).max(4_000).optional(),
+  name: z.string().trim().min(1).max(80),
+  instructions: z.string().trim().min(1).max(8_000),
+  timezone: z.string().min(1).max(64),
+  budget_usd_month: z.number().min(1).max(1_000),
+});
+export type WatchmanCreateInput = z.infer<typeof watchmanCreateInputSchema>;
+export const WATCHMAN_SETUP_ROUTE = '/api/watchman/setup';
+export const watchmanSetupViewSchema = z.object({
+  input: watchmanCreateInputSchema,
+  setup: watchmanSetupAttemptSchema,
+});
+export type WatchmanSetupView = z.infer<typeof watchmanSetupViewSchema>;
+export const watchmanCreateResultSchema = z.object({
+  watchman_id: z.string().uuid(),
+  status: z.enum(['active', 'paused']),
+  setup: watchmanSetupAttemptSchema,
+});
+export type WatchmanCreateResult = z.infer<typeof watchmanCreateResultSchema>;
+
 export const watchmanTaskPatchSchema = watchmanTaskInputSchema
   .partial()
   .extend({ active: z.boolean().optional() });
@@ -193,6 +241,8 @@ export const watchmanReportInputSchema = z.object({
   task_id: z.string().uuid(),
   subject: z.string().min(1).max(200),
   body_md: z.string().min(1).max(20_000),
+  evidence: z.array(watchmanMetricEvidenceSchema).max(100).optional(),
+  claims: z.array(watchmanEvidenceClaimSchema).max(100).optional(),
 });
 
 /** An FDM's settings for one Watchman. Every field optional; at least one must be given. */
@@ -234,12 +284,16 @@ export const watchmanContextSchema = z
       brand_id: z.string(),
       name: z.string(),
       kind: z.enum(WATCHMAN_KINDS),
+      role: watchmanRoleSchema.optional(),
       instructions: z.string(),
       timezone: z.string(),
       models: watchmanModelsSchema,
       autonomy: watchmanAutonomySchema.default({}),
     }),
     memory: z.object({ text: z.string(), version: z.number().int() }),
+    note_to_self: z.string().max(4_000).nullable().optional(),
+    continuation: watchmanContinuationSchema.nullable().optional(),
+    capability_instructions: z.record(z.string(), z.string().max(6_000)).optional(),
     inbox: z.array(watchmanInboxItemSchema),
     watch_rules: z.array(z.record(z.string(), z.unknown())),
     schedules: z.array(z.record(z.string(), z.unknown())),
@@ -268,6 +322,7 @@ export type WatchmanModelUsage = z.infer<typeof watchmanModelUsageSchema>;
 /** watchman_manage action=turn_complete `turn`: acks the wake's inbox, writes memory (compare-and-set), records usage. */
 export const watchmanTurnCompleteInputSchema = z.object({
   wake_id: z.string().min(1),
+  attempt: z.number().int().positive(),
   status: z.enum(['completed', 'failed']),
   /** Full replacement memory text; omit to leave memory unchanged. */
   memory: z
@@ -324,10 +379,15 @@ export const WATCHMAN_MODEL_ACTIONS = [
   'alarm_add',
   'alarm_cancel',
   'propose',
+  'work_submit',
+  'work_request',
+  'work_handoff',
+  'capability_run',
 ] as const;
 
 /** A person's actions on the active brand's Watchman, each needing brand admin. */
 export const WATCHMAN_PERSON_ACTIONS = [
+  'create',
   'status',
   'configure',
   'report_list',
@@ -361,6 +421,13 @@ export type WatchmanAction = (typeof WATCHMAN_ACTIONS)[number];
 /** The model's view of watchman_manage: its own actions only. Each action reads only its own field. */
 export const watchmanModelManageInputSchema = z.object({
   action: z.enum(WATCHMAN_MODEL_ACTIONS),
+  /** Runtime forces these from its signed request for durable work actions. */
+  wake_id: z.string().min(1).optional(),
+  attempt: z.number().int().positive().optional(),
+  work_product: watchmanWorkProductInputSchema.optional(),
+  work_request: watchmanWorkRequestInputSchema.optional(),
+  work_handoff: watchmanWorkHandoffInputSchema.optional(),
+  capability: watchmanCapabilityInputSchema.optional(),
   message: watchmanMessageInputSchema.optional(),
   report: watchmanReportInputSchema.optional(),
   rule: watchmanWatchRuleInputSchema.optional(),
@@ -385,6 +452,7 @@ export const watchmanManageInputSchema = watchmanModelManageInputSchema
     feedback: watchmanFeedbackInputSchema.optional(),
     reason: z.string().min(1).max(500).optional(),
     configure: watchmanConfigureInputSchema.optional(),
+    create: watchmanCreateInputSchema.optional(),
     /** report_list: which reports (default held). */
     report_status: z.enum(WATCHMAN_REPORT_STATUSES).optional(),
     proposal_id: z.string().uuid().optional(),
@@ -395,7 +463,19 @@ export const watchmanManageInputSchema = watchmanModelManageInputSchema
     note: z.string().max(1_000).optional(),
     /** proposal_done (the runtime's): how the approved call went. */
     outcome: z
-      .object({ ok: z.boolean(), result: z.unknown().optional(), error: z.string().max(2_000).optional() })
+      .object({
+        ok: z.boolean(),
+        result: z.unknown().optional(),
+        error: z.string().max(2_000).optional(),
+        receipt: watchmanExecutionReceiptSchema.optional(),
+      })
+      .refine(
+        (outcome) => !outcome.receipt || outcome.ok === (outcome.receipt.status === 'completed'),
+        {
+          path: ['ok'],
+          message: 'Only a verified completed receipt may report a successful effect.',
+        },
+      )
       .optional(),
   })
   .strict();
@@ -441,6 +521,7 @@ export const watchmanStatusViewSchema = z
     active_tasks: z.number(),
     failures_24h: z.number(),
     unacked_inbox: z.record(z.string(), z.number()),
+    instructions: z.string().default(''),
   })
   .passthrough();
 export type WatchmanStatusView = z.infer<typeof watchmanStatusViewSchema>;
@@ -511,3 +592,6 @@ export const watchmanWakeViewSchema = z.object({
   tool_calls: z.array(watchmanToolCallViewSchema),
 });
 export type WatchmanWakeView = z.infer<typeof watchmanWakeViewSchema>;
+
+export * from './dashboard';
+export * from './report-narrative';

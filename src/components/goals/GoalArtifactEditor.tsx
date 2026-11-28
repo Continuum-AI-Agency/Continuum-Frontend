@@ -24,6 +24,7 @@ import {
 } from '@/lib/goals/checklistCopy';
 import type { GoalArtifactView } from '@/lib/goals/models';
 import { GoalStatusPill } from './GoalStatusPill';
+import { WatchmanDeliveryPreview } from './WatchmanDeliveryPreview';
 
 type GoalArtifactEditorProps = {
   artifact: GoalArtifactView | null;
@@ -241,9 +242,13 @@ export function GoalArtifactEditor({
                   <p className="mt-1 text-xs text-muted-foreground">
                     {uiText('this_exact_library_version_is_the_working_aut_9a25627')}
                   </p>
-                  <pre className="mt-4 overflow-x-auto whitespace-pre-wrap text-xs leading-5">
-                    {JSON.stringify(structuredDocument.data, null, 2)}
-                  </pre>
+                  {structuredDocument.artifactType === 'watchman-delivery' ? (
+                    <WatchmanDeliveryPreview data={structuredDocument.data} />
+                  ) : (
+                    <pre className="mt-4 overflow-x-auto whitespace-pre-wrap text-xs leading-5">
+                      {JSON.stringify(structuredDocument.data, null, 2)}
+                    </pre>
+                  )}
                 </div>
                 {!exactVersionValidated ? (
                   <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">

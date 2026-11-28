@@ -6,6 +6,10 @@ import type {
 import type { GoalDisplayTranslator } from './displayCopy';
 
 const labels = {
+  'Assignment objective': 'watchman_delivery_objective',
+  'Qualitative delivery for review': 'watchman_delivery_review',
+  'Saved completed operation receipts': 'watchman_delivery_saved_receipts',
+  'Limitations and follow-ups': 'watchman_delivery_open_items',
   'Business and campaign objective': 'm_f28510b0e6',
   'Scope and offer': 'm_8fa584f442',
   'Measurable success criteria': 'm_1d58672088',
@@ -177,7 +181,10 @@ export function goalChecklistCopy(
       : definition.question ===
           `Provide or confirm ${definition.label.toLowerCase()} for this trial.`
         ? 'trial'
-        : null;
+        : definition.question ===
+            `Provide or confirm ${definition.label.toLowerCase()} for this assignment.`
+          ? 'assignment'
+          : null;
   if (!subject || !Object.hasOwn(labels, definition.label))
     return { label: definition.label, question: definition.question };
   const label = t(labels[definition.label as keyof typeof labels]);

@@ -7,3 +7,4 @@ export * from './http';
 export * from './markdown';
 export * from './supervisor';
 export * from './templates';
+export * from './watchman-delivery';

@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+  },
+  "files": [
+    "setup.bench.spec.ts",
+    "preflight.ts",
+    "preflight.test.ts",
+    "dashboard.bench.spec.ts",
+    "daily-work.bench.spec.ts",
+    "experiencePlan.ts",
+    "experienceBrowser.ts",
+    "experiencePlan.test.ts"
+  ],
+  "include": [],
+  "exclude": []
+}

@@ -492,12 +492,6 @@
     "reason": "Product name, identical in every UI language."
   },
   {
-    "file": "src/app/[locale]/(post-auth)/automations/watchman/page.tsx",
-    "kind": "text",
-    "text": "Watchman",
-    "reason": "Product name, identical in every UI language."
-  },
-  {
     "file": "src/components/library/MediaCard.tsx",
     "kind": "text",
     "text": "HEVC",

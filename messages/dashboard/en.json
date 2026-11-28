@@ -756,7 +756,7 @@
   "m_a290bb3bc0": "The winning coordinate, if one was proven",
   "m_7d3d34f046": "What this trial could not establish",
   "m_b7f022b531": "Graduation of the winner to followers",
-  "m_deb513e0f6": "{subject,select,trial {Provide or confirm {label} for this trial.} other {Provide or confirm {label} for this campaign.}}",
+  "m_deb513e0f6": "{subject,select,trial {Provide or confirm {label} for this trial.} assignment {Provide or confirm {label} for this assignment.} other {Provide or confirm {label} for this campaign.}}",
   "m_e309e56088": "Researching",
   "m_722c0db8d0": "Awaiting input",
   "m_d0a0d8070f": "Awaiting approval",
@@ -1176,5 +1176,13 @@
   "date_not_recorded_40b7215": "date not recorded",
   "budget_change_fb5ad5f": "Budget change",
   "budget_amounts_were_not_reported_11a8844": "Budget amounts were not reported.",
-  "nothing_is_recorded_in_this_queue_e492102": "Nothing is recorded in this queue."
+  "nothing_is_recorded_in_this_queue_e492102": "Nothing is recorded in this queue.",
+  "watchman_delivery_unverified": "The writing is unverified. Saved operation receipts support the recorded work; this version still needs review.",
+  "watchman_delivery_operations": "{count, plural, one {# completed operation} other {# completed operations}}",
+  "watchman_delivery_limitations": "Limitations",
+  "watchman_delivery_followups": "Follow-ups",
+  "watchman_delivery_objective": "Assignment objective",
+  "watchman_delivery_review": "Qualitative delivery for review",
+  "watchman_delivery_saved_receipts": "Saved completed operation receipts",
+  "watchman_delivery_open_items": "Limitations and follow-ups"
 }

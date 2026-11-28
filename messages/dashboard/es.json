@@ -756,7 +756,7 @@
   "m_a290bb3bc0": "Combinación ganadora, si se comprobó",
   "m_7d3d34f046": "Lo que esta prueba no pudo demostrar",
   "m_b7f022b531": "Promoción del ganador para los seguidores",
-  "m_deb513e0f6": "{subject,select,trial {Indica o confirma {label} para esta prueba.} other {Indica o confirma {label} para esta campaña.}}",
+  "m_deb513e0f6": "{subject,select,trial {Indica o confirma {label} para esta prueba.} assignment {Indica o confirma {label} para esta tarea.} other {Indica o confirma {label} para esta campaña.}}",
   "m_e309e56088": "Investigando",
   "m_722c0db8d0": "Esperando información",
   "m_d0a0d8070f": "Esperando aprobación",
@@ -1176,5 +1176,13 @@
   "date_not_recorded_40b7215": "fecha no registrada",
   "budget_change_fb5ad5f": "Cambio de presupuesto",
   "budget_amounts_were_not_reported_11a8844": "No se reportaron los montos del presupuesto.",
-  "nothing_is_recorded_in_this_queue_e492102": "No hay nada registrado en esta cola."
+  "nothing_is_recorded_in_this_queue_e492102": "No hay nada registrado en esta cola.",
+  "watchman_delivery_unverified": "El texto no está verificado. Los comprobantes de operaciones guardados respaldan el trabajo registrado; esta versión aún necesita revisión.",
+  "watchman_delivery_operations": "{count, plural, one {# operación completada} other {# operaciones completadas}}",
+  "watchman_delivery_limitations": "Limitaciones",
+  "watchman_delivery_followups": "Próximos pasos",
+  "watchman_delivery_objective": "Objetivo de la tarea",
+  "watchman_delivery_review": "Entrega cualitativa para revisión",
+  "watchman_delivery_saved_receipts": "Comprobantes guardados de operaciones completadas",
+  "watchman_delivery_open_items": "Limitaciones y próximos pasos"
 }

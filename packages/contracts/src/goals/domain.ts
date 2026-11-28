@@ -842,6 +842,10 @@ export const goalDecisionSchema = z
     decidedBy: goalActorSchema,
     evidenceIds: z.array(idSchema).max(200).default([]),
     relatedArtifactIds: z.array(idSchema).max(100).default([]),
+    relatedArtifactVersions: z
+      .array(z.object({ artifactId: idSchema, versionId: idSchema }).strict())
+      .max(100)
+      .optional(),
     relatedWorkstreamIds: z.array(idSchema).max(100).default([]),
     decidedAt: timestampSchema,
     supersedesDecisionId: idSchema.optional(),

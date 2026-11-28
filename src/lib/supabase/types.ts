@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "12.2.3"
-  }
   agent_workspace: {
     Tables: {
       alignments: {
@@ -221,6 +216,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workstreams"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "artifact_refs_workstream_scope_fk"
+            columns: ["goal_id", "brand_id", "workstream_id"]
+            isOneToOne: false
+            referencedRelation: "workstreams"
+            referencedColumns: ["goal_id", "brand_id", "id"]
           },
         ]
       }
@@ -2340,6 +2342,864 @@ export type Database = {
       [_ in never]: never
     }
   }
+  billing: {
+    Tables: {
+      brand_addons: {
+        Row: {
+          activated_at: string
+          active: boolean
+          addon: string
+          brand_id: string
+          source: string
+        }
+        Insert: {
+          activated_at?: string
+          active?: boolean
+          addon: string
+          brand_id: string
+          source?: string
+        }
+        Update: {
+          activated_at?: string
+          active?: boolean
+          addon?: string
+          brand_id?: string
+          source?: string
+        }
+        Relationships: []
+      }
+      brand_credit_balance: {
+        Row: {
+          auto_refill_amount_usd: number | null
+          auto_refill_mode: string
+          auto_refill_threshold_usd: number | null
+          balance_usd: number
+          brand_id: string
+          last_month_rollover_usd: number
+          lifetime_topup_usd: number
+          updated_at: string
+          x_balance_usd: number
+          x_lifetime_topup_usd: number
+        }
+        Insert: {
+          auto_refill_amount_usd?: number | null
+          auto_refill_mode?: string
+          auto_refill_threshold_usd?: number | null
+          balance_usd?: number
+          brand_id: string
+          last_month_rollover_usd?: number
+          lifetime_topup_usd?: number
+          updated_at?: string
+          x_balance_usd?: number
+          x_lifetime_topup_usd?: number
+        }
+        Update: {
+          auto_refill_amount_usd?: number | null
+          auto_refill_mode?: string
+          auto_refill_threshold_usd?: number | null
+          balance_usd?: number
+          brand_id?: string
+          last_month_rollover_usd?: number
+          lifetime_topup_usd?: number
+          updated_at?: string
+          x_balance_usd?: number
+          x_lifetime_topup_usd?: number
+        }
+        Relationships: []
+      }
+      brand_credit_programs: {
+        Row: {
+          active: boolean
+          brand_id: string
+          created_at: string
+          monthly_grant_usd: number
+          program: string
+          starts_month: string
+        }
+        Insert: {
+          active?: boolean
+          brand_id: string
+          created_at?: string
+          monthly_grant_usd: number
+          program: string
+          starts_month?: string
+        }
+        Update: {
+          active?: boolean
+          brand_id?: string
+          created_at?: string
+          monthly_grant_usd?: number
+          program?: string
+          starts_month?: string
+        }
+        Relationships: []
+      }
+      brand_daily_caps: {
+        Row: {
+          brand_id: string
+          cap_credits: number
+          set_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          cap_credits: number
+          set_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          cap_credits?: number
+          set_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      brand_products: {
+        Row: {
+          activated_at: string
+          active: boolean
+          brand_id: string
+          product: string
+          source: string
+          tier: string | null
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string
+          active?: boolean
+          brand_id: string
+          product: string
+          source?: string
+          tier?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string
+          active?: boolean
+          brand_id?: string
+          product?: string
+          source?: string
+          tier?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      brand_seats: {
+        Row: {
+          billed_seats: number
+          brand_id: string
+          seat_count: number
+          updated_at: string
+        }
+        Insert: {
+          billed_seats?: number
+          brand_id: string
+          seat_count?: number
+          updated_at?: string
+        }
+        Update: {
+          billed_seats?: number
+          brand_id?: string
+          seat_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      brand_subscriptions: {
+        Row: {
+          billing_model: string
+          brand_id: string
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          overage_enabled: boolean
+          plan_code: string
+          plan_codes: string[]
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          stripe_synced_at: string | null
+          updated_at: string
+          x_overage_cap_usd: number
+          x_overage_enabled: boolean
+        }
+        Insert: {
+          billing_model?: string
+          brand_id: string
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          overage_enabled?: boolean
+          plan_code?: string
+          plan_codes?: string[]
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          stripe_synced_at?: string | null
+          updated_at?: string
+          x_overage_cap_usd?: number
+          x_overage_enabled?: boolean
+        }
+        Update: {
+          billing_model?: string
+          brand_id?: string
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          overage_enabled?: boolean
+          plan_code?: string
+          plan_codes?: string[]
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          stripe_synced_at?: string | null
+          updated_at?: string
+          x_overage_cap_usd?: number
+          x_overage_enabled?: boolean
+        }
+        Relationships: []
+      }
+      brand_usage_buckets: {
+        Row: {
+          brand_id: string
+          bucket: string
+          cap_usd: number | null
+          consumed_usd: number
+          included_usd: number
+          overage_action: string
+          period_end: string
+          period_start: string
+        }
+        Insert: {
+          brand_id: string
+          bucket: string
+          cap_usd?: number | null
+          consumed_usd?: number
+          included_usd?: number
+          overage_action?: string
+          period_end: string
+          period_start: string
+        }
+        Update: {
+          brand_id?: string
+          bucket?: string
+          cap_usd?: number | null
+          consumed_usd?: number
+          included_usd?: number
+          overage_action?: string
+          period_end?: string
+          period_start?: string
+        }
+        Relationships: []
+      }
+      credit_alerts: {
+        Row: {
+          armed_by: string
+          brand_id: string
+          level: string
+          recipients: number
+          sent_at: string
+        }
+        Insert: {
+          armed_by: string
+          brand_id: string
+          level: string
+          recipients?: number
+          sent_at?: string
+        }
+        Update: {
+          armed_by?: string
+          brand_id?: string
+          level?: string
+          recipients?: number
+          sent_at?: string
+        }
+        Relationships: []
+      }
+      credit_transactions: {
+        Row: {
+          brand_id: string
+          created_at: string
+          delta_usd: number
+          id: string
+          kind: string
+          meta: Json
+          ref: string | null
+          wallet: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          delta_usd: number
+          id?: string
+          kind: string
+          meta?: Json
+          ref?: string | null
+          wallet?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          delta_usd?: number
+          id?: string
+          kind?: string
+          meta?: Json
+          ref?: string | null
+          wallet?: string
+        }
+        Relationships: []
+      }
+      internal_brand_exclusions: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Relationships: []
+      }
+      model_pricing: {
+        Row: {
+          cached_input_per_mtok: number | null
+          effective_from: string
+          input_per_mtok: number | null
+          modality: string
+          model_id: string
+          output_per_mtok: number | null
+          per_call_usd: number | null
+          per_image_usd: number | null
+          per_video_sec_usd: number | null
+          updated_at: string
+        }
+        Insert: {
+          cached_input_per_mtok?: number | null
+          effective_from?: string
+          input_per_mtok?: number | null
+          modality: string
+          model_id: string
+          output_per_mtok?: number | null
+          per_call_usd?: number | null
+          per_image_usd?: number | null
+          per_video_sec_usd?: number | null
+          updated_at?: string
+        }
+        Update: {
+          cached_input_per_mtok?: number | null
+          effective_from?: string
+          input_per_mtok?: number | null
+          modality?: string
+          model_id?: string
+          output_per_mtok?: number | null
+          per_call_usd?: number | null
+          per_image_usd?: number | null
+          per_video_sec_usd?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      paid_job_attempts: {
+        Row: {
+          attempt: number
+          created_at: string
+          detail: Json | null
+          job_id: string
+          model: string
+          provider: string
+          provider_ref: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          attempt: number
+          created_at?: string
+          detail?: Json | null
+          job_id: string
+          model: string
+          provider: string
+          provider_ref?: string | null
+          state: string
+          updated_at?: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          detail?: Json | null
+          job_id?: string
+          model?: string
+          provider?: string
+          provider_ref?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_job_attempts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "paid_jobs"
+            referencedColumns: ["job_id"]
+          },
+        ]
+      }
+      paid_job_pilot_brands: {
+        Row: {
+          brand_id: string
+          enrolled_at: string
+          enrolled_by: string | null
+        }
+        Insert: {
+          brand_id: string
+          enrolled_at?: string
+          enrolled_by?: string | null
+        }
+        Update: {
+          brand_id?: string
+          enrolled_at?: string
+          enrolled_by?: string | null
+        }
+        Relationships: []
+      }
+      paid_jobs: {
+        Row: {
+          asset_id: string | null
+          billed_seconds: number | null
+          brand_id: string
+          captured_credits: number | null
+          correlation_id: string
+          created_at: string
+          delivered_seconds: number | null
+          error_code: string | null
+          idempotency_key: string
+          job_id: string
+          max_credits: number
+          operation: string
+          quote_credits: number
+          request_hash: string
+          requested_seconds: number | null
+          settled_at: string | null
+          sha256: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id?: string | null
+          billed_seconds?: number | null
+          brand_id: string
+          captured_credits?: number | null
+          correlation_id?: string
+          created_at?: string
+          delivered_seconds?: number | null
+          error_code?: string | null
+          idempotency_key: string
+          job_id: string
+          max_credits: number
+          operation: string
+          quote_credits: number
+          request_hash: string
+          requested_seconds?: number | null
+          settled_at?: string | null
+          sha256?: string | null
+          state: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string | null
+          billed_seconds?: number | null
+          brand_id?: string
+          captured_credits?: number | null
+          correlation_id?: string
+          created_at?: string
+          delivered_seconds?: number | null
+          error_code?: string | null
+          idempotency_key?: string
+          job_id?: string
+          max_credits?: number
+          operation?: string
+          quote_credits?: number
+          request_hash?: string
+          requested_seconds?: number | null
+          settled_at?: string | null
+          sha256?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      plan_definitions: {
+        Row: {
+          agent_cap_usd: number | null
+          created_at: string
+          display_name: string
+          flat_price_usd: number
+          grants_addons: string[]
+          included_agent_usd: number
+          included_studio_usd: number
+          monthly_credit_grant_usd: number
+          plan_code: string
+          products: string[]
+          stripe_price_id: string | null
+          studio_overage_cap_usd: number | null
+          tier: string | null
+        }
+        Insert: {
+          agent_cap_usd?: number | null
+          created_at?: string
+          display_name: string
+          flat_price_usd?: number
+          grants_addons?: string[]
+          included_agent_usd?: number
+          included_studio_usd?: number
+          monthly_credit_grant_usd?: number
+          plan_code: string
+          products?: string[]
+          stripe_price_id?: string | null
+          studio_overage_cap_usd?: number | null
+          tier?: string | null
+        }
+        Update: {
+          agent_cap_usd?: number | null
+          created_at?: string
+          display_name?: string
+          flat_price_usd?: number
+          grants_addons?: string[]
+          included_agent_usd?: number
+          included_studio_usd?: number
+          monthly_credit_grant_usd?: number
+          plan_code?: string
+          products?: string[]
+          stripe_price_id?: string | null
+          studio_overage_cap_usd?: number | null
+          tier?: string | null
+        }
+        Relationships: []
+      }
+      usage_events: {
+        Row: {
+          base_cost_usd: number
+          billed_cost_usd: number
+          brand_id: string
+          bucket: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          image_count: number | null
+          input_tokens: number | null
+          meta: Json
+          modality: string
+          model_id: string
+          output_tokens: number | null
+          overage_usd: number
+          provider_calls: number | null
+          reported_at: string | null
+          run_id: string | null
+          session_id: string | null
+          subsystem: string
+          total_tokens: number | null
+          user_id: string | null
+          video_seconds: number | null
+        }
+        Insert: {
+          base_cost_usd?: number
+          billed_cost_usd?: number
+          brand_id: string
+          bucket: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          image_count?: number | null
+          input_tokens?: number | null
+          meta?: Json
+          modality: string
+          model_id: string
+          output_tokens?: number | null
+          overage_usd?: number
+          provider_calls?: number | null
+          reported_at?: string | null
+          run_id?: string | null
+          session_id?: string | null
+          subsystem: string
+          total_tokens?: number | null
+          user_id?: string | null
+          video_seconds?: number | null
+        }
+        Update: {
+          base_cost_usd?: number
+          billed_cost_usd?: number
+          brand_id?: string
+          bucket?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          image_count?: number | null
+          input_tokens?: number | null
+          meta?: Json
+          modality?: string
+          model_id?: string
+          output_tokens?: number | null
+          overage_usd?: number
+          provider_calls?: number | null
+          reported_at?: string | null
+          run_id?: string | null
+          session_id?: string | null
+          subsystem?: string
+          total_tokens?: number | null
+          user_id?: string | null
+          video_seconds?: number | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      admin_grant_credits: {
+        Args: {
+          p_brand_id: string
+          p_meta?: Json
+          p_ref: string
+          p_usd: number
+        }
+        Returns: Json
+      }
+      admin_move_brand_billing: {
+        Args: {
+          p_from_brand_id: string
+          p_meta?: Json
+          p_ref: string
+          p_to_brand_id: string
+        }
+        Returns: Json
+      }
+      apply_stripe_projection: { Args: { p_projection: Json }; Returns: Json }
+      brand_access_flags: {
+        Args: { p_brand_ids: string[] }
+        Returns: {
+          brand_id: string
+          canvas_credits: number
+          internal: boolean
+          internal_authored: boolean
+        }[]
+      }
+      check_allowance: {
+        Args: { p_brand_id: string; p_bucket: string }
+        Returns: Json
+      }
+      check_storage_capacity: {
+        Args: { p_additional_bytes?: number; p_brand_id: string }
+        Returns: Json
+      }
+      claim_staff_alert: {
+        Args: { p_cooldown?: string; p_key: string }
+        Returns: boolean
+      }
+      consume_canvas_credits: {
+        Args: {
+          p_action_code: string
+          p_brand_id: string
+          p_idempotency_key: string
+          p_meta?: Json
+          p_model_id: string
+          p_quantity: number
+          p_run_id?: string
+          p_session_id?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      daily_cap_status: { Args: { p_brand_id: string }; Returns: Json }
+      ensure_admin_plan_period: { Args: { p_brand_id: string }; Returns: Json }
+      get_brand_entitlements: { Args: { p_brand_id: string }; Returns: Json }
+      get_effective_entitlements: {
+        Args: { p_brand_id: string }
+        Returns: Json
+      }
+      get_mvp_catalog: { Args: never; Returns: Json }
+      get_mvp_summary: { Args: { p_brand_id: string }; Returns: Json }
+      grant_canvas_credits: {
+        Args: {
+          p_brand_id: string
+          p_credits: number
+          p_expires_at?: string
+          p_meta?: Json
+          p_source: string
+          p_source_key: string
+        }
+        Returns: Json
+      }
+      grant_period_credits: {
+        Args: {
+          p_brand_id: string
+          p_period_end: string
+          p_period_start: string
+          p_plan_code: string
+        }
+        Returns: undefined
+      }
+      invoke_billing_credit_alerts: { Args: never; Returns: number }
+      invoke_billing_meter_report: { Args: never; Returns: number }
+      is_internal_brand: { Args: { p_brand_id: string }; Returns: boolean }
+      is_staff_authored_brand: {
+        Args: { p_brand_id: string }
+        Returns: boolean
+      }
+      is_unmetered_brand: { Args: { p_brand_id: string }; Returns: boolean }
+      list_credit_alerts_due: {
+        Args: { p_limit?: number }
+        Returns: {
+          armed_by: string
+          brand_id: string
+          brand_name: string
+          email_due: boolean
+          level: string
+          remaining_credits: number
+        }[]
+      }
+      list_unreported_overage: {
+        Args: { p_limit?: number }
+        Returns: {
+          brand_id: string
+          bucket: string
+          created_at: string
+          id: string
+          overage_usd: number
+          stripe_customer_id: string
+        }[]
+      }
+      paid_job_attempt_result: {
+        Args: {
+          p_attempt: number
+          p_detail: Json
+          p_error_code: string
+          p_job_id: string
+          p_provider_ref: string
+          p_result: string
+        }
+        Returns: string
+      }
+      paid_job_begin_attempt: {
+        Args: { p_job_id: string; p_model: string; p_provider: string }
+        Returns: number
+      }
+      paid_job_pilot: { Args: { p_brand_id: string }; Returns: boolean }
+      paid_job_receipt: { Args: { p_job_id: string }; Returns: Json }
+      paid_job_recover: {
+        Args: { p_brand_id?: string; p_stale: string }
+        Returns: string[]
+      }
+      paid_job_release: {
+        Args: { p_error_code: string; p_job_id: string }
+        Returns: string
+      }
+      paid_job_reserved_credits: {
+        Args: { p_brand_id: string }
+        Returns: number
+      }
+      paid_job_settle: {
+        Args: {
+          p_asset_id: string
+          p_billed_seconds: number
+          p_captured_credits: number
+          p_delivered_seconds: number
+          p_job_id: string
+          p_sha256: string
+        }
+        Returns: Json
+      }
+      paid_job_submit: {
+        Args: {
+          p_brand_id: string
+          p_idempotency_key: string
+          p_job_id: string
+          p_max_credits: number
+          p_operation: string
+          p_quote_credits: number
+          p_request_hash: string
+          p_requested_seconds: number
+        }
+        Returns: Json
+      }
+      quote_canvas_credits: {
+        Args: {
+          p_action_code: string
+          p_brand_id: string
+          p_model_id: string
+          p_quantity?: number
+        }
+        Returns: Json
+      }
+      record_usage_event: {
+        Args: {
+          p_brand_id: string
+          p_idempotency_key: string
+          p_image_count: number
+          p_input_tokens: number
+          p_meta: Json
+          p_modality: string
+          p_model_id: string
+          p_output_tokens: number
+          p_provider_calls: number
+          p_run_id: string
+          p_session_id: string
+          p_subsystem: string
+          p_user_id: string
+          p_video_seconds: number
+        }
+        Returns: Json
+      }
+      release_canvas_credit_spend: {
+        Args: { p_idempotency_key: string; p_reason?: string }
+        Returns: Json
+      }
+      release_stale_credit_reservations: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
+      release_storage_reservation: {
+        Args: { p_reservation_id: string }
+        Returns: Json
+      }
+      renew_admin_plan_periods: { Args: never; Returns: Json }
+      reserve_storage_capacity: {
+        Args: {
+          p_brand_id: string
+          p_bytes: number
+          p_meta?: Json
+          p_reservation_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      set_daily_cap: {
+        Args: { p_brand_id: string; p_cap_credits: number; p_set_by: string }
+        Returns: Json
+      }
+      settle_canvas_credit_spend: {
+        Args: { p_idempotency_key: string; p_usage?: Json }
+        Returns: Json
+      }
+      settle_storage_reservation: {
+        Args: { p_reservation_id: string }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   brand_integrations: {
     Tables: {
       google_ad_accounts: {
@@ -2746,6 +3606,84 @@ export type Database = {
           status?: string | null
           synced_at?: string | null
           time_zone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pinterest_ad_accounts: {
+        Row: {
+          ad_account_id: string
+          brand_integration_id: string
+          country: string | null
+          created_at: string
+          currency: string | null
+          id: string
+          name: string | null
+          owner_username: string | null
+          raw_profile: Json
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          brand_integration_id: string
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          name?: string | null
+          owner_username?: string | null
+          raw_profile?: Json
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          brand_integration_id?: string
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          name?: string | null
+          owner_username?: string | null
+          raw_profile?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pinterest_boards: {
+        Row: {
+          board_id: string
+          brand_integration_id: string
+          created_at: string
+          id: string
+          image_url: string | null
+          name: string | null
+          owner_username: string | null
+          privacy: string | null
+          raw_profile: Json
+          updated_at: string
+        }
+        Insert: {
+          board_id: string
+          brand_integration_id: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          owner_username?: string | null
+          privacy?: string | null
+          raw_profile?: Json
+          updated_at?: string
+        }
+        Update: {
+          board_id?: string
+          brand_integration_id?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          owner_username?: string | null
+          privacy?: string | null
+          raw_profile?: Json
           updated_at?: string
         }
         Relationships: []
@@ -6587,6 +7525,48 @@ export type Database = {
           },
         ]
       }
+      brand_report_targets: {
+        Row: {
+          brand_id: string
+          metric: string
+          month: string
+          set_by: string
+          target: number
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          metric: string
+          month: string
+          set_by?: string
+          target: number
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          metric?: string
+          month?: string
+          set_by?: string
+          target?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_report_targets_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "brand_report_targets_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_reports: {
         Row: {
           active: boolean
@@ -7002,6 +7982,60 @@ export type Database = {
           {
             foreignKeyName: "chat_messages_brand_profile_id_fkey"
             columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_reports: {
+        Row: {
+          brand_id: string
+          email: Json
+          generated_at: string
+          id: string
+          report: Json
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          brand_id: string
+          email: Json
+          generated_at?: string
+          id?: string
+          report: Json
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          brand_id?: string
+          email?: Json
+          generated_at?: string
+          id?: string
+          report?: Json
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_reports_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "client_reports_brand_id_fkey"
+            columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
@@ -9652,6 +10686,7 @@ export type Database = {
       preview_runs: {
         Row: {
           brand_id: string
+          commit_error: string | null
           completed_at: string | null
           error: Json | null
           id: string
@@ -9666,6 +10701,7 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          commit_error?: string | null
           completed_at?: string | null
           error?: Json | null
           id?: string
@@ -9680,6 +10716,7 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          commit_error?: string | null
           completed_at?: string | null
           error?: Json | null
           id?: string
@@ -10491,6 +11528,947 @@ export type Database = {
           },
           {
             foreignKeyName: "virality_scores_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_conversation_events: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          event: Json
+          request_id: string
+          request_payload: Json
+          sequence: number
+          ui_message: Json | null
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          event: Json
+          request_id: string
+          request_payload: Json
+          sequence: number
+          ui_message?: Json | null
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          event?: Json
+          request_id?: string
+          request_payload?: Json
+          sequence?: number
+          ui_message?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_conversation_events_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_conversations: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string
+          execution: Json | null
+          id: string
+          updated_at: string
+          version: number
+          watchman_id: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by: string
+          execution?: Json | null
+          id: string
+          updated_at?: string
+          version?: number
+          watchman_id: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string
+          execution?: Json | null
+          id?: string
+          updated_at?: string
+          version?: number
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_conversations_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "watchman_conversations_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_conversations_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_inbox: {
+        Row: {
+          acked_at: string | null
+          automation_event_id: string | null
+          classifier: Json | null
+          created_at: string
+          event_type: string
+          fired_for: string | null
+          id: string
+          must_wake: boolean
+          payload: Json
+          schedule_id: string | null
+          source: string
+          task_goal_attempts: number
+          task_goal_claim_token: string | null
+          task_goal_claim_until: string | null
+          task_goal_error: string | null
+          task_goal_next_attempt_at: string | null
+          task_goal_receipt: Json | null
+          task_goal_source: Json | null
+          task_id: string | null
+          triage: string | null
+          triage_reason: string | null
+          triage_source: string | null
+          wake_id: string | null
+          watchman_id: string
+        }
+        Insert: {
+          acked_at?: string | null
+          automation_event_id?: string | null
+          classifier?: Json | null
+          created_at?: string
+          event_type: string
+          fired_for?: string | null
+          id?: string
+          must_wake?: boolean
+          payload?: Json
+          schedule_id?: string | null
+          source: string
+          task_goal_attempts?: number
+          task_goal_claim_token?: string | null
+          task_goal_claim_until?: string | null
+          task_goal_error?: string | null
+          task_goal_next_attempt_at?: string | null
+          task_goal_receipt?: Json | null
+          task_goal_source?: Json | null
+          task_id?: string | null
+          triage?: string | null
+          triage_reason?: string | null
+          triage_source?: string | null
+          wake_id?: string | null
+          watchman_id: string
+        }
+        Update: {
+          acked_at?: string | null
+          automation_event_id?: string | null
+          classifier?: Json | null
+          created_at?: string
+          event_type?: string
+          fired_for?: string | null
+          id?: string
+          must_wake?: boolean
+          payload?: Json
+          schedule_id?: string | null
+          source?: string
+          task_goal_attempts?: number
+          task_goal_claim_token?: string | null
+          task_goal_claim_until?: string | null
+          task_goal_error?: string | null
+          task_goal_next_attempt_at?: string | null
+          task_goal_receipt?: Json | null
+          task_goal_source?: Json | null
+          task_id?: string | null
+          triage?: string | null
+          triage_reason?: string | null
+          triage_source?: string | null
+          wake_id?: string | null
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_inbox_automation_event_id_fkey"
+            columns: ["automation_event_id"]
+            isOneToOne: false
+            referencedRelation: "automation_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_inbox_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_inbox_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_inbox_wake_id_fkey"
+            columns: ["wake_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_wakes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_inbox_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_interaction_turns: {
+        Row: {
+          brand_id: string
+          conversation_id: string
+          created_at: string
+          input: Json
+          plan: Json | null
+          presentation: Json | null
+          request_id: string
+          result: Json | null
+          updated_at: string
+          user_id: string
+          watchman_id: string
+        }
+        Insert: {
+          brand_id: string
+          conversation_id: string
+          created_at?: string
+          input: Json
+          plan?: Json | null
+          presentation?: Json | null
+          request_id: string
+          result?: Json | null
+          updated_at?: string
+          user_id: string
+          watchman_id: string
+        }
+        Update: {
+          brand_id?: string
+          conversation_id?: string
+          created_at?: string
+          input?: Json
+          plan?: Json | null
+          presentation?: Json | null
+          request_id?: string
+          result?: Json | null
+          updated_at?: string
+          user_id?: string
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_interaction_turns_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "watchman_interaction_turns_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_interaction_turns_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_interaction_turns_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_messages: {
+        Row: {
+          created_at: string
+          destination_id: string | null
+          error: string | null
+          id: string
+          kind: string
+          status: string
+          text: string
+          wake_id: string | null
+          watchman_id: string
+        }
+        Insert: {
+          created_at?: string
+          destination_id?: string | null
+          error?: string | null
+          id?: string
+          kind: string
+          status: string
+          text: string
+          wake_id?: string | null
+          watchman_id: string
+        }
+        Update: {
+          created_at?: string
+          destination_id?: string | null
+          error?: string | null
+          id?: string
+          kind?: string
+          status?: string
+          text?: string
+          wake_id?: string | null
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_messages_wake_id_fkey"
+            columns: ["wake_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_wakes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_messages_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_metric_evidence: {
+        Row: {
+          attempt: number
+          created_at: string
+          evidence: Json
+          execution_ref: Json | null
+          id: string
+          wake_id: string
+          watchman_id: string
+        }
+        Insert: {
+          attempt: number
+          created_at?: string
+          evidence: Json
+          execution_ref?: Json | null
+          id: string
+          wake_id: string
+          watchman_id: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          evidence?: Json
+          execution_ref?: Json | null
+          id?: string
+          wake_id?: string
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_metric_evidence_wake_id_fkey"
+            columns: ["wake_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_wakes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_metric_evidence_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_proposals: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          executed_at: string | null
+          execution_ref: Json | null
+          expires_at: string
+          id: string
+          input: Json
+          kind: string
+          note: string | null
+          outcome: Json | null
+          status: string
+          summary: string
+          tool: string
+          wake_id: string | null
+          watchman_id: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          executed_at?: string | null
+          execution_ref?: Json | null
+          expires_at?: string
+          id?: string
+          input: Json
+          kind: string
+          note?: string | null
+          outcome?: Json | null
+          status?: string
+          summary: string
+          tool: string
+          wake_id?: string | null
+          watchman_id: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          executed_at?: string | null
+          execution_ref?: Json | null
+          expires_at?: string
+          id?: string
+          input?: Json
+          kind?: string
+          note?: string | null
+          outcome?: Json | null
+          status?: string
+          summary?: string
+          tool?: string
+          wake_id?: string | null
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_proposals_wake_id_fkey"
+            columns: ["wake_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_wakes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_proposals_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_reports: {
+        Row: {
+          attempt: number | null
+          attempts: number
+          body_md: string
+          claims: Json
+          created_at: string
+          evidence: Json
+          evidence_status: string
+          execution_ref: Json | null
+          id: string
+          last_error: string | null
+          next_attempt_at: string | null
+          recipients: Json
+          released_by: string | null
+          rendered_claims_md: string
+          sent_at: string | null
+          status: string
+          subject: string
+          task_id: string | null
+          updated_at: string
+          wake_id: string | null
+          watchman_id: string
+        }
+        Insert: {
+          attempt?: number | null
+          attempts?: number
+          body_md: string
+          claims?: Json
+          created_at?: string
+          evidence?: Json
+          evidence_status?: string
+          execution_ref?: Json | null
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string | null
+          recipients?: Json
+          released_by?: string | null
+          rendered_claims_md?: string
+          sent_at?: string | null
+          status: string
+          subject: string
+          task_id?: string | null
+          updated_at?: string
+          wake_id?: string | null
+          watchman_id: string
+        }
+        Update: {
+          attempt?: number | null
+          attempts?: number
+          body_md?: string
+          claims?: Json
+          created_at?: string
+          evidence?: Json
+          evidence_status?: string
+          execution_ref?: Json | null
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string | null
+          recipients?: Json
+          released_by?: string | null
+          rendered_claims_md?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          task_id?: string | null
+          updated_at?: string
+          wake_id?: string | null
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_reports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_reports_wake_id_fkey"
+            columns: ["wake_id"]
+            isOneToOne: false
+            referencedRelation: "watchman_wakes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "watchman_reports_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_schedules: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string
+          cron: string | null
+          id: string
+          kind: string
+          last_fired_at: string | null
+          last_skipped_at: string | null
+          next_run_at: string
+          note: string
+          run_at: string | null
+          skipped_count: number
+          watchman_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string
+          cron?: string | null
+          id?: string
+          kind: string
+          last_fired_at?: string | null
+          last_skipped_at?: string | null
+          next_run_at: string
+          note?: string
+          run_at?: string | null
+          skipped_count?: number
+          watchman_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string
+          cron?: string | null
+          id?: string
+          kind?: string
+          last_fired_at?: string | null
+          last_skipped_at?: string | null
+          next_run_at?: string
+          note?: string
+          run_at?: string | null
+          skipped_count?: number
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_schedules_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_setup_attempts: {
+        Row: {
+          bot_user_id: string
+          brand_id: string
+          claim_token: string | null
+          completed_stages: string[]
+          created_at: string
+          created_by: string
+          error: string | null
+          first_assignment_receipt: Json | null
+          input: Json
+          lease_until: string | null
+          readiness: Json | null
+          request_id: string
+          status: string
+          updated_at: string
+          version: number
+          watchman_id: string | null
+        }
+        Insert: {
+          bot_user_id: string
+          brand_id: string
+          claim_token?: string | null
+          completed_stages?: string[]
+          created_at?: string
+          created_by: string
+          error?: string | null
+          first_assignment_receipt?: Json | null
+          input: Json
+          lease_until?: string | null
+          readiness?: Json | null
+          request_id: string
+          status?: string
+          updated_at?: string
+          version?: number
+          watchman_id?: string | null
+        }
+        Update: {
+          bot_user_id?: string
+          brand_id?: string
+          claim_token?: string | null
+          completed_stages?: string[]
+          created_at?: string
+          created_by?: string
+          error?: string | null
+          first_assignment_receipt?: Json | null
+          input?: Json
+          lease_until?: string | null
+          readiness?: Json | null
+          request_id?: string
+          status?: string
+          updated_at?: string
+          version?: number
+          watchman_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_setup_attempts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "watchman_setup_attempts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_tasks: {
+        Row: {
+          active: boolean
+          check_minutes: number
+          condition: Json
+          cooldown_minutes: number
+          created_at: string
+          created_by: string
+          created_by_user: string | null
+          deliver: Json | null
+          id: string
+          instruction: string
+          last_fired_at: string | null
+          last_observed: Json | null
+          next_check_at: string
+          review: boolean
+          title: string
+          updated_at: string
+          watchman_id: string
+        }
+        Insert: {
+          active?: boolean
+          check_minutes?: number
+          condition: Json
+          cooldown_minutes?: number
+          created_at?: string
+          created_by: string
+          created_by_user?: string | null
+          deliver?: Json | null
+          id?: string
+          instruction: string
+          last_fired_at?: string | null
+          last_observed?: Json | null
+          next_check_at?: string
+          review?: boolean
+          title: string
+          updated_at?: string
+          watchman_id: string
+        }
+        Update: {
+          active?: boolean
+          check_minutes?: number
+          condition?: Json
+          cooldown_minutes?: number
+          created_at?: string
+          created_by?: string
+          created_by_user?: string | null
+          deliver?: Json | null
+          id?: string
+          instruction?: string
+          last_fired_at?: string | null
+          last_observed?: Json | null
+          next_check_at?: string
+          review?: boolean
+          title?: string
+          updated_at?: string
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_tasks_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_wakes: {
+        Row: {
+          attempt: number
+          completed_at: string | null
+          cost_usd: number
+          created_at: string
+          dispatched_at: string | null
+          error: string | null
+          escalation_reason: string | null
+          id: string
+          lease_until: string | null
+          note_to_self: string | null
+          reason: string
+          started_at: string | null
+          status: string
+          tier_max: string | null
+          timing: Json | null
+          usage: Json
+          watchman_id: string
+        }
+        Insert: {
+          attempt?: number
+          completed_at?: string | null
+          cost_usd?: number
+          created_at?: string
+          dispatched_at?: string | null
+          error?: string | null
+          escalation_reason?: string | null
+          id?: string
+          lease_until?: string | null
+          note_to_self?: string | null
+          reason: string
+          started_at?: string | null
+          status?: string
+          tier_max?: string | null
+          timing?: Json | null
+          usage?: Json
+          watchman_id: string
+        }
+        Update: {
+          attempt?: number
+          completed_at?: string | null
+          cost_usd?: number
+          created_at?: string
+          dispatched_at?: string | null
+          error?: string | null
+          escalation_reason?: string | null
+          id?: string
+          lease_until?: string | null
+          note_to_self?: string | null
+          reason?: string
+          started_at?: string | null
+          status?: string
+          tier_max?: string | null
+          timing?: Json | null
+          usage?: Json
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_wakes_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchman_watch_rules: {
+        Row: {
+          active: boolean
+          cooldown_minutes: number
+          created_at: string
+          created_by: string
+          event_type: string
+          id: string
+          last_tripped_at: string | null
+          match: Json
+          note: string
+          op: string | null
+          path: string | null
+          value: number | null
+          watchman_id: string
+        }
+        Insert: {
+          active?: boolean
+          cooldown_minutes?: number
+          created_at?: string
+          created_by?: string
+          event_type: string
+          id?: string
+          last_tripped_at?: string | null
+          match?: Json
+          note?: string
+          op?: string | null
+          path?: string | null
+          value?: number | null
+          watchman_id: string
+        }
+        Update: {
+          active?: boolean
+          cooldown_minutes?: number
+          created_at?: string
+          created_by?: string
+          event_type?: string
+          id?: string
+          last_tripped_at?: string | null
+          match?: Json
+          note?: string
+          op?: string | null
+          path?: string | null
+          value?: number | null
+          watchman_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchman_watch_rules_watchman_id_fkey"
+            columns: ["watchman_id"]
+            isOneToOne: false
+            referencedRelation: "watchmen"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watchmen: {
+        Row: {
+          autonomy: Json
+          bot_user_id: string
+          brand_id: string
+          budget_usd_month: number
+          created_at: string
+          created_by: string | null
+          home_destination_id: string | null
+          id: string
+          instructions: string
+          kind: string
+          memory: string
+          memory_version: number
+          models: Json
+          name: string
+          role: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          autonomy?: Json
+          bot_user_id: string
+          brand_id: string
+          budget_usd_month?: number
+          created_at?: string
+          created_by?: string | null
+          home_destination_id?: string | null
+          id?: string
+          instructions?: string
+          kind: string
+          memory?: string
+          memory_version?: number
+          models?: Json
+          name: string
+          role: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          autonomy?: Json
+          bot_user_id?: string
+          brand_id?: string
+          budget_usd_month?: number
+          created_at?: string
+          created_by?: string | null
+          home_destination_id?: string | null
+          id?: string
+          instructions?: string
+          kind?: string
+          memory?: string
+          memory_version?: number
+          models?: Json
+          name?: string
+          role?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchmen_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "watchmen_brand_id_fkey"
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
@@ -13295,6 +15273,363 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      watchman_advance_schedule: {
+        Args: { p_expected_next: string; p_next: string; p_schedule_id: string }
+        Returns: boolean
+      }
+      watchman_advance_task: {
+        Args: { p_expected_next: string; p_next: string; p_task_id: string }
+        Returns: boolean
+      }
+      watchman_append_conversation_event: {
+        Args: {
+          p_actor_user_id: string
+          p_brand_id: string
+          p_conversation_id: string
+          p_event: Json
+          p_execution: Json
+          p_expected_version: number
+          p_presentation_user_id?: string
+          p_request_id: string
+          p_ui_blocks?: Json
+          p_watchman_id: string
+        }
+        Returns: Json
+      }
+      watchman_bot_secret: { Args: { p_watchman_id: string }; Returns: string }
+      watchman_budget: { Args: { p_watchman_id: string }; Returns: Json }
+      watchman_checkpoint_goal_work: {
+        Args: {
+          p_attempt: number
+          p_capability: string
+          p_checkpoint_version: number
+          p_child_run_id: string
+          p_execution: Json
+          p_next_check_at?: string
+          p_state: Json
+          p_wake_id: string
+          p_watchman_id: string
+        }
+        Returns: Json
+      }
+      watchman_claim_due_schedules: {
+        Args: { p_limit?: number }
+        Returns: {
+          active: boolean
+          created_at: string
+          created_by: string
+          cron: string | null
+          id: string
+          kind: string
+          last_fired_at: string | null
+          last_skipped_at: string | null
+          next_run_at: string
+          note: string
+          run_at: string | null
+          skipped_count: number
+          watchman_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "watchman_schedules"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      watchman_claim_setup: {
+        Args: {
+          p_bot_user_id: string
+          p_brand_id: string
+          p_claim_token: string
+          p_created_by: string
+          p_input: Json
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      watchman_claim_task_goal_firings: {
+        Args: { p_lease_seconds?: number; p_limit?: number }
+        Returns: Json[]
+      }
+      watchman_claim_wake: {
+        Args: { p_lease_seconds?: number; p_wake_id: string }
+        Returns: {
+          attempt: number
+          completed_at: string | null
+          cost_usd: number
+          created_at: string
+          dispatched_at: string | null
+          error: string | null
+          escalation_reason: string | null
+          id: string
+          lease_until: string | null
+          note_to_self: string | null
+          reason: string
+          started_at: string | null
+          status: string
+          tier_max: string | null
+          timing: Json | null
+          usage: Json
+          watchman_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "watchman_wakes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      watchman_commit_goal_work: {
+        Args: {
+          p_attempt: number
+          p_checkpoint_version: number
+          p_child_run_id: string
+          p_execution: Json
+          p_payload: Json
+          p_wake_id: string
+          p_watchman_id: string
+        }
+        Returns: Json
+      }
+      watchman_complete_task_goal_firing: {
+        Args: { p_claim_token: string; p_execution: Json; p_inbox_id: string }
+        Returns: Json
+      }
+      watchman_emit_event: {
+        Args: {
+          p_brand_id: string
+          p_event_type: string
+          p_idempotency_key: string
+          p_payload: Json
+        }
+        Returns: undefined
+      }
+      watchman_eval_tasks: {
+        Args: { p_limit?: number }
+        Returns: {
+          condition_type: string
+          fired: boolean
+          fired_for: string
+          task_id: string
+          watchman_id: string
+        }[]
+      }
+      watchman_evidence_execution: {
+        Args: { p_attempt: number; p_wake_id: string; p_watchman_id: string }
+        Returns: Json
+      }
+      watchman_fail_task_goal_firing: {
+        Args: { p_claim_token: string; p_inbox_id: string }
+        Returns: boolean
+      }
+      watchman_finish_claim: {
+        Args: {
+          p_attempt: number
+          p_base_version: number
+          p_cost_usd: number
+          p_error: string
+          p_escalation_reason: string
+          p_memory: string
+          p_note: string
+          p_status: string
+          p_tier_max: string
+          p_timing?: Json
+          p_usage: Json
+          p_wake_id: string
+        }
+        Returns: Json
+      }
+      watchman_finish_wake: {
+        Args: {
+          p_base_version: number
+          p_cost_usd: number
+          p_error: string
+          p_escalation_reason: string
+          p_memory: string
+          p_note: string
+          p_status: string
+          p_tier_max: string
+          p_timing?: Json
+          p_usage: Json
+          p_wake_id: string
+        }
+        Returns: Json
+      }
+      watchman_handoff_goal_work: {
+        Args: {
+          p_attempt: number
+          p_capability: string
+          p_checkpoint_version: number
+          p_child_run_id: string
+          p_execution: Json
+          p_objective: string
+          p_request_id: string
+          p_source_watchman_id: string
+          p_target_inbox_id: string
+          p_target_packet: Json
+          p_target_watchman_id: string
+          p_wake_id: string
+        }
+        Returns: Json
+      }
+      watchman_ingest_events: { Args: { p_limit?: number }; Returns: number }
+      watchman_insert_evidence_report: {
+        Args: {
+          p_attempt: number
+          p_report: Json
+          p_task_id: string
+          p_wake_id: string
+          p_watchman_id: string
+        }
+        Returns: Json
+      }
+      watchman_lock_goal_claim: {
+        Args: {
+          p_attempt: number
+          p_execution: Json
+          p_wake_id: string
+          p_watchman_id: string
+        }
+        Returns: Database["agent_workspace"]["Tables"]["run_checkpoints"]["Row"]
+        SetofOptions: {
+          from: "*"
+          to: "run_checkpoints"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      watchman_locked_setup: {
+        Args: { p_claim_token: string; p_request_id: string }
+        Returns: {
+          bot_user_id: string
+          brand_id: string
+          claim_token: string | null
+          completed_stages: string[]
+          created_at: string
+          created_by: string
+          error: string | null
+          first_assignment_receipt: Json | null
+          input: Json
+          lease_until: string | null
+          readiness: Json | null
+          request_id: string
+          status: string
+          updated_at: string
+          version: number
+          watchman_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "watchman_setup_attempts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      watchman_open_wakes: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempt: number
+          completed_at: string | null
+          cost_usd: number
+          created_at: string
+          dispatched_at: string | null
+          error: string | null
+          escalation_reason: string | null
+          id: string
+          lease_until: string | null
+          note_to_self: string | null
+          reason: string
+          started_at: string | null
+          status: string
+          tier_max: string | null
+          timing: Json | null
+          usage: Json
+          watchman_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "watchman_wakes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      watchman_reap_wakes: { Args: never; Returns: number }
+      watchman_reconcile_goal_work: {
+        Args: {
+          p_checkpoint_version: number
+          p_child_run_id: string
+          p_execution: Json
+          p_watchman_id: string
+        }
+        Returns: Json
+      }
+      watchman_record_evidence: {
+        Args: {
+          p_attempt: number
+          p_brand_id: string
+          p_evidence: Json
+          p_execution_ref?: Json
+          p_user_id: string
+          p_wake_id: string
+        }
+        Returns: boolean
+      }
+      watchman_recover_goal_turn: {
+        Args: { p_attempt: number; p_expired?: boolean; p_wake_id: string }
+        Returns: Json
+      }
+      watchman_request_goal_input: {
+        Args: {
+          p_attempt: number
+          p_checkpoint_version: number
+          p_child_run_id: string
+          p_execution: Json
+          p_request: Json
+          p_wake_id: string
+          p_watchman_id: string
+        }
+        Returns: Json
+      }
+      watchman_resume_approved_goal: {
+        Args: { p_decider_id: string; p_proposal_id: string }
+        Returns: Json
+      }
+      watchman_set_bot_secret: {
+        Args: { p_password: string; p_watchman_id: string }
+        Returns: undefined
+      }
+      watchman_setup_receipt: {
+        Args: {
+          p_attempt: Database["brand_profiles"]["Tables"]["watchman_setup_attempts"]["Row"]
+        }
+        Returns: Json
+      }
+      watchman_setup_secret: {
+        Args: {
+          p_claim_token: string
+          p_password: string
+          p_request_id: string
+        }
+        Returns: string
+      }
+      watchman_setup_stage: {
+        Args: {
+          p_assignment_receipt?: Json
+          p_claim_token: string
+          p_error?: string
+          p_readiness?: Json
+          p_request_id: string
+          p_stage?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      watchman_task_recipients: {
+        Args: { p_task_id: string }
+        Returns: {
+          email: string
+        }[]
       }
     }
     Enums: {
@@ -21196,6 +23531,8 @@ export type Database = {
           user_id: string
           variant_name: string | null
           verification: Json
+          working_copy_id: string | null
+          working_copy_scope: string | null
           workspace_seed_artifact_id: string | null
         }
         Insert: {
@@ -21232,6 +23569,8 @@ export type Database = {
           user_id: string
           variant_name?: string | null
           verification: Json
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
           workspace_seed_artifact_id?: string | null
         }
         Update: {
@@ -21268,6 +23607,8 @@ export type Database = {
           user_id?: string
           variant_name?: string | null
           verification?: Json
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
           workspace_seed_artifact_id?: string | null
         }
         Relationships: [
@@ -21280,7 +23621,13 @@ export type Database = {
           },
           {
             foreignKeyName: "template_authoring_artifacts_draft_fk"
-            columns: ["brand_id", "asset_id", "base_version_id", "user_id"]
+            columns: [
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
+            ]
             isOneToOne: false
             referencedRelation: "template_authoring_drafts"
             referencedColumns: [
@@ -21288,6 +23635,7 @@ export type Database = {
               "asset_id",
               "base_version_id",
               "user_id",
+              "working_copy_scope",
             ]
           },
           {
@@ -21298,6 +23646,25 @@ export type Database = {
             referencedColumns: ["id", "asset_id", "brand_id"]
           },
           {
+            foreignKeyName: "template_authoring_artifacts_working_copy_fk"
+            columns: [
+              "working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
+          },
+          {
             foreignKeyName: "template_authoring_workspace_seed_reference_fk"
             columns: ["workspace_seed_artifact_id"]
             isOneToOne: false
@@ -21305,6 +23672,155 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      template_authoring_draft_attempts: {
+        Row: {
+          asset_id: string
+          authoring_working_copy_id: string | null
+          base_version_id: string
+          brand_id: string
+          commands: Json
+          expected_revision: number
+          origin: Json | null
+          received_at: string
+          request_fingerprint: string
+          request_id: string
+          requested_event_id: string
+          snapshot_sha256: string
+          template_id: string | null
+          terminal_event_id: string
+          user_id: string
+          working_copy_id: string
+        }
+        Insert: {
+          asset_id: string
+          authoring_working_copy_id?: string | null
+          base_version_id: string
+          brand_id: string
+          commands: Json
+          expected_revision: number
+          origin?: Json | null
+          received_at?: string
+          request_fingerprint: string
+          request_id: string
+          requested_event_id?: string
+          snapshot_sha256: string
+          template_id?: string | null
+          terminal_event_id?: string
+          user_id: string
+          working_copy_id?: string
+        }
+        Update: {
+          asset_id?: string
+          authoring_working_copy_id?: string | null
+          base_version_id?: string
+          brand_id?: string
+          commands?: Json
+          expected_revision?: number
+          origin?: Json | null
+          received_at?: string
+          request_fingerprint?: string
+          request_id?: string
+          requested_event_id?: string
+          snapshot_sha256?: string
+          template_id?: string | null
+          terminal_event_id?: string
+          user_id?: string
+          working_copy_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_authoring_attempts_working_copy_fk"
+            columns: [
+              "authoring_working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
+          },
+          {
+            foreignKeyName: "template_authoring_draft_attempts_template_id_brand_id_fkey"
+            columns: ["template_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
+      template_authoring_draft_results: {
+        Row: {
+          brand_id: string
+          received_at: string
+          request_id: string
+          result: Json
+        }
+        Insert: {
+          brand_id: string
+          received_at?: string
+          request_id: string
+          result: Json
+        }
+        Update: {
+          brand_id?: string
+          received_at?: string
+          request_id?: string
+          result?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_authoring_draft_results_request_id_brand_id_fkey"
+            columns: ["request_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "template_authoring_draft_attempts"
+            referencedColumns: ["request_id", "brand_id"]
+          },
+        ]
+      }
+      template_authoring_draft_snapshots: {
+        Row: {
+          asset_id: string
+          base_version_id: string
+          brand_id: string
+          draft_revision: number
+          draft_user_id: string
+          id: string
+          observation: string
+          observed_at: string
+          snapshot: Json
+        }
+        Insert: {
+          asset_id: string
+          base_version_id: string
+          brand_id: string
+          draft_revision: number
+          draft_user_id: string
+          id?: string
+          observation: string
+          observed_at?: string
+          snapshot: Json
+        }
+        Update: {
+          asset_id?: string
+          base_version_id?: string
+          brand_id?: string
+          draft_revision?: number
+          draft_user_id?: string
+          id?: string
+          observation?: string
+          observed_at?: string
+          snapshot?: Json
+        }
+        Relationships: []
       }
       template_authoring_drafts: {
         Row: {
@@ -21318,6 +23834,8 @@ export type Database = {
           source_checksum: string
           updated_at: string
           user_id: string
+          working_copy_id: string | null
+          working_copy_scope: string
         }
         Insert: {
           asset_id: string
@@ -21330,6 +23848,8 @@ export type Database = {
           source_checksum: string
           updated_at?: string
           user_id: string
+          working_copy_id?: string | null
+          working_copy_scope?: string
         }
         Update: {
           asset_id?: string
@@ -21342,6 +23862,8 @@ export type Database = {
           source_checksum?: string
           updated_at?: string
           user_id?: string
+          working_copy_id?: string | null
+          working_copy_scope?: string
         }
         Relationships: [
           {
@@ -21364,6 +23886,25 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "asset_versions"
             referencedColumns: ["id", "asset_id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_drafts_working_copy_fk"
+            columns: [
+              "working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
           },
         ]
       }
@@ -21388,6 +23929,8 @@ export type Database = {
           state: string
           updated_at: string
           user_id: string
+          working_copy_id: string | null
+          working_copy_scope: string | null
         }
         Insert: {
           artifact_id: string
@@ -21409,6 +23952,8 @@ export type Database = {
           state?: string
           updated_at?: string
           user_id: string
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
         }
         Update: {
           artifact_id?: string
@@ -21430,6 +23975,8 @@ export type Database = {
           state?: string
           updated_at?: string
           user_id?: string
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
         }
         Relationships: [
           {
@@ -21449,6 +23996,46 @@ export type Database = {
               "asset_id",
               "base_version_id",
               "user_id",
+            ]
+          },
+          {
+            foreignKeyName: "template_authoring_native_renders_working_copy_fk"
+            columns: [
+              "working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
+          },
+          {
+            foreignKeyName: "template_authoring_native_working_artifact_fk"
+            columns: [
+              "artifact_id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_artifacts"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
             ]
           },
         ]
@@ -21472,6 +24059,8 @@ export type Database = {
           state: string
           updated_at: string
           user_id: string
+          working_copy_id: string | null
+          working_copy_scope: string | null
         }
         Insert: {
           artifact_id: string
@@ -21491,6 +24080,8 @@ export type Database = {
           state?: string
           updated_at?: string
           user_id: string
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
         }
         Update: {
           artifact_id?: string
@@ -21510,6 +24101,8 @@ export type Database = {
           state?: string
           updated_at?: string
           user_id?: string
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
         }
         Relationships: [
           {
@@ -21531,7 +24124,181 @@ export type Database = {
               "user_id",
             ]
           },
+          {
+            foreignKeyName: "template_authoring_preparations_working_artifact_fk"
+            columns: [
+              "artifact_id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_artifacts"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
+            ]
+          },
+          {
+            foreignKeyName: "template_authoring_preparations_working_copy_fk"
+            columns: [
+              "working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
+          },
         ]
+      }
+      template_authoring_working_copies: {
+        Row: {
+          base_revision_id: string
+          brand_id: string
+          closed_at: string | null
+          created_at: string
+          id: string
+          landed_revision_id: string | null
+          settings_snapshot: Json
+          source_asset_id: string
+          source_checksum: string
+          source_version_id: string
+          template_id: string
+          user_id: string
+          variant_id: string
+        }
+        Insert: {
+          base_revision_id: string
+          brand_id: string
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          landed_revision_id?: string | null
+          settings_snapshot: Json
+          source_asset_id: string
+          source_checksum: string
+          source_version_id: string
+          template_id: string
+          user_id: string
+          variant_id: string
+        }
+        Update: {
+          base_revision_id?: string
+          brand_id?: string
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          landed_revision_id?: string | null
+          settings_snapshot?: Json
+          source_asset_id?: string
+          source_checksum?: string
+          source_version_id?: string
+          template_id?: string
+          user_id?: string
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_authoring_working_co_base_revision_id_brand_id_te_fkey"
+            columns: ["base_revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_working_co_landed_revision_id_brand_id__fkey"
+            columns: ["landed_revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_working_co_source_version_id_source_ass_fkey"
+            columns: ["source_version_id", "source_asset_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id", "asset_id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_working_co_variant_id_brand_id_template_fkey"
+            columns: ["variant_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_variants"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_working_copies_template_id_brand_id_fkey"
+            columns: ["template_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
+      template_blob_versions: {
+        Row: {
+          recorded_at: string
+          sha256: string
+          version_id: string
+        }
+        Insert: {
+          recorded_at?: string
+          sha256: string
+          version_id: string
+        }
+        Update: {
+          recorded_at?: string
+          sha256?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_blob_versions_sha256_fkey"
+            columns: ["sha256"]
+            isOneToOne: false
+            referencedRelation: "template_blobs"
+            referencedColumns: ["sha256"]
+          },
+        ]
+      }
+      template_blobs: {
+        Row: {
+          created_at: string
+          gcs_generation: string
+          media_type: string
+          sha256: string
+          size_bytes: number
+        }
+        Insert: {
+          created_at?: string
+          gcs_generation: string
+          media_type: string
+          sha256: string
+          size_bytes: number
+        }
+        Update: {
+          created_at?: string
+          gcs_generation?: string
+          media_type?: string
+          sha256?: string
+          size_bytes?: number
+        }
+        Relationships: []
       }
       template_colour_fields: {
         Row: {
@@ -21737,6 +24504,396 @@ export type Database = {
           },
         ]
       }
+      template_operation_streams: {
+        Row: {
+          brand_id: string
+          last_sequence: number
+          template_id: string
+          working_copy_id: string
+        }
+        Insert: {
+          brand_id: string
+          last_sequence?: number
+          template_id: string
+          working_copy_id: string
+        }
+        Update: {
+          brand_id?: string
+          last_sequence?: number
+          template_id?: string
+          working_copy_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_operation_streams_template_id_brand_id_fkey"
+            columns: ["template_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
+      template_operations: {
+        Row: {
+          base_revision_id: string | null
+          brand_id: string
+          id: string
+          payload: Json
+          principal_user_id: string
+          received_at: string
+          sequence: number
+          template_id: string
+          working_copy_id: string
+        }
+        Insert: {
+          base_revision_id?: string | null
+          brand_id: string
+          id: string
+          payload: Json
+          principal_user_id: string
+          received_at?: string
+          sequence: number
+          template_id: string
+          working_copy_id: string
+        }
+        Update: {
+          base_revision_id?: string | null
+          brand_id?: string
+          id?: string
+          payload?: Json
+          principal_user_id?: string
+          received_at?: string
+          sequence?: number
+          template_id?: string
+          working_copy_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_operations_base_revision_id_brand_id_template_id_fkey"
+            columns: ["base_revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_operations_working_copy_id_brand_id_template_id_fkey"
+            columns: ["working_copy_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_operation_streams"
+            referencedColumns: ["working_copy_id", "brand_id", "template_id"]
+          },
+        ]
+      }
+      template_release_events: {
+        Row: {
+          binding_id: string
+          brand_id: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          intent: Json
+          kind: string
+          operator_user_id: string
+          previous_release_id: string | null
+          release_id: string
+          request_fingerprint: string
+          template_id: string
+          template_key: string
+        }
+        Insert: {
+          binding_id: string
+          brand_id: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          intent: Json
+          kind: string
+          operator_user_id: string
+          previous_release_id?: string | null
+          release_id: string
+          request_fingerprint: string
+          template_id: string
+          template_key: string
+        }
+        Update: {
+          binding_id?: string
+          brand_id?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          intent?: Json
+          kind?: string
+          operator_user_id?: string
+          previous_release_id?: string | null
+          release_id?: string
+          request_fingerprint?: string
+          template_id?: string
+          template_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_release_events_previous_release_id_brand_id_templ_fkey"
+            columns: [
+              "previous_release_id",
+              "brand_id",
+              "template_id",
+              "binding_id",
+              "template_key",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_releases"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "template_id",
+              "binding_id",
+              "template_key",
+            ]
+          },
+          {
+            foreignKeyName: "template_release_events_release_id_brand_id_template_id_bi_fkey"
+            columns: [
+              "release_id",
+              "brand_id",
+              "template_id",
+              "binding_id",
+              "template_key",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_releases"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "template_id",
+              "binding_id",
+              "template_key",
+            ]
+          },
+        ]
+      }
+      template_release_heads: {
+        Row: {
+          binding_id: string
+          brand_id: string
+          release_id: string | null
+          template_id: string
+          template_key: string
+        }
+        Insert: {
+          binding_id: string
+          brand_id: string
+          release_id?: string | null
+          template_id: string
+          template_key: string
+        }
+        Update: {
+          binding_id?: string
+          brand_id?: string
+          release_id?: string | null
+          template_id?: string
+          template_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_release_heads_binding_id_brand_id_fkey"
+            columns: ["binding_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "render_workspace_bindings"
+            referencedColumns: ["id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_release_heads_release_id_brand_id_template_id_bin_fkey"
+            columns: [
+              "release_id",
+              "brand_id",
+              "template_id",
+              "binding_id",
+              "template_key",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_releases"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "template_id",
+              "binding_id",
+              "template_key",
+            ]
+          },
+          {
+            foreignKeyName: "template_release_heads_template_id_brand_id_fkey"
+            columns: ["template_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
+      template_releases: {
+        Row: {
+          binding_id: string
+          brand_id: string
+          created_at: string
+          created_by: string
+          id: string
+          manifest: Json
+          revision_id: string
+          template_id: string
+          template_key: string
+          variant_id: string
+        }
+        Insert: {
+          binding_id: string
+          brand_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          manifest: Json
+          revision_id: string
+          template_id: string
+          template_key: string
+          variant_id: string
+        }
+        Update: {
+          binding_id?: string
+          brand_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          manifest?: Json
+          revision_id?: string
+          template_id?: string
+          template_key?: string
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_releases_binding_id_brand_id_fkey"
+            columns: ["binding_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "render_workspace_bindings"
+            referencedColumns: ["id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_releases_revision_id_brand_id_template_id_fkey"
+            columns: ["revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_releases_variant_id_brand_id_template_id_fkey"
+            columns: ["variant_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_variants"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+        ]
+      }
+      template_revision_blender_dependencies: {
+        Row: {
+          application: string
+          brand_id: string
+          bucket: string
+          byte_length: number
+          generation: string
+          key: string
+          path: string
+          revision_id: string
+          sha256: string
+          source_asset_id: string
+          source_version_id: string
+          template_id: string
+        }
+        Insert: {
+          application: string
+          brand_id: string
+          bucket: string
+          byte_length: number
+          generation: string
+          key: string
+          path: string
+          revision_id: string
+          sha256: string
+          source_asset_id: string
+          source_version_id: string
+          template_id: string
+        }
+        Update: {
+          application?: string
+          brand_id?: string
+          bucket?: string
+          byte_length?: number
+          generation?: string
+          key?: string
+          path?: string
+          revision_id?: string
+          sha256?: string
+          source_asset_id?: string
+          source_version_id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_revision_blender_dep_revision_id_brand_id_templat_fkey"
+            columns: ["revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_revision_blender_dep_source_version_id_source_ass_fkey"
+            columns: ["source_version_id", "source_asset_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id", "asset_id", "brand_id"]
+          },
+        ]
+      }
+      template_revision_derivations: {
+        Row: {
+          artifact_sha256: string
+          brand_id: string
+          derivation_commit_sha: string
+          operation_sha256: string
+          qualification: string
+          receipt: Json
+          revision_id: string
+          source_sha256: string
+          template_id: string
+        }
+        Insert: {
+          artifact_sha256: string
+          brand_id: string
+          derivation_commit_sha: string
+          operation_sha256: string
+          qualification: string
+          receipt: Json
+          revision_id: string
+          source_sha256: string
+          template_id: string
+        }
+        Update: {
+          artifact_sha256?: string
+          brand_id?: string
+          derivation_commit_sha?: string
+          operation_sha256?: string
+          qualification?: string
+          receipt?: Json
+          revision_id?: string
+          source_sha256?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_revision_derivations_revision_id_brand_id_templat_fkey"
+            columns: ["revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+        ]
+      }
       template_revision_native: {
         Row: {
           brand_id: string
@@ -21769,6 +24926,42 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "template_revisions"
             referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
+      template_revision_operation_links: {
+        Row: {
+          brand_id: string
+          operation_id: string
+          revision_id: string
+          template_id: string
+        }
+        Insert: {
+          brand_id: string
+          operation_id: string
+          revision_id: string
+          template_id: string
+        }
+        Update: {
+          brand_id?: string
+          operation_id?: string
+          revision_id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_revision_operation_l_operation_id_brand_id_templa_fkey"
+            columns: ["operation_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_operations"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_revision_operation_l_revision_id_brand_id_templat_fkey"
+            columns: ["revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
           },
         ]
       }
@@ -22509,6 +25702,95 @@ export type Database = {
           },
         ]
       }
+      template_version_commits: {
+        Row: {
+          brand_id: string
+          created_at: string
+          idempotency_key: string
+          intent: Json
+          kind: string
+          merge_parent_revision_id: string | null
+          message: string
+          operator_user_id: string
+          request_fingerprint: string
+          revision_id: string
+          template_id: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          idempotency_key: string
+          intent: Json
+          kind: string
+          merge_parent_revision_id?: string | null
+          message: string
+          operator_user_id: string
+          request_fingerprint: string
+          revision_id: string
+          template_id: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          idempotency_key?: string
+          intent?: Json
+          kind?: string
+          merge_parent_revision_id?: string | null
+          message?: string
+          operator_user_id?: string
+          request_fingerprint?: string
+          revision_id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_version_commits_merge_parent_revision_id_brand_id_fkey"
+            columns: ["merge_parent_revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_version_commits_revision_id_brand_id_template_id_fkey"
+            columns: ["revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+        ]
+      }
+      template_version_families: {
+        Row: {
+          admitted_at: string
+          admitted_by: string
+          brand_id: string
+          reason: string
+          template_id: string
+        }
+        Insert: {
+          admitted_at?: string
+          admitted_by: string
+          brand_id: string
+          reason: string
+          template_id: string
+        }
+        Update: {
+          admitted_at?: string
+          admitted_by?: string
+          brand_id?: string
+          reason?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_version_families_template_id_brand_id_fkey"
+            columns: ["template_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
       timeline_drafts: {
         Row: {
           asset_id: string
@@ -22565,6 +25847,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      unity_licences: {
+        Row: {
+          brand_id: string
+          has_serial: boolean
+          last_error: string | null
+          seats: number
+          status: string
+          updated_at: string
+          updated_by: string | null
+          username: string
+        }
+        Insert: {
+          brand_id: string
+          has_serial?: boolean
+          last_error?: string | null
+          seats?: number
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          username: string
+        }
+        Update: {
+          brand_id?: string
+          has_serial?: boolean
+          last_error?: string | null
+          seats?: number
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          username?: string
+        }
+        Relationships: []
       }
       video_chapters: {
         Row: {
@@ -22768,6 +26083,15 @@ export type Database = {
         Returns: number
       }
       any_restricted_collection: { Args: never; Returns: boolean }
+      append_template_operations: {
+        Args: {
+          p_brand_id: string
+          p_operations: Json
+          p_operator_user_id: string
+          p_template_id: string
+        }
+        Returns: Json
+      }
       aspect_ratio_bin: {
         Args: { p_height: number; p_width: number }
         Returns: string
@@ -22801,22 +26125,64 @@ export type Database = {
         }
         Returns: boolean
       }
-      attach_template_authoring_workspace_seed: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_expected_revision: number
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      attach_template_authoring_workspace_seed:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       backfill_template_revisions: {
         Args: { p_brand_id?: string }
         Returns: number
       }
+      begin_template_authoring_draft_attempt:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_origin: Json
+              p_request_id: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_origin: Json
+              p_request_id: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       caller_blocked_anywhere: { Args: never; Returns: boolean }
       caller_hidden_storage_objects: {
         Args: never
@@ -22869,6 +26235,10 @@ export type Database = {
       }
       capture_template_authoring_settings_plan: {
         Args: { p_asset_id: string; p_commands: Json }
+        Returns: Json
+      }
+      capture_template_authoring_working_copy_settings: {
+        Args: { p_commands: Json; p_working_copy_id: string }
         Returns: Json
       }
       checkpoint_service_template_ingest_dependencies: {
@@ -23377,6 +26747,45 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_unity_render: {
+        Args: { p_lease_seconds?: number; p_worker_id: string }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation_name: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       collection_role: { Args: { p_collection: string }; Returns: string }
       collection_role_as: {
         Args: { p_collection: string; p_user: string }
@@ -23447,6 +26856,15 @@ export type Database = {
           p_storage_path: string
           p_user_id: string
           p_variant_id: string
+        }
+        Returns: Json
+      }
+      commit_template_version: {
+        Args: {
+          p_brand_id: string
+          p_intent: Json
+          p_operator_user_id: string
+          p_template_id: string
         }
         Returns: Json
       }
@@ -23718,6 +27136,28 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_template_authoring_working_copy_commit: {
+        Args: {
+          p_asset_id: string
+          p_base_version_id: string
+          p_brand_id: string
+          p_child_asset_id: string
+          p_child_version_id: string
+          p_command_digest: string
+          p_dependencies: Json
+          p_expected_head_revision_id: string
+          p_expected_revision: number
+          p_id: string
+          p_package_checksum: string
+          p_parent_revision_id: string
+          p_revision_edits: Json
+          p_save_target: string
+          p_source_checksum: string
+          p_user_id: string
+          p_working_copy_id: string
+        }
+        Returns: Json
+      }
       consume_presentation_export: {
         Args: {
           p_asset_id: string
@@ -23768,18 +27208,32 @@ export type Database = {
         Args: { p_options: Json; p_type: string }
         Returns: boolean
       }
-      detach_template_authoring_workspace_seed: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_expected_revision: number
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      detach_template_authoring_workspace_seed:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       drive_authenticate: { Args: { p_token_hash: string }; Returns: Json }
       drive_brands: {
         Args: { p_user_id: string }
@@ -24027,6 +27481,51 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      fail_stranded_unity_renders: { Args: never; Returns: number }
+      fail_template_authoring_draft_attempt:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_failure: Json
+              p_request_id: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_failure: Json
+              p_request_id: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      find_template_release_replay: {
+        Args: {
+          p_brand_id: string
+          p_idempotency_key: string
+          p_operator_user_id: string
+          p_request_fingerprint: string
+          p_template_id: string
+        }
+        Returns: Json
+      }
+      find_template_version_replay: {
+        Args: {
+          p_brand_id: string
+          p_idempotency_key: string
+          p_operator_user_id: string
+          p_request_fingerprint: string
+          p_template_id: string
+        }
+        Returns: Json
       }
       head_version_number: { Args: { p_asset_id: string }; Returns: number }
       headless_organic_spend_window: {
@@ -24423,22 +27922,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      mark_template_authoring_preparation_pending: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_error_code: string
-          p_idempotency_key: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      mark_template_authoring_preparation_pending:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_error_code: string
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_error_code: string
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       match_asset_frames: {
         Args: {
           exclude_asset_id?: string
@@ -24537,54 +28054,158 @@ export type Database = {
         Args: { p_collection: string }
         Returns: string
       }
-      observe_template_authoring_preparation_run: {
+      observe_template_authoring_preparation_run:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_error_code: string
+              p_forge_run_id: string
+              p_forge_state: string
+              p_progress: Json
+              p_state: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_error_code: string
+              p_forge_run_id: string
+              p_forge_state: string
+              p_progress: Json
+              p_state: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      observe_template_authoring_preparation_state_cas:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_error_code: string
+              p_expected_command_digest: string
+              p_expected_draft_revision: number
+              p_expected_package_checksum: string
+              p_expected_source_checksum: string
+              p_expected_state: string
+              p_expected_updated_at: string
+              p_forge_run_id: string
+              p_forge_state: string
+              p_progress: Json
+              p_state: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_error_code: string
+              p_expected_command_digest: string
+              p_expected_draft_revision: number
+              p_expected_package_checksum: string
+              p_expected_source_checksum: string
+              p_expected_state: string
+              p_expected_updated_at: string
+              p_forge_run_id: string
+              p_forge_state: string
+              p_progress: Json
+              p_state: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      open_template_authoring_working_copy: {
         Args: {
-          p_artifact_id: string
           p_asset_id: string
-          p_base_version_id: string
+          p_base_revision_id: string
           p_brand_id: string
-          p_error_code: string
-          p_forge_run_id: string
-          p_forge_state: string
-          p_progress: Json
-          p_state: string
           p_user_id: string
+          p_variant_id: string
+          p_working_copy_id: string
         }
         Returns: Json
       }
-      observe_template_authoring_preparation_state_cas: {
+      promote_template_release: {
         Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
           p_brand_id: string
-          p_error_code: string
-          p_expected_command_digest: string
-          p_expected_draft_revision: number
-          p_expected_package_checksum: string
-          p_expected_source_checksum: string
-          p_expected_state: string
-          p_expected_updated_at: string
-          p_forge_run_id: string
-          p_forge_state: string
-          p_progress: Json
-          p_state: string
-          p_user_id: string
+          p_intent: Json
+          p_operator_user_id: string
+          p_template_id: string
         }
         Returns: Json
       }
-      put_template_authoring_draft: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_commands: Json
-          p_expected_revision: number
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      put_template_authoring_draft:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      put_template_authoring_draft_audited:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_request_id: string
+              p_response: Json
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_request_id: string
+              p_response: Json
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       read_editor_project_for_edit: {
         Args: { p_project_id: string; p_user_id: string }
         Returns: {
@@ -24610,22 +28231,40 @@ export type Database = {
           paths: string[]
         }[]
       }
-      reconcile_template_authoring_artifact_settings: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_committed_asset_id: string
-          p_committed_version_id: string
-          p_expected_revision: number
-          p_id: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      reconcile_template_authoring_artifact_settings:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_committed_asset_id: string
+              p_committed_version_id: string
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_committed_asset_id: string
+              p_committed_version_id: string
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       record_asset_assignments: { Args: { p_rows: Json }; Returns: undefined }
       record_canvas_lineage: {
         Args: {
@@ -24640,6 +28279,10 @@ export type Database = {
       record_media_info: {
         Args: { p_info: Json; p_version_id: string }
         Returns: Json
+      }
+      record_template_authoring_draft_attempt_event: {
+        Args: { p_request_id: string; p_result?: Json }
+        Returns: undefined
       }
       record_template_authoring_native_render:
         | {
@@ -24685,37 +28328,117 @@ export type Database = {
             }
             Returns: Json
           }
-      record_template_authoring_preparation_evidence: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_evidence: Json
-          p_expected_revision: number
-          p_id: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
-      record_template_authoring_preparation_run: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_forge_run_id: string
-          p_idempotency_key: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_engine: string
+              p_error_code: string
+              p_frames: Json
+              p_id: string
+              p_native_run_id: string
+              p_package_checksum: string
+              p_request_digest: string
+              p_required_samples: Json
+              p_source_checksum: string
+              p_state: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_engine: string
+              p_error_code: string
+              p_frames: Json
+              p_id: string
+              p_native_run_id: string
+              p_package_checksum: string
+              p_request_digest: string
+              p_source_checksum: string
+              p_state: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      record_template_authoring_preparation_evidence:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_evidence: Json
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_evidence: Json
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      record_template_authoring_preparation_run:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_forge_run_id: string
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_forge_run_id: string
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       record_template_revision_publication: {
         Args: {
           p_binding_id: string
@@ -24734,6 +28457,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: Json
+      }
+      register_coordinated_native_template_revision: {
+        Args: { p_payload: Json }
+        Returns: string
       }
       register_native_scene_render_attempt: {
         Args: { p_job_id: string; p_lease_token: string; p_worker_id: string }
@@ -24858,6 +28585,44 @@ export type Database = {
         }
         Returns: undefined
       }
+      require_template_authoring_working_copy: {
+        Args: {
+          p_asset_id: string
+          p_base_version_id: string
+          p_brand_id: string
+          p_user_id: string
+          p_working_copy_id: string
+        }
+        Returns: {
+          base_revision_id: string
+          brand_id: string
+          closed_at: string | null
+          created_at: string
+          id: string
+          landed_revision_id: string | null
+          settings_snapshot: Json
+          source_asset_id: string
+          source_checksum: string
+          source_version_id: string
+          template_id: string
+          user_id: string
+          variant_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "template_authoring_working_copies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      require_template_version_operator: {
+        Args: {
+          p_brand_id: string
+          p_operator_user_id: string
+          p_template_id: string
+        }
+        Returns: undefined
+      }
       reserve_template_authoring_fork: {
         Args: {
           p_asset_id: string
@@ -24875,35 +28640,90 @@ export type Database = {
         }
         Returns: Json
       }
-      reserve_template_authoring_native_render: {
+      reserve_template_authoring_native_render:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_request_digest: string
+              p_selections: Json
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_request_digest: string
+              p_selections: Json
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      reserve_template_authoring_preparation:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      reserve_template_authoring_working_copy_commit: {
         Args: {
-          p_artifact_id: string
           p_asset_id: string
           p_base_version_id: string
           p_brand_id: string
           p_command_digest: string
-          p_draft_revision: number
+          p_expected_head_revision_id: string
+          p_expected_revision: number
           p_id: string
+          p_name: string
           p_package_checksum: string
-          p_request_digest: string
-          p_selections: Json
+          p_parent_revision_id: string
+          p_save_target: string
           p_source_checksum: string
           p_user_id: string
-        }
-        Returns: Json
-      }
-      reserve_template_authoring_preparation: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_idempotency_key: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
+          p_working_copy_id: string
         }
         Returns: Json
       }
@@ -24920,17 +28740,42 @@ export type Database = {
         }
         Returns: Json
       }
-      review_template_authoring_artifact: {
+      review_template_authoring_artifact:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      rollback_template_release: {
         Args: {
-          p_asset_id: string
-          p_base_version_id: string
           p_brand_id: string
-          p_command_digest: string
-          p_expected_revision: number
-          p_id: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
+          p_intent: Json
+          p_operator_user_id: string
+          p_template_id: string
         }
         Returns: Json
       }
@@ -25000,47 +28845,107 @@ export type Database = {
           version_id: string
         }[]
       }
-      stage_template_authoring_artifact: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_filename: string
-          p_id: string
-          p_object_path: string
-          p_package_checksum: string
-          p_provenance?: Json
-          p_result_parse: Json
-          p_size_bytes: number
-          p_source_checksum: string
-          p_user_id: string
-          p_verification: Json
-        }
-        Returns: Json
-      }
-      stage_template_authoring_seed_artifact: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_filename: string
-          p_id: string
-          p_object_path: string
-          p_package_checksum: string
-          p_provenance?: Json
-          p_result_parse: Json
-          p_size_bytes: number
-          p_source_checksum: string
-          p_user_id: string
-          p_verification: Json
-        }
-        Returns: Json
-      }
+      stage_template_authoring_artifact:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_filename: string
+              p_id: string
+              p_object_path: string
+              p_package_checksum: string
+              p_provenance?: Json
+              p_result_parse: Json
+              p_size_bytes: number
+              p_source_checksum: string
+              p_user_id: string
+              p_verification: Json
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_filename: string
+              p_id: string
+              p_object_path: string
+              p_package_checksum: string
+              p_provenance: Json
+              p_result_parse: Json
+              p_size_bytes: number
+              p_source_checksum: string
+              p_user_id: string
+              p_verification: Json
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      stage_template_authoring_seed_artifact:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_filename: string
+              p_id: string
+              p_object_path: string
+              p_package_checksum: string
+              p_provenance?: Json
+              p_result_parse: Json
+              p_size_bytes: number
+              p_source_checksum: string
+              p_user_id: string
+              p_verification: Json
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_filename: string
+              p_id: string
+              p_object_path: string
+              p_package_checksum: string
+              p_provenance: Json
+              p_result_parse: Json
+              p_size_bytes: number
+              p_source_checksum: string
+              p_user_id: string
+              p_verification: Json
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       storage_object_brand_id: { Args: { p_name: string }; Returns: string }
+      template_store_unkept: {
+        Args: {
+          p_limit: number
+          p_max_bytes: number
+          p_since: string
+          p_skip: string[]
+        }
+        Returns: {
+          asset_id: string
+          brand_id: string
+          created_at: string
+          file_name: string
+          id: string
+          size_bytes: number
+        }[]
+      }
       transition_asset_review_guarded: {
         Args: {
           p_actor: string
@@ -25052,6 +28957,34 @@ export type Database = {
           p_to_status: string
         }
         Returns: Json
+      }
+      unity_licence_remove: { Args: { p_brand_id: string }; Returns: undefined }
+      unity_licence_secret: { Args: { p_brand_id: string }; Returns: Json }
+      unity_licence_set: {
+        Args: {
+          p_brand_id: string
+          p_password: string
+          p_seats: number
+          p_serial: string
+          p_user_id: string
+          p_username: string
+        }
+        Returns: {
+          brand_id: string
+          has_serial: boolean
+          last_error: string | null
+          seats: number
+          status: string
+          updated_at: string
+          updated_by: string | null
+          username: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "unity_licences"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       validate_native_revision_scene: {
         Args: {
@@ -25325,6 +29258,30 @@ export type Database = {
           media_id?: string
           payload?: Json
           request_hash?: string
+        }
+        Relationships: []
+      }
+      music_settings: {
+        Row: {
+          brand_id: string
+          enabled: boolean
+          unavailable_policy: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brand_id: string
+          enabled?: boolean
+          unavailable_policy?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brand_id?: string
+          enabled?: boolean
+          unavailable_policy?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -25846,6 +29803,7 @@ export type Database = {
       organic_publish_attempts: {
         Row: {
           attempted_at: string
+          audio_metadata: Json | null
           brand_id: string
           caption_sent: string | null
           completed_at: string | null
@@ -25864,6 +29822,7 @@ export type Database = {
         }
         Insert: {
           attempted_at?: string
+          audio_metadata?: Json | null
           brand_id: string
           caption_sent?: string | null
           completed_at?: string | null
@@ -25882,6 +29841,7 @@ export type Database = {
         }
         Update: {
           attempted_at?: string
+          audio_metadata?: Json | null
           brand_id?: string
           caption_sent?: string | null
           completed_at?: string | null
@@ -25920,6 +29880,7 @@ export type Database = {
           angle_id: string | null
           angle_provenance: Json | null
           angle_vocab_version: number
+          audio_metadata: Json | null
           brand_id: string
           caption: string | null
           content_snapshot: Json | null
@@ -25942,6 +29903,7 @@ export type Database = {
           angle_id?: string | null
           angle_provenance?: Json | null
           angle_vocab_version?: number
+          audio_metadata?: Json | null
           brand_id: string
           caption?: string | null
           content_snapshot?: Json | null
@@ -25964,6 +29926,7 @@ export type Database = {
           angle_id?: string | null
           angle_provenance?: Json | null
           angle_vocab_version?: number
+          audio_metadata?: Json | null
           brand_id?: string
           caption?: string | null
           content_snapshot?: Json | null
@@ -26538,6 +30501,65 @@ export type Database = {
         }
         Relationships: []
       }
+      youtube_upload_checkpoints: {
+        Row: {
+          brand_id: string
+          channel_id: string
+          content_length: number | null
+          content_sha256: string | null
+          created_at: string
+          draft_id: string
+          input_hash: string
+          last_error: string | null
+          lease_token: string | null
+          lease_until: string | null
+          state: string
+          updated_at: string
+          upload_uri: string | null
+          video_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          channel_id: string
+          content_length?: number | null
+          content_sha256?: string | null
+          created_at?: string
+          draft_id: string
+          input_hash: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          state: string
+          updated_at?: string
+          upload_uri?: string | null
+          video_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          channel_id?: string
+          content_length?: number | null
+          content_sha256?: string | null
+          created_at?: string
+          draft_id?: string
+          input_hash?: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          state?: string
+          updated_at?: string
+          upload_uri?: string | null
+          video_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "youtube_upload_checkpoints_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: true
+            referencedRelation: "organic_calendar_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -26940,6 +30962,64 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      plan_items_patch_open_item: {
+        Args: { p_item_id: string; p_items: Json; p_patch: Json }
+        Returns: Json
+      }
+      reap_stale_plan_items: {
+        Args: { p_stale_after?: string }
+        Returns: number
+      }
+      recreate_post_generation_job: {
+        Args: {
+          p_draft_id: string
+          p_job_id: string
+          p_min_worker_generation: number
+        }
+        Returns: {
+          account_id: string | null
+          attempts: number
+          brand_id: string
+          cancel_requested: boolean
+          claimed_at: string | null
+          client_key: string | null
+          completed_at: string | null
+          creative_brief: Json | null
+          dead_lettered_at: string | null
+          dispatch_context: Json | null
+          draft_id: string | null
+          enqueued_at: string
+          error: Json | null
+          expires_at: string
+          guidance_prompt: string | null
+          heartbeat_at: string | null
+          job_id: string
+          job_type: string
+          last_error: Json | null
+          max_attempts: number
+          min_worker_generation: number
+          next_run_at: string
+          payload: Json | null
+          plan_id: string | null
+          plan_item_id: string | null
+          platform: string
+          progress: Json
+          scheduled_at: string
+          session_id: string
+          started_at: string | null
+          status: Database["organic"]["Enums"]["post_generation_job_status"]
+          trend_id: string | null
+          updated_at: string
+          user_id: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "post_generation_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       remove_draft_group_member: {
         Args: {
           p_member_id: string
@@ -26969,6 +31049,18 @@ export type Database = {
       update_post_generation_job_progress: {
         Args: { p_job_id: string; p_progress: Json }
         Returns: undefined
+      }
+      watchman_enqueue_post_generation_job: {
+        Args: {
+          p_attempt: number
+          p_checkpoint_version: number
+          p_child_run_id: string
+          p_execution: Json
+          p_job: Json
+          p_wake_id: string
+          p_watchman_id: string
+        }
+        Returns: string
       }
     }
     Enums: {
@@ -34430,6 +38522,9 @@ export type CompositeTypes<
 
 export const Constants = {
   agent_workspace: {
+    Enums: {},
+  },
+  billing: {
     Enums: {},
   },
   brand_integrations: {

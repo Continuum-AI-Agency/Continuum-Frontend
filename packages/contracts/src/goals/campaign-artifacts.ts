@@ -16,6 +16,7 @@ import {
   goalExpectedResponseSchema,
   goalRequestSchema,
 } from './domain';
+import { watchmanDeliveryDataSchema } from './watchman-delivery';
 
 const idSchema = z.string().trim().min(1).max(240);
 const textSchema = z.string().trim().min(1);
@@ -25,6 +26,7 @@ const confidenceSchema = z.number().min(0).max(1);
 export const CAMPAIGN_ARTIFACT_TYPES = [
   'campaign-charter',
   'research-dossier',
+  'watchman-delivery',
   'campaign-strategy',
   'audience-strategy',
   'creative-strategy',
@@ -683,6 +685,7 @@ export const trialWinnerReportDataSchema = z
 export const campaignArtifactSchemaRegistry = {
   'campaign-charter': campaignCharterDataSchema,
   'research-dossier': researchDossierDataSchema,
+  'watchman-delivery': watchmanDeliveryDataSchema,
   'campaign-strategy': campaignStrategyDataSchema,
   'audience-strategy': audienceStrategyDataSchema,
   'creative-strategy': creativeStrategyDataSchema,
@@ -799,6 +802,21 @@ const requirements = (
 export const campaignChecklistRegistry: Readonly<
   Record<CampaignArtifactType, readonly GoalChecklistRequirementDefinition[]>
 > = Object.freeze({
+  'watchman-delivery': requirements(
+    'operations',
+    [
+      ['objective', '/data/objective', 'Assignment objective', 'derived'],
+      ['delivery', '/data/delivery', 'Qualitative delivery for review', 'derived'],
+      [
+        'operations',
+        '/data/operationReceipts',
+        'Saved completed operation receipts',
+        'authoritative_system',
+      ],
+      ['open-items', '/data/openItems', 'Limitations and follow-ups', 'derived'],
+    ],
+    'assignment',
+  ),
   'campaign-charter': requirements('strategy', [
     ['objective', '/data/objective', 'Business and campaign objective', 'stakeholder_required'],
     ['scope-offer', '/data/scopeAndOffer', 'Scope and offer', 'stakeholder_required'],
@@ -1209,6 +1227,9 @@ const artifactEnvelope = <Type extends CampaignArtifactType, Schema extends z.Zo
     })
     .strict()
     .superRefine((document, context) => {
+      // Watchman stamps provenance from its current saved-operation boundary.
+      // Model input need not invent authoritative tool provenance to get there.
+      if (artifactType === 'watchman-delivery') return;
       const provenancePaths = new Set(document.provenance.map((entry) => entry.path));
       for (const requirement of campaignChecklistRegistry[artifactType]) {
         if (!provenancePaths.has(requirement.path)) {
@@ -1224,6 +1245,7 @@ const artifactEnvelope = <Type extends CampaignArtifactType, Schema extends z.Zo
 export const campaignArtifactDocumentSchema = z.discriminatedUnion('artifactType', [
   artifactEnvelope('campaign-charter', campaignCharterDataSchema),
   artifactEnvelope('research-dossier', researchDossierDataSchema),
+  artifactEnvelope('watchman-delivery', watchmanDeliveryDataSchema),
   artifactEnvelope('campaign-strategy', campaignStrategyDataSchema),
   artifactEnvelope('audience-strategy', audienceStrategyDataSchema),
   artifactEnvelope('creative-strategy', creativeStrategyDataSchema),

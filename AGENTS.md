@@ -59,6 +59,10 @@ Frontend response interpreters that parse Backend agent outputs (NDJSON stream f
 * **Stack:** All forms must use the **React Hook Form + Zod stack** for controlled, performant, and type-safe validation.
 * **Dual Validation:** Client-side Zod validation provides fast user feedback. **Server-side validation** (in Server Actions or Route Handlers) is mandatory to enforce invariants and security rules.
 
+### Watchman UI SDK interaction
+
+Watchman's interactive work cards use `@ui-sdk/react` and `@ui-sdk/core` with the existing Continuum tokens and layouts. Before using them, follow the ui-sdk skill if installed and read `node_modules/@ui-sdk/react/docs/llms.txt`. For a new primitive, search `docs/core.md` by heading and read `docs/rendering.md`. Keep generated output as validated shared card data; authorization and durable work remain on the Backend. Existing shared controls continue to use Base UI.
+
 ---
 
 ## 3. Linear Workflow
