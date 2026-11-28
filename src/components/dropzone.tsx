@@ -1,9 +1,9 @@
 'use client';
 
+import { CheckCircle, File, Loader2, Upload, X } from 'lucide-react';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
 import { createContext, type PropsWithChildren, useCallback, useContext } from 'react';
-import { ArrowUpFromLine, CircleCheck, File, Spinner, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import type { UseSupabaseUploadReturn } from '@/hooks/use-supabase-upload';
 import { useUiErrorMessage } from '@/i18n/errors';
@@ -96,7 +96,7 @@ const DropzoneContent = ({ className }: { className?: string }) => {
   if (isSuccess) {
     return (
       <div className={cn('flex flex-row items-center gap-x-2 justify-center', className)}>
-        <CircleCheck size={16} className="text-primary" />
+        <CheckCircle size={16} className="text-primary" />
         <p className="text-primary text-sm">{uiText('m_f4732088ed', { count: files.length })}</p>
       </div>
     );
@@ -193,7 +193,7 @@ const DropzoneContent = ({ className }: { className?: string }) => {
           >
             {loading ? (
               <>
-                <Spinner className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 {uiText('m_070e328ec8')}
               </>
             ) : (
@@ -222,7 +222,7 @@ const DropzoneEmptyState = ({ className }: { className?: string }) => {
 
   return (
     <div className={cn('flex flex-col items-center gap-y-1 text-xs leading-tight', className)}>
-      <ArrowUpFromLine size={16} className="text-muted-foreground" />
+      <Upload size={16} className="text-muted-foreground" />
       <p className="text-xs">
         {tUi('m_cc6f4f6c17', { unlimited: !maxFiles ? 'yes' : 'no', count: maxFiles ?? 0 })}
       </p>

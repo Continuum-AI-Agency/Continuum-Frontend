@@ -13,10 +13,11 @@
 
 import type { CanvasTechniquePort } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
+import { Blocks, Maximize2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
+
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { Blocks, Maximize2 } from '@/components/icons';
 import { useModuleFoldStore } from '../stores/useModuleFoldStore';
 import { COLLAPSED_NODE_TYPE, type CollapsedModuleData } from '../utils/moduleFold';
 import { EDGE_COLOR_BY_MODALITY } from './modalityPreview';

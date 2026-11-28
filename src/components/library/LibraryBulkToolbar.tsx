@@ -8,23 +8,23 @@ import {
   type Project,
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { useTranslations as useUiTranslations } from 'next-intl';
-import { useEffect, useRef, useState } from 'react';
 import {
   Check,
   Columns2,
   FolderInput,
   FolderOpen,
-  Layers2,
+  Layers,
   Link2,
   ListPlus,
-  Spinner,
+  Loader2,
   Tag,
   Trash2,
   UserCheck,
   Workflow,
   X,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -740,7 +740,7 @@ export function LibraryBulkToolbar({
           })
         }
       >
-        <Layers2 className="size-3.5" /> {translateUi('mark_as_element_29af581b')}
+        <Layers className="size-3.5" /> {translateUi('mark_as_element_29af581b')}
       </Button>
       <Button
         type="button"
@@ -792,7 +792,7 @@ export function LibraryBulkToolbar({
         {busy ? (
           <span className="inline-flex items-center gap-1.5">
             {progress}
-            <Spinner className="size-3.5 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin" />
           </span>
         ) : (
           message

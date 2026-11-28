@@ -1,15 +1,15 @@
 import {
+  AlertTriangle,
   Bell,
   Circle,
-  type IconComponent,
+  type LucideIcon,
   Pause,
   Play,
   Replace,
   TrendingUp,
-  TriangleAlert,
-} from '@/components/icons';
+} from 'lucide-react';
 
-const ICON_MAP: Record<string, IconComponent> = {
+const ICON_MAP: Record<string, LucideIcon> = {
   PAUSE_AD: Pause,
   PAUSE_ADSET: Pause,
   PAUSE_CAMPAIGN: Pause,
@@ -25,6 +25,6 @@ const ICON_MAP: Record<string, IconComponent> = {
   NOOP: Circle,
 };
 
-export function getActionIcon(type: string): IconComponent {
-  return ICON_MAP[type] ?? TriangleAlert;
+export function getActionIcon(type: string): LucideIcon {
+  return ICON_MAP[type] ?? AlertTriangle;
 }

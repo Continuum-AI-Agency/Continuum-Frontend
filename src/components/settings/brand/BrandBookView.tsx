@@ -22,7 +22,6 @@ import {
   deriveReadinessSummary,
   readinessBandForScore,
 } from '@continuum/contracts';
-import type { ReactNode } from 'react';
 import {
   AudioLines,
   Check,
@@ -31,7 +30,6 @@ import {
   FileText,
   FolderOpen,
   Gauge,
-  type IconComponent,
   Image as ImageIcon,
   ListChecks,
   Palette,
@@ -40,7 +38,8 @@ import {
   Type,
   Users,
   X,
-} from '@/components/icons';
+} from 'lucide-react';
+import type { ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -121,7 +120,7 @@ function SectionCard({
   description,
   children,
 }: {
-  icon: IconComponent;
+  icon: typeof Palette;
   title: string;
   description?: string;
   children: ReactNode;
@@ -145,7 +144,7 @@ function EmptyTab({
   title,
   description,
 }: {
-  icon: IconComponent;
+  icon: typeof Palette;
   title: string;
   description: string;
 }) {

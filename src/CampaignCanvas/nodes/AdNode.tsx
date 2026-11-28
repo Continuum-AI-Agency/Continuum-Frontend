@@ -1,18 +1,18 @@
 'use client';
 
-import { useLocale, useTranslations } from 'next-intl';
-import React, { memo, useCallback, useMemo } from 'react';
-import { Node, NodeContent, NodeHeader, NodeTitle } from '@/components/ai-elements/node';
 import {
-  CircleAlert,
-  CircleCheck,
-  CircleX,
+  AlertCircle,
+  CheckCircle2,
   Copy,
   Megaphone,
   Plus,
   Send,
   Trash2,
-} from '@/components/icons';
+  XCircle,
+} from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import React, { memo, useCallback, useMemo } from 'react';
+import { Node, NodeContent, NodeHeader, NodeTitle } from '@/components/ai-elements/node';
 import { Badge } from '@/components/ui/badge';
 import {
   ContextMenu,
@@ -138,13 +138,13 @@ export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => 
               </div>
               <div className="flex items-center gap-1">
                 {data.validationStatus === 'valid' && (
-                  <CircleCheck className="h-4 w-4 text-green-500" />
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
                 )}
                 {data.validationStatus === 'warning' && (
-                  <CircleAlert className="h-4 w-4 text-yellow-500" />
+                  <AlertCircle className="h-4 w-4 text-yellow-500" />
                 )}
                 {data.validationStatus === 'error' && (
-                  <CircleX className="h-4 w-4 text-destructive" />
+                  <XCircle className="h-4 w-4 text-destructive" />
                 )}
               </div>
             </div>

@@ -1,10 +1,10 @@
 'use client';
 
+import { ArrowUpToLine, RotateCw, ScrollText, SquareArrowOutUpRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { CreativeSwapComparison } from '@/components/dco/CreativeSwapComparison';
-import { ArrowUpToLine, RotateCw, ScrollText, SquareArrowOutUpRight } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Badge as ShadcnBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

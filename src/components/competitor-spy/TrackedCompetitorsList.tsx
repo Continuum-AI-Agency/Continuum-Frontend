@@ -1,8 +1,8 @@
 'use client';
 
 import type { Competitor } from '@continuum/contracts';
+import { X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { X } from '@/components/icons';
 import { TikTokIcon, YouTubeIcon } from '@/components/shared/icons/brandIcon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { localizeCompetitorCopy } from '@/i18n/competitorCopy';

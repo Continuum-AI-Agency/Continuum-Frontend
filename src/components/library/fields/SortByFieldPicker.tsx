@@ -7,9 +7,9 @@
 // last in either direction).
 
 import type { CustomField } from '@continuum/contracts';
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, ChevronDown } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, ChevronDown } from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -27,8 +27,6 @@ import {
   scrubSpriteTile,
   type TimeAnnotation,
 } from '@continuum/contracts';
-import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   Camera,
   ImageOff,
@@ -38,7 +36,9 @@ import {
   Repeat,
   SquareDashedBottom,
   X,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import { useUiErrorMessage } from '@/i18n/errors';

@@ -8,9 +8,9 @@ import { useLocale, useTranslations } from 'next-intl';
 // Axis ↔ move ↔ ledger are one selection: hovering or focusing an axis or a move
 // previews that dimension's criteria ledger, clicking pins it.
 
+import { Info } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { type ReactNode, useId, useState } from 'react';
-import { Info } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ReadinessAnalysis, ReadinessDimension } from '@/lib/onboarding/agentClient';
 import { cn } from '@/lib/utils';

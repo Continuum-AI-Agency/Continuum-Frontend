@@ -8,8 +8,8 @@ import { useTranslations } from 'next-intl';
 // but snapshots the prior last-seen id first, so per-row "new" dots persist for
 // the duration of the open session.
 
+import { SparklesIcon } from 'lucide-react';
 import { useState } from 'react';
-import { Sparkles as SparklesIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ChangelogEntry } from '@/lib/changelog/schema';

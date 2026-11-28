@@ -1,7 +1,7 @@
 'use client';
 
 import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox';
-import { Check } from '@/components/icons';
+import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Radix modelled the third state as checked="indeterminate"; Base UI has a separate

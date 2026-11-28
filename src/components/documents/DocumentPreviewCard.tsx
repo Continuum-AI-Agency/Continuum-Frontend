@@ -8,17 +8,17 @@ import { useLocale, useTranslations } from 'next-intl';
 //   peek is suppressed so only one surface is ever visible.
 // Both share a single trigger element (passed in as children).
 
-import { useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
-  ArrowDownToLine,
-  CircleAlert,
-  CircleCheck,
-  type IconComponent,
-  Spinner,
-  SquareArrowOutUpRight,
+  AlertCircle,
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Loader2,
   Trash2,
   X,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -123,8 +123,8 @@ function KindBadge({ doc }: { doc: DocumentView }) {
 }
 
 function StatusChip({ label }: { label: ProgressLabel }) {
-  const Icon: IconComponent =
-    label.tone === 'success' ? CircleCheck : label.tone === 'error' ? CircleAlert : Spinner;
+  const Icon: LucideIcon =
+    label.tone === 'success' ? CheckCircle2 : label.tone === 'error' ? AlertCircle : Loader2;
   return (
     <span
       className={cn(
@@ -213,7 +213,7 @@ function PinnedBody({
       <footer className="flex shrink-0 items-center gap-2 border-t border-border/70 px-4 py-2.5">
         {storagePath ? (
           <ActionButton
-            icon={SquareArrowOutUpRight}
+            icon={ExternalLink}
             label={uiText('open_ed077f3')}
             tone="primary"
             onClick={() => onOpenInline(storagePath)}
@@ -221,7 +221,7 @@ function PinnedBody({
         ) : null}
         {storagePath ? (
           <ActionButton
-            icon={ArrowDownToLine}
+            icon={Download}
             label={uiText('download_d6eafe8')}
             tone="ghost"
             onClick={() => onDownload(storagePath)}
@@ -298,7 +298,7 @@ function ActionButton({
   onClick,
   className,
 }: {
-  icon: IconComponent;
+  icon: LucideIcon;
   label: string;
   tone: 'primary' | 'ghost' | 'danger';
   onClick: () => void;

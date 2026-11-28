@@ -1,20 +1,20 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import type { z } from 'zod';
 import {
+  AlertTriangle,
   Check,
   ChevronsUpDown,
   Database,
   Plus,
   RefreshCw,
   Trash2,
-  TriangleAlert,
-} from '@/components/icons';
+} from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import type { z } from 'zod';
 import { Pill, type PillProps } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -1172,7 +1172,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                   transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
                 >
                   <Alert variant="destructive">
-                    <TriangleAlert className="h-4 w-4" />
+                    <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 </motion.div>
@@ -1594,7 +1594,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                     transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
                   >
                     <Alert variant="destructive">
-                      <TriangleAlert className="h-3.5 w-3.5" />
+                      <AlertTriangle className="h-3.5 w-3.5" />
                       <AlertDescription>
                         {uiText.rich('sentence_66ce0298083e', {
                           v0: () => <strong>{activeCatalog.name}</strong>,
@@ -1704,7 +1704,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                   transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
                 >
                   <Alert variant="destructive">
-                    <TriangleAlert className="h-4 w-4" />
+                    <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>{catalogLinksError}</AlertDescription>
                   </Alert>
                 </motion.div>

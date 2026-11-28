@@ -10,23 +10,23 @@ import {
   TEXT_TEMPLATES,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { useTranslations as useUiTranslations } from 'next-intl';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import {
-  ArrowDownToLine,
   ArrowLeft,
   AudioLines,
   Captions,
   ChevronDown,
   Clapperboard,
   Command as CommandIcon,
+  Download,
   Music,
   Redo2,
   Sparkles,
   Undo2,
   Waves,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -1117,7 +1117,7 @@ export function EditWorkspace({
             disabled={!canExport}
             onClick={() => setExportOpen(true)}
           >
-            <ArrowDownToLine className="size-3.5" /> {translateUi('export_36648955')}
+            <Download className="size-3.5" /> {translateUi('export_36648955')}
           </Button>
         </div>
       </header>

@@ -9,9 +9,9 @@
 // the board had no figure to cite, the tile's own figure line from its read.
 
 import type { HomeBoardTile, HomeTileId } from '@continuum/contracts';
+import { ArrowUpRightIcon, PinIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type ReactNode, Suspense, useState } from 'react';
-import { ArrowUpRight, Pin } from '@/components/icons';
 import {
   ModuleFrame,
   type ModuleFrameState,
@@ -120,7 +120,7 @@ export function HomeTileFrame({
               type="button"
               variant="ghost"
             >
-              <Pin className={cn('size-3.5', pinned && 'fill-current')} />
+              <PinIcon className={cn('size-3.5', pinned && 'fill-current')} />
             </Button>
             {expanded ? (
               <Button
@@ -131,7 +131,7 @@ export function HomeTileFrame({
                 type="button"
                 variant="ghost"
               >
-                {uiText('open_ed077f3')} <ArrowUpRight className="size-3" />
+                {uiText('open_ed077f3')} <ArrowUpRightIcon className="size-3" />
               </Button>
             ) : null}
           </div>

@@ -11,6 +11,22 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
+import {
+  CheckCircle2,
+  Copy,
+  Crop,
+  Expand,
+  Image as ImageIcon,
+  Loader2,
+  RotateCw,
+  Scaling,
+  SquarePen,
+  Trash2,
+  Unlink,
+  Upload,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -19,22 +35,6 @@ import {
   ImageMarkupDialog,
   type ImageMarkupSaveResult,
 } from '@/components/ai-studio/markup/ImageMarkupDialog';
-import {
-  ArrowUpFromLine,
-  CircleCheck,
-  CircleX,
-  Copy,
-  Crop,
-  Expand,
-  Image as ImageIcon,
-  RotateCw,
-  Scaling,
-  Spinner,
-  SquarePen,
-  Trash2,
-  Unlink,
-  X,
-} from '@/components/icons';
 import {
   QuickReformatMenu,
   useQuickReformat,
@@ -603,7 +603,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                           : translateUi('upload_image_ffe4df6c')
                       }
                     >
-                      <ArrowUpFromLine className="h-3 w-3" />
+                      <Upload className="h-3 w-3" />
                     </Button>
                     <NodeDownloadButton
                       nodeType="image"
@@ -749,9 +749,9 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                           )}
                         >
                           {refBadge.tone === 'processing' && (
-                            <Spinner className="h-2.5 w-2.5 animate-spin" />
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
                           )}
-                          {refBadge.tone === 'ready' && <CircleCheck className="h-2.5 w-2.5" />}
+                          {refBadge.tone === 'ready' && <CheckCircle2 className="h-2.5 w-2.5" />}
                           <span>{refBadge.label}</span>
                         </div>
                       )}
@@ -760,7 +760,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                           <TooltipTrigger
                             render={
                               <div className="absolute top-2 right-2 z-10 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-1.5 py-0.5 text-3xs font-medium text-white shadow-sm">
-                                <CircleX className="h-2.5 w-2.5" />
+                                <XCircle className="h-2.5 w-2.5" />
                                 <span>{refBadge.label}</span>
                               </div>
                             }

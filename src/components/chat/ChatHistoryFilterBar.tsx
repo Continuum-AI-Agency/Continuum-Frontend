@@ -1,8 +1,8 @@
 'use client';
 
+import { SearchIcon, XIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
-import { Search, X } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -69,7 +69,7 @@ export function ChatHistoryFilterBar({
   return (
     <div className={cn('flex flex-col gap-2 border-b border-border/60 px-2 py-2', className)}>
       <div className="relative">
-        <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <SearchIcon className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="search"
           value={draftQuery}
@@ -88,7 +88,7 @@ export function ChatHistoryFilterBar({
             }}
             className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
-            <X className="size-3.5" />
+            <XIcon className="size-3.5" />
           </button>
         ) : null}
       </div>

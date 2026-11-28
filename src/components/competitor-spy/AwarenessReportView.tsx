@@ -1,9 +1,9 @@
 'use client';
 
 import type { AwarenessBlock, AwarenessReportPayload } from '@continuum/contracts';
+import { Radar } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { formatCompetitorNumber } from '@/components/competitor-spy/brandVisuals';
-import { Radar } from '@/components/icons';
 import { MetricStrip } from '@/components/shared/MetricStrip';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { EmptyState } from '@/components/shared/state';

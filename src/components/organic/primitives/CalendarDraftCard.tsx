@@ -1,10 +1,6 @@
 'use client';
 
 import { plannerInstantFromDayTime } from '@continuum/contracts';
-import { useReducedMotion } from 'motion/react';
-import Image from 'next/image';
-import { useLocale, useTranslations } from 'next-intl';
-import * as React from 'react';
 import {
   Check,
   CircleDashed,
@@ -12,14 +8,18 @@ import {
   Clapperboard,
   Copy,
   GalleryHorizontalEnd,
-  type IconComponent,
   Image as ImageIcon,
   ImageOff,
+  type LucideIcon,
   Pencil,
   Trash2,
   X,
   Zap,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useReducedMotion } from 'motion/react';
+import Image from 'next/image';
+import { useLocale, useTranslations } from 'next-intl';
+import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveScheduleDraft';
 import { useLadderStepRequest } from '@/components/organic/hooks/useDraftEnrichmentLadder';
@@ -80,7 +80,7 @@ function resolvePlatformAccentColor(platform: string): string {
   return isPostPlatform(platform) ? POST_PLATFORMS[platform].color : '#5A48F9';
 }
 
-function formatGlyph(format: string | undefined): IconComponent {
+function formatGlyph(format: string | undefined): LucideIcon {
   const normalized = (format ?? '').toLowerCase();
   if (normalized === 'reel' || normalized === 'video') return Clapperboard;
   if (normalized === 'carousel') return GalleryHorizontalEnd;

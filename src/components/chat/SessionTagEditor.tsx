@@ -1,9 +1,9 @@
 'use client';
 
 import { AGENT_SESSION_MAX_TAGS, normalizeAgentSessionTags } from '@continuum/contracts';
+import { TagIcon, XIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Tag, X } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -63,7 +63,7 @@ export function SessionTagEditor({
               className,
             )}
           >
-            <Tag className="size-3.5" />
+            <TagIcon className="size-3.5" />
           </button>
         }
       />
@@ -82,7 +82,7 @@ export function SessionTagEditor({
                   onClick={() => void commit(tags.filter((item) => item !== tag))}
                   className="text-muted-foreground hover:text-destructive"
                 >
-                  <X className="size-3" />
+                  <XIcon className="size-3" />
                 </button>
               </Pill>
             ))

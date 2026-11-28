@@ -28,9 +28,9 @@ import {
   type PortfolioLevel,
   type PortfolioListItem,
 } from '@continuum/contracts';
+import { ArrowLeftIcon, LineChartIcon, RefreshCwIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
-import { ArrowLeft, ChartLine, RefreshCw } from '@/components/icons';
 import { DataState } from '@/components/shared/state/DataState';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -714,7 +714,7 @@ export function PortfolioDetailWorkspace({
                 type="button"
                 variant="ghost"
               >
-                <ArrowLeft />
+                <ArrowLeftIcon />
                 {uiText('portfolios_e8af9d8')}
               </Button>
               <span aria-hidden className="text-muted-foreground">
@@ -782,7 +782,7 @@ export function PortfolioDetailWorkspace({
             aria-busy="true"
             className="flex items-center gap-2 rounded-lg bg-primary/5 px-4 py-3 text-foreground text-xs"
           >
-            <RefreshCw className="size-4 shrink-0 animate-spin text-primary-ink" aria-hidden />
+            <RefreshCwIcon className="size-4 shrink-0 animate-spin text-primary-ink" aria-hidden />
             <span>{uiText('scoring_your_first_cycle_this_can_take_up_to__bc23bbf')}</span>
           </div>
         ) : null}
@@ -801,7 +801,7 @@ export function PortfolioDetailWorkspace({
               type="button"
               variant="secondary"
             >
-              <RefreshCw aria-hidden className="size-3.5" />
+              <RefreshCwIcon aria-hidden className="size-3.5" />
               {uiText('check_again_fb7099a')}
             </Button>
           </div>
@@ -884,7 +884,7 @@ export function PortfolioDetailWorkspace({
                 type="button"
                 variant="ghost"
               >
-                <ChartLine className="size-3.5" />
+                <LineChartIcon className="size-3.5" />
               </Button>
             )}
             rows={adsetRows}

@@ -14,6 +14,16 @@ import {
   getAutomationNodePortSpec,
   type TestAutomationWorkflowResponse,
 } from '@continuum/contracts';
+import {
+  AlertCircle,
+  Copy,
+  Focus,
+  Lock,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+  Webhook,
+} from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
@@ -25,16 +35,6 @@ import {
   ToolInput,
   ToolOutput,
 } from '@/components/ai-elements/tool';
-import {
-  CircleAlert,
-  Copy,
-  Focus,
-  Lock,
-  RefreshCw,
-  Save,
-  ShieldCheck,
-  Webhook,
-} from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -186,7 +186,7 @@ function ValidationIssueButton({
       className="w-full rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
     >
       <Alert variant={issue.severity === 'error' ? 'destructive' : 'default'} className="py-2.5">
-        <CircleAlert aria-hidden="true" />
+        <AlertCircle aria-hidden="true" />
         <AlertTitle className="text-xs">
           {issue.severity === 'error'
             ? uiText('blocks_publishing_dfaf2ee')
@@ -458,7 +458,7 @@ export function WebhookManager({
 
         {error ? (
           <Alert variant="destructive">
-            <CircleAlert aria-hidden="true" />
+            <AlertCircle aria-hidden="true" />
             <AlertTitle>{uiText('webhook_setup_failed_dc76cfa')}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>

@@ -1,9 +1,9 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
+import { Image, Music2, Plus, Video, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
-import { Image, Music2, Plus, Video, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { TimelineInputSource } from '../../types';

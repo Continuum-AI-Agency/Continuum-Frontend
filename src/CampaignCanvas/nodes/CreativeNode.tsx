@@ -1,10 +1,5 @@
 'use client';
 
-import Image from 'next/image';
-import { useTranslations } from 'next-intl';
-import type React from 'react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Node } from '@/components/ai-elements/node';
 import {
   Copy,
   Film,
@@ -13,7 +8,12 @@ import {
   Play,
   Sparkles,
   Trash2,
-} from '@/components/icons';
+} from 'lucide-react';
+import Image from 'next/image';
+import { useTranslations } from 'next-intl';
+import type React from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { Node } from '@/components/ai-elements/node';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Badge } from '@/components/ui/badge';

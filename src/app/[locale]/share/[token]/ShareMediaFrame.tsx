@@ -7,8 +7,8 @@ import { useTranslations } from 'next-intl';
 // the per-viewer watermark stays on screen in fullscreen too.
 
 import type { ShareLinkWatermark, ShareWatermarkViewer } from '@continuum/contracts';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2 } from '@/components/icons';
 import { ShareWatermark } from './ShareWatermark';
 
 export function ShareMediaFrame({

@@ -1,8 +1,8 @@
 'use client';
 
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
-import { CircleAlert, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useRouter } from '@/i18n/navigation';
 import { markImpersonatedSession } from '@/lib/auth/impersonation';
@@ -144,7 +144,7 @@ export default function ImpersonatePage() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
         <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-2xl shadow-xl border border-red-100 max-w-md w-full text-center">
           <div className="bg-red-50 p-3 rounded-full">
-            <CircleAlert className="h-8 w-8 text-red-500" />
+            <AlertCircle className="h-8 w-8 text-red-500" />
           </div>
           <h1 className="text-xl font-bold text-gray-900">
             {uiText('authentication_failed_1a19525')}
@@ -175,7 +175,7 @@ export default function ImpersonatePage() {
       <div className="flex flex-col items-center gap-6 p-10 bg-white rounded-2xl shadow-xl border border-gray-100 max-w-sm w-full">
         <div className="relative">
           <div className="absolute inset-0 bg-blue-100 rounded-full blur-xl animate-pulse" />
-          <Spinner className="h-12 w-12 animate-spin text-blue-600 relative z-10" />
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 relative z-10" />
         </div>
         <div className="space-y-2 text-center">
           <h1 className="text-lg font-bold text-gray-900">

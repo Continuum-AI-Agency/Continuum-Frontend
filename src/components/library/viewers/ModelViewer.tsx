@@ -8,20 +8,20 @@
 // mirrored onto the root's data attributes, not React state, for tests and benches.
 
 import type { ModelViewerSource, OrbitAnchor } from '@continuum/contracts';
+import {
+  Loader2,
+  MessageSquarePlus,
+  Pause,
+  RotateCcw,
+  RotateCw,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import {
-  MessageSquarePlus,
-  Pause,
-  RotateCcw,
-  RotateCw,
-  Spinner,
-  ZoomIn,
-  ZoomOut,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { OverlayPin } from '../detail/AnnotationOverlay';
@@ -643,7 +643,7 @@ export function ModelViewer({
 
       {status === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-          <Spinner className="size-6 animate-spin" />
+          <Loader2 className="size-6 animate-spin" />
         </div>
       )}
       {status === 'error' && (

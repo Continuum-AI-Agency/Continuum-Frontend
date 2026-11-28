@@ -5,9 +5,10 @@
 // their own way, and neither knew a finished job could have lost its draft.
 
 import { hasApprovablePreview } from '@continuum/contracts';
+import type { LucideIcon } from 'lucide-react';
+import { CalendarDays, PencilRuler, RefreshCw, Wand2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type ButtonHTMLAttributes, type ReactNode, useEffect, useState } from 'react';
-import { Calendar, type IconComponent, PencilRuler, RefreshCw, Wand2 } from '@/components/icons';
 import { describeOrganicFailure } from '@/lib/organic/organicActionCopy';
 import { cn } from '@/lib/utils';
 import { type ConceptStatus, isFailureKind } from './conceptStatus';
@@ -22,7 +23,7 @@ export function RowAction({
   emphasis,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon: IconComponent;
+  icon: LucideIcon;
   emphasis?: 'primary' | 'danger';
 }) {
   return (
@@ -54,7 +55,7 @@ function FooterAction({
   emphasis: _emphasis,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon: IconComponent;
+  icon: LucideIcon;
   emphasis?: 'primary' | 'danger';
 }) {
   return (
@@ -223,7 +224,7 @@ export function DraftCardActions({
       )}
       {showOpen && (
         <Action
-          icon={Calendar}
+          icon={CalendarDays}
           onClick={() => onOpenDraft?.(liveDraftId)}
           title={
             missing

@@ -1,9 +1,9 @@
 'use client';
 
 import { type ChatMediaItem, type ChatMediaKind, chatMediaRefKey } from '@continuum/contracts';
+import { ExternalLink, Layers, Play } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type ReactNode, useMemo } from 'react';
-import { Layers2, Play, SquareArrowOutUpRight } from '@/components/icons';
 import { SkeletonText } from '@/components/ui/skeleton';
 import {
   type SignedChatMediaTile,
@@ -88,7 +88,7 @@ function MediaStripTile({
         </span>
       ) : null}
       {item.kind === 'carousel' ? (
-        <Layers2
+        <Layers
           aria-hidden="true"
           className="pointer-events-none absolute right-1 top-1 size-3.5 text-neutral-50 drop-shadow"
         />
@@ -105,7 +105,7 @@ function MediaStripTile({
         </span>
       ) : null}
       {state === 'empty' && item.permalink ? (
-        <SquareArrowOutUpRight
+        <ExternalLink
           aria-hidden="true"
           className="pointer-events-none absolute bottom-1 left-1 size-3 text-muted-foreground"
         />

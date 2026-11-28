@@ -2,6 +2,15 @@
 
 import { type ApiRenderVariable, templateDisplayName } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import {
+  ArrowLeft,
+  CalendarClock,
+  CircleDot,
+  Loader2,
+  Play,
+  RectangleHorizontal,
+  Variable,
+} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { FactList } from '@/components/forge/FactList';
@@ -11,15 +20,6 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
-import {
-  ArrowLeft,
-  CalendarClock,
-  CircleDot,
-  Play,
-  RectangleHorizontal,
-  Spinner,
-  Variable,
-} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Panel } from '@/components/shared/Panel';
 import { Button } from '@/components/ui/button';
@@ -128,7 +128,7 @@ export function SharedTemplateDetail({
             disabled={busy}
             onClick={onToggle}
           >
-            {busy ? <Spinner className="size-3.5 animate-spin" aria-hidden /> : null}
+            {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
             {template.granted
               ? translateUi('remove_c3812fc4')
               : translateUi('use_in_value0_54e69fc0', { value0: String(brand) })}

@@ -20,8 +20,8 @@ import { useTranslations } from 'next-intl';
 // A move with a platform whose writes are off in this portfolio (G5) offers no approval at all.
 
 import type { RecommendationRow } from '@continuum/contracts';
+import { ArrowRightIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import { useState } from 'react';
-import { ArrowRight, Spinner, TriangleAlert } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -101,7 +101,7 @@ function movePreviewVerdict(
 function Pending({ children }: { children: string }) {
   return (
     <p className="flex items-center gap-2 text-muted-foreground text-sm" role="status">
-      <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
+      <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
       {children}
     </p>
   );
@@ -117,7 +117,7 @@ function Verdict({ verdict, testId }: { verdict: CardActionVerdict; testId: stri
       data-testid={testId}
       data-tone={verdict.tone}
     >
-      {verdict.tone === 'ok' ? null : <TriangleAlert className="mt-0.5 size-4 shrink-0" />}
+      {verdict.tone === 'ok' ? null : <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />}
       <span>{verdict.text}</span>
     </p>
   );
@@ -277,7 +277,7 @@ export function BudgetMoveQueueRow({
           {move.from.map((platform) => (
             <PlatformChip key={`from-${platform}`} platform={platform} />
           ))}
-          <ArrowRight aria-hidden="true" className="size-3 text-muted-foreground" />
+          <ArrowRightIcon aria-hidden="true" className="size-3 text-muted-foreground" />
           {move.to.map((platform) => (
             <PlatformChip key={`to-${platform}`} platform={platform} />
           ))}
@@ -347,7 +347,7 @@ export function BudgetMoveQueueRow({
             )}
             <Button disabled={disabled} onClick={onDismiss} size="sm" variant="ghost">
               {uiText.rich('sentence_c0b09555af17', {
-                v0: () => (busy ? <Spinner className="size-3.5 animate-spin" /> : null),
+                v0: () => (busy ? <Loader2Icon className="size-3.5 animate-spin" /> : null),
               })}
             </Button>
           </div>

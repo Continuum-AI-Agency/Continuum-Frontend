@@ -1,8 +1,8 @@
 'use client';
 
+import { ChevronDown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useId, useMemo, useState } from 'react';
-import { ChevronDown } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 export type AgentDataScopeOption = {

@@ -11,8 +11,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // re-read past the edge cache.
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronRight, RotateCw } from 'lucide-react';
 import * as React from 'react';
-import { ChevronRight, RotateCw } from '@/components/icons';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 import { Button } from '@/components/ui/button';

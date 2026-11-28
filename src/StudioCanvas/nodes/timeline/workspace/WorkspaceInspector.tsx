@@ -22,6 +22,17 @@ import {
   editorTextWithRetainedAnimation,
   resolveNestedSequence,
 } from '@continuum/contracts';
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Film,
+  Loader2,
+  Music,
+  Type,
+  Wand2,
+  X,
+} from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   type ReactNode,
@@ -33,17 +44,6 @@ import {
   useState,
   useMemo as useUiConfigMemo,
 } from 'react';
-import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  Film,
-  Music,
-  Spinner,
-  Type,
-  Wand2,
-  X,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';
@@ -1322,7 +1322,7 @@ function CaptionTrackInspector({
           onClick={() => void autoCaption()}
         >
           {captioning ? (
-            <Spinner className="h-3 w-3 animate-spin" />
+            <Loader2 className="h-3 w-3 animate-spin" />
           ) : (
             <Wand2 className="h-3 w-3" />
           )}

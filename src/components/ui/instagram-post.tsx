@@ -1,6 +1,5 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
 import {
   Bookmark,
   Code,
@@ -11,7 +10,8 @@ import {
   MoreHorizontal,
   Send,
   UserMinus,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   DropdownMenu,
   DropdownMenuContent,

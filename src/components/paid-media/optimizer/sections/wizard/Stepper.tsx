@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 // one the same list lies down as a compact row on top. Completed steps are clickable so an
 // operator can go back and change one answer without unwinding the rest.
 
-import { Check } from '@/components/icons';
+import { CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WIZARD_STEPS, type WizardStep, wizardSteps } from './wizardModel';
 
@@ -46,7 +46,7 @@ export function Stepper({ current, completed, onSelect, values = {} }: StepperPr
               type="button"
             >
               <span aria-hidden className="w-3 shrink-0 font-mono text-xs tabular-nums">
-                {done && !active ? <Check className="size-3.5 translate-y-0.5" /> : index + 1}
+                {done && !active ? <CheckIcon className="size-3.5 translate-y-0.5" /> : index + 1}
               </span>
               <span className="whitespace-nowrap @4xl:whitespace-normal">
                 {step.label}

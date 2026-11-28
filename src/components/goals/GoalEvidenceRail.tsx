@@ -5,23 +5,23 @@ import type {
   GoalStructuredResponseLeafValue,
   GoalStructuredResponseValue,
 } from '@continuum/contracts';
+import {
+  Bot,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  MessageSquare,
+  MessageSquarePlus,
+  Paperclip,
+  Reply,
+  Users,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ACCEPTED_ATTACHMENT_TYPES,
   useChatAttachments,
 } from '@/components/chat/useChatAttachments';
-import {
-  Bot,
-  CircleAlert,
-  CircleCheck,
-  Clock,
-  MessageSquare,
-  MessageSquarePlus,
-  Paperclip,
-  Reply,
-  Users,
-} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -352,7 +352,7 @@ export function GoalEvidenceRail({
                         <span className="text-foreground">{event.subject}</span>
                       </p>
                       <p className="mt-0.5 flex items-center gap-1 text-2xs text-muted-foreground">
-                        <Clock className="size-3" />
+                        <Clock3 className="size-3" />
                         {formatRelativeTime(event.occurredAt, Date.now(), uiLocale)}
                       </p>
                     </div>
@@ -405,7 +405,7 @@ export function GoalEvidenceRail({
 
           <div className="border-y border-border/70 px-3 py-2">
             <p className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wide text-muted-foreground">
-              <CircleCheck className="size-3.5" />
+              <CheckCircle2 className="size-3.5" />
               {uiText('m_93f44becc5')}
             </p>
           </div>

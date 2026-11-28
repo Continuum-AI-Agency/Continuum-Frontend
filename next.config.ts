@@ -88,6 +88,8 @@ const nextConfig: NextConfig = {
     },
     // `experimental.viewTransition` graduated in Next 16.3 — React's
     // <ViewTransition> now works in the App Router with no configuration.
+    // lucide-react is already in Next's built-in optimizePackageImports list.
+    optimizePackageImports: ['@phosphor-icons/react'],
   },
   webpack(config) {
     config.module.rules.push({ test: /\.wgsl$/, loader: '@vgpu/wgsl/loader-webpack' });

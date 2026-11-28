@@ -9,7 +9,7 @@ import { useTranslations } from 'next-intl';
 // the empty state, the header is a breadcrumb back to it ("← Portfolios / New portfolio")
 // instead of an onboarding pitch.
 
-import { ArrowLeft } from '@/components/icons';
+import { ArrowLeftIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { PortfolioSetup } from './PortfolioSetup';
@@ -41,7 +41,7 @@ export function PortfolioCreateView({
           type="button"
           variant="ghost"
         >
-          <ArrowLeft className="size-3.5" aria-hidden="true" />
+          <ArrowLeftIcon className="size-3.5" aria-hidden="true" />
           {uiText('portfolios_e8af9d8')}
         </Button>
         <span aria-hidden="true" className="text-muted-foreground text-sm">

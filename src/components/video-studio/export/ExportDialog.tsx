@@ -10,14 +10,9 @@ import {
   platformExportPresetIdSchema,
   type VideoEditorOpOutput,
 } from '@continuum/contracts';
+import { Download, ExternalLink, RotateCcw, TriangleAlert } from 'lucide-react';
 import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ArrowDownToLine,
-  RotateCcw,
-  SquareArrowOutUpRight,
-  TriangleAlert,
-} from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
@@ -66,8 +61,7 @@ function VariantExportRow({ row, onRetry }: { row: VariantExport; onRetry: () =>
                 download
                 className={buttonVariants({ size: 'sm', className: 'h-7 text-xs' })}
               >
-                <ArrowDownToLine data-icon="inline-start" /> {translateUi('download_d6eafe82')}{' '}
-                {row.label}
+                <Download data-icon="inline-start" /> {translateUi('download_d6eafe82')} {row.label}
               </a>
             ) : null}
             {row.assetId ? (
@@ -78,7 +72,7 @@ function VariantExportRow({ row, onRetry }: { row: VariantExport; onRetry: () =>
                 })}
                 className={buttonVariants({ size: 'sm', variant: 'outline', className: 'h-7' })}
               >
-                <SquareArrowOutUpRight className="size-3.5" />
+                <ExternalLink className="size-3.5" />
               </Link>
             ) : null}
           </>
@@ -336,7 +330,7 @@ export function ExportDialog({
           <div className="flex flex-wrap items-center gap-2" data-testid="export-complete">
             {status.downloadUrl ? (
               <a href={status.downloadUrl} download className={buttonVariants()}>
-                <ArrowDownToLine data-icon="inline-start" /> {translateUi('download_mp4_4ec38a29')}
+                <Download data-icon="inline-start" /> {translateUi('download_mp4_4ec38a29')}
               </a>
             ) : null}
             {status.assetId ? (
@@ -344,8 +338,9 @@ export function ExportDialog({
                 href={buildLibraryAssetHref({ assetId: status.assetId })}
                 className={buttonVariants({ variant: 'outline' })}
               >
-                <SquareArrowOutUpRight data-icon="inline-start" />{' '}
-                {translateUi('open_in_library_c0a66bb6')}{' '}
+                <ExternalLink data-icon="inline-start" /> {translateUi(
+                  'open_in_library_c0a66bb6',
+                )}{' '}
               </Link>
             ) : null}
           </div>

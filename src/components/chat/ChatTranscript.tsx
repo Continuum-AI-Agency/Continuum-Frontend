@@ -1,5 +1,6 @@
 'use client';
 
+import { ArrowDown, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -12,7 +13,6 @@ import {
   useState,
 } from 'react';
 import { flushSync } from 'react-dom';
-import { ArrowDown, Spinner } from '@/components/icons';
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -194,7 +194,7 @@ function LoadEarlierSentinel({ loading, onReached }: { loading: boolean; onReach
     >
       {loading ? (
         <span className="flex items-center gap-2">
-          <Spinner className="size-3.5 animate-spin" aria-hidden="true" />
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
           {tUi('m_e7077a0e5f')}
         </span>
       ) : (

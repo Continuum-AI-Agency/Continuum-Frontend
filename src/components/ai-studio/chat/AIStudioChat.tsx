@@ -1,8 +1,9 @@
 'use client';
+import { MessageCircle, Send, X } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MessageCircle, Send, X } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

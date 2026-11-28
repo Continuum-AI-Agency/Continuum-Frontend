@@ -5,9 +5,9 @@ import type {
   OrganicCanvasTarget,
   OrganicCanvasTargetSearchResponse,
 } from '@continuum/contracts';
+import { AlertTriangle, ImageOff, Loader2 } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ImageOff, Spinner, TriangleAlert } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -177,7 +177,7 @@ export function PlannerDraftBrowser({
       <div className="nodrag nowheel min-h-0 flex-1 overflow-y-auto rounded-md border border-border/60">
         {loading ? (
           <p className="flex items-center gap-1.5 p-2 text-2xs text-muted-foreground">
-            <Spinner className="size-3 animate-spin" aria-hidden />{' '}
+            <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
             {translateUi('searching_c31723ab')}
           </p>
         ) : null}
@@ -298,7 +298,7 @@ function DraftRow({
             ) : null}
             {target.blockers.map((blocker) => (
               <Pill key={blocker} variant="destructive" className="text-2xs">
-                <TriangleAlert className="size-2.5" aria-hidden />
+                <AlertTriangle className="size-2.5" aria-hidden />
                 {blocker === 'account_orphaned'
                   ? translateUi('account_not_connected_d7087db9')
                   : blocker}

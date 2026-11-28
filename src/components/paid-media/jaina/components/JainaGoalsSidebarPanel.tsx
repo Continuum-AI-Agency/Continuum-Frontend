@@ -1,8 +1,8 @@
 'use client';
 
+import { FileText, Loader2, Target } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { FileText, Spinner, Target } from '@/components/icons';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useGoals } from '@/hooks/useGoals';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
@@ -15,7 +15,7 @@ export function JainaGoalsSidebarPanel({ brandId }: { brandId: string }) {
   if (query.isLoading) {
     return (
       <div className="flex items-center gap-2 px-4 py-5 text-xs text-muted-foreground">
-        <Spinner className="size-3.5 animate-spin" />
+        <Loader2 className="size-3.5 animate-spin" />
         {uiText('loading_goals_1c23423')}
       </div>
     );

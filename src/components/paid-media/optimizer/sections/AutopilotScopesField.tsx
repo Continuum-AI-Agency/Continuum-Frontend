@@ -17,8 +17,8 @@ import { useTranslations } from 'next-intl';
 
 import type { AutopilotScope, AutopilotScopes } from '@continuum/contracts';
 import { AUTOPILOT_SCOPE_COPY, DEFAULT_AUTOPILOT_SCOPES } from '@continuum/contracts';
+import { Loader2Icon } from 'lucide-react';
 import { useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -138,7 +138,7 @@ export function AutopilotScopesField({
                 <Label className="flex items-center gap-1 font-medium text-xs" htmlFor={id}>
                   {copy.label}
                   {savingScope === scope ? (
-                    <Spinner className="size-3 animate-spin text-muted-foreground" />
+                    <Loader2Icon className="size-3 animate-spin text-muted-foreground" />
                   ) : null}
                 </Label>
               </li>
@@ -168,7 +168,7 @@ export function AutopilotScopesField({
                 <Label className="flex items-center gap-1.5" htmlFor={id}>
                   {copy.label}
                   {savingScope === scope ? (
-                    <Spinner className="size-3 animate-spin text-muted-foreground" />
+                    <Loader2Icon className="size-3 animate-spin text-muted-foreground" />
                   ) : null}
                 </Label>
                 <p className="text-xs text-muted-foreground">{copy.body}</p>

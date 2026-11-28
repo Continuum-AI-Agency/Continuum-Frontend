@@ -1,8 +1,8 @@
 'use client';
 
+import { ExternalLink, GalleryHorizontalEnd, Play, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
-import { GalleryHorizontalEnd, Play, SquareArrowOutUpRight, Trash2 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { isCarouselMediaType } from '@/lib/organic/carousel';
@@ -41,7 +41,7 @@ function PostedActions({
           className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'self-start')}
         >
           {uiText('open_post_92a0ae1')}
-          <SquareArrowOutUpRight data-icon="inline-end" />
+          <ExternalLink data-icon="inline-end" />
         </a>
       ) : null}
       {onViewMetrics && (
@@ -52,7 +52,7 @@ function PostedActions({
           className="w-full justify-between"
           onClick={onViewMetrics}
         >
-          {uiText('viewPostMetrics')} <SquareArrowOutUpRight data-icon="inline-end" />
+          {uiText('viewPostMetrics')} <ExternalLink data-icon="inline-end" />
         </Button>
       )}
       {onDelete && (

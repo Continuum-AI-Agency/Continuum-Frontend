@@ -1,9 +1,9 @@
 'use client';
 
 import { exportSettingsForPreset } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { useRouter } from '@/i18n/navigation';
 import { studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
@@ -48,7 +48,7 @@ export function NewVideoProject({ brandId }: { brandId: string }) {
         </span>
       ) : (
         <>
-          <Spinner className="size-4 animate-spin" /> {translateUi(
+          <Loader2 className="size-4 animate-spin" /> {translateUi(
             'starting_a_new_edit_b9afebbf',
           )}{' '}
         </>

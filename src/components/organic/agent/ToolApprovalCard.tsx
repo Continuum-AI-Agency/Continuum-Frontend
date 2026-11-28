@@ -1,9 +1,9 @@
 'use client';
 
 import { findStampedCandidate, publishAccountLabel } from '@continuum/contracts';
+import { Check, X } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { Check, X } from '@/components/icons';
 import {
   AgentButton,
   AgentDecisionCard,

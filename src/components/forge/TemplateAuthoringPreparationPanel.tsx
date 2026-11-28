@@ -10,17 +10,10 @@ export type PreparationUi = {
 };
 
 import type { TemplateAuthoringDocument } from '@continuum/contracts';
+import { Check, Circle, Download, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { LayerDraftSyncStatus } from '@/components/forge/layerDraft';
 import type { useTemplateAuthoringLifecycle } from '@/components/forge/useTemplateAuthoringLifecycle';
-import {
-  ArrowDownToLine,
-  Check,
-  Circle,
-  RefreshCw,
-  ShieldAlert,
-  Spinner,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -691,7 +684,7 @@ export function TemplateAuthoringPreparationPanel({
         {workflow.state === 'compiling' ||
         workflow.state === 'preparing' ||
         workflow.state === 'rendering' ? (
-          <Spinner
+          <Loader2
             aria-label={translateUi('preparation_in_progress_1d6050e9')}
             className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground"
           />
@@ -916,9 +909,9 @@ export function TemplateAuthoringPreparationPanel({
             }}
           >
             {downloading ? (
-              <Spinner className="animate-spin" data-icon="inline-start" />
+              <Loader2 className="animate-spin" data-icon="inline-start" />
             ) : (
-              <ArrowDownToLine data-icon="inline-start" />
+              <Download data-icon="inline-start" />
             )}
             {downloading
               ? translateUi('verifying_package_3e2e01da')
@@ -1091,7 +1084,7 @@ export function TemplateAuthoringPreparationPanel({
               }}
             >
               {reviewing ? (
-                <Spinner className="animate-spin" data-icon="inline-start" />
+                <Loader2 className="animate-spin" data-icon="inline-start" />
               ) : (
                 <Check data-icon="inline-start" />
               )}{' '}

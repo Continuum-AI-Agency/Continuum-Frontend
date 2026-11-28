@@ -12,9 +12,9 @@ import {
   type LookEffectId,
   lookEffectInstance,
 } from '@continuum/contracts';
+import { X } from 'lucide-react';
 import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState, useMemo as useUiConfigMemo } from 'react';
-import { X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { SliderField } from '@/components/ui/slider-field';
 import { useToast } from '@/components/ui/ToastProvider';

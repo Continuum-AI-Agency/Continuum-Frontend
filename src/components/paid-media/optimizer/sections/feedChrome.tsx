@@ -14,8 +14,8 @@ import { useTranslations } from 'next-intl';
 // of what has loaded, a copyable platform receipt, and an honest "load more" that appears only
 // when the RPC's own cursor says there IS more.
 
+import { CheckIcon, CopyIcon } from 'lucide-react';
 import { useState } from 'react';
-import { Check, Copy } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -131,9 +131,9 @@ export function ReceiptToken({
       )}
     >
       {copied ? (
-        <Check aria-hidden="true" className="size-3 shrink-0 text-success" />
+        <CheckIcon aria-hidden="true" className="size-3 shrink-0 text-success" />
       ) : (
-        <Copy aria-hidden="true" className="size-3 shrink-0" />
+        <CopyIcon aria-hidden="true" className="size-3 shrink-0" />
       )}
       <span className="shrink-0 font-sans" data-testid="receipt-label">
         {label}

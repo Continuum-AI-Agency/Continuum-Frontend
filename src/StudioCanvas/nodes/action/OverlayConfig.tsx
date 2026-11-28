@@ -3,10 +3,10 @@
 import type { ActionId } from '@continuum/contracts';
 import { createNodeData } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
+import { ImageUp, Sparkles, Upload } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { ArrowUpFromLine, ImageUp, Sparkles } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -281,7 +281,7 @@ export function OverlayConfig({
             className="h-7 flex-1 text-xs"
             onClick={() => fileRef.current?.click()}
           >
-            <ArrowUpFromLine className="mr-1 size-3" /> {translateUi('upload_865e89de')}
+            <Upload className="mr-1 size-3" /> {translateUi('upload_865e89de')}
           </Button>
           <Button
             type="button"

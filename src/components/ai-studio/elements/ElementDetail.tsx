@@ -13,9 +13,9 @@
 // entry keeps its name when a newer one lands above it.
 
 import { elementReferenceAspectRatio, isElementProductCategory } from '@continuum/contracts';
+import { History, Loader2, Plus, RotateCw, Star, Upload, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
-import { ArrowUpFromLine, History, Plus, RotateCw, Spinner, Star, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -297,7 +297,7 @@ export function ElementDetail({
           disabled={isGenerating || element.members.length === 0}
         >
           {isGenerating ? (
-            <Spinner className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <RotateCw className="mr-2 h-4 w-4" />
           )}
@@ -333,8 +333,9 @@ export function ElementDetail({
           htmlFor="element-reference-upload"
           className="inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-xs hover:bg-muted"
         >
-          <ArrowUpFromLine className="mr-2 h-3.5 w-3.5" />{' '}
-          {translateUi('upload_existing_sheet_e98a19e6')}{' '}
+          <Upload className="mr-2 h-3.5 w-3.5" /> {translateUi(
+            'upload_existing_sheet_e98a19e6',
+          )}{' '}
         </Label>
         <Input
           id="element-reference-upload"
@@ -348,7 +349,7 @@ export function ElementDetail({
             if (file) void uploadOne(file, 'sheet');
           }}
         />
-        {uploading ? <Spinner className="h-4 w-4 animate-spin" /> : null}
+        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
       </div>
 
       {history.length > 0 ? (
@@ -407,7 +408,7 @@ export function ElementDetail({
                   )}
                   {isPending ? (
                     <span className="absolute inset-0 flex items-center justify-center bg-background/60">
-                      <Spinner className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     </span>
                   ) : isDefault ? (
                     <Star className="absolute right-0.5 top-0.5 h-3 w-3 fill-current text-brand-primary" />
@@ -542,7 +543,7 @@ export function ElementDetail({
               htmlFor="element-motion-upload"
               className="inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-xs hover:bg-muted"
             >
-              <ArrowUpFromLine className="mr-2 h-3.5 w-3.5" />{' '}
+              <Upload className="mr-2 h-3.5 w-3.5" />{' '}
               {motionAssetId
                 ? translateUi('replace_clip_a0b6e7ed')
                 : translateUi('upload_clip_95ac507d')}
@@ -621,7 +622,7 @@ export function ElementDetail({
             })
           }
         >
-          {isSaving ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}{' '}
+          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{' '}
           {translateUi('replace_element_f7062476')}
         </Button>
       </div>

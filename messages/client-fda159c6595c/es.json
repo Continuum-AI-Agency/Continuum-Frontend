@@ -21,9 +21,7 @@
     "requestCancelled": "La solicitud se canceló.",
     "requestTimedOut": "Esta solicitud tardó demasiado. Inténtalo de nuevo.",
     "resourceNotFound": "Este elemento ya no está disponible.",
-    "save": "Guardar",
     "saving": "Guardando…",
-    "search": "Buscar",
     "serviceUnavailable": "El servicio no está disponible temporalmente. Inténtalo de nuevo en un momento.",
     "unexpectedError": "Ocurrió un error inesperado. Inténtalo de nuevo.",
     "unknown": "Desconocido",
@@ -319,9 +317,6 @@
     "the_import_is_still_running_import_again_in_a_11aa35d": "La importación sigue en curso. Vuelve a importar en un minuto: retomará la misma importación.",
     "the_linked_frame_is_ready_to_import_9ac90aa": "El fotograma enlazado está listo para importar.",
     "value0_selected_975acbfe": "{count, plural, one {# seleccionado} other {# seleccionados}}"
-  },
-  "navigation": {
-    "search": "Buscar"
   },
   "settings": {
     "billingContractReason": "Las marcas con contrato se facturan según su acuerdo, sin cobro por uso.",

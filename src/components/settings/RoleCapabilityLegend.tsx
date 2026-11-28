@@ -6,8 +6,8 @@ import { useTranslations } from 'next-intl';
 // and who can act before they change a role. Copy + tooltip only — the security
 // lane owns the actual RBAC enforcement; this component never changes behaviour.
 
+import { Info, ScrollText } from 'lucide-react';
 import Link from 'next/link';
-import { Info, ScrollText } from '@/components/icons';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 

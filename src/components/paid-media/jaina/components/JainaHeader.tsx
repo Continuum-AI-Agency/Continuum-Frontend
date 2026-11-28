@@ -1,7 +1,7 @@
 'use client';
 
+import { Archive, Layers, RotateCcw, Target, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Archive, Layers2, RotateCcw, Target, X } from '@/components/icons';
 
 import { ActiveProjectSelect, useActiveProjectOptional } from '@/components/projects';
 import {
@@ -65,7 +65,7 @@ export function JainaHeader({
 
           {showAccountScope && adAccountId && (
             <div className="flex items-center gap-1.5 shrink-0 text-xs uppercase tracking-wider font-semibold text-muted-foreground">
-              <Layers2 className="size-3" />
+              <Layers className="size-3" />
               <span className="font-mono truncate max-w-[120px]">{adAccountId}</span>
             </div>
           )}

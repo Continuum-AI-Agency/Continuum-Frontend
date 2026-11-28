@@ -9,9 +9,9 @@
 // or at the clip's own timecode.
 
 import type { MediaComment } from '@continuum/contracts';
+import { Check, Copy, Download, ExternalLink } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
-import { ArrowDownToLine, Check, Copy, SquareArrowOutUpRight } from '@/components/icons';
 import { useAssetComments } from '@/components/library/detail/useAssetComments';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/toast-imperative';
@@ -127,7 +127,7 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
             className="text-muted-foreground hover:text-foreground"
             title={translateUi('open_in_the_library_2cc5a234')}
           >
-            <SquareArrowOutUpRight className="size-3.5" />
+            <ExternalLink className="size-3.5" />
           </a>
         </div>
         <p className="mt-0.5 text-2xs tabular-nums text-muted-foreground">
@@ -167,7 +167,7 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
               onClick={() => void exportAs(format)}
               className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-2xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
             >
-              <ArrowDownToLine className="size-3" />
+              <Download className="size-3" />
               {EXPORT_BUTTONS[format]}
             </button>
           ))}

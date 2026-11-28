@@ -13,8 +13,8 @@ import {
   type ListeningMention,
   type ListeningTag,
 } from '@continuum/contracts';
+import { ExternalLink, X } from 'lucide-react';
 import { type FormEvent, useMemo, useState } from 'react';
-import { SquareArrowOutUpRight, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,7 +63,7 @@ function MentionRow({ mention }: { mention: ListeningMention }) {
             className="flex items-center gap-1 text-sm font-medium hover:underline"
           >
             <span className="truncate">{mention.title ?? hostOf(mention.url)}</span>
-            <SquareArrowOutUpRight className="h-3 w-3 shrink-0" aria-hidden />
+            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
           </a>
           {mention.body ? (
             <p className="text-muted-foreground line-clamp-2 text-xs">{mention.body}</p>

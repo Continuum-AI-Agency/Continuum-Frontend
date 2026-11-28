@@ -35,9 +35,9 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { ChevronDown, Columns3 } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Columns3 } from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,

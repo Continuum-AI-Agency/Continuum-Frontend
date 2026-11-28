@@ -3,7 +3,7 @@
 // Sprout / Dash Hudson adapt by post type): reels lead with Views + Hook Rate +
 // Avg Watch, static posts with Reach + Views + Engagement, carousels with
 // Reach + Views + Saves. Pure module (no React) so it is unit-testable; the icon
-// is referenced by key and resolved to an icon component in the view layer.
+// is referenced by key and resolved to a lucide component in the view layer.
 
 import { hookRateTextColor } from '@/lib/organic/hook-rate-color';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';

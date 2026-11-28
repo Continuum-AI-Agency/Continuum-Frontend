@@ -1,8 +1,8 @@
 'use client';
 
 import type { CustomField } from '@continuum/contracts';
+import { SlidersHorizontal } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { SlidersHorizontal } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';

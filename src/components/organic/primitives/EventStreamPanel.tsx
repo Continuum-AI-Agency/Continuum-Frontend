@@ -1,8 +1,9 @@
 'use client';
 
+import { ScrollText, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+
 import * as React from 'react';
-import { ScrollText, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { StreamEventItem } from './StreamEventItem';

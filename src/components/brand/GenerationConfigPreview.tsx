@@ -2,8 +2,8 @@
 
 import type { Skill } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { BookOpen, Type, Wand2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { BookOpen, Type, Wand2 } from '@/components/icons';
 import type { BrandBookPiecePresentation } from '@/lib/brands/generationConfigPresentation';
 import { getCreativeAssetsBucket } from '@/lib/creative-assets/config';
 import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';

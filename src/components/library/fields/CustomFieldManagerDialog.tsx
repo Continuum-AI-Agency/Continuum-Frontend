@@ -22,9 +22,9 @@ import {
   DEFAULT_RATING_MAX,
   MAX_CUSTOM_FIELDS_PER_BRAND,
 } from '@continuum/contracts';
+import { ChevronDown, ChevronUp, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Plus, Spinner, Trash2, X } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -564,7 +564,7 @@ function NewFieldForm({
           disabled={!ready || busy}
           onClick={() => void submit()}
         >
-          {busy ? <Spinner className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}{' '}
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}{' '}
           {translateUi('add_9fd728c6')}
         </Button>
       </div>

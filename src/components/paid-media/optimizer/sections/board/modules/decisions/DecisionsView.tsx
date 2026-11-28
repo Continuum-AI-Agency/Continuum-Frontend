@@ -6,10 +6,10 @@
 // cards to their new places (Motion layout); under reduced motion they simply appear there.
 
 import type { BoardModuleSize } from '@continuum/contracts';
+import { PlusIcon } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Plus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { DecisionCardView } from './DecisionCard';
@@ -212,7 +212,7 @@ function NoDecisions({
           {uiText('no_portfolio_yet_so_the_optimizer_has_no_deci_b10191d')}
         </p>
         <Button data-testid="decision-create" onClick={onCreatePortfolio} size="sm" type="button">
-          <Plus aria-hidden="true" />
+          <PlusIcon aria-hidden="true" />
           {uiText('create_portfolio_a53487c')}
         </Button>
       </div>

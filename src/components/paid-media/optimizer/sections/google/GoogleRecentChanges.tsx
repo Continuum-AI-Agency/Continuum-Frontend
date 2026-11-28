@@ -6,7 +6,7 @@ import type { GoogleText } from './googlePresentation';
 // each row with its undo, as Activity shows it) and what Google's own change history saw in the
 // same week, by whichever channel made it. Undo is the row's own control; nothing else writes.
 
-import { ArrowRight } from '@/components/icons';
+import { ArrowRightIcon } from 'lucide-react';
 import {
   type OptimizerActionFeedRow,
   useOptimizerActions,
@@ -124,7 +124,7 @@ export function GoogleRecentChangesView({
           type="button"
         >
           {uiText('every_change_with_undo_in_activity_45a00aa')}
-          <ArrowRight aria-hidden="true" className="size-3.5" />
+          <ArrowRightIcon aria-hidden="true" className="size-3.5" />
         </button>
       </section>
       <section className="space-y-1" data-testid="google-recent-history">

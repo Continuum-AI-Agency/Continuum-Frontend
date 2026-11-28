@@ -23,7 +23,7 @@ import { useTranslations } from 'next-intl';
 // a reader can take it to mean Instagram as a whole, which is both wider than
 // the truth and the opposite of reassuring.
 
-import { Info } from '@/components/icons';
+import { Info } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export function ButtonReachNote() {

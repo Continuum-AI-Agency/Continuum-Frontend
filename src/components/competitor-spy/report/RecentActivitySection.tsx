@@ -5,8 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 // blocks that used to be the Overview tab now live at the bottom of the
 // Competitive Report as "Recent activity".
 
+import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
-import { ChevronDown } from '@/components/icons';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAwarenessReport } from '@/lib/api/competitorSpy';
 import { cn } from '@/lib/utils';

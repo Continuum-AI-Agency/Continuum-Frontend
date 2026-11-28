@@ -1,9 +1,9 @@
 'use client';
 
 import type { ToolUIPart } from 'ai';
+import { ChevronDownIcon, Code } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
-import { ChevronDown, Code } from '@/components/icons';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
@@ -38,7 +38,7 @@ export const SandboxHeader = ({ className, title, state, ...props }: SandboxHead
         <span className="font-medium text-sm">{title}</span>
         {getStatusBadge(state, tUi)}
       </div>
-      <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
     </CollapsibleTrigger>
   );
 };

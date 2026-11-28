@@ -1,8 +1,8 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { Spinner } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -282,7 +282,7 @@ export function AgentButton({
     >
       {loading ? (
         <>
-          <Spinner className="h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
           {variant === 'primary' && <span>{uiText('starting_bbe5fc3')}</span>}
         </>
       ) : (

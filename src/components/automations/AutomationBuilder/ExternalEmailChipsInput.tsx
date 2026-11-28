@@ -1,9 +1,9 @@
 'use client';
 
+import { XIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type KeyboardEvent, useState } from 'react';
 import { z } from 'zod';
-import { X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 
@@ -67,7 +67,7 @@ export function ExternalEmailChipsInput({
                 className="rounded-full p-0.5 hover:bg-muted-foreground/20"
                 onClick={() => onChange(value.filter((existing) => existing !== email))}
               >
-                <X className="size-3" />
+                <XIcon className="size-3" />
               </button>
             </Badge>
           ))}

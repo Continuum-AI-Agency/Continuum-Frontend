@@ -1,7 +1,7 @@
 'use client';
 
+import { ChevronRightIcon } from 'lucide-react';
 import type * as React from 'react';
-import { ChevronRight } from '@/components/icons';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
@@ -109,7 +109,7 @@ function TraceCollapsibleTrigger({
     >
       {children}
       <TraceIcon className="transition-transform group-aria-expanded/trace-collapsible-trigger:rotate-90">
-        <ChevronRight />
+        <ChevronRightIcon />
       </TraceIcon>
     </CollapsibleTrigger>
   );

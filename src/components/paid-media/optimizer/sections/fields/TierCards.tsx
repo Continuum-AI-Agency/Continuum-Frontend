@@ -9,7 +9,7 @@ import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTrans
 // never a greyed-out option behind two fields nobody explained.
 
 import type { ApplyMode } from '@continuum/contracts';
-import { Sparkles } from '@/components/icons';
+import { SparklesIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { applyModePill } from '../../reportModel';
 
@@ -79,7 +79,7 @@ export function TierCards({
               )}
             >
               {tier === 'autopilot' ? (
-                <Sparkles aria-hidden="true" className="size-3.5 text-primary-ink" />
+                <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
               ) : null}
               {applyModePill(tier, optimizerText)?.label ?? copy.title}
             </span>

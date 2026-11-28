@@ -11,14 +11,6 @@ import {
   type MediaReviewStatus,
   orderCollectionsTree,
 } from '@continuum/contracts';
-import { useTranslations as useUiTranslations } from 'next-intl';
-import {
-  type DragEvent,
-  type HTMLAttributes,
-  useCallback,
-  useState,
-  useMemo as useUiConfigMemo,
-} from 'react';
 import {
   BadgeCheck,
   Bookmark,
@@ -29,8 +21,8 @@ import {
   FolderOpen,
   FolderPlus,
   HardDrive,
-  Image,
-  Layers2,
+  ImageIcon,
+  Layers,
   LayoutGrid,
   LayoutTemplate,
   Link2,
@@ -43,9 +35,17 @@ import {
   Type,
   UserCheck,
   UserLock,
-  Users,
+  UsersRound,
   Workflow,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import {
+  type DragEvent,
+  type HTMLAttributes,
+  useCallback,
+  useState,
+  useMemo as useUiConfigMemo,
+} from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/components/ui/toast-imperative';
@@ -111,10 +111,10 @@ function useLocalBrowseFoldersMessages() {
       icon: typeof Folder;
     }[] = [
       { value: 'home', label: translateConfig('home_3a786953'), icon: LayoutGrid },
-      { value: 'images', label: translateConfig('images_be7e2f20'), icon: Image },
+      { value: 'images', label: translateConfig('images_be7e2f20'), icon: ImageIcon },
       { value: 'videos', label: translateConfig('videos_c9a96394'), icon: Film },
       { value: 'canvas', label: translateConfig('canvas_3824a9f4'), icon: Sparkles },
-      { value: 'elements', label: translateConfig('elements_e1ff7a90'), icon: Layers2 },
+      { value: 'elements', label: translateConfig('elements_e1ff7a90'), icon: Layers },
       { value: 'sources', label: translateConfig('source_files_fa125556'), icon: PackageOpen },
       { value: 'templates', label: translateConfig('templates_56b564b7'), icon: LayoutTemplate },
       { value: 'review', label: translateConfig('needs_review_07297fa9'), icon: ShieldAlert },
@@ -261,7 +261,7 @@ function CollectionRow({
           aria-label={translateUi('request_review_of_value0_062367c2', { value0: String(label) })}
           className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
         >
-          <Users className="size-3" />
+          <UsersRound className="size-3" />
         </button>
       ) : null}
       {locked ? null : (

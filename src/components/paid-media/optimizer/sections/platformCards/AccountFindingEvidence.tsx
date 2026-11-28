@@ -3,9 +3,9 @@
 // here applies a change; copying a negative list to paste in Google Ads is not a write.
 
 import type { PlatformCard } from '@continuum/contracts';
+import { CheckIcon, CopyIcon, InfoIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Check, Copy, Info } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -166,9 +166,9 @@ function CopyTerms({ theme, terms }: { theme: string; terms: readonly string[] }
       variant="ghost"
     >
       {copied ? (
-        <Check aria-hidden="true" className="size-3.5 text-success" />
+        <CheckIcon aria-hidden="true" className="size-3.5 text-success" />
       ) : (
-        <Copy aria-hidden="true" className="size-3.5" />
+        <CopyIcon aria-hidden="true" className="size-3.5" />
       )}
       {copied ? uiText('copied_8d525e5') : uiText('copy_e21f935')}
     </Button>
@@ -231,7 +231,7 @@ export function AccountFindingEvidence({ card }: { card: AccountFindingCard }) {
           className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-muted-foreground text-xs"
           data-testid="account-finding-blocked"
         >
-          <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          <InfoIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
           <span>{card.blocked}</span>
         </p>
       ) : null}

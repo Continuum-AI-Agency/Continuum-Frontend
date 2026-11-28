@@ -8,6 +8,16 @@ import {
   workflowSlug,
 } from '@continuum/contracts';
 import {
+  AtSign,
+  Check,
+  CornerUpLeft,
+  Send,
+  Sparkles,
+  Square,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
+import {
   useTranslations,
   useLocale as useUiLocale,
   useTranslations as useUiTranslations,
@@ -22,16 +32,6 @@ import { Message } from '@/components/ai-elements/message';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { SlashMenu, useSlashTextarea } from '@/components/chat/slash-menu';
 import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
-import {
-  AtSign,
-  Check,
-  CornerUpLeft,
-  Send,
-  Sparkles,
-  Square,
-  TriangleAlert,
-  X,
-} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {

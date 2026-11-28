@@ -1,8 +1,8 @@
 'use client';
 
 import type { MediaAsset } from '@continuum/contracts';
+import { Scaling } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { Scaling } from '@/components/icons';
 
 import { QuickReformatMenu } from '@/components/library/reformat/QuickReformatMenu';
 import { Button } from '@/components/ui/button';

@@ -1,8 +1,8 @@
 'use client';
 
+import { Plug, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
-import { Plug, Plus } from '@/components/icons';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
   IntegrationSwitcher,

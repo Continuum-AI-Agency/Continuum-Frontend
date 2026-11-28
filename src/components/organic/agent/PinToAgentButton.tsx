@@ -1,7 +1,7 @@
 'use client';
 
+import { MessageSquarePlus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { MessageSquarePlus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { enqueueAgentMentions } from '@/lib/agent/mention-queue-store';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';

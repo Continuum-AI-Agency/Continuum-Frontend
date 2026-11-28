@@ -1,7 +1,8 @@
 'use client';
+import { CircleCheck, CircleX, RotateCw, TriangleAlert } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+
 import React from 'react';
-import { CircleCheck, CircleX, RotateCw, TriangleAlert } from '@/components/icons';
 import {
   type CanvasConnectionState,
   deriveCanvasConnectionState,

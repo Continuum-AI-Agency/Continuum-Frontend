@@ -6,22 +6,13 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
+import { Copy, FileText, Library, Loader2, Trash2, Unlink, Upload, X } from 'lucide-react';
 import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { type DocumentView, describeError, describeStep } from '@/components/documents/types';
 import { useDocuments } from '@/components/documents/useDocuments';
-import {
-  ArrowUpFromLine,
-  Copy,
-  FileText,
-  Library,
-  Spinner,
-  Trash2,
-  Unlink,
-  X,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -553,7 +544,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                     className="absolute right-8 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100"
                     onMouseDown={(event) => event.stopPropagation()}
                   >
-                    <ArrowUpFromLine className="w-3 h-3" />
+                    <Upload className="w-3 h-3" />
                   </Label>
 
                   <Button
@@ -586,7 +577,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
                           >
                             <div className="rounded bg-amber-500/10 p-1.5 text-amber-600">
                               {status === 'processing' ? (
-                                <Spinner className="w-4 h-4 animate-spin" />
+                                <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
                                 <FileText className="w-4 h-4" />
                               )}

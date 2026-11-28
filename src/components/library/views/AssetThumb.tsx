@@ -1,8 +1,8 @@
 'use client';
 
 import type { MediaAsset } from '@continuum/contracts';
+import { AudioLines, FileIcon, FileText, Film } from 'lucide-react';
 import Image from 'next/image';
-import { AudioLines, File, FileText, Film } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { useCardScrub } from '../ScrubSprite';
 
@@ -22,7 +22,7 @@ export function AssetThumb({ asset, className }: { asset: MediaAsset; className?
         ? AudioLines
         : asset.kind === 'video'
           ? Film
-          : File;
+          : FileIcon;
 
   return (
     <span

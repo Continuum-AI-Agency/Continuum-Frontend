@@ -14,8 +14,8 @@ import { useUiErrorSentence } from '@/i18n/errors';
 // locked, and the control never saves an empty list itself. The write switch (apply_enabled)
 // stays the gate either way; the set RPC itself accepts any member's list.
 
+import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
@@ -169,7 +169,7 @@ function PlatformActionsRow({
               variant="outline"
             >
               {uiText.rich('sentence_e66795836de4', {
-                v0: () => (saving ? <Spinner className="size-3.5 animate-spin" /> : null),
+                v0: () => (saving ? <Loader2 className="size-3.5 animate-spin" /> : null),
               })}
             </Button>
             {chosen.length === 0 ? (

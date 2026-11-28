@@ -8,9 +8,9 @@ import {
   type FigmaImportedAsset,
   parseFigmaLink,
 } from '@continuum/contracts';
+import { Check, Loader2, RefreshCw } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
-import { Check, RefreshCw, Spinner } from '@/components/icons';
 import { FigmaIcon } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -322,7 +322,7 @@ export function FigmaImportDialog({
                   onClick={() => void loadFolders()}
                 >
                   {busy === 'folders' ? (
-                    <Spinner className="size-4 animate-spin" />
+                    <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <RefreshCw className="size-4" />
                   )}
@@ -386,7 +386,7 @@ export function FigmaImportDialog({
                   onClick={() => void connect()}
                 >
                   {busy === 'connect' ? (
-                    <Spinner className="size-4 animate-spin" />
+                    <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <FigmaIcon className="size-4" />
                   )}
@@ -398,7 +398,7 @@ export function FigmaImportDialog({
 
           {busy === 'files' || busy === 'frames' ? (
             <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
-              <Spinner className="mr-2 size-4 animate-spin" />{' '}
+              <Loader2 className="mr-2 size-4 animate-spin" />{' '}
               {translateUi('loading_from_figma_f34d9916')}
             </div>
           ) : linkedOnly ? (
@@ -480,7 +480,7 @@ export function FigmaImportDialog({
               onClick={() => void importSelected()}
             >
               {busy === 'import' ? (
-                <Spinner className="size-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
               ) : (
                 <FigmaIcon className="size-4" />
               )}

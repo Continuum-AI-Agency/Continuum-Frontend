@@ -1,19 +1,19 @@
 'use client';
 
+import {
+  ArrowRight,
+  CaretRight,
+  CheckCircle,
+  CircleNotch,
+  Clock,
+  MagnifyingGlass,
+  PlugsConnected,
+  ShieldCheck,
+} from '@phosphor-icons/react';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
-import {
-  ArrowRight,
-  ChevronRight,
-  CircleCheck,
-  Clock,
-  PlugZap,
-  Search,
-  ShieldCheck,
-  Spinner,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -324,7 +324,7 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
 
           <div className="mt-8 grid gap-3 text-sm">
             <AccessFact
-              icon={<ShieldCheck size={18} />}
+              icon={<ShieldCheck size={18} weight="regular" />}
               label={uiText('access_scope_4a51fa6')}
               detail={
                 state.kind === 'ready'
@@ -333,7 +333,7 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
               }
             />
             <AccessFact
-              icon={<Clock size={18} />}
+              icon={<Clock size={18} weight="regular" />}
               label={uiText('link_window_514971c')}
               detail={
                 expiresText ? uiText('expiresAt', { time: expiresText }) : uiText('timeLimited')
@@ -358,14 +358,14 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
               </p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[oklch(65%_0.13_180_/_0.26)] bg-[oklch(65%_0.13_180_/_0.1)] text-[oklch(72%_0.13_180)]">
-              <PlugZap size={20} />
+              <PlugsConnected size={20} weight="regular" />
             </span>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
             {state.kind === 'loading' ? (
               <StatusRow
-                icon={<Spinner className="h-4 w-4 animate-spin" />}
+                icon={<CircleNotch className="h-4 w-4 animate-spin" />}
                 text={uiText('checkingLink')}
               />
             ) : null}
@@ -390,7 +390,7 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
                   {uiText.rich('sentence_ddfc21bf78f7', {
                     v0: () =>
                       isPending ? (
-                        <Spinner className="h-4 w-4 animate-spin" />
+                        <CircleNotch className="h-4 w-4 animate-spin" />
                       ) : (
                         <ArrowRight className="h-4 w-4" />
                       ),
@@ -413,10 +413,11 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
                     {uiText('search_brands_50539c7')}
                   </label>
                   <div className="relative">
-                    <Search
+                    <MagnifyingGlass
                       aria-hidden="true"
                       className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[oklch(75%_0.015_265)]"
                       size={16}
+                      weight="regular"
                     />
                     <input
                       id="brand-search"
@@ -478,10 +479,11 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
                             </span>
                           </span>
                           {checked ? (
-                            <CircleCheck
+                            <CheckCircle
                               aria-hidden="true"
                               className="shrink-0 text-[oklch(72%_0.13_180)]"
                               size={20}
+                              weight="fill"
                             />
                           ) : null}
                         </label>
@@ -501,7 +503,7 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
             {state.kind === 'done' ? (
               <div className="space-y-4">
                 <StatusRow
-                  icon={<CircleCheck className="h-4 w-4" />}
+                  icon={<CheckCircle className="h-4 w-4" weight="fill" />}
                   text={uiText('brandsLinked', { count: state.linked })}
                 />
                 <Button
@@ -529,9 +531,9 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
                 {uiText.rich('sentence_c4f491a6e230', {
                   v0: () =>
                     isPending ? (
-                      <Spinner className="h-4 w-4 animate-spin" />
+                      <CircleNotch className="h-4 w-4 animate-spin" />
                     ) : (
-                      <CircleCheck className="h-4 w-4" />
+                      <CheckCircle className="h-4 w-4" weight="fill" />
                     ),
                 })}
               </Button>
@@ -562,10 +564,10 @@ function BrandAccountsDisclosure({ accounts }: { accounts: LinkAccount[] }) {
     <Collapsible>
       <CollapsibleTrigger className="group flex w-full cursor-pointer items-center justify-between gap-2 border-t border-[oklch(98%_0.005_265_/_0.08)] px-4 py-2.5 text-xs font-medium text-[oklch(78%_0.018_265)] outline-none transition-colors duration-150 hover:text-[oklch(98%_0.005_265)] focus-visible:text-[oklch(98%_0.005_265)]">
         <span>{uiText.rich('sentence_9781653fbce5', { count: accounts.length })}</span>
-        <ChevronRight
+        <CaretRight
           aria-hidden="true"
           size={14}
-          strokeWidth={3}
+          weight="bold"
           className="shrink-0 text-[oklch(72%_0.13_180)] transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] group-data-[state=open]:rotate-90"
         />
       </CollapsibleTrigger>

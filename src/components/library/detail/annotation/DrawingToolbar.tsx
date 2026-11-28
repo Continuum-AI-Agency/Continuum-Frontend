@@ -5,17 +5,9 @@
 // Ctrl+Y) redoes while the stage has focus — wired by the host, which owns focus.
 
 import type { DrawingTool } from '@continuum/contracts';
+import { ArrowUpRight, MousePointer2, Pencil, Redo2, Slash, Square, Undo2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo as useUiConfigMemo } from 'react';
-import {
-  ArrowUpRight,
-  MousePointer2,
-  Pencil,
-  Redo2,
-  Slash,
-  Square,
-  Undo2,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DRAWING_COLORS } from './drawing';

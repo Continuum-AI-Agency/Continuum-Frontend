@@ -1,6 +1,6 @@
+import { ArrowSquareOut, Sparkle } from '@phosphor-icons/react';
 import { useTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useState } from 'react';
-import { Sparkles, SquareArrowOutUpRight } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
 import type { ReadinessFinding, WebsitePalette } from '@/lib/onboarding/agentClient';
@@ -86,7 +86,7 @@ export function IdentityPanel({
               />
               {host ? (
                 <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <SquareArrowOutUpRight className="h-3 w-3" />
+                  <ArrowSquareOut className="h-3 w-3" />
                   {host}
                 </div>
               ) : null}
@@ -109,7 +109,7 @@ export function IdentityPanel({
             <SubsectionHeader title={tUi('m_adac6e0342')} />
             {firstImpression ? (
               <p className="flex items-start gap-1.5 text-sm italic leading-snug text-foreground">
-                <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-[var(--primary)]" />
+                <Sparkle className="mt-0.5 h-3 w-3 shrink-0 text-[var(--primary)]" />
                 <span className="min-w-0">{firstImpression}</span>
               </p>
             ) : firstImpressionStatus === 'running' ? (

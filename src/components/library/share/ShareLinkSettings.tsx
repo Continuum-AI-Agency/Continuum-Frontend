@@ -16,6 +16,15 @@ import {
   type ShareLinkWatermark,
   type ShareLinkWatermarkPosition,
 } from '@continuum/contracts';
+import {
+  ArrowDown,
+  ArrowUp,
+  GripVertical,
+  LayoutGrid,
+  List,
+  Loader2,
+  PlaySquare,
+} from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   type DragEvent,
@@ -24,16 +33,6 @@ import {
   useState,
   useMemo as useUiConfigMemo,
 } from 'react';
-import {
-  ArrowDown,
-  ArrowUp,
-  GripVertical,
-  type IconComponent,
-  LayoutGrid,
-  List,
-  PlaySquare,
-  Spinner,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { ShareLogoPicker } from './ShareLogoPicker';
@@ -42,7 +41,7 @@ import { updateShareLinkSettings } from './shareLinkClient';
 function useLocalLayoutsMessages() {
   const translateConfig = useUiTranslations('library');
   return useUiConfigMemo(() => {
-    const value: Array<{ value: ShareLinkLayout; label: string; Icon: IconComponent }> = [
+    const value: Array<{ value: ShareLinkLayout; label: string; Icon: typeof List }> = [
       { value: 'grid', label: translateConfig('grid_0d7d12ac'), Icon: LayoutGrid },
       { value: 'list', label: translateConfig('list_6f202f54'), Icon: List },
       { value: 'reel', label: translateConfig('reel_9cb145e8'), Icon: PlaySquare },
@@ -533,7 +532,7 @@ export function ShareLinkSettings({
           disabled={saving}
           data-share-save
         >
-          {saving ? <Spinner className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
           {translateUi('save_presentation_16a4ddd5')}
         </Button>
       </div>

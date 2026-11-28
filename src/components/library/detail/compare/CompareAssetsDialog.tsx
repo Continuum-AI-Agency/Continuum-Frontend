@@ -6,9 +6,9 @@
 // Loads both assets and their version lists itself, so a caller only needs ids.
 
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { listAssetVersions } from '@/lib/library/versions';
@@ -132,7 +132,7 @@ export function CompareAssetsDialog({ brandId, assetIds, open, onOpenChange }: P
           <p className="text-xs text-destructive">{error}</p>
         ) : (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Spinner className="size-3.5 animate-spin" />{' '}
+            <Loader2 className="size-3.5 animate-spin" />{' '}
             {translateUi('loading_both_assets_e88ebeba')}
           </p>
         )}

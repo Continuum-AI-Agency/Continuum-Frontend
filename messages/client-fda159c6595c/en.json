@@ -21,9 +21,7 @@
     "requestCancelled": "The request was cancelled.",
     "requestTimedOut": "This request took too long. Please try again.",
     "resourceNotFound": "This item is no longer available.",
-    "save": "Save",
     "saving": "Saving…",
-    "search": "Search",
     "serviceUnavailable": "The service is temporarily unavailable. Please try again shortly.",
     "unexpectedError": "An unexpected error occurred. Please try again.",
     "unknown": "Unknown",
@@ -319,9 +317,6 @@
     "the_import_is_still_running_import_again_in_a_11aa35d": "The import is still running. Import again in a minute: it picks up the same import.",
     "the_linked_frame_is_ready_to_import_9ac90aa": "The linked frame is ready to import.",
     "value0_selected_975acbfe": "{count, plural, one {# selected} other {# selected}}"
-  },
-  "navigation": {
-    "search": "Search"
   },
   "settings": {
     "billingContractReason": "Contract brands are billed through their agreement and never metered.",

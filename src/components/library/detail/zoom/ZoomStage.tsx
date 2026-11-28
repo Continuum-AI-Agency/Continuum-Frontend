@@ -10,9 +10,9 @@
 // The view is controllable: compare hands both panes one view to keep them on
 // the same spot, and lets go of it when the reviewer unlinks them.
 
+import { Minus, Plus, ScanSearch } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Plus, ScanSearch } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import {
   type CssRect,

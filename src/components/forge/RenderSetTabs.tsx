@@ -7,15 +7,11 @@ import {
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { defaultFilter } from 'cmdk';
-import { useLocale, type useTranslations, useTranslations as useUiTranslations } from 'next-intl';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { ActionMenuItems, type GridAction } from '@/components/forge/gridActions';
-import { NameDialog } from '@/components/forge/RenderSetMenu';
 import {
-  ArrowDownToLine,
   Check,
   ChevronDown,
   Copy,
+  Download,
   FolderOpen,
   History,
   MoreHorizontal,
@@ -26,7 +22,11 @@ import {
   Share2,
   Text,
   Trash2,
-} from '@/components/icons';
+} from 'lucide-react';
+import { useLocale, type useTranslations, useTranslations as useUiTranslations } from 'next-intl';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { ActionMenuItems, type GridAction } from '@/components/forge/gridActions';
+import { NameDialog } from '@/components/forge/RenderSetMenu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -432,7 +432,7 @@ export function RenderSetTabs({
         {
           id: 'download',
           label: translateUi('download_set_5bfdcac2'),
-          icon: ArrowDownToLine,
+          icon: Download,
           hint: 'One zip of every row’s newest render, with a manifest',
           run: () => void downloadRenderSet(brandId, set, translateUi),
         },

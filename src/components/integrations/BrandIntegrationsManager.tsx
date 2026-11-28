@@ -1,9 +1,9 @@
 'use client';
 
+import { ChevronDown, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React, { type ComponentProps, type ReactNode, useMemo, useState } from 'react';
 import { applyBrandIntegrationAssignmentsAction } from '@/app/[locale]/(post-auth)/settings/integrations/actions';
-import { ChevronDown, RefreshCw, TriangleAlert } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PLATFORMS, type PlatformKey } from '@/components/onboarding/platforms';
 import { isProviderComingSoon } from '@/components/settings/shell/platformIcons';

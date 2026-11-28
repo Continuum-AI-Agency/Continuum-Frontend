@@ -1,10 +1,10 @@
 'use client';
 
 import { actionDef } from '@continuum/contracts';
+import { Image, Loader2, Plus, Scissors, Type, Video, X } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo as useUiConfigMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Image, Plus, Scissors, Spinner, Type, Video, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -577,7 +577,7 @@ export function ClipInspector({
               onClick={backgroundRemoval.run}
             >
               {backgroundRemoval.pending ? (
-                <Spinner className="h-3 w-3 animate-spin" />
+                <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <Scissors className="h-3 w-3" />
               )}

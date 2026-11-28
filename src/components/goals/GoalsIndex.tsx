@@ -1,7 +1,7 @@
 'use client';
 
+import { ArrowRight, FileText, Target } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowRight, FileText, Target } from '@/components/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Link } from '@/i18n/navigation';
 import type { GoalSummaryView } from '@/lib/goals/models';

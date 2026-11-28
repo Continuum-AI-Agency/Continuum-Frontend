@@ -1,7 +1,5 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
-import * as React from 'react';
 /**
  * What the preview shows when a selection names a draft the Calendar does not have: a chat
  * card's "Open in Calendar" or a `?draftId=` link to a post that failed to save or was
@@ -9,7 +7,9 @@ import * as React from 'react';
  * Recreate re-queues the job that made the post onto a fresh draft row; when no job made it,
  * the only way forward is a new post, so that is what the panel offers instead.
  */
-import { Plus, RefreshCw, Spinner, TriangleAlert, X } from '@/components/icons';
+import { AlertTriangle, Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { requestDraftRecreate } from '@/lib/organic/agent-retry';
 
@@ -73,7 +73,7 @@ export function MissingDraftPanel({
     <div className="flex h-full flex-col gap-3 p-4" role="alert" data-testid="missing-draft-panel">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
           <div className="flex flex-col gap-1">
             <h2 className="text-sm font-semibold text-foreground">
               {uiText('this_post_failed_to_save_de27f50')}
@@ -108,7 +108,7 @@ export function MissingDraftPanel({
             disabled={!brandId || state.kind === 'busy' || state.kind === 'still_generating'}
           >
             {state.kind === 'busy' ? (
-              <Spinner className="size-3.5 animate-spin" />
+              <Loader2 className="size-3.5 animate-spin" />
             ) : (
               <RefreshCw className="size-3.5" />
             )}

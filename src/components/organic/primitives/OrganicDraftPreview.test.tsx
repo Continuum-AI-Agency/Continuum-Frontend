@@ -1591,10 +1591,10 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
   });
 
   for (const [platform, format, label, railIcon] of [
-    ['instagram', 'Reel', 'Reel', 'icon-send'],
+    ['instagram', 'Reel', 'Reel', 'lucide-send'],
     ['facebook', 'Reel', 'Reel', 'lucide-forward'],
-    ['youtube', 'Reel', 'Short', 'icon-thumbs-down'],
-    ['tiktok', 'Reel', 'Video', 'icon-bookmark'],
+    ['youtube', 'Reel', 'Short', 'lucide-thumbs-down'],
+    ['tiktok', 'Reel', 'Video', 'lucide-bookmark'],
   ] as const) {
     it(`calls a ${platform} vertical video a ${label}, with its action rail only once posted`, () => {
       const { container, rerender } = render(

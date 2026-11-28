@@ -8,10 +8,10 @@
 // library asset. Images only in v1 — video/file get a disabled button.
 
 import type { BrandBookPieceKind, MediaAsset } from '@continuum/contracts';
+import { Loader2, Sparkles } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
 import { BrandBookPiecePreview } from '@/components/brand/GenerationConfigPreview';
-import { Sparkles, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -270,7 +270,7 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
                   disabled={saving !== null || generating}
                 >
                   {saving === 'version' ? (
-                    <Spinner className="size-3.5 animate-spin" aria-hidden />
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
                   ) : null}{' '}
                   {translateUi('save_as_new_version_ad8907dd')}
                 </Button>
@@ -281,7 +281,7 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
                   disabled={saving !== null || generating}
                 >
                   {saving === 'asset' ? (
-                    <Spinner className="size-3.5 animate-spin" aria-hidden />
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
                   ) : null}{' '}
                   {translateUi('save_as_new_asset_a42a78f2')}
                 </Button>
@@ -292,7 +292,7 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
               onClick={() => void handleGenerate()}
               disabled={generating || saving !== null || brandPieces.length === 0}
             >
-              {generating ? <Spinner className="size-3.5 animate-spin" aria-hidden /> : null}
+              {generating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
               {generating
                 ? translateUi('generating_d20a4476')
                 : result

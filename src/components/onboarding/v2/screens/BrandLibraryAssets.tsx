@@ -12,11 +12,12 @@
 // saved this session gets a specimen drawn from its local bytes.
 
 import { normalizeTemplateFontFamily } from '@continuum/contracts';
+import { ArrowBendUpRight, UploadSimple, Warning } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { FontSpecimen } from '@/components/brand/FontSpecimen';
-import { ArrowUpFromLine, CornerUpRight, TriangleAlert } from '@/components/icons';
 import { BrandIdentityTagMenu } from '@/components/library/BrandIdentityTagMenu';
 import {
   FontUploadReviewDialog,
@@ -335,7 +336,7 @@ function TaggedImageUploader({
           onClick={() => inputRef.current?.click()}
           disabled={uploading > 0}
         >
-          <ArrowUpFromLine className="mr-1.5 h-4 w-4" />
+          <UploadSimple className="mr-1.5 h-4 w-4" />
           {uploading > 0
             ? tUi('brandLibraryUploading', { count: uploading })
             : tUi('brandLibraryAddImages')}
@@ -370,9 +371,9 @@ function TaggedImageUploader({
                     )}
                   />
                 ) : tile.status === 'moved' ? (
-                  <CornerUpRight className="h-5 w-5 text-muted-foreground" />
+                  <ArrowBendUpRight className="h-5 w-5 text-muted-foreground" />
                 ) : (
-                  <TriangleAlert className="h-5 w-5 text-amber-600" />
+                  <Warning className="h-5 w-5 text-amber-600" />
                 )}
                 {tile.brandLogo === 'set' ? (
                   <Badge variant="success" className="absolute top-1 left-1">

@@ -1,9 +1,9 @@
 'use client';
 
+import { ArrowRightIcon, MinusIcon, PackageIcon, PlusIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { HTMLAttributes } from 'react';
 import { createContext, useContext } from 'react';
-import { ArrowRight, Minus, Package, Plus } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -66,7 +66,7 @@ export const PackageInfoName = ({ className, children, ...props }: PackageInfoNa
 
   return (
     <div className={cn('flex items-center gap-2', className)} {...props}>
-      <Package className="size-4 text-muted-foreground" />
+      <PackageIcon className="size-4 text-muted-foreground" />
       <span className="font-medium font-mono text-sm">{children ?? name}</span>
     </div>
   );
@@ -81,11 +81,11 @@ const changeTypeStyles: Record<ChangeType, string> = {
 };
 
 const changeTypeIcons: Record<ChangeType, React.ReactNode> = {
-  added: <Plus className="size-3" />,
-  major: <ArrowRight className="size-3" />,
-  minor: <ArrowRight className="size-3" />,
-  patch: <ArrowRight className="size-3" />,
-  removed: <Minus className="size-3" />,
+  added: <PlusIcon className="size-3" />,
+  major: <ArrowRightIcon className="size-3" />,
+  minor: <ArrowRightIcon className="size-3" />,
+  patch: <ArrowRightIcon className="size-3" />,
+  removed: <MinusIcon className="size-3" />,
 };
 
 export type PackageInfoChangeTypeProps = HTMLAttributes<HTMLDivElement>;
@@ -133,7 +133,7 @@ export const PackageInfoVersion = ({ className, children, ...props }: PackageInf
       {children ?? (
         <>
           {currentVersion && <span>{currentVersion}</span>}
-          {currentVersion && newVersion && <ArrowRight className="size-3" />}
+          {currentVersion && newVersion && <ArrowRightIcon className="size-3" />}
           {newVersion && <span className="font-medium text-foreground">{newVersion}</span>}
         </>
       )}

@@ -10,9 +10,9 @@ import {
   capiMappableFieldSchema,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
-import { Trash2 } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,

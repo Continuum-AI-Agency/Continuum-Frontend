@@ -4,9 +4,9 @@ import type {
   GoalStructuredResponseValue,
   UpsertGoalCapabilityRouteRequest,
 } from '@continuum/contracts';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, RefreshCw } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button, buttonVariants } from '@/components/ui/button';

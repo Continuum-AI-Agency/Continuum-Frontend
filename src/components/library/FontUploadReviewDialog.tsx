@@ -2,12 +2,12 @@
 
 import { readFontNames } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { FontSpecimen } from '@/components/brand/FontSpecimen';
-import { Spinner as Loader2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,

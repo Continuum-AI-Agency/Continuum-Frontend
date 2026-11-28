@@ -1,8 +1,8 @@
 'use client';
 
+import { Circle, type LucideIcon, Mic, Monitor, Square, Video } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo as useUiConfigMemo } from 'react';
-import { Circle, type IconComponent, Mic, Monitor, Square, Video } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -22,7 +22,7 @@ export type { RecordingSource } from './useMediaRecorder';
 function useLocalSourcesMessages() {
   const translateConfig = useUiTranslations('studio');
   return useUiConfigMemo(() => {
-    const value: ReadonlyArray<{ source: RecordingSource; label: string; icon: IconComponent }> = [
+    const value: ReadonlyArray<{ source: RecordingSource; label: string; icon: LucideIcon }> = [
       { source: 'screen', label: translateConfig('screen_6e56137e'), icon: Monitor },
       { source: 'camera', label: translateConfig('camera_03494b0d'), icon: Video },
       { source: 'mic', label: translateConfig('voice_over_mic_cfea5bf5'), icon: Mic },

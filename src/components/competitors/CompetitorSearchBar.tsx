@@ -1,7 +1,7 @@
 'use client';
 
+import { Search, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Search, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { localizeCompetitorCopy } from '@/i18n/competitorCopy';

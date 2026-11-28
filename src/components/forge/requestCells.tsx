@@ -21,6 +21,23 @@ import {
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { type CellContext, flexRender, type Row, type Table } from '@tanstack/react-table';
+import {
+  ChevronDown,
+  ChevronRight,
+  CornerDownRight,
+  GripVertical,
+  ImageIcon,
+  Info,
+  Library,
+  Loader2,
+  type LucideIcon,
+  MoreHorizontal,
+  Plus,
+  RotateCcw,
+  Upload,
+  Video,
+  X,
+} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import {
   createContext,
@@ -68,23 +85,6 @@ import {
   seededValue,
   toPreflightDelivery,
 } from '@/components/forge/renderRequestRows';
-import {
-  ArrowUpFromLine,
-  ChevronDown,
-  ChevronRight,
-  CornerDownRight,
-  GripVertical,
-  type IconComponent,
-  Image,
-  Info,
-  Library,
-  MoreHorizontal,
-  Plus,
-  RotateCcw,
-  Spinner,
-  Video,
-  X,
-} from '@/components/icons';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -253,7 +253,7 @@ function MediaPicker({
   const fileInput = useRef<HTMLInputElement>(null);
   const pins = pickedPins(value);
   const fit = fitTone(pins.length ? verdict : null);
-  const Kind = variable.kind === 'video' ? Video : Image;
+  const Kind = variable.kind === 'video' ? Video : ImageIcon;
   // An empty slot with a saved Library default renders that default, so it says so. The default
   // is a bare pin with no sidecar, so it shows the kind's icon rather than a thumbnail.
   const defaulted = isDefaultValue(variable, value);
@@ -378,9 +378,9 @@ function MediaPicker({
         onClick={() => fileInput.current?.click()}
       >
         {uploading ? (
-          <Spinner className="size-3.5 animate-spin" aria-hidden />
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
         ) : (
-          <ArrowUpFromLine className="size-3.5" aria-hidden />
+          <Upload className="size-3.5" aria-hidden />
         )}
       </Button>
       {clip && pins.length && clipSec === undefined && media?.clipUrl ? (
@@ -514,7 +514,7 @@ function StatusBadge({
       // No kit for the template: the readiness line says so once, not per row.
       return fitLoading ? (
         <Badge variant="muted">
-          <Spinner className="size-3 animate-spin" aria-hidden /> {translateUi(
+          <Loader2 className="size-3 animate-spin" aria-hidden /> {translateUi(
             'checking_0dfe1d63',
           )}{' '}
         </Badge>
@@ -977,7 +977,7 @@ function RowAddButton({
   label: string;
   hint: string;
   disabledReason: string | null;
-  icon: IconComponent;
+  icon: LucideIcon;
   onAdd: () => void;
 }) {
   return (
@@ -1403,7 +1403,7 @@ function RunBadge({ job }: { job: ApiRenderJob }) {
   return (
     <Explained why={where}>
       <Badge variant="muted">
-        <Spinner className="size-3 animate-spin motion-reduce:animate-none" aria-hidden />{' '}
+        <Loader2 className="size-3 animate-spin motion-reduce:animate-none" aria-hidden />{' '}
         {translateUi('rendering_e2fe3539')}
       </Badge>
     </Explained>

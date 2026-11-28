@@ -19,8 +19,8 @@ import type {
   PortfolioSuggestion,
 } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
+import { CheckCircle2Icon, PlusIcon, XIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { CircleCheck, Plus, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -145,7 +145,7 @@ export function SuggestionExplorer({
           </Select>
           {created ? (
             <Badge className="gap-1 text-xs" variant="success">
-              <CircleCheck className="size-3" />
+              <CheckCircle2Icon className="size-3" />
               {uiText('created_406effb')}
             </Badge>
           ) : (
@@ -156,7 +156,7 @@ export function SuggestionExplorer({
               size="sm"
               type="button"
             >
-              <Plus className="size-3.5" />
+              <PlusIcon className="size-3.5" />
               {busy ? uiText('creating_c79ed94') : uiText('create_4759498')}
             </Button>
           )}
@@ -168,7 +168,7 @@ export function SuggestionExplorer({
             type="button"
             variant="ghost"
           >
-            <X className="size-4" />
+            <XIcon className="size-4" />
           </Button>
         </div>
       </div>

@@ -6,10 +6,10 @@ import type {
   RenderApprovalDestination,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckIcon, ChevronsUpDownIcon, Loader2, UserPlus } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
-import { Check, ChevronsUpDown, Spinner, UserPlus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -149,7 +149,7 @@ export function DestinationApproversPanel({
           }
         >
           {busyId === approver.id ? (
-            <Spinner className="animate-spin" data-icon="inline-start" aria-hidden />
+            <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
           ) : null}
           {action === 'activate'
             ? translateUi('activate_24433c70')
@@ -168,7 +168,7 @@ export function DestinationApproversPanel({
     >
       {approversQuery.isPending ? (
         <p className="flex items-center gap-1.5 text-muted-foreground">
-          <Spinner className="size-3 animate-spin" aria-hidden />{' '}
+          <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
           {translateUi('loading_approvers_8f6c0f93')}
         </p>
       ) : approversQuery.isError ? (
@@ -331,7 +331,7 @@ function AddApprover({
                 <span className="min-w-0 truncate">
                   {userId ? labelOf(userId) : translateUi('choose_a_member_c6aaa720')}
                 </span>
-                <ChevronsUpDown className="ml-2 size-3.5 shrink-0 opacity-50" />
+                <ChevronsUpDownIcon className="ml-2 size-3.5 shrink-0 opacity-50" />
               </Button>
             }
           />
@@ -354,7 +354,7 @@ function AddApprover({
                         setPicking(false);
                       }}
                     >
-                      <Check
+                      <CheckIcon
                         className={cn('mr-2 size-3.5', id === userId ? 'opacity-100' : 'opacity-0')}
                       />
                       <span className="min-w-0 flex-1 break-all">{labelOf(id)}</span>

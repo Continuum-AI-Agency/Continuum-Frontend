@@ -10,9 +10,15 @@ import { useMemo } from 'react';
 // the brand integration state + FreshnessMeta and renders. Reused by the Scale
 // dashboard blocked state and the Jaina Setup Concierge (FEAT-004).
 
+import {
+  AlertTriangleIcon,
+  CheckCircle2Icon,
+  CircleDashedIcon,
+  PlugZapIcon,
+  RefreshCwIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 import type { ComponentType } from 'react';
-import { CircleCheck, CircleDashed, PlugZap, RefreshCw, TriangleAlert } from '@/components/icons';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
@@ -38,10 +44,10 @@ type PaidSetupDiagnosticsProps = {
 };
 
 const STATUS_ICON: Record<PaidSetupStepStatus, ComponentType<{ className?: string }>> = {
-  done: CircleCheck,
-  action_required: PlugZap,
-  attention: TriangleAlert,
-  pending: CircleDashed,
+  done: CheckCircle2Icon,
+  action_required: PlugZapIcon,
+  attention: AlertTriangleIcon,
+  pending: CircleDashedIcon,
 };
 
 const STATUS_ICON_CLASS: Record<PaidSetupStepStatus, string> = {
@@ -57,7 +63,7 @@ function StepCta({ step, onRetry }: { step: PaidSetupStep; onRetry: () => void }
   if (step.cta.kind === 'retry') {
     return (
       <Button type="button" size="sm" variant="outline" className="h-8" onClick={onRetry}>
-        <RefreshCw aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+        <RefreshCwIcon aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
         {step.cta.label}
       </Button>
     );

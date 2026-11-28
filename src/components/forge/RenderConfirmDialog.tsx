@@ -18,6 +18,7 @@ import {
   templateDisplayName,
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, Check, Loader2, Play } from 'lucide-react';
 import {
   type useTranslations,
   useLocale as useUiLocale,
@@ -68,7 +69,6 @@ import {
 import { RatioChips } from '@/components/forge/requestCells';
 import type { SlackPickerState } from '@/components/forge/SlackDestinationPicker';
 import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
-import { Check, Play, Spinner, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -904,7 +904,7 @@ export function RenderConfirmDialog({
           <div role="status" className="flex min-w-0 flex-1 items-center gap-1.5 text-xs">
             {resolving || check.state === 'loading' ? (
               <>
-                <Spinner className="size-3 animate-spin text-muted-foreground" aria-hidden />
+                <Loader2 className="size-3 animate-spin text-muted-foreground" aria-hidden />
                 <span className="text-muted-foreground">
                   {resolving
                     ? translateUi('looking_up_ad_ids_7a0e5ca6')
@@ -919,7 +919,7 @@ export function RenderConfirmDialog({
               <span className="text-destructive">{problem}</span>
             ) : check.state === 'refused' ? (
               <span className={cn(check.override ? 'text-warning' : 'text-destructive')}>
-                <TriangleAlert className="mr-1 inline size-3.5" aria-hidden />
+                <AlertTriangle className="mr-1 inline size-3.5" aria-hidden />
                 {check.override
                   ? translateUi('tick_render_anyway_above_or_fix_the_bf6ed098')
                   : `${check.message}${check.details.length ? ` ${check.details.join(' ')}` : ''}${
@@ -960,7 +960,7 @@ export function RenderConfirmDialog({
           </Button>
           <Button type="button" disabled={!canRender} onClick={() => void fire()}>
             {firing ? (
-              <Spinner className="animate-spin" data-icon="inline-start" aria-hidden />
+              <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
             ) : (
               <Play data-icon="inline-start" aria-hidden />
             )}{' '}
@@ -1120,7 +1120,7 @@ export function HeldBatchView({
             onClick={() => void retry()}
           >
             {retrying || held.sending ? (
-              <Spinner className="size-3 animate-spin" aria-hidden />
+              <Loader2 className="size-3 animate-spin" aria-hidden />
             ) : null}{' '}
             {translateUi('retry_this_batch_17603985')}
           </Button>

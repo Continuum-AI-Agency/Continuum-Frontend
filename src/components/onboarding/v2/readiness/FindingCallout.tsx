@@ -1,7 +1,7 @@
 import type { ReadinessSeverity } from '@continuum/contracts';
 import { readinessSeverity } from '@continuum/contracts';
+import { BookOpen, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { BookOpen, Sparkles } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { ReadinessFinding } from '@/lib/onboarding/agentClient';

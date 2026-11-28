@@ -13,7 +13,7 @@ import type { UiLocale } from '@/i18n/config';
 // started, waiting for the first paced cycle, ended. Nothing here renders a green gauge
 // off a placeholder — see buildFlightPacing for why.
 
-import { CalendarPlus } from '@/components/icons';
+import { CalendarPlusIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ExplainPopover, ExplainRow } from '../components/ExplainPopover';
@@ -111,7 +111,7 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
             type="button"
             variant="secondary"
           >
-            <CalendarPlus aria-hidden className="size-3.5" />
+            <CalendarPlusIcon aria-hidden className="size-3.5" />
             {uiText('set_a_flight_1bc9e41')}
           </Button>
         ) : null}

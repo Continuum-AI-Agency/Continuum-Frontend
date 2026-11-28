@@ -7,8 +7,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // stays conversational — a person asked Jaina for an analysis and liked it; this is the
 // one affordance that turns that exact output into something they come back to.
 
+import { LayoutDashboardIcon } from 'lucide-react';
 import { useState } from 'react';
-import { LayoutDashboard } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -101,7 +101,7 @@ export function SaveDashboardButton({
         type="button"
         variant="outline"
       >
-        <LayoutDashboard className="size-3.5" />
+        <LayoutDashboardIcon className="size-3.5" />
         {uiText('save_as_dashboard_f6c0cc6')}
       </Button>
       <Dialog onOpenChange={setOpen} open={open}>

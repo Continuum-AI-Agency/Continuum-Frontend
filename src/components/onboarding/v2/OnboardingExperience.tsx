@@ -1,6 +1,7 @@
 'use client';
 
 import type { OnboardingIntake, OnboardingSourceResponse } from '@continuum/contracts';
+import { CircleNotch } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -10,7 +11,6 @@ import {
   approveOnboardingAndStartAnalysisAction,
   completeOnboardingAction,
 } from '@/app/[locale]/onboarding/actions';
-import { Spinner } from '@/components/icons';
 import {
   OnboardingProvider,
   useOnboarding,
@@ -1104,7 +1104,10 @@ function useBottomBar({
         >
           {continueQueued ? (
             <>
-              <Spinner className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+              <CircleNotch
+                className="size-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden
+              />
               {tUi('finishing_your_brand_dna_9c46865')}
             </>
           ) : launching ? (

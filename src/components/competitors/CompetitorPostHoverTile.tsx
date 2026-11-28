@@ -14,8 +14,8 @@ import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 // Facebook: only Instagram posts are analysed.
 
 import { COMPETITOR_POST_FORMAT_LABELS } from '@continuum/contracts';
+import { Images, Play } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { Images, Play } from '@/components/icons';
 import { YouTubeIcon } from '@/components/shared/icons/brandIcon';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';

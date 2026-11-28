@@ -10,15 +10,9 @@
 // is only its fallback (a ZIP that turns out to be a plain archive).
 
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
+import { Download, ExternalLink, FileIcon, ImagePlus, Loader2 } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
-import {
-  ArrowDownToLine as Download,
-  SquareArrowOutUpRight as ExternalLink,
-  File as FileIcon,
-  ImagePlus,
-  Spinner as Loader2,
-} from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';

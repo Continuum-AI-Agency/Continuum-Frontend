@@ -4,9 +4,9 @@
 // The sheet's content is its own lazy chunk, so the story (and its one read) downloads only when
 // someone opens it.
 
+import { BookOpenIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { lazy, Suspense, useState } from 'react';
-import { BookOpen } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -33,7 +33,7 @@ export default function StoryButton({ ctx }: { ctx: HomeBoardContext }) {
         type="button"
         variant="outline"
       >
-        <BookOpen aria-hidden className="size-3.5" /> {uiText('weekly_story_bc91068')}
+        <BookOpenIcon aria-hidden className="size-3.5" /> {uiText('weekly_story_bc91068')}
       </Button>
       <Sheet onOpenChange={setOpen} open={open}>
         <SheetContent

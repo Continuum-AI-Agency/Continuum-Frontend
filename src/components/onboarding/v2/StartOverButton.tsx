@@ -1,5 +1,5 @@
+import { Trash } from '@phosphor-icons/react';
 import { useTranslations } from 'next-intl';
-import { Trash } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,

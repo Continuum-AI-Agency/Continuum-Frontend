@@ -1,7 +1,7 @@
 'use client';
 
+import { EyeIcon, HelpCircleIcon, LightbulbIcon, ZapIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { CircleQuestionMark, Eye, Lightbulb, Zap } from '@/components/icons';
 import type { InsightListBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { ITEM_PRIORITY_LABEL, SECTION_LABELS } from '../answerLanguage';
@@ -20,10 +20,10 @@ type Severity = 'positive' | 'neutral' | 'watch' | 'risk';
 type IconComponent = ComponentType<{ className?: string }>;
 
 const itemTypeIcon: Record<ItemType, IconComponent> = {
-  recommendation: Lightbulb,
-  insight: Eye,
-  action: Zap,
-  question: CircleQuestionMark,
+  recommendation: LightbulbIcon,
+  insight: EyeIcon,
+  action: ZapIcon,
+  question: HelpCircleIcon,
 };
 
 export default function InsightListBlock({ block }: InsightListBlockProps) {
@@ -41,7 +41,7 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
       )}
       <div className="space-y-3">
         {block.items.map((item, index) => {
-          const Icon: IconComponent = itemTypeIcon[item.item_type as ItemType] ?? Lightbulb;
+          const Icon: IconComponent = itemTypeIcon[item.item_type as ItemType] ?? LightbulbIcon;
           // Through `reading.ts` rather than a local emerald/amber/red map: one answer to
           // "why is this item red", and design tokens that follow the theme. The judgement
           // colours the item's icon; the item itself draws no rule.

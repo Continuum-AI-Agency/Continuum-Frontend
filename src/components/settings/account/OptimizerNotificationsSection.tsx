@@ -2,10 +2,10 @@
 
 import type { ApiRenderSlackChannel, OptimizerPingDestination } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckIcon, ChevronsUpDownIcon, Lock, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Check, ChevronsUpDown, Lock, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -233,7 +233,7 @@ export function OptimizerNotificationsSection({
                           ? tUi('m_748dde3000', { v0: String(settings.data.channelName) })
                           : tUi('m_de93ca88d2')}
                       </span>
-                      <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                      <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
                     </Button>
                   }
                 />
@@ -259,7 +259,7 @@ export function OptimizerNotificationsSection({
                               save.mutate({ destination: 'channel', channel });
                             }}
                           >
-                            <Check
+                            <CheckIcon
                               className={
                                 channel.id === settings.data?.channelId
                                   ? 'mr-2 size-4 opacity-100'

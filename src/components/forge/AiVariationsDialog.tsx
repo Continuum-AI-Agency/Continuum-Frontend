@@ -16,11 +16,11 @@ import {
   readWorkbook,
   sheetTable,
 } from '@continuum/contracts';
+import { FolderOpen, Loader2, Paperclip, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
-import { FolderOpen, Paperclip, Sparkles, Spinner, TriangleAlert, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -735,7 +735,7 @@ export function AiDraftDialog({
               onClick={() => fileInput.current?.click()}
             >
               {uploading ? (
-                <Spinner className="size-3.5 animate-spin" aria-hidden />
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
               ) : (
                 <Paperclip className="size-3.5" aria-hidden />
               )}
@@ -862,7 +862,7 @@ export function AiDraftDialog({
             onClick={() => void draft()}
           >
             {busy ? (
-              <Spinner className="size-4 animate-spin" aria-hidden />
+              <Loader2 className="size-4 animate-spin" aria-hidden />
             ) : (
               <Sparkles className="size-4" aria-hidden />
             )}

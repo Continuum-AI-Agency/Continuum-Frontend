@@ -11,7 +11,7 @@ import { useTranslations } from 'next-intl';
 // role="radio" items), where an account that needs reconnecting is disabled with "Reconnect".
 
 import { PUBLISH_PLATFORM_LABELS, PUBLISH_PLATFORM_ORDER } from '@continuum/contracts';
-import { ChevronDown } from '@/components/icons';
+import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   accountName,

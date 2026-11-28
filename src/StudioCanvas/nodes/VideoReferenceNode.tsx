@@ -6,21 +6,21 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
+import {
+  CheckCircle2,
+  Copy,
+  Loader2,
+  RotateCw,
+  Trash2,
+  Unlink,
+  Upload,
+  Video,
+  XCircle,
+} from 'lucide-react';
 import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import {
-  ArrowUpFromLine,
-  CircleCheck,
-  CircleX,
-  Copy,
-  RotateCw,
-  Spinner,
-  Trash2,
-  Unlink,
-  Video,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -337,9 +337,9 @@ export function VideoReferenceNode({
                       )}
                     >
                       {refBadge.tone === 'processing' && (
-                        <Spinner className="h-3 w-3 animate-spin" />
+                        <Loader2 className="h-3 w-3 animate-spin" />
                       )}
-                      {refBadge.tone === 'ready' && <CircleCheck className="h-3 w-3" />}
+                      {refBadge.tone === 'ready' && <CheckCircle2 className="h-3 w-3" />}
                       {refBadge.label}
                     </div>
                   )}
@@ -348,7 +348,7 @@ export function VideoReferenceNode({
                       <TooltipTrigger
                         render={
                           <div className="absolute left-2 top-2 z-20 flex cursor-help items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-2xs font-medium text-white shadow-sm">
-                            <CircleX className="h-3 w-3" />
+                            <XCircle className="h-3 w-3" />
                             {refBadge.label}
                           </div>
                         }
@@ -372,7 +372,7 @@ export function VideoReferenceNode({
                     className="absolute right-2 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100 focus-visible:opacity-100"
                     onMouseDown={(event) => event.stopPropagation()}
                   >
-                    <ArrowUpFromLine className="h-3 w-3" />
+                    <Upload className="h-3 w-3" />
                   </label>
                   <label
                     htmlFor={`video-file-${id}`}

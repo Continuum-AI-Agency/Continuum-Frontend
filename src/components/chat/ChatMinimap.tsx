@@ -1,8 +1,8 @@
 'use client';
 
+import { ChevronsDown, ChevronUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef } from 'react';
-import { ChevronsDown, ChevronUp } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   useMessageScroller,

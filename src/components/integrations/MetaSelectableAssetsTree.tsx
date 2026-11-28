@@ -1,8 +1,8 @@
 'use client';
 
 import { Accordion } from '@base-ui/react/accordion';
+import { ChevronDown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { ChevronDown } from '@/components/icons';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Checkbox } from '@/components/ui/checkbox';

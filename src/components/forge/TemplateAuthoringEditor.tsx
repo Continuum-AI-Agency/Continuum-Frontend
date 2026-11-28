@@ -21,6 +21,24 @@ import {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  ChevronDown,
+  Circle,
+  CircleHelp,
+  Copy,
+  GitFork,
+  Image as ImageIcon,
+  Layers,
+  Loader2,
+  Lock,
+  Plus,
+  RectangleHorizontal,
+  Redo2,
+  RotateCcw,
+  Trash2,
+  Type,
+  Undo2,
+} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -84,24 +102,6 @@ import {
   useTemplateAuthoringDraft,
 } from '@/components/forge/useTemplateAuthoringDraft';
 import { useTemplateAuthoringLifecycle } from '@/components/forge/useTemplateAuthoringLifecycle';
-import {
-  ChevronDown,
-  Circle,
-  CircleQuestionMark,
-  Copy,
-  GitFork,
-  Image as ImageIcon,
-  Layers2,
-  Lock,
-  Plus,
-  RectangleHorizontal,
-  Redo2,
-  RotateCcw,
-  Spinner,
-  Trash2,
-  Type,
-  Undo2,
-} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -2259,7 +2259,7 @@ export function TemplateAuthoringEditor({
                 role="status"
                 className="flex items-center gap-1 text-2xs text-muted-foreground"
               >
-                {previewing ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}
+                {previewing ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
                 {previewLabel}
               </span>
             ) : null}
@@ -2385,7 +2385,7 @@ export function TemplateAuthoringEditor({
             >
               {seedImporting ? (
                 <>
-                  <Spinner className="animate-spin" aria-hidden />{' '}
+                  <Loader2 className="animate-spin" aria-hidden />{' '}
                   {translateUi('preparing_private_workspace_fced2b6e')}
                 </>
               ) : canBootstrapEmptyDraft ? (
@@ -3076,7 +3076,7 @@ export function TemplateAuthoringEditor({
                       disabled={busy || staleSource || !groupSelectionReady}
                       onClick={createGroup}
                     >
-                      <Layers2 aria-hidden /> {translateUi('group_34ca0e76')}
+                      <Layers aria-hidden /> {translateUi('group_34ca0e76')}
                     </Button>
                   </div>
                 ) : null}
@@ -3183,7 +3183,7 @@ export function TemplateAuthoringEditor({
                         />
                       }
                     >
-                      <CircleQuestionMark aria-hidden />
+                      <CircleHelp aria-hidden />
                     </PopoverTrigger>
                     <PopoverContent side="bottom" align="end" className="w-80">
                       <h3 className="text-sm font-semibold">
@@ -4020,7 +4020,7 @@ export function TemplateAuthoringEditor({
                 }
                 onClick={() => void save('this_variant')}
               >
-                {saving ? <Spinner className="animate-spin" data-icon="inline-start" /> : null}{' '}
+                {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}{' '}
                 {translateUi('review_and_publish_revision_05597d26')}
               </Button>
             ) : null}
@@ -4036,7 +4036,7 @@ export function TemplateAuthoringEditor({
               }
             >
               {saving && !onVariant ? (
-                <Spinner className="animate-spin" data-icon="inline-start" />
+                <Loader2 className="animate-spin" data-icon="inline-start" />
               ) : null}
               {onVariant
                 ? translateUi('review_and_publish_new_variant_88a645d3')

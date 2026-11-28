@@ -16,8 +16,8 @@ import { useTranslations } from 'next-intl';
 // increase first, a decrease only once every increase of the move is undone, so an undo that
 // stops halfway leaves the client spending less, never more (moveDecisionModel.legUndo).
 
+import { GavelIcon } from 'lucide-react';
 import * as React from 'react';
-import { Gavel } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import * as typeScale from '../../typeScale';
 import { ActionMeta } from '../actionCardParts';
@@ -192,7 +192,7 @@ export function MoveDecisionCard({
           <span
             className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 font-semibold text-muted-foreground`}
           >
-            <Gavel aria-hidden="true" className="size-3.5" />
+            <GavelIcon aria-hidden="true" className="size-3.5" />
             {uiText('decision_640ae4b')}
           </span>
           <ActionMeta row={{ ...move.actorRow, ts: move.ts }} />

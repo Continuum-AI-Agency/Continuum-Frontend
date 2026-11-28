@@ -1,17 +1,11 @@
 'use client';
+import { Image as ImageIcon, RotateCw, SquarePen, Trash2, Upload } from 'lucide-react';
 import Image from 'next/image';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { type FileError, type FileRejection, useDropzone } from 'react-dropzone';
 import { ImageMarkupDialog } from '@/components/ai-studio/markup/ImageMarkupDialog';
 import { Dropzone, DropzoneEmptyState } from '@/components/dropzone';
-import {
-  ArrowUpFromLine,
-  Image as ImageIcon,
-  RotateCw,
-  SquarePen,
-  Trash2,
-} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -577,7 +571,7 @@ export function ReferenceDock({
         ) : null}
 
         <div className="mt-3 flex items-center gap-2">
-          <ArrowUpFromLine />
+          <Upload />
           <span className="text-xs text-gray-400">
             {translateUi('drag_from_creative_library_to_seed__c8c8632f')}
           </span>

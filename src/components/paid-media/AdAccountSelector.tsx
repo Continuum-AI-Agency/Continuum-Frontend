@@ -1,10 +1,10 @@
 'use client';
 
+import { Check, ChevronDown, ChevronsUpDown, PlugZapIcon, RefreshCwIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { BrandAvatar } from '@/components/brand/BrandAvatar';
-import { Check, ChevronDown, ChevronsUpDown, PlugZap, RefreshCw } from '@/components/icons';
 import { PlatformIcon } from '@/components/paid-media/optimizer/sections/platforms/PlatformChip';
 import {
   type AdPlatform,
@@ -391,7 +391,7 @@ export function AdAccountSelector({
           )}
           title={chip ? uiText('connect_ad_account_05e148f') : undefined}
         >
-          <PlugZap aria-hidden="true" className="h-3.5 w-3.5" />
+          <PlugZapIcon aria-hidden="true" className="h-3.5 w-3.5" />
           {chip ? (
             <span className="sr-only @[30rem]/scale-bar:not-sr-only">
               {uiText('connect_ad_account_05e148f')}
@@ -409,7 +409,7 @@ export function AdAccountSelector({
             aria-label={uiText('retry_loading_ad_accounts_2bdc642')}
             onClick={handleRetry}
           >
-            <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
+            <RefreshCwIcon aria-hidden="true" className="h-3.5 w-3.5" />
           </Button>
         ) : null}
       </div>

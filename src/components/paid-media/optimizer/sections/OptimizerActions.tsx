@@ -15,8 +15,8 @@ import { useTranslations } from 'next-intl';
 // ride into its group, where they render with their own control, as on the platform's tab.
 
 import type { AccountCandidate, PortfolioListItem, RenewalTask } from '@continuum/contracts';
+import { CheckCircle2Icon } from 'lucide-react';
 import { useMemo } from 'react';
-import { CircleCheck } from '@/components/icons';
 
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -98,7 +98,7 @@ export function OptimizerActions({
                 : uiText('template_f0a073f61bcf', { count: portfolios.length })
           }
           headline={uiText('activityNoDecisions')}
-          media={<CircleCheck aria-hidden="true" />}
+          media={<CheckCircle2Icon aria-hidden="true" />}
         />
       </div>
     );

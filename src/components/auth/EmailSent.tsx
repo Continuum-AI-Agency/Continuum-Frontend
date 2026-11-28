@@ -1,10 +1,10 @@
 'use client';
 
+import { Loader2, Mail } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { FormAlert } from '@/components/auth/FormAlert';
 import { FormInput } from '@/components/auth/FormInput';
-import { Mail, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useValidationErrorMap } from '@/i18n/validation';
 import type { EmailCodeInput } from '@/lib/auth/schemas';
@@ -99,7 +99,7 @@ export function EmailSent({
         >
           {isPending ? (
             <span className="flex items-center justify-center gap-2">
-              <Spinner className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               {tUi('m_6ca8910ee6')}
             </span>
           ) : (

@@ -3,8 +3,8 @@
 // House-modified: diverged from the upstream ai-elements component of the same name.
 // Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
 import { Collapsible } from '@base-ui/react/collapsible';
+import { ChevronDown, Info } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { ChevronDown, Info } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 

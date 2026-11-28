@@ -8,14 +8,14 @@ import { useTranslations } from 'next-intl';
 
 import type { OrganicStatusTone } from '@continuum/contracts';
 import {
-  ArrowDownToLine,
-  CircleAlert,
-  CircleCheck,
-  CircleX,
-  RefreshCw,
-  Spinner,
-  X,
-} from '@/components/icons';
+  AlertCircleIcon,
+  CheckCircle2Icon,
+  DownloadIcon,
+  Loader2Icon,
+  RefreshCwIcon,
+  XCircleIcon,
+  XIcon,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useRouter } from '@/i18n/navigation';
@@ -35,11 +35,11 @@ const TONE_TEXT: Record<OrganicStatusTone, string> = {
 };
 
 function StatusIcon({ job }: { job: InFlightJob }) {
-  if (job.active) return <Spinner className="size-3.5 animate-spin text-amber-500" />;
-  if (job.error) return <CircleAlert className="size-3.5 text-destructive" />;
+  if (job.active) return <Loader2Icon className="size-3.5 animate-spin text-amber-500" />;
+  if (job.error) return <AlertCircleIcon className="size-3.5 text-destructive" />;
   if (job.tone === 'live' || job.tone === 'ready')
-    return <CircleCheck className="size-3.5 text-emerald-500" />;
-  return <CircleX className="size-3.5 text-muted-foreground" />;
+    return <CheckCircle2Icon className="size-3.5 text-emerald-500" />;
+  return <XCircleIcon className="size-3.5 text-muted-foreground" />;
 }
 
 function InFlightRow({
@@ -95,7 +95,7 @@ function InFlightRow({
           size="sm"
           variant="ghost"
         >
-          <X className="size-3" />
+          <XIcon className="size-3" />
         </Button>
       )}
 
@@ -106,7 +106,7 @@ function InFlightRow({
           size="sm"
           variant="ghost"
         >
-          <RefreshCw className="size-3" />
+          <RefreshCwIcon className="size-3" />
           {uiText('retry_942087c')}
         </Button>
       )}
@@ -118,7 +118,7 @@ function InFlightRow({
           size="sm"
           variant="ghost"
         >
-          <ArrowDownToLine className="size-3" />
+          <DownloadIcon className="size-3" />
           {uiText('open_ed077f3')}
         </Button>
       )}

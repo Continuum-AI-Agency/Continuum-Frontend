@@ -1,8 +1,8 @@
 'use client';
 
+import { ChevronRightIcon, FileIcon, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { ChevronRight, File, Folder, FolderOpen } from '@/components/icons';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
@@ -128,7 +128,7 @@ export const FileTreeFolder = ({
                 onClick={handleSelect}
                 type="button"
               >
-                <ChevronRight
+                <ChevronRightIcon
                   className={cn(
                     'size-4 shrink-0 text-muted-foreground transition-transform',
                     isExpanded && 'rotate-90',
@@ -136,9 +136,9 @@ export const FileTreeFolder = ({
                 />
                 <FileTreeIcon>
                   {isExpanded ? (
-                    <FolderOpen className="size-4 text-blue-500" />
+                    <FolderOpenIcon className="size-4 text-blue-500" />
                   ) : (
-                    <Folder className="size-4 text-blue-500" />
+                    <FolderIcon className="size-4 text-blue-500" />
                   )}
                 </FileTreeIcon>
                 <FileTreeName>{name}</FileTreeName>
@@ -214,7 +214,9 @@ export const FileTreeFile = ({
           <>
             {/* Spacer for alignment */}
             <span className="size-4" />
-            <FileTreeIcon>{icon ?? <File className="size-4 text-muted-foreground" />}</FileTreeIcon>
+            <FileTreeIcon>
+              {icon ?? <FileIcon className="size-4 text-muted-foreground" />}
+            </FileTreeIcon>
             <FileTreeName>{name}</FileTreeName>
           </>
         )}

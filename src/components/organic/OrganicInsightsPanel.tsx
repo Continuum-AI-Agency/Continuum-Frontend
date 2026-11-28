@@ -1,8 +1,8 @@
 'use client';
 
+import { HeartIcon, LayoutGridIcon, RotateCw, TrendingUpIcon, UsersIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { Heart, LayoutGrid, RotateCw, TrendingUp, Users } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
 import { Button } from '@/components/ui/button';
@@ -47,25 +47,25 @@ export function OrganicInsightsPanel({
     {
       key: 'growth',
       title: uiText('growth_66b06e9'),
-      icon: TrendingUp,
+      icon: TrendingUpIcon,
       accent: 'bg-emerald-500/90',
     },
     {
       key: 'content',
       title: uiText('content_47bd290'),
-      icon: LayoutGrid,
+      icon: LayoutGridIcon,
       accent: 'bg-violet-500/90',
     },
     {
       key: 'engagement',
       title: uiText('engagement_ea68771'),
-      icon: Heart,
+      icon: HeartIcon,
       accent: 'bg-rose-500/90',
     },
     {
       key: 'audience',
       title: uiText('audience_545c023'),
-      icon: Users,
+      icon: UsersIcon,
       accent: 'bg-amber-500/90',
     },
   ];

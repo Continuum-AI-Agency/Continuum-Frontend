@@ -8,10 +8,10 @@
 // only the value waits for it.
 
 import type { BoardModuleSize } from '@continuum/contracts';
+import { AlertTriangleIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
-import { TriangleAlert } from '@/components/icons';
 import { figureProps, formatCurrency } from '@/components/paid-media/optimizer/format';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -124,7 +124,7 @@ function FlagBadge({ event }: { event: PortfolioEvent }) {
         event.flag.kind === 'lost' || event.flag.kind === 'silent' ? 'destructive' : 'warning'
       }
     >
-      <TriangleAlert aria-hidden="true" />
+      <AlertTriangleIcon aria-hidden="true" />
       {flagText(event.flag, many)}
     </Badge>
   );
@@ -197,7 +197,7 @@ function EventsSmall({
       </ul>
       {flagged?.flag ? (
         <p className="flex items-start gap-1.5 text-xs" data-testid={`${TEST_ID}-flag`}>
-          <TriangleAlert
+          <AlertTriangleIcon
             aria-hidden="true"
             className="mt-0.5 size-3 shrink-0 text-destructive-ink"
           />

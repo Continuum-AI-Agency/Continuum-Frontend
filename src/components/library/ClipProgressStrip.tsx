@@ -1,8 +1,8 @@
 'use client';
 
+import { AlertCircle, Check, Loader2, Scissors } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-import { Check, CircleAlert, Scissors, Spinner } from '@/components/icons';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
 import { cn } from '@/lib/utils';
 import type { ClipGenerationProgress } from './hooks/useGenerateClips';
@@ -19,7 +19,7 @@ export function ClipProgressStrip({ progress }: { progress: ClipGenerationProgre
     >
       {progress.stageLabel ? (
         <span className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
-          <Spinner className="size-3 shrink-0 animate-spin" />
+          <Loader2 className="size-3 shrink-0 animate-spin" />
           {progress.stageLabel}
         </span>
       ) : null}
@@ -37,9 +37,9 @@ export function ClipProgressStrip({ progress }: { progress: ClipGenerationProgre
           )}
           title={section.title}
         >
-          {section.status === 'active' && <Spinner className="size-2.5 shrink-0 animate-spin" />}
+          {section.status === 'active' && <Loader2 className="size-2.5 shrink-0 animate-spin" />}
           {section.status === 'done' && <Check className="size-2.5 shrink-0" />}
-          {section.status === 'error' && <CircleAlert className="size-2.5 shrink-0" />}
+          {section.status === 'error' && <AlertCircle className="size-2.5 shrink-0" />}
           {section.status === 'pending' && <Scissors className="size-2.5 shrink-0" />}
           <span className="max-w-[90px] truncate">{section.title}</span>
           <ViralityScoreBadge

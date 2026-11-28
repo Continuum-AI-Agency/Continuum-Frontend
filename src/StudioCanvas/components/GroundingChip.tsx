@@ -11,13 +11,13 @@
 
 import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@continuum/contracts';
 import { SECTION_AUTO_APPLY, suppressedDesignSections } from '@continuum/contracts';
+import { ChevronDown, Gem } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import {
   BrandBookPiecePreview,
   SkillConfigPreview,
 } from '@/components/brand/GenerationConfigPreview';
-import { ChevronDown, Gem } from '@/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,

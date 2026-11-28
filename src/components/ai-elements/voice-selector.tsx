@@ -1,19 +1,19 @@
 'use client';
 
+import {
+  CircleSmallIcon,
+  MarsIcon,
+  MarsStrokeIcon,
+  NonBinaryIcon,
+  PauseIcon,
+  PlayIcon,
+  TransgenderIcon,
+  VenusAndMarsIcon,
+  VenusIcon,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useMemo } from 'react';
-import {
-  CircleSmall,
-  Mars,
-  MarsStroke,
-  NonBinary,
-  Pause,
-  Play,
-  Transgender,
-  Venus,
-  VenusAndMars,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -172,31 +172,31 @@ export const VoiceSelectorGender = ({
 
   switch (value) {
     case 'male': {
-      icon = <Mars className="size-4" />;
+      icon = <MarsIcon className="size-4" />;
       break;
     }
     case 'female': {
-      icon = <Venus className="size-4" />;
+      icon = <VenusIcon className="size-4" />;
       break;
     }
     case 'transgender': {
-      icon = <Transgender className="size-4" />;
+      icon = <TransgenderIcon className="size-4" />;
       break;
     }
     case 'androgyne': {
-      icon = <MarsStroke className="size-4" />;
+      icon = <MarsStrokeIcon className="size-4" />;
       break;
     }
     case 'non-binary': {
-      icon = <NonBinary className="size-4" />;
+      icon = <NonBinaryIcon className="size-4" />;
       break;
     }
     case 'intersex': {
-      icon = <VenusAndMars className="size-4" />;
+      icon = <VenusAndMarsIcon className="size-4" />;
       break;
     }
     default: {
-      icon = <CircleSmall className="size-4" />;
+      icon = <CircleSmallIcon className="size-4" />;
     }
   }
 
@@ -449,12 +449,12 @@ export const VoiceSelectorPreview = ({
     [onClick, onPlay],
   );
 
-  let icon = <Play className="size-3" />;
+  let icon = <PlayIcon className="size-3" />;
 
   if (loading) {
     icon = <Spinner className="size-3" />;
   } else if (playing) {
-    icon = <Pause className="size-3" />;
+    icon = <PauseIcon className="size-3" />;
   }
 
   return (

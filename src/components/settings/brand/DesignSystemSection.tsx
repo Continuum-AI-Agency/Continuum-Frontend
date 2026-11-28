@@ -15,10 +15,10 @@ import { useTranslations } from 'next-intl';
 
 import type { DesignSection, DesignSystemSnapshot } from '@continuum/contracts';
 import { DESIGN_SECTION_LABELS } from '@continuum/contracts';
+import { AlertTriangle, Check, Download, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { DesignSystemCard } from '@/components/design-system/DesignSystemCard';
 import { useDesignSystem } from '@/components/design-system/useDesignSystem';
-import { ArrowDownToLine, Check, Pencil, TriangleAlert, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -102,7 +102,7 @@ function ConflictBar({
           className="flex items-start justify-between gap-4 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3"
         >
           <div className="flex items-start gap-2">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
             <div className="text-sm">
               <p className="font-medium text-foreground">
                 {DESIGN_SECTION_LABELS[conflict.section]} · {conflict.field}
@@ -363,7 +363,7 @@ function ExportRow({ snapshot }: { snapshot: DesignSystemSnapshot }) {
           }
         }}
       >
-        <ArrowDownToLine className="size-4" />
+        <Download className="size-4" />
         {busy ? tUi('m_0b1d6c0b1a') : tUi('m_a479c9c34e')}
       </Button>
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { Position } from '@xyflow/react';
+import { AlertCircle, CheckCircle2, Copy, Layers, Plus, Trash2, XCircle } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import React, { memo, useCallback, useMemo } from 'react';
 import {
@@ -12,7 +13,6 @@ import {
   NodeTitle,
 } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
-import { CircleAlert, CircleCheck, CircleX, Copy, Layers2, Plus, Trash2 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -141,7 +141,7 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="rounded-md bg-primary/10 p-1.5 text-primary">
-                  <Layers2 className="h-4 w-4" />
+                  <Layers className="h-4 w-4" />
                 </div>
                 <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   {uiText('ad_set_8fa52e4')}
@@ -149,13 +149,13 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
               </div>
               <div className="flex items-center gap-1">
                 {data.validationStatus === 'valid' && (
-                  <CircleCheck className="h-4 w-4 text-green-500" />
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
                 )}
                 {data.validationStatus === 'warning' && (
-                  <CircleAlert className="h-4 w-4 text-yellow-500" />
+                  <AlertCircle className="h-4 w-4 text-yellow-500" />
                 )}
                 {data.validationStatus === 'error' && (
-                  <CircleX className="h-4 w-4 text-destructive" />
+                  <XCircle className="h-4 w-4 text-destructive" />
                 )}
               </div>
             </div>
@@ -256,7 +256,7 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
           <ContextMenuSub>
             <ContextMenuSubTrigger>
               {uiText.rich('sentence_0b86e57c3b98', {
-                v0: () => <Layers2 className="mr-2 h-4 w-4" />,
+                v0: () => <Layers className="mr-2 h-4 w-4" />,
                 v1: () => (
                   <ContextMenuItemInfo
                     className="ml-2 mr-4"

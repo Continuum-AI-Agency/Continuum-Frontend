@@ -1,12 +1,12 @@
 'use client';
 
+import { AtSign, ChevronLeft, ChevronRight, Video } from 'lucide-react';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import {
   type MentionAnalyticsContext,
   MentionSuggestionHover,
 } from '@/components/chat/mention-suggestion-hover';
-import { AtSign, ChevronLeft, ChevronRight, Video } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import {
   Breadcrumb,

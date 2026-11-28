@@ -1,12 +1,12 @@
 'use client';
 
 import { resolveOrganicGenerationDisplay } from '@continuum/contracts';
+import { AlertCircle, Check, Clock, Loader2, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import type { ChatMedia } from '@/components/chat/media/media';
-import { Check, CircleAlert, Clock, Sparkles, Spinner } from '@/components/icons';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import {
   AgentArtifactCard,
@@ -83,12 +83,12 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
       >
-        <Spinner className="h-3 w-3 animate-spin text-amber-500" />
+        <Loader2 className="h-3 w-3 animate-spin text-amber-500" />
       </motion.div>
     ) : node.status === 'done' ? (
       <Check className="h-3 w-3 text-emerald-500" />
     ) : node.status === 'failed' ? (
-      <CircleAlert className="h-3 w-3 text-destructive" />
+      <AlertCircle className="h-3 w-3 text-destructive" />
     ) : (
       <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
     );
@@ -157,7 +157,7 @@ function CheckpointStepNode({
     status === 'done' ? (
       <Check className="h-3 w-3 text-emerald-500" />
     ) : status === 'active' || status === 'generating' ? (
-      <Spinner className="h-3 w-3 animate-spin text-amber-500" />
+      <Loader2 className="h-3 w-3 animate-spin text-amber-500" />
     ) : status === 'awaiting' ? (
       <Clock className="h-3 w-3 text-muted-foreground" />
     ) : status === 'ready' || status === 'user_supplied' ? (

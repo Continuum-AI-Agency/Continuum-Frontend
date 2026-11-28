@@ -1,9 +1,9 @@
 'use client';
 
+import { X } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { X } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { usePathname, useRouter } from '@/i18n/navigation';
 

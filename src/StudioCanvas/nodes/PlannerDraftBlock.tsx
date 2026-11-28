@@ -15,6 +15,7 @@ import {
   Position,
   type Node as ReactFlowNode,
 } from '@xyflow/react';
+import { CalendarRange, Copy, ExternalLink, Save, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState, useMemo as useUiConfigMemo } from 'react';
@@ -23,7 +24,6 @@ import {
   type OrganicPublishTarget,
   OrganicPublishTargetPicker,
 } from '@/components/automations/workspace/pickers/OrganicPublishTargetPicker';
-import { CalendarRange, Copy, Save, SquareArrowOutUpRight, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -359,7 +359,7 @@ export function PlannerDraftBlock({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  <SquareArrowOutUpRight className="size-3" aria-hidden />{' '}
+                  <ExternalLink className="size-3" aria-hidden />{' '}
                   {translateUi('open_in_planner_28ad31bc')}
                 </a>
                 <button

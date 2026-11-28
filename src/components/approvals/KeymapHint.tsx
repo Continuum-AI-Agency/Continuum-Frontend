@@ -1,7 +1,7 @@
 'use client';
 
+import { HelpCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { CircleQuestionMark } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -33,7 +33,7 @@ export function KeymapHint() {
             className="h-7 w-7 text-muted-foreground"
             aria-label={tUi('m_266695479a')}
           >
-            <CircleQuestionMark className="h-4 w-4" strokeWidth={1.5} />
+            <HelpCircle className="h-4 w-4" strokeWidth={1.5} />
           </Button>
         }
       />

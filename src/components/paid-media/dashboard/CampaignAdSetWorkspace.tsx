@@ -2,19 +2,19 @@
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
 import type { UTCTimestamp } from 'lightweight-charts';
+import {
+  ArrowLeft,
+  ChevronRight,
+  Ellipsis,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
+  RotateCw,
+} from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
-import {
-  ArrowLeft,
-  ChevronRight,
-  Ellipsis,
-  PanelRightClose,
-  PanelRightOpen,
-  RotateCw,
-} from '@/components/icons';
 import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
 import {
   type FigureProps,
@@ -2114,9 +2114,9 @@ export function CampaignAdSetWorkspace({
                 className="h-9 w-9 rounded-md border border-border/70 bg-background p-0"
               >
                 {isRailCollapsed ? (
-                  <PanelRightOpen className="h-4 w-4" />
+                  <PanelRightOpenIcon className="h-4 w-4" />
                 ) : (
-                  <PanelRightClose className="h-4 w-4" />
+                  <PanelRightCloseIcon className="h-4 w-4" />
                 )}
               </Button>
             </div>

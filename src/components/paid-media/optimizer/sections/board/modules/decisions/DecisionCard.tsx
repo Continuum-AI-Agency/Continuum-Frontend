@@ -5,15 +5,15 @@
 // worth and the button the mode allows. On a narrow card the button drops under the body; from
 // 32rem it sits on the right, as in the design.
 
+import {
+  AlertTriangleIcon,
+  ArrowRightIcon,
+  ChevronDownIcon,
+  ExternalLinkIcon,
+  LockIcon,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
-import {
-  ArrowRight,
-  ChevronDown,
-  Lock,
-  SquareArrowOutUpRight,
-  TriangleAlert,
-} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -114,7 +114,7 @@ export function DecisionCardView({
           <div className="min-w-0 space-y-1.5">
             <div className="flex flex-wrap items-center gap-1.5">
               <Badge data-testid="decision-tier" variant={TIER_BADGE[card.tier]}>
-                {card.tier === 'low' ? null : <TriangleAlert aria-hidden="true" />}
+                {card.tier === 'low' ? null : <AlertTriangleIcon aria-hidden="true" />}
                 {DECISION_TIER_LABEL[card.tier]}
               </Badge>
               <Badge data-testid="decision-group" variant="outline">
@@ -147,7 +147,7 @@ export function DecisionCardView({
                 className="flex items-start gap-1.5 text-muted-foreground text-xs"
                 data-testid="decision-note"
               >
-                <Lock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                <LockIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
                 <span className="min-w-0 break-words">{card.note}</span>
               </p>
             ) : null}
@@ -161,7 +161,7 @@ export function DecisionCardView({
                     client: clientExecutes ? 'yes' : 'no',
                     count: card.steps.length,
                   })}
-                  <ChevronDown
+                  <ChevronDownIcon
                     aria-hidden="true"
                     className={cn(
                       'size-3.5 transition-transform motion-reduce:transition-none',
@@ -187,7 +187,7 @@ export function DecisionCardView({
                       target="_blank"
                     >
                       {OPEN_PLATFORM_LABEL[platform]}
-                      <SquareArrowOutUpRight aria-hidden="true" className="size-3.5" />
+                      <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
                     </a>
                   ) : null}
                 </CollapsibleContent>
@@ -203,7 +203,7 @@ export function DecisionCardView({
                 <span className="truncate">
                   {portfolioName ?? uiText('open_portfolio_4f22ccf')}
                 </span>
-                <ArrowRight aria-hidden="true" className="size-3 shrink-0" />
+                <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
               </button>
             ) : null}
           </div>

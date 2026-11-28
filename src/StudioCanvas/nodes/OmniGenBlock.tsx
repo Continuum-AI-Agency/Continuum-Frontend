@@ -10,12 +10,12 @@ import {
   useEdges,
   useNodeId,
 } from '@xyflow/react';
+import { Copy, Download, Play, SquarePen, Trash2, Video } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
-import { ArrowDownToLine, Copy, Play, SquarePen, Trash2, Video } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -647,7 +647,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!previewVideo}>
-            <ArrowDownToLine className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
+            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem

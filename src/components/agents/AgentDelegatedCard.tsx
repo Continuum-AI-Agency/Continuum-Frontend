@@ -2,8 +2,8 @@
 
 import type { AgentDelegatedFrameData } from '@continuum/contracts';
 import { AGENT_INITIATOR_LABELS, agentConversationPath } from '@continuum/contracts';
+import { ArrowLeftRightIcon, ArrowUpRightIcon, Loader2Icon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { ArrowLeftRight, ArrowUpRight, Spinner } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Link } from '@/i18n/navigation';
 import { translateControlLabel } from '@/lib/ui/controlLabels';
@@ -75,13 +75,13 @@ export function AgentDelegatedCard({ data, className }: AgentDelegatedCardProps)
       )}
     >
       <div className="flex items-center gap-2">
-        <ArrowLeftRight className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+        <ArrowLeftRightIcon className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
         <span className="text-xs font-medium text-foreground">
           {agentDelegatedLabel(data, tUi)}
         </span>
         <Pill variant="secondary" className="ml-auto gap-1">
           {status === 'running' ? (
-            <Spinner className="size-3 animate-spin" />
+            <Loader2Icon className="size-3 animate-spin" />
           ) : (
             <PillIndicator variant={STATUS_VARIANT[status]} />
           )}
@@ -99,7 +99,7 @@ export function AgentDelegatedCard({ data, className }: AgentDelegatedCardProps)
           className="inline-flex w-fit items-center gap-1 text-2xs text-primary hover:underline"
         >
           {tUi('m_c1e01db47d')}
-          <ArrowUpRight className="size-3" />
+          <ArrowUpRightIcon className="size-3" />
         </Link>
       ) : null}
     </div>

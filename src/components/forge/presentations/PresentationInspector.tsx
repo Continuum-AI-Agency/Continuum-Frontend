@@ -10,11 +10,11 @@ import {
   presentationTableDataSchema,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Lock, Unlock } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Lock, LockOpen } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
@@ -227,7 +227,7 @@ export function PresentationInspector({
           disabled={busy}
           onClick={() => void onCommands([{ type: 'lock.set', ...target, locked: !locked }])}
         >
-          {locked ? <LockOpen data-icon="inline-start" /> : <Lock data-icon="inline-start" />}
+          {locked ? <Unlock data-icon="inline-start" /> : <Lock data-icon="inline-start" />}
           {locked ? translateUi('unlock_4ac709aa') : translateUi('lock_db44b8db')}
         </Button>
       </div>

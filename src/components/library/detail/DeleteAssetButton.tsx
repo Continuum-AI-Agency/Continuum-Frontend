@@ -6,9 +6,9 @@
 // removal, never erasure.
 
 import type { MediaAsset } from '@continuum/contracts';
+import { Loader2Icon, Trash2Icon } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Spinner, Trash2 } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,7 +79,7 @@ export function DeleteAssetButton({ brandId, asset, onDeleted }: DeleteAssetButt
         className="gap-1.5 text-destructive hover:text-destructive"
         onClick={() => setOpen(true)}
       >
-        <Trash2 className="size-3.5" /> {translateUi('delete_e2d0a549')}
+        <Trash2Icon className="size-3.5" /> {translateUi('delete_e2d0a549')}
       </Button>
       <AlertDialog open={open} onOpenChange={(next) => (deleting ? undefined : setOpen(next))}>
         <AlertDialogContent>
@@ -100,7 +100,7 @@ export function DeleteAssetButton({ brandId, asset, onDeleted }: DeleteAssetButt
               {translateUi('cancel_19766ed6')}
             </AlertDialogCancel>
             <AlertDialogAction disabled={deleting} onClick={() => void handleDelete()}>
-              {deleting && <Spinner className="size-3.5 animate-spin" />}
+              {deleting && <Loader2Icon className="size-3.5 animate-spin" />}
               {deleting ? translateUi('deleting_43b5894c') : translateUi('delete_e2d0a549')}
             </AlertDialogAction>
           </AlertDialogFooter>

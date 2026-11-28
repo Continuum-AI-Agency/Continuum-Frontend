@@ -5,8 +5,8 @@ import { useMemo } from 'react';
 // stays in AccountRead, so a Google card and a Meta card differ only where their platforms do.
 
 import type { PlatformCard } from '@continuum/contracts';
+import { ExternalLinkIcon } from 'lucide-react';
 import { useState } from 'react';
-import { SquareArrowOutUpRight } from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../format';
@@ -103,7 +103,7 @@ function OpenInGoogleAds({ href }: { href: string }) {
       target="_blank"
     >
       {uiText('open_in_google_ads_0131249')}
-      <SquareArrowOutUpRight aria-hidden="true" className="size-3.5" />
+      <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
     </a>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import type { MediaSearchResultsFrame } from '@continuum/contracts';
+import { ArrowRight, RefreshCw } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useMemo, useRef } from 'react';
@@ -12,7 +13,6 @@ import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { MediaStrip } from '@/components/chat/media/MediaStrip';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
-import { ArrowRight, RefreshCw } from '@/components/icons';
 import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';

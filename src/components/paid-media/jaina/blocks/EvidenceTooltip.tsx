@@ -7,8 +7,8 @@
 // from gathered evidence. Follows the GlossaryTooltip idiom (IMP-018) so the
 // provenance is exposed via aria-describedby, not hover-only.
 
+import { InfoIcon } from 'lucide-react';
 import { useId } from 'react';
-import { Info } from '@/components/icons';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PROVENANCE_TEXT } from '../answerLanguage';
@@ -92,7 +92,7 @@ export function EvidenceTooltip({ provenance, datasetId, evidenceRefs }: Evidenc
               aria-describedby={descriptionId}
               className="inline-flex cursor-help items-center text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:text-foreground"
             >
-              <Info className="size-3.5" aria-hidden="true" />
+              <InfoIcon className="size-3.5" aria-hidden="true" />
             </button>
           }
         />

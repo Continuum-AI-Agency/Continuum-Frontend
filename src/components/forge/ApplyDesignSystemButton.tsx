@@ -11,9 +11,9 @@ import {
   type TemplateRevision,
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
+import { Palette } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
-import { Palette } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorSentence } from '@/i18n/errors';

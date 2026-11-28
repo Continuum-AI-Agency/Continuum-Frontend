@@ -15,6 +15,24 @@ import {
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowLeft,
+  CalendarClock,
+  CircleDot,
+  History,
+  Layers,
+  Loader2,
+  Play,
+  RectangleHorizontal,
+  RefreshCw,
+  Rocket,
+  Send,
+  TestTube2,
+  Trash2,
+  Type,
+  Variable,
+  Wrench,
+} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
@@ -50,24 +68,6 @@ import {
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
 import { VariantsPanel } from '@/components/forge/VariantsPanel';
-import {
-  ArrowLeft,
-  CalendarClock,
-  CircleDot,
-  History,
-  Layers2,
-  Play,
-  RectangleHorizontal,
-  RefreshCw,
-  Rocket,
-  Send,
-  Spinner,
-  TestTube2,
-  Trash2,
-  Type,
-  Variable,
-  Wrench,
-} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Panel } from '@/components/shared/Panel';
 import {
@@ -887,7 +887,7 @@ export function TemplateDetail({
         onClick={() => void onAdvance(step.action)}
       >
         {busy === step.action ? (
-          <Spinner className="size-3 animate-spin" aria-hidden />
+          <Loader2 className="size-3 animate-spin" aria-hidden />
         ) : (
           <Icon className="size-3" aria-hidden />
         )}
@@ -1088,7 +1088,7 @@ export function TemplateDetail({
             disabled={fontBusy}
             onClick={() => fontInput.current?.click()}
           >
-            {fontBusy ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}{' '}
+            {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
             {translateUi('add_font_files_7ad2d46a')}
           </Button>
         ) : null}
@@ -1109,7 +1109,7 @@ export function TemplateDetail({
             disabled={fontBusy}
             onClick={() => void reviewFontInstall()}
           >
-            {fontBusy ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}{' '}
+            {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
             {translateUi('review_font_install_8b99a35e')}
           </Button>
         ) : null}
@@ -1165,7 +1165,7 @@ export function TemplateDetail({
               onClick={onSubmit}
             >
               {busy === 'submit' ? (
-                <Spinner className="size-3.5 animate-spin" aria-hidden />
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
               ) : (
                 <Send className="size-3.5" aria-hidden />
               )}{' '}
@@ -1408,7 +1408,7 @@ export function TemplateDetail({
       onClick={() => void onFix()}
     >
       {fixing ? (
-        <Spinner className="size-3 animate-spin" aria-hidden />
+        <Loader2 className="size-3 animate-spin" aria-hidden />
       ) : (
         <Wrench className="size-3" aria-hidden />
       )}{' '}
@@ -1697,7 +1697,7 @@ export function TemplateDetail({
                     }
                     onClick={() => void saveTextMoves()}
                   >
-                    {savingText ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}{' '}
+                    {savingText ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
                     {translateUi('save_text_layout_1434bf4c')}
                   </Button>
                   <Button
@@ -1961,7 +1961,7 @@ export function TemplateDetail({
                   ),
                 },
                 {
-                  icon: Layers2,
+                  icon: Layers,
                   label: translateUi('sets_fbb0f1b4'),
                   numeric: true,
                   value: setCount ?? '—',

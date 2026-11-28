@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from 'next-intl';
 // caption snippet + its own measured metric + captured date + live permalink).
 // PostQuickLook can't be reused here — an exemplar has no full OrganicPost.
 
-import { SquareArrowOutUpRight } from '@/components/icons';
+import { ExternalLink } from 'lucide-react';
 import type { UiLocale } from '@/i18n/config';
 import type { ExemplarView } from '@/lib/organic/creative-strategy-rows';
 import { formatMetricValue } from '@/lib/organic/creative-strategy-rows';
@@ -73,7 +73,7 @@ export function ExemplarQuickLook({ exemplar }: { exemplar: ExemplarView }) {
           className="inline-flex items-center gap-1 text-xs text-accent transition-colors hover:text-foreground"
         >
           {uiText('open_post_92a0ae1')}
-          <SquareArrowOutUpRight className="size-3" aria-hidden />
+          <ExternalLink className="size-3" aria-hidden />
         </a>
       ) : null}
     </div>

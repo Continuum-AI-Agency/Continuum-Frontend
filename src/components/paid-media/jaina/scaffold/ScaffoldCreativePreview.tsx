@@ -1,9 +1,10 @@
 'use client';
 
+import { Sparkles } from 'lucide-react';
+
 import { useTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
-import { Sparkles } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useUiErrorMessage } from '@/i18n/errors';
 

@@ -8,8 +8,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // apart in the same settings nav and should not feel like different apps.
 
 import { PROJECT_COLOR_PRESETS, type Project } from '@continuum/contracts';
+import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useProjectMutations } from '@/lib/projects/hooks';
@@ -247,7 +247,7 @@ export function ProjectForm({ brandId, initial, onCancelAction, onSavedAction }:
           aria-busy={saving || undefined}
           onClick={save}
         >
-          {saving && <Spinner className="h-3.5 w-3.5 animate-spin" />}
+          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {initial ? tUi('m_179359b39e') : tUi('m_a8d8ff51e4')}
         </Button>
       </div>

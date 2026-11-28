@@ -1,8 +1,8 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { Spinner } from '@/components/icons';
 
 type AgentWorkingIndicatorProps = {
   // 'inline'  — transient three-dot cue inside a pending assistant bubble, shown before
@@ -36,7 +36,7 @@ export function AgentWorkingIndicator({
         aria-label={label}
       >
         <div className="flex items-center gap-2.5 px-3 py-2">
-          <Spinner className="size-4 shrink-0 animate-spin text-brand-primary" />
+          <Loader2 className="size-4 shrink-0 animate-spin text-brand-primary" />
           <span className="text-sm font-medium text-foreground">{label}</span>
         </div>
         <div className="h-0.5 w-full overflow-hidden bg-brand-primary/10">

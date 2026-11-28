@@ -10,10 +10,10 @@
 
 import { EXPORT_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
+import { Download, Loader2, Package } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import { ArrowDownToLine, Package, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -153,7 +153,7 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <NodeTitleBar icon={ArrowDownToLine} label={translateUi('export_36648955')}>
+        <NodeTitleBar icon={Download} label={translateUi('export_36648955')}>
           {kind ? <NodeBadge>{MODALITY_LABEL[kind]}</NodeBadge> : null}
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
@@ -199,7 +199,7 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
                 onClick={() => void run()}
                 data-testid="studio-export-download"
               >
-                {busy ? <Spinner className="mr-2 size-3.5 animate-spin" /> : null}
+                {busy ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
                 {bulk ? (
                   <>
                     <Package className="mr-2 size-3.5" /> {translateUi(

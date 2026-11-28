@@ -1,10 +1,10 @@
 'use client';
 
 import type { AdNamingSchemaConfig } from '@continuum/contracts';
+import { Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
 import { updateBrandAdNamingSchemaAction } from '@/app/[locale]/(post-auth)/settings/actions';
-import { Plus, Trash2 } from '@/components/icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -14,6 +14,7 @@ import { useRouter } from '@/i18n/navigation';
 import '@xyflow/react/dist/style.css';
 import type { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
 import { type ActionId, type UnsplashPhoto, validateWorkflowGraph } from '@continuum/contracts';
+import { AtSign, Camera, FolderOpen, Palette } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useShallow } from 'zustand/react/shallow';
@@ -28,7 +29,6 @@ import { useCanvasRealtime } from '@/components/ai-studio/hooks/useCanvasRealtim
 import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
 import { useCanvasRunRequests } from '@/components/ai-studio/hooks/useCanvasRunRequests';
 import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
-import { AtSign, Camera, FolderOpen, Palette } from '@/components/icons';
 import { Cursor } from '@/components/realtime/cursor';
 import { StylesShelfLazy } from '@/components/styles/StylesShelfLazy';
 import { Button } from '@/components/ui/button';

@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 // style, one panel style, so an expert can skip it and a non-expert can trust it.
 // Content is plain language first, evidence second (the numbers, the window, the rule).
 
-import { CircleQuestionMark } from '@/components/icons';
+import { HelpCircleIcon } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
@@ -39,7 +39,7 @@ export function ExplainPopover({
         )}
         type="button"
       >
-        <CircleQuestionMark aria-hidden className="size-3.5" />
+        <HelpCircleIcon aria-hidden className="size-3.5" />
         {label ? <span>{label}</span> : null}
       </PopoverTrigger>
       <PopoverContent align={align} className="w-72 space-y-2 p-3 text-xs">

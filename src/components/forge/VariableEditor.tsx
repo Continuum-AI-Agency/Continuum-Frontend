@@ -12,19 +12,11 @@ import {
   SLOT_ROLES,
   type SlotRole,
 } from '@continuum/contracts';
+import { Image as ImageIcon, Info, Loader2, Save, Type, Upload, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useRef, useState, useMemo as useUiConfigMemo } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import { KIND_ICONS } from '@/components/forge/DataGrid';
-import {
-  ArrowUpFromLine,
-  Image as ImageIcon,
-  Info,
-  Save,
-  Spinner,
-  Type,
-  X,
-} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
 import { Accordion, AccordionItem } from '@/components/ui/accordion';
@@ -199,9 +191,9 @@ export function DefaultValueControl({
           onClick={() => fileInput.current?.click()}
         >
           {uploading ? (
-            <Spinner className="size-3.5 animate-spin" aria-hidden />
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
           ) : (
-            <ArrowUpFromLine className="size-3.5" aria-hidden />
+            <Upload className="size-3.5" aria-hidden />
           )}{' '}
           {translateUi('upload_here_0a705ba9')}
         </Button>
@@ -897,7 +889,7 @@ export function VariableEditor({
             onClick={() => void save()}
           >
             {saving ? (
-              <Spinner className="size-3.5 animate-spin" aria-hidden />
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
             ) : (
               <Save className="size-3.5" aria-hidden />
             )}{' '}

@@ -1,7 +1,7 @@
 import type { UpsertGoalCapabilityRouteRequest } from '@continuum/contracts';
 import { campaignResearchTemplate } from '@continuum/contracts';
+import { Bot, CircleAlert, CircleCheck, Route, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Bot, CircleAlert, CircleCheck, Route, Users } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import type { GoalWorkspaceView } from '@/lib/goals/models';
 import { GoalRoutingDialog } from './GoalRoutingDialog';

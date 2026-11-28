@@ -12,11 +12,11 @@
 // that lands somewhere with no pipeline in it.
 
 import type { PipelineCapabilityV2, PipelineManifest } from '@continuum/contracts';
+import { Check, Copy, Play, Workflow, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { PipelineContract } from '@/components/ai-studio/PipelineContract';
 import { PipelineInvocationForm } from '@/components/ai-studio/PipelineInvocationForm';
-import { Check, Copy, Play, Workflow, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useBrandPipelineManifests, usePipelineCapabilities } from '@/lib/ai-studio/pipelines';
 

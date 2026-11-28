@@ -8,8 +8,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // Reads GET /api/trends/runs/recent via fetchRecentTrendsRuns.
 
 import type { TrendsRecentRun } from '@continuum/contracts';
+import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import {

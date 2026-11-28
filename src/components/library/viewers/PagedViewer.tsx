@@ -6,9 +6,9 @@
 // thread turns to its page.
 
 import type { ViewerPage } from '@continuum/contracts';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { OverlayPin } from '../detail/AnnotationOverlay';

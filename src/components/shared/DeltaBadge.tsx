@@ -1,5 +1,5 @@
+import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowDownRight, ArrowUpRight, Minus } from '@/components/icons';
 import { judgeDelta } from '@/components/paid-media/jaina/reading';
 import type { UiLocale } from '@/i18n/config';
 import { cn } from '@/lib/utils';

@@ -7,7 +7,7 @@ import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
 // Discover signals -> Generate content -> Measure -> Optimize. The first two
 // nodes reflect real setup signals (done vs todo); the rest are navigational.
 
-import { Check, ChevronRight, Circle } from '@/components/icons';
+import { Check, ChevronRight, Circle } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 
 import { cn } from '@/lib/utils';

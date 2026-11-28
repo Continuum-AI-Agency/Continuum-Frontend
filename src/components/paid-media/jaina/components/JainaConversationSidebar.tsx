@@ -4,6 +4,7 @@ import type { useTranslations as ScaleTranslationHook } from 'next-intl';
 type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
 
 import { type AgentSessionListFilters, agentInitiatorLabel } from '@continuum/contracts';
+import { Loader2Icon, Plus, Trash2Icon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import React, { useMemo } from 'react';
 import { ChatHistoryFilterBar } from '@/components/chat/ChatHistoryFilterBar';
@@ -15,7 +16,6 @@ import { SessionSearchFailureNotice } from '@/components/chat/SessionSearchFailu
 import { SessionTagEditor } from '@/components/chat/SessionTagEditor';
 import { useSessionSearch } from '@/components/chat/useSessionSearch';
 import { CreateCampaignGoalDialog } from '@/components/goals/CreateCampaignGoalDialog';
-import { Plus, Spinner, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -316,7 +316,7 @@ export function JainaConversationSidebar({
                         {isGenerating ? (
                           <span className="inline-flex shrink-0 items-center gap-1 text-primary-ink">
                             {uiText.rich('sentence_950c98d9306c', {
-                              v0: () => <Spinner className="size-3 animate-spin" />,
+                              v0: () => <Loader2Icon className="size-3 animate-spin" />,
                               v1: () => (
                                 <span aria-hidden="true" className="text-muted-foreground">
                                   ·
@@ -371,9 +371,9 @@ export function JainaConversationSidebar({
                       )}
                     >
                       {isDeleting ? (
-                        <Spinner className="size-3.5 animate-spin" />
+                        <Loader2Icon className="size-3.5 animate-spin" />
                       ) : (
-                        <Trash2 className="size-3.5" />
+                        <Trash2Icon className="size-3.5" />
                       )}
                     </button>
                   </div>

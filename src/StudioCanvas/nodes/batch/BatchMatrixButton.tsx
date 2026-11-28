@@ -4,9 +4,9 @@
 // made them, and a batch node that showed someone else's renders would keep showing them
 // after it was rewired to a different generator.
 
+import { Grid3x3 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Grid3x3 } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import type { BatchRunRecord } from '../../utils/batch/generationFanout';

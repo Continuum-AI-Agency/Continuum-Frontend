@@ -13,7 +13,7 @@ import { useTranslations } from 'next-intl';
 // The account-resolution logic lives in ./portfolioAccounts so it stays testable without
 // rendering; this file is presentation only.
 
-import { ArrowLeftRight, FolderSearch, Library, Plus } from '@/components/icons';
+import { ArrowRightLeftIcon, FolderSearchIcon, LibraryIcon, PlusIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { HiddenPortfolioAccount } from './portfolioAccounts';
@@ -43,7 +43,7 @@ export function OptimizerOtherAccountNotice({
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 p-6 text-center">
       <span className="grid size-10 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground">
-        <FolderSearch className="size-4" aria-hidden="true" />
+        <FolderSearchIcon className="size-4" aria-hidden="true" />
       </span>
       <div className="space-y-1.5">
         <h2 className="font-semibold text-sm tracking-tight">
@@ -71,7 +71,7 @@ export function OptimizerOtherAccountNotice({
                 className="h-7 shrink-0 gap-1.5 text-xs"
                 onClick={() => onSwitchAccount(account.accountId)}
               >
-                <ArrowLeftRight className="size-3.5" aria-hidden="true" />
+                <ArrowRightLeftIcon className="size-3.5" aria-hidden="true" />
                 {uiText('switch_39921a7')}
               </Button>
             ) : null}
@@ -82,14 +82,14 @@ export function OptimizerOtherAccountNotice({
       <div className="flex flex-wrap items-center justify-center gap-2">
         {onCreate ? (
           <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={onCreate} type="button">
-            <Plus className="size-3.5" aria-hidden="true" />
+            <PlusIcon className="size-3.5" aria-hidden="true" />
             {uiText('new_portfolio_2ea4a33')}
           </Button>
         ) : null}
         {onBrowseAll ? (
           <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" onClick={onBrowseAll}>
             {uiText.rich('sentence_4f47d89be4cd', {
-              v0: () => <Library className="size-3.5" aria-hidden="true" />,
+              v0: () => <LibraryIcon className="size-3.5" aria-hidden="true" />,
               v1: hiddenCount,
             })}
           </Button>

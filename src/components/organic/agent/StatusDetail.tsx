@@ -1,7 +1,7 @@
 'use client';
 
+import { Check, Clock, Loader2, Minus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Check, Clock, Minus, Spinner } from '@/components/icons';
 import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
 import { localizeOrganicAgentLabel } from '@/lib/ui/organicLifecycleLabels';
 import { cn } from '@/lib/utils';
@@ -15,7 +15,7 @@ type LadderState = 'done' | 'active' | 'waiting' | 'pending';
 
 const LADDER_ICON: Record<LadderState, typeof Check> = {
   done: Check,
-  active: Spinner,
+  active: Loader2,
   waiting: Clock,
   pending: Minus,
 };

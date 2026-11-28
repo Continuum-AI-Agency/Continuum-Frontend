@@ -1,8 +1,8 @@
 'use client';
 
+import { MessageSquarePlus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useActionState, useEffect, useState } from 'react';
-import { MessageSquarePlus } from '@/components/icons';
 import { formatTimecodeRange } from '@/components/library/detail/annotationGeometry';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

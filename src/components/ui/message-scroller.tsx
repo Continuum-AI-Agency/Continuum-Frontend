@@ -6,9 +6,9 @@ import {
   useMessageScrollerScrollable,
   useMessageScrollerVisibility,
 } from '@shadcn/react/message-scroller';
+import { ArrowDownIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type * as React from 'react';
-import { ArrowDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -109,7 +109,7 @@ function MessageScrollerButton({
     >
       {children ?? (
         <>
-          <ArrowDown />
+          <ArrowDownIcon />
           <span className="sr-only">
             {direction === 'end' ? tUi('m_b5916c2888') : tUi('m_900c74620b')}
           </span>

@@ -1,8 +1,14 @@
 'use client';
 
+import {
+  BarChart3Icon,
+  MousePointerClickIcon,
+  RotateCw,
+  TrendingUpIcon,
+  WalletIcon,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
-import { BarChart3, MousePointerClick, RotateCw, TrendingUp, Wallet } from '@/components/icons';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -165,22 +171,22 @@ export function LinkedInInsightsPanel({
     ? [
         {
           title: uiText('spend_85f3d55'),
-          icon: Wallet,
+          icon: WalletIcon,
           body: chooseSpendLine(payload.metrics, payload.comparison, uiLocale, uiText),
         },
         {
           title: uiText('traffic_4876efb'),
-          icon: MousePointerClick,
+          icon: MousePointerClickIcon,
           body: chooseVolumeLine(payload.metrics, payload.comparison, uiLocale, uiText),
         },
         {
           title: uiText('efficiency_87b180c'),
-          icon: TrendingUp,
+          icon: TrendingUpIcon,
           body: chooseEfficiencyLine(payload.metrics, payload.comparison, uiLocale, uiText),
         },
         {
           title: uiText('trend_9e21771'),
-          icon: BarChart3,
+          icon: BarChart3Icon,
           body: trendLine(payload.trends, uiText),
         },
       ]
@@ -191,7 +197,7 @@ export function LinkedInInsightsPanel({
       <SectionHeader
         title={
           <span className="flex items-center gap-2">
-            <BarChart3 className="size-4 text-muted-foreground" />
+            <BarChart3Icon className="size-4 text-muted-foreground" />
             {title}
           </span>
         }

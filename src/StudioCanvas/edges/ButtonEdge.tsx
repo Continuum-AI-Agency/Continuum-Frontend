@@ -7,9 +7,9 @@ import {
   getBezierPath,
   useReactFlow,
 } from '@xyflow/react';
+import { X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React, { memo, useCallback } from 'react';
-import { X } from '@/components/icons';
 
 /**
  * ButtonEdge - An edge with a delete button in the center

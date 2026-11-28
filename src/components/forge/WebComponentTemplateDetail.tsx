@@ -7,6 +7,7 @@ import {
   webTemplateKey,
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Play, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { OpenInLibrary } from '@/components/forge/libraryState';
 import { templateLoadQueries } from '@/components/forge/queryKeys';
@@ -14,7 +15,6 @@ import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { KIND_LABEL } from '@/components/forge/SharedTemplateDetail';
 import { InlineRename } from '@/components/forge/TemplateCard';
 import { WebComponentPreview } from '@/components/forge/WebComponentPreview';
-import { ArrowLeft, Play, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { parseErrorSentence } from '@/lib/library/sceneTemplates';
 

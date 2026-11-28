@@ -29,6 +29,7 @@ import {
   getOptimizationMetricDefinition,
   type TimelineEvent,
 } from '@continuum/contracts';
+import { PauseIcon, SettingsIcon, WalletIcon, ZapIcon } from 'lucide-react';
 import { useChartStable } from '@/components/charts/chart-context';
 import { ComposedChart } from '@/components/charts/composed-chart';
 import { Grid } from '@/components/charts/grid';
@@ -39,7 +40,6 @@ import { ReferenceArea } from '@/components/charts/reference-area';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { XAxis } from '@/components/charts/x-axis';
 import { YAxis } from '@/components/charts/y-axis';
-import { Pause, Settings, Wallet, Zap } from '@/components/icons';
 import {
   currencyColumnSuffix,
   figureProps,
@@ -266,11 +266,11 @@ function CycleActionPins({ points }: { points: CpaHeroPoint[] }) {
 
 /** Per-kind glyph + accent. The pin and the tooltip row use the SAME pair, so a mark on the
  *  axis and its line in the card are recognizably the same event. */
-const EVENT_STYLE: Record<string, { Icon: typeof Zap; color: string; label: string }> = {
-  cycle: { Icon: Zap, color: 'var(--chart-4)', label: 'Cycle' },
-  applied: { Icon: Wallet, color: 'var(--success)', label: 'Applied' },
-  status: { Icon: Pause, color: 'var(--warning)', label: 'Status' },
-  config: { Icon: Settings, color: 'var(--chart-3)', label: 'Setting' },
+const EVENT_STYLE: Record<string, { Icon: typeof ZapIcon; color: string; label: string }> = {
+  cycle: { Icon: ZapIcon, color: 'var(--chart-4)', label: 'Cycle' },
+  applied: { Icon: WalletIcon, color: 'var(--success)', label: 'Applied' },
+  status: { Icon: PauseIcon, color: 'var(--warning)', label: 'Status' },
+  config: { Icon: SettingsIcon, color: 'var(--chart-3)', label: 'Setting' },
 };
 
 function eventStyle(kind: string) {

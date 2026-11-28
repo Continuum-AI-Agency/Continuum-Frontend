@@ -15,14 +15,9 @@ import {
   customFieldChoiceOptions,
   MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH,
 } from '@continuum/contracts';
+import { CalendarIcon, ExternalLink, Star, X } from 'lucide-react';
 import { useLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
-import {
-  Calendar as CalendarIcon,
-  SquareArrowOutUpRight as ExternalLink,
-  Star,
-  X,
-} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';

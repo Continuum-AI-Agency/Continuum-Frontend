@@ -5,9 +5,9 @@
 // image (as an overlay) or audio (on an audio track) is placed by the add_clip op.
 
 import { editorCommandBatchSchema, type MediaAsset } from '@continuum/contracts';
+import { Loader2, Plus, Scissors } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
-import { Plus, Scissors, Spinner } from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';
@@ -174,7 +174,7 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
         onClick={() => void openStudio()}
       >
         {opening ? (
-          <Spinner className="size-3.5 animate-spin" aria-hidden />
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
         ) : (
           <Scissors className="size-3.5" aria-hidden />
         )}

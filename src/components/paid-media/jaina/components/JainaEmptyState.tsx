@@ -1,11 +1,11 @@
 'use client';
 
+import { Rocket } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import React, { useMemo } from 'react';
 import { Suggestion } from '@/components/ai-elements/suggestion';
 import type { Attachment } from '@/components/chat/attachments';
-import { Rocket } from '@/components/icons';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 
 import { JainaSetupConcierge } from './JainaSetupConcierge';

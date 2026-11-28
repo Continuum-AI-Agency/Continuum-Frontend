@@ -6,25 +6,25 @@ import {
   placementPreviewCrops,
   videoCodecFamily,
 } from '@continuum/contracts';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import Image from 'next/image';
-import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
-import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   AudioLines,
   Check,
   ChevronLeft,
   ChevronRight,
   Copy,
-  File,
+  FileIcon,
   FileText,
   ImageOff,
-  Layers2,
+  Layers,
+  Loader2,
   Play,
   Scaling,
   Scissors,
-  Spinner,
-} from '@/components/icons';
+} from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import Image from 'next/image';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { VideoStill } from '@/components/media/VideoStill';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
@@ -225,7 +225,7 @@ function StatusBadge({ status }: { status: MediaAsset['status'] }) {
   const content =
     status === 'analyzing' ? (
       <span className={cn(BADGE_BASE, 'bg-black/60 text-white backdrop-blur-sm')}>
-        <Spinner className="size-2.5 animate-spin" /> {translateUi('analyzing_0141ee95')}
+        <Loader2 className="size-2.5 animate-spin" /> {translateUi('analyzing_0141ee95')}
       </span>
     ) : status === 'skipped_free' ? (
       <span className={cn(BADGE_BASE, 'bg-amber-900/80 text-amber-200')}>
@@ -386,7 +386,7 @@ function Thumbnail({
             Pr
           </span>
         ) : (
-          <File className="size-8 text-muted-foreground/40" strokeWidth={1.5} />
+          <FileIcon className="size-8 text-muted-foreground/40" strokeWidth={1.5} />
         )}
         {ext && (
           <span className="rounded border border-border bg-background px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-muted-foreground">
@@ -527,7 +527,7 @@ function CarouselThumbnail({
       <span
         className={cn(BADGE_BASE, 'left-auto right-1.5 bg-black/60 text-white backdrop-blur-sm')}
       >
-        <Layers2 className="size-2.5" />
+        <Layers className="size-2.5" />
         {index + 1}/{slides.length}
       </span>
 

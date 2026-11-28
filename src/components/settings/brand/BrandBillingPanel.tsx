@@ -2,13 +2,13 @@
 
 import { productCodeSchema } from '@continuum/contracts';
 import { useMutation } from '@tanstack/react-query';
+import { CreditCard, TriangleAlert } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useRef, useState, useTransition } from 'react';
 import { switchActiveBrandAction } from '@/app/[locale]/(post-auth)/settings/actions';
 import { CheckoutReceiptDialog } from '@/components/billing/CheckoutReceiptDialog';
-import { CreditCard, TriangleAlert } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AutoBillingControl } from '@/components/settings/billing/AutoBillingControl';

@@ -12,8 +12,8 @@ import { useTranslations } from 'next-intl';
 // wrapping row. Colours come from theme tokens only.
 
 import type { PlatformId, PortfolioListItem } from '@continuum/contracts';
+import { SparklesIcon } from 'lucide-react';
 import type * as React from 'react';
-import { Sparkles } from '@/components/icons';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
 import { type JainaEntry, jainaEntryPrompts } from './jainaEntryModel';
@@ -40,7 +40,7 @@ export function JainaEntryChips(props: JainaEntryChipsProps) {
   const { layout = 'stack', frame = true, platform = null } = props;
   const title = (
     <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-primary-ink text-sm">
-      <Sparkles aria-hidden className="size-3.5" /> {label}
+      <SparklesIcon aria-hidden className="size-3.5" /> {label}
     </span>
   );
   const questions = entries.map((entry) => (

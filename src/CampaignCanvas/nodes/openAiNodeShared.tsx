@@ -9,7 +9,7 @@ import { useTranslations } from 'next-intl';
  * boundary. Doing it per node is how a budget ends up 1,000,000x off in one place only.
  */
 
-import { CircleCheck, Link2 } from '@/components/icons';
+import { CheckCircle2, Link2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export const MICROS_PER_UNIT = 1_000_000;
@@ -73,7 +73,7 @@ export function OpenAiRecordBadge({
                 : 'gap-1 text-3xs px-1 py-0 uppercase opacity-70'
           }
         >
-          {reviewStatus === 'approved' ? <CircleCheck className="h-2.5 w-2.5" /> : null}
+          {reviewStatus === 'approved' ? <CheckCircle2 className="h-2.5 w-2.5" /> : null}
           {reviewStatus.replace('_', ' ')}
         </Badge>
       ) : null}

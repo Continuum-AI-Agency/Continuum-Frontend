@@ -22,8 +22,8 @@ import type {
   PortfolioSuggestion,
 } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
+import { ArrowRightIcon, ChevronDownIcon, PencilRulerIcon, SparklesIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ChevronDown, PencilRuler, Sparkles } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SkeletonText } from '@/components/ui/skeleton';
@@ -240,7 +240,7 @@ function SuggestionCard({
             type="button"
             variant="ghost"
           >
-            <ChevronDown
+            <ChevronDownIcon
               className={cn('size-3.5 transition-transform', exploring && 'rotate-180')}
             />
             {uiText('explore_ad_sets_1b9a75f')}
@@ -250,7 +250,7 @@ function SuggestionCard({
         )}
         <Button className="h-7 gap-1.5 px-3 text-xs" onClick={onPick} size="sm" type="button">
           {uiText('use_this_b291996')}
-          <ArrowRight aria-hidden className="size-3.5" />
+          <ArrowRightIcon aria-hidden className="size-3.5" />
         </Button>
       </div>
     </article>
@@ -374,7 +374,7 @@ export function StepStart({
       <div className="space-y-2">
         <h3 className={questionHeading}>{uiText('where_should_it_start_673fc8d')}</h3>
         <div className="flex items-center gap-2">
-          <Sparkles aria-hidden className="size-4 text-primary-ink" />
+          <SparklesIcon aria-hidden className="size-4 text-primary-ink" />
           <h4 className="font-semibold text-sm tracking-tight">
             {uiText('start_from_a_suggestion_0ed4aca')}
           </h4>
@@ -460,7 +460,7 @@ export function StepStart({
             type="button"
           >
             <span className="flex items-center gap-2">
-              <PencilRuler aria-hidden className="size-4 text-muted-foreground" />
+              <PencilRulerIcon aria-hidden className="size-4 text-muted-foreground" />
               <span className="font-semibold text-sm tracking-tight">
                 {uiText('start_from_scratch_a4822ff')}
               </span>
@@ -470,7 +470,7 @@ export function StepStart({
             </span>
             <span className="inline-flex items-center gap-1 text-primary-ink text-xs">
               {uiText('build_it_5e38320')}
-              <ArrowRight aria-hidden className="size-3.5" />
+              <ArrowRightIcon aria-hidden className="size-3.5" />
             </span>
           </button>
         </div>

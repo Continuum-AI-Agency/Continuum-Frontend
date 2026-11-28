@@ -22,16 +22,16 @@ import type {
   ConvertCboResponse,
   CycleItemRow,
 } from '@continuum/contracts';
+import {
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  Loader2Icon,
+  MegaphoneIcon,
+  SplitIcon,
+  TriangleAlertIcon,
+} from 'lucide-react';
 import type * as React from 'react';
 import { useId, useMemo, useRef, useState } from 'react';
-import {
-  ChevronDown,
-  CircleCheck,
-  Megaphone,
-  Spinner,
-  Split,
-  TriangleAlert,
-} from '@/components/icons';
 
 import {
   AlertDialog,
@@ -147,7 +147,7 @@ export function CboCampaigns({
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2">
-        <Megaphone className="size-4 text-muted-foreground" />
+        <MegaphoneIcon className="size-4 text-muted-foreground" />
         <h3 className="text-sm font-semibold tracking-tight">
           {uiText('campaigns_using_cbo_0a67190')}
         </h3>
@@ -243,7 +243,7 @@ function CboCampaignRow({
               className="h-7 shrink-0 gap-1.5 px-3 text-xs"
               onClick={requestPreview}
             >
-              <Split className="size-3.5" />
+              <SplitIcon className="size-3.5" />
               {uiText('convert_to_ad_set_budgets_28729cf')}
             </Button>
           }
@@ -352,7 +352,7 @@ function ConvertedPreview({
       >
         {uiText.rich('sentence_6fe8c2e1375d', {
           v0: () => (
-            <ChevronDown
+            <ChevronDownIcon
               className={`size-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
               aria-hidden="true"
             />
@@ -400,7 +400,7 @@ function ConvertedPreviewBody({
   if (isPending || outcome == null) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-        <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
+        <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
         {uiText('running_the_optimizer_over_the_converted_ad_s_2ae509c')}
       </p>
     );
@@ -458,7 +458,7 @@ function ConvertDialogBody({
     case 'working':
       return (
         <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-          <Spinner className="size-4 animate-spin motion-reduce:animate-none" />
+          <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
           {stage.applying
             ? uiText('converting_the_campaign_on_meta_fad51b4')
             : uiText('computing_per_ad_set_budgets_3b8d97f')}
@@ -584,7 +584,7 @@ function ConvertOutcome({
   return (
     <div className="space-y-2">
       <p className="flex items-start gap-2 text-sm text-foreground" role="status">
-        <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />
+        <CheckCircle2Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />
         <span>
           {response.deduped
             ? uiText('this_campaign_was_already_converted_today_so__92db7e3')
@@ -623,7 +623,7 @@ function ReadBackNote({ response }: { response: ConvertCboResponse }) {
 function InlineError({ children }: { children: React.ReactNode }) {
   return (
     <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-      <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+      <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
       <span>{children}</span>
     </p>
   );

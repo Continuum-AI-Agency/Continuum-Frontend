@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Circle, X } from '@/components/icons';
+import { Check, Circle, X } from 'lucide-react';
 
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';

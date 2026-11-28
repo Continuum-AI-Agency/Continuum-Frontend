@@ -7,9 +7,9 @@
 // The database enforces roles (RLS + authorize_operation); this dialog only reads and relays.
 
 import type { CollectionAccess, CollectionMember, CollectionRole } from '@continuum/contracts';
+import { Loader2, Trash2, UserLock } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
-import { Spinner, Trash2, UserLock } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -147,7 +147,7 @@ export function CollectionMembersDialog({
 
         {!state ? (
           <div className="flex justify-center py-6">
-            <Spinner className="size-4 animate-spin text-muted-foreground" />
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <div className="flex flex-col gap-4">

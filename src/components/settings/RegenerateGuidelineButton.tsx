@@ -1,9 +1,10 @@
 'use client';
 
+import { Loader2, RefreshCw } from 'lucide-react';
+
 import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
 import { regenerateBrandGuidelineAction } from '@/app/[locale]/(post-auth)/settings/actions';
-import { RefreshCw, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useUiErrorMessage } from '@/i18n/errors';
@@ -64,7 +65,7 @@ export function RegenerateGuidelineButton({
       title={blockReason ?? tUi('m_68fe20d9d8')}
     >
       {pending ? (
-        <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
       ) : (
         <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
       )}

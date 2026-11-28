@@ -17,6 +17,7 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
+import { AlertTriangle, Copy, Layers, Plus, Trash2, Unlink } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -25,7 +26,6 @@ import {
   elementCategoryLabel,
   elementUseIntentLabel,
 } from '@/components/ai-studio/elements/elementPresentation';
-import { Copy, Layers2, Plus, Trash2, TriangleAlert, Unlink } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -172,7 +172,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     <Empty>
                       <EmptyHeader>
                         <EmptyMedia variant="icon">
-                          <TriangleAlert />
+                          <AlertTriangle />
                         </EmptyMedia>
                         <EmptyTitle>{translateUi('element_unavailable_bb8afce0')}</EmptyTitle>
                         <EmptyDescription>
@@ -203,7 +203,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     <Empty>
                       <EmptyHeader>
                         <EmptyMedia variant="icon">
-                          <Layers2 />
+                          <Layers />
                         </EmptyMedia>
                         <EmptyTitle>
                           {intent === 'motion' ? translateUi('no_motion_clip_f5d31d15') : name}
@@ -415,7 +415,7 @@ function ElementNodeSetup({
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <Layers2 />
+              <Layers />
             </EmptyMedia>
             <EmptyTitle>{translateUi('no_elements_yet_d2dff1dd')}</EmptyTitle>
             <EmptyDescription>{translateUi('elementOnboarding')}</EmptyDescription>

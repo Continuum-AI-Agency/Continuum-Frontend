@@ -4,9 +4,9 @@
 // wears one pill that slides between the two (a shared layout, so it also travels when the
 // switch itself moves from the board's header to Today's bar); under reduced motion it jumps.
 
+import { SparklesIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { Sparkles } from '@/components/icons';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { BoardLayout } from './boardLayout';
 
@@ -56,7 +56,7 @@ export function BoardLayoutToggle({
           ) : null}
           <span className="relative inline-flex items-center gap-1.5">
             {option.value === 'adaptive' ? (
-              <Sparkles aria-hidden="true" className="size-3.5 text-primary-ink" />
+              <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
             ) : null}
             {uiText(option.label)}
           </span>
