@@ -33,7 +33,6 @@ import {
   getElement,
   useElements,
 } from '@/lib/ai-studio/elements';
-import { warmLaya } from '@/lib/api/layaWarm';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { LoadWorkflowDialog } from '@/StudioCanvas/components/LoadWorkflowDialog';
@@ -178,9 +177,6 @@ export function CanvasComposer({
     <PromptInput
       variant="canvas"
       disabled={!brandProfileId || !roomId}
-      // Wakes the Laya decision service behind the composer's fast path: a cold instance
-      // takes ~90s to load, so waiting for the first edit means that edit always falls back.
-      onFocus={() => warmLaya()}
       isStreaming={isRunning}
       onStop={cancel}
       mentionProvider={mentionProvider}

@@ -35,7 +35,6 @@ export * from './hyperframes-aep/authoring';
 export * from './hyperframes-aep/scene';
 export * from './insights/index';
 export * from './invites/index';
-export * from './laya/index';
 export * from './mcp/index';
 export * from './media/index';
 export * from './media/template-authoring-native-render';

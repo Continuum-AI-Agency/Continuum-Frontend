@@ -11,6 +11,10 @@ import { z } from 'zod';
  * X API calls (`x` subsystem and bucket) bill the same way — X's list price × 1.15, whole
  * credits — but draw only the brand's prepaid X wallet; their overage goes to the
  * `continuum_x_usage` meter, and only while the owner opted in to X auto-billing.
+ *
+ * Gemini Decision calls (`decision` subsystem) draw the studio wallet too, but at their real
+ * fraction of a cent: one call costs ~$0.0002, and rounding each up to a whole credit would bill
+ * it ~50× over. They are never blocked — the feature that asked was already allowed.
  */
 
 export const BILLING_MARKUP = 1.15;
@@ -25,6 +29,8 @@ export const USAGE_SUBSYSTEMS = [
   'mcp',
   /** X (Twitter) API calls, drawn from the separate prepaid X wallet. */
   'x',
+  /** Gemini Decision calls: the studio wallet, billed to the fraction of a cent, never blocked. */
+  'decision',
 ] as const;
 export const usageSubsystemSchema = z.enum(USAGE_SUBSYSTEMS);
 export type UsageSubsystem = z.infer<typeof usageSubsystemSchema>;

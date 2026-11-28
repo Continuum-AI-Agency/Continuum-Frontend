@@ -69,7 +69,7 @@ const setEditorText = (editor: HTMLElement, text: string): void => {
 };
 
 describe('canvas PromptInput context grabber', () => {
-  it('reports focus with no arguments, so a caller like warmLaya never receives the event', () => {
+  it('reports focus with no arguments, so a caller never receives the event', () => {
     const onFocus = mock();
     render(<PromptInput variant="canvas" onSubmit={mock()} onFocus={onFocus} />);
 
