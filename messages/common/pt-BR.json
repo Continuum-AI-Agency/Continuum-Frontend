@@ -1421,5 +1421,7 @@
   "routedToLibraryTitle": "{count, plural, one {# arquivo foi para sua Biblioteca} other {# arquivos foram para sua Biblioteca}}",
   "routedToLibraryBody": "Imagens, logos e SVGs ficam na Biblioteca, onde o Studio e seus agentes os usam.",
   "routedReadAsText": "{count, plural, one {Ler o texto em vez disso} other {Ler o texto em vez disso}}",
-  "routedToLibraryFailed": "Não salvo na sua Biblioteca: {files}. Tente de novo pela Biblioteca."
+  "routedToLibraryFailed": "Não salvo na sua Biblioteca: {files}. Tente de novo pela Biblioteca.",
+  "linkedin_personal_profile": "{name} — perfil pessoal",
+  "personal_profile": "Perfil pessoal"
 }

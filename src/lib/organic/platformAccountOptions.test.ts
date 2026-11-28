@@ -120,6 +120,38 @@ describe('deriveOrganicPlatformAccounts', () => {
     expect(linkedin?.connected).toBe(false);
   });
 
+  // MindPraxis, 2026-11-25: a LinkedIn member posts to their own feed as well as their Pages.
+  it('offers a linked LinkedIn personal profile next to the company Pages, marked as one', () => {
+    const rows = deriveOrganicPlatformAccounts({
+      integrationSummary: {
+        linkedin: {
+          accounts: [
+            account({ integrationAccountId: 'li-ads', name: 'Ads', type: 'linkedin_ad_account' }),
+            account({
+              integrationAccountId: 'li-page',
+              name: 'MindPraxis',
+              type: 'linkedin_organization',
+            }),
+            account({
+              integrationAccountId: 'li-member',
+              name: 'Ana Pérez',
+              externalAccountId: 'urn:li:person:abc',
+              type: 'linkedin_member',
+            }),
+          ],
+        },
+      },
+    });
+    const linkedin = rows.find((row) => row.platform === 'linkedin');
+
+    expect(linkedin?.options).toEqual([
+      { id: 'li-page', label: 'MindPraxis' },
+      { id: 'li-member', label: 'Ana Pérez', personalProfile: true },
+    ]);
+    // Two places to post is a choice, never a default.
+    expect(linkedin?.accountId).toBeNull();
+  });
+
   // The planner page resolves a publish account id per platform from this list. It stopped at
   // Instagram/Facebook/LinkedIn, so a TikTok draft never had an account id to publish with.
   it('covers every publishable platform unless a narrower set is asked for', () => {
@@ -232,5 +264,25 @@ describe('deriveOrganicPublishAccountOptions', () => {
     });
     // X ships a publisher since 2026-10-06.
     expect(options.map((option) => option.accountId)).toContain('x-1');
+  });
+
+  it('carries the personal-profile mark through to the flat list', () => {
+    const options = deriveOrganicPublishAccountOptions({
+      linkedin: {
+        accounts: [
+          account({ integrationAccountId: 'li-member', name: 'Ana', type: 'linkedin_member' }),
+        ],
+      },
+    });
+
+    expect(options).toEqual([
+      {
+        platform: 'linkedin',
+        platformLabel: 'LinkedIn',
+        accountId: 'li-member',
+        label: 'Ana',
+        personalProfile: true,
+      },
+    ]);
   });
 });

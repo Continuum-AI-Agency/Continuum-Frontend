@@ -30,6 +30,7 @@ const TYPE_TO_PLATFORM_MAP: Record<string, PlatformKey> = {
   tiktok_account: 'tiktok',
   linkedin_ad_account: 'linkedin',
   linkedin_organization: 'linkedin',
+  linkedin_member: 'linkedin',
   linkedin_account: 'linkedin',
   x_user: 'x',
   x_account: 'x',

@@ -26,6 +26,8 @@ export type AssignmentRow = {
   externalId: string;
   businessId: string | null;
   readOnly: boolean;
+  // A LinkedIn member's own profile, listed beside their Pages: the row says so next to the name.
+  personalProfile: boolean;
 };
 
 export type AssignmentSection = {
@@ -68,6 +70,7 @@ function toRow(asset: SelectableAsset): AssignmentRow | null {
     externalId: asset.external_id || asset.asset_pk,
     businessId: asset.business_id ?? null,
     readOnly: isReadOnlyMetaRole(asset.role),
+    personalProfile: asset.type === 'linkedin_member',
   };
 }
 

@@ -44,6 +44,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { request } from '@/lib/api/http';
 import type { AiStudioWorkflow } from '@/lib/schemas/aiStudio';
+import { pipelineCapabilitiesQueryKey } from './pipelineQueryKeys';
 import { listAiStudioWorkflowsAction } from './workflowActions';
 
 export type PipelineItem = {
@@ -111,8 +112,7 @@ export function useBrandPipelineManifests(brandProfileId?: string) {
   });
 }
 
-export const pipelineCapabilitiesQueryKey = (brandProfileId?: string) =>
-  ['pipeline-capabilities', brandProfileId] as const;
+export { pipelineCapabilitiesQueryKey } from './pipelineQueryKeys';
 
 export async function fetchPipelineCapabilities(
   brandProfileId: string,

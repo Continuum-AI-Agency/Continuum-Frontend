@@ -1421,5 +1421,7 @@
   "routedToLibraryTitle": "{count, plural, one {# file went to your Library} other {# files went to your Library}}",
   "routedToLibraryBody": "Images, logos and SVGs live in the Library, where Studio and your agents use them.",
   "routedReadAsText": "{count, plural, one {Read its text instead} other {Read their text instead}}",
-  "routedToLibraryFailed": "Not saved to your Library: {files}. Try again from the Library."
+  "routedToLibraryFailed": "Not saved to your Library: {files}. Try again from the Library.",
+  "linkedin_personal_profile": "{name} — personal profile",
+  "personal_profile": "Personal profile"
 }
