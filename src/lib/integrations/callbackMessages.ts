@@ -34,6 +34,14 @@ export function successMessage(reason?: string | null, present?: PresentCallback
       present,
     );
   }
+  // LinkedIn lists only the Pages a member holds a role on. A personal profile named after
+  // the business, or a content admin, connects fine and leaves nothing to publish to.
+  if (reason === 'linkedin_no_admin_pages') {
+    return presentMessage(
+      "Connected, but this LinkedIn profile isn't an admin of any Company Page. Ask a Page admin to make it a Super admin, then reconnect.",
+      present,
+    );
+  }
   return presentMessage('Integration connected.', present);
 }
 

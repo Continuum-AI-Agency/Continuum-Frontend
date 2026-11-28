@@ -8,6 +8,8 @@ const keys = {
     'm_42db83697a',
   "Connected, but some Meta accounts may be missing. We'll keep trying to load them.":
     'm_efee455b09',
+  "Connected, but this LinkedIn profile isn't an admin of any Company Page. Ask a Page admin to make it a Super admin, then reconnect.":
+    'm_a64de6406e',
   'Integration connected.': 'm_2a491fc94f',
   'You cancelled the connection.': 'm_ef41547622',
   'This app is not approved for the permissions it asked for. Contact support.': 'm_099de33d79',

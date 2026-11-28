@@ -1114,6 +1114,7 @@
   "m_8640a406f4": "Connected, but no YouTube channel is owned by this Google account. If your channel is a Brand Account, reconnect and pick it at the Google account chooser.",
   "m_42db83697a": "Connected, but we could not load your YouTube channels. We'll retry on the next sync.",
   "m_efee455b09": "Connected, but some Meta accounts may be missing. We'll keep trying to load them.",
+  "m_a64de6406e": "Connected, but this LinkedIn profile isn't an admin of any Company Page. Ask a Page admin to make it a Super admin, then reconnect.",
   "m_2a491fc94f": "Integration connected.",
   "m_ef41547622": "You cancelled the connection.",
   "m_099de33d79": "This app is not approved for the permissions it asked for. Contact support.",

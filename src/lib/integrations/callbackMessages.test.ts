@@ -16,6 +16,7 @@ describe('successMessage', () => {
       'Connected, but no Google Ads accounts were found.',
     );
     expect(successMessage('meta_partial_sync')).toContain('some Meta accounts may be missing');
+    expect(successMessage('linkedin_no_admin_pages')).toContain("isn't an admin of any Company Page");
   });
 });
 
