@@ -15,13 +15,15 @@ import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/
 import { confirmForgeExit } from '@/components/forge/useForgeExitGuard';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { intentProps } from '@/lib/intent';
 
+// Each tab's grid downloads on first visit, warmed when a pointer or focus lands on its tab.
+const loadRenderGrid = () => import('@/components/forge/RenderRequestsGrid');
+const loadJobsGrid = () => import('@/components/forge/RenderJobsGrid');
 const RenderRequestsGrid = dynamic(() =>
-  import('@/components/forge/RenderRequestsGrid').then((module) => module.RenderRequestsGrid),
+  loadRenderGrid().then((module) => module.RenderRequestsGrid),
 );
-const RenderJobsGrid = dynamic(() =>
-  import('@/components/forge/RenderJobsGrid').then((module) => module.RenderJobsGrid),
-);
+const RenderJobsGrid = dynamic(() => loadJobsGrid().then((module) => module.RenderJobsGrid));
 
 // The three things a person does on Forge, as three tabs: make a template, set up renders
 // against a published one, and watch them come back. A render request is against a PUBLISHED
@@ -102,8 +104,10 @@ export function ForgeTabs({
     >
       <TabsList className="shrink-0">
         <TabsTrigger value="templates">{translateUi('templates_56b564b7')}</TabsTrigger>
-        <TabsTrigger value="render">{translateUi('render_6d89eb7d')}</TabsTrigger>
-        <TabsTrigger value="renders">
+        <TabsTrigger value="render" {...intentProps(loadRenderGrid)}>
+          {translateUi('render_6d89eb7d')}
+        </TabsTrigger>
+        <TabsTrigger value="renders" {...intentProps(loadJobsGrid)}>
           {translateUi('render_ledger_8068f2c7')}{' '}
           {approvalCountUnavailable ? (
             <Badge

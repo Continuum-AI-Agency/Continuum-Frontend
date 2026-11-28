@@ -61,11 +61,15 @@ describe('one table style', () => {
     const template = tableClasses(
       render(<TemplateTableView table={templateTable} figures={[figure]} />).container,
     );
-    expect(report.table).toBe(JAINA_TABLE.table);
-    expect(template.table).toBe(JAINA_TABLE.table);
+    expect(report.table).toContain(JAINA_TABLE.table);
+    expect(template.table).toContain(JAINA_TABLE.table);
+    // Compared token by token: `cn` merges these onto `ui/table`'s defaults, and a cell may
+    // still choose its own wrapping (the template's label column does not wrap).
+    const tokens = (classes: string) =>
+      classes.split(' ').filter((c) => !c.startsWith('whitespace-'));
     for (const classes of [report, template]) {
-      expect(classes.th).toContain(JAINA_TABLE.th);
-      expect(classes.td).toContain(JAINA_TABLE.td);
+      expect(classes.th?.split(' ')).toEqual(expect.arrayContaining(tokens(JAINA_TABLE.th)));
+      expect(classes.td?.split(' ')).toEqual(expect.arrayContaining(tokens(JAINA_TABLE.td)));
       expect(classes.table).not.toContain('text-xs');
     }
   });

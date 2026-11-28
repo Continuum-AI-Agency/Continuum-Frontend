@@ -7,6 +7,14 @@ import {
   paidCurrencyCodeSchema,
 } from '@continuum/contracts';
 import { useTranslations } from 'next-intl';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { formatValue } from '@/lib/jaina/formatValue';
 import type { DataTableBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
@@ -308,76 +316,74 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
           })}
         </ul>
       ) : (
-        <div className={JAINA_TABLE.wrap}>
-          <table className={JAINA_TABLE.table}>
-            <thead>
-              <tr className={JAINA_TABLE.headRow}>
-                {block.columns.map((column) => (
-                  <th
-                    key={column.key}
-                    className={cn(JAINA_TABLE.th, `text-${column.align ?? 'left'}`)}
-                  >
-                    {column.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {block.rows.map((row, rowIndex) => {
-                const rowMeta = block.row_meta?.[rowIndex];
-                // The entity's id, under its name in the first column. The cell
-                // used to BE the id (`campaign-1202…`) because the Backend had no
-                // name to put there; now that it does, the id still has to stay
-                // reachable — it is what a user pastes into Ads Manager.
-                const entityId = typeof rowMeta?.entity_id === 'string' ? rowMeta.entity_id : null;
-                const rowCurrency = currencyCode(rowMeta?.currency);
-                const parsedAudience = paidCreativeAudienceEvidenceSchema.safeParse(
-                  rowMeta?.audience,
-                );
-                const audience = parsedAudience.success ? parsedAudience.data : null;
-                return (
-                  <tr key={rowIndex} className={JAINA_TABLE.row}>
-                    {block.columns.map((column, columnIndex) => {
-                      const value = displayValue(
-                        row[column.key],
-                        column.format,
-                        rowCurrency,
-                        undefined,
-                        reportLocale,
-                      );
-                      const showEntityId = columnIndex === 0 && entityId !== null;
-                      return (
-                        <td
-                          key={column.key}
-                          className={JAINA_TABLE.td}
-                          style={{ textAlign: column.align ?? 'left' }}
-                        >
-                          {column.format === 'creative' ? (
-                            <CreativeCell label={value} creative={rowMeta?.creative} />
-                          ) : !column.format || column.format === 'text' ? (
-                            <>
-                              <MediaText>{value}</MediaText>
-                              {showEntityId ? (
-                                <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
-                                  {entityId}
-                                </span>
-                              ) : null}
-                              {column.key === 'audience_coverage' ? (
-                                <AudienceEvidence audience={audience} currency={rowCurrency} />
-                              ) : null}
-                            </>
-                          ) : (
-                            value
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Table className={JAINA_TABLE.table}>
+          <TableHeader>
+            <TableRow className={JAINA_TABLE.headRow}>
+              {block.columns.map((column) => (
+                <TableHead
+                  key={column.key}
+                  className={cn(JAINA_TABLE.th, `text-${column.align ?? 'left'}`)}
+                >
+                  {column.label}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {block.rows.map((row, rowIndex) => {
+              const rowMeta = block.row_meta?.[rowIndex];
+              // The entity's id, under its name in the first column. The cell
+              // used to BE the id (`campaign-1202…`) because the Backend had no
+              // name to put there; now that it does, the id still has to stay
+              // reachable — it is what a user pastes into Ads Manager.
+              const entityId = typeof rowMeta?.entity_id === 'string' ? rowMeta.entity_id : null;
+              const rowCurrency = currencyCode(rowMeta?.currency);
+              const parsedAudience = paidCreativeAudienceEvidenceSchema.safeParse(
+                rowMeta?.audience,
+              );
+              const audience = parsedAudience.success ? parsedAudience.data : null;
+              return (
+                <TableRow key={rowIndex} className={JAINA_TABLE.row}>
+                  {block.columns.map((column, columnIndex) => {
+                    const value = displayValue(
+                      row[column.key],
+                      column.format,
+                      rowCurrency,
+                      undefined,
+                      reportLocale,
+                    );
+                    const showEntityId = columnIndex === 0 && entityId !== null;
+                    return (
+                      <TableCell
+                        key={column.key}
+                        className={JAINA_TABLE.td}
+                        style={{ textAlign: column.align ?? 'left' }}
+                      >
+                        {column.format === 'creative' ? (
+                          <CreativeCell label={value} creative={rowMeta?.creative} />
+                        ) : !column.format || column.format === 'text' ? (
+                          <>
+                            <MediaText>{value}</MediaText>
+                            {showEntityId ? (
+                              <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
+                                {entityId}
+                              </span>
+                            ) : null}
+                            {column.key === 'audience_coverage' ? (
+                              <AudienceEvidence audience={audience} currency={rowCurrency} />
+                            ) : null}
+                          </>
+                        ) : (
+                          value
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
       {block.notes && (
         <p className={cn('mt-1.5 italic text-muted-foreground/70', JAINA_TYPE.table)}>

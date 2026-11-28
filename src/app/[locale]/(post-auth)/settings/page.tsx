@@ -3,43 +3,45 @@ import { getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
 import { BrandGrantsSection } from '@/components/integrations/BrandGrantsSection';
 import { MyConnectionsSharingSection } from '@/components/integrations/MyConnectionsSharingSection';
-import { NotificationPreferences } from '@/components/notifications/NotificationPreferences';
-import { ChatConnectionsSection } from '@/components/settings/account/ChatConnectionsSection';
-import { McpActivityTable } from '@/components/settings/account/McpActivityTable';
-import { McpConnectionsSection } from '@/components/settings/account/McpConnectionsSection';
-import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
-import { SignOutEverywhereSection } from '@/components/settings/account/SignOutEverywhereSection';
-import { UserBrandsPanel } from '@/components/settings/account/UserBrandsPanel';
-import { UserConnectionsSwitcher } from '@/components/settings/account/UserConnectionsSwitcher';
-import { UserProfileSection } from '@/components/settings/account/UserProfileSection';
-import { BrandDocumentsSection } from '@/components/settings/BrandDocumentsSection';
 import { BrandGuidelineSection } from '@/components/settings/BrandGuidelineSection';
-import { BrandMembersSection } from '@/components/settings/BrandMembersSection';
 import { BrandActivationSection } from '@/components/settings/brand/BrandActivationSection';
-import { BrandAdNamingSection } from '@/components/settings/brand/BrandAdNamingSection';
-import { BrandBillingPanel } from '@/components/settings/brand/BrandBillingPanel';
 import { BrandBookSection } from '@/components/settings/brand/BrandBookSection';
-import { BrandDangerZone } from '@/components/settings/brand/BrandDangerZone';
 import { BrandIdentityHeader } from '@/components/settings/brand/BrandIdentityHeader';
-import { BrandIdentitySection } from '@/components/settings/brand/BrandIdentitySection';
 import { BrandIntegrationsSwitcher } from '@/components/settings/brand/BrandIntegrationsSwitcher';
-import { BrandIntelligenceWorkspace } from '@/components/settings/brand/BrandIntelligenceWorkspace';
-import { BrandInvitesSection } from '@/components/settings/brand/BrandInvitesSection';
-import { BrandPulseSection } from '@/components/settings/brand/BrandPulseSection';
-import { BrandSlackRoomsSection } from '@/components/settings/brand/BrandSlackRoomsSection';
-import { BrandSlackWorkspacesSection } from '@/components/settings/brand/BrandSlackWorkspacesSection';
-import { DesignSystemSection } from '@/components/settings/brand/DesignSystemSection';
-import { PromptsSettingsSection } from '@/components/settings/brand/PromptsSettingsSection';
-import { SkillsSettingsSection } from '@/components/settings/brand/SkillsSettingsSection';
-import { ProjectsSettingsSection } from '@/components/settings/projects/ProjectsSettingsSection';
-import { RoleCapabilityLegend } from '@/components/settings/RoleCapabilityLegend';
+import {
+  BrandAdNamingSection,
+  BrandBillingPanel,
+  BrandDangerZone,
+  BrandDocumentsSection,
+  BrandIdentitySection,
+  BrandIntelligenceWorkspace,
+  BrandInvitesSection,
+  BrandMembersSection,
+  BrandPulseSection,
+  BrandSlackRoomsSection,
+  BrandSlackWorkspacesSection,
+  ChatConnectionsSection,
+  DesignSystemSection,
+  McpActivityTable,
+  McpConnectionsSection,
+  NotificationPreferences,
+  OptimizerNotificationsSection,
+  ProjectsSettingsSection,
+  PromptsSettingsSection,
+  RoleCapabilityLegend,
+  RunStrategicAnalysisButton,
+  SignOutEverywhereSection,
+  SkillsSettingsSection,
+  UserBrandsPanel,
+  UserConnectionsSwitcher,
+  UserProfileSection,
+} from '@/components/settings/lazySections';
 import { AccountNavPill } from '@/components/settings/shell/AccountNavPill';
 import { BrandNavPill } from '@/components/settings/shell/BrandNavPill';
 import { SettingsSection } from '@/components/settings/shell/SettingsSection';
 import { SettingsShell } from '@/components/settings/shell/SettingsShell';
 import { resolveSection } from '@/components/settings/shell/sections';
 import { GlossaryTooltip } from '@/components/shared/glossary';
-import { RunStrategicAnalysisButton } from '@/components/strategic-analyses/RunStrategicAnalysisButton';
 import { isImpersonationMarked } from '@/lib/auth/impersonation';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandAdNamingSchema } from '@/lib/brands/adNaming';
@@ -196,17 +198,23 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       </>
     );
   } else if (initialSection === 'brand-intelligence') {
-    const [brandBook, brandIntelligence] = await Promise.all([
+    const [brandBook, brandIntelligence, members] = await Promise.all([
       fetchBrandBook(activeBrandId),
       fetchBrandIntelligenceOverview(activeBrandId),
+      createBrandProfileRepository().fetchMembers(activeBrandId),
     ]);
+    const memberRole =
+      members.find((m) => m.id === user?.id || m.email === user?.email)?.role ?? null;
+    // The Backend's brand-edit roles (brandAccess EDIT_ROLES); `editor` is a legacy operator alias.
+    const canEditBrandDna = (['owner', 'admin', 'operator', 'editor'] as string[]).includes(
+      memberRole ?? '',
+    );
 
-    // Not ready yet (absent, assembling, or errored) → let the empty state kick
-    // off a first-time report run. Build the same payload onboarding sends from
-    // stored onboarding state, but prefer the canonical brand record name over
-    // the mapper's derived fallback.
+    // The same payload onboarding sends, from stored onboarding state, but with the canonical
+    // brand record name over the mapper's derived fallback. It starts the first-time run when
+    // the book is not ready yet (absent, assembling, or errored) and a re-analysis once it is.
     let generationPayload: AgentRequestPayload | null = null;
-    if ((!brandBook || !brandBook.present) && user?.id) {
+    if (user?.id && (!brandBook?.present || canEditBrandDna)) {
       const onboardingState = await fetchOnboardingState(activeBrandId);
       const mapped = mapOnboardingStateToAgentPayload(activeBrandId, user.id, onboardingState);
       const canonicalBrandName = activeBrand?.name;
@@ -230,11 +238,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             brandName={defaultBrandName}
             brandBook={brandBook}
             initialOverview={brandIntelligence}
+            canEdit={canEditBrandDna}
+            reanalysisPayload={generationPayload}
           />
           {!brandBook?.present && generationPayload ? (
             <div className="mt-6 border-t border-white/10 pt-6">
               <BrandBookSection
                 brandBook={brandBook}
+                canEdit={canEditBrandDna}
                 generation={{
                   brandId: activeBrandId,
                   brandName: defaultBrandName,

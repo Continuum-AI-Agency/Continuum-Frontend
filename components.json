@@ -24,6 +24,7 @@
     "@kibo-ui": "https://www.kibo-ui.com/r/{name}.json",
     "@kobra": "https://kobra.systems/r/{name}.json",
     "@mapcn": "https://mapcn.dev/r/{name}.json",
-    "@blocks-so": "https://blocks.so/r/{name}.json"
+    "@blocks-so": "https://blocks.so/r/{name}.json",
+    "@uiarc": "https://uiarc.dev/r/{name}.json"
   }
 }

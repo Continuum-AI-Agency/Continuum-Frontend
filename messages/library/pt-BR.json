@@ -1184,5 +1184,15 @@
   "brandLogoSetTitle": "Logo da marca atualizado",
   "brandLogoSetDescription": "O conteúdo novo usará este logo.",
   "brandLogoSetFailedTitle": "Não foi possível definir o logo da marca",
-  "brandLogoSetFailedDescription": "Tente novamente."
+  "brandLogoSetFailedDescription": "Tente novamente.",
+  "brandIdentity": "Identidade da marca",
+  "brandReference": "Referência da marca",
+  "logoVariant": "Variante do logo",
+  "logoVariantPrimary": "Principal",
+  "logoVariantWhite": "Branco, para fundos escuros",
+  "logoVariantDark": "Escuro, para fundos claros",
+  "logoVariantIcon": "Ícone ou símbolo",
+  "logoVariantHorizontal": "Horizontal",
+  "brandIdentityTagFailed": "Não foi possível atualizar a etiqueta. Tente novamente.",
+  "brandReferencesFilter": "Referências da marca"
 }

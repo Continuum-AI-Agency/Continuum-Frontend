@@ -143,6 +143,13 @@ describe('countPlatformAccounts — Pages and organisations are not ad accounts'
     expect(countPlatformAccounts(pageOnly, 'linkedin')).toBe(0);
   });
 
+  it('a LinkedIn personal profile is no LinkedIn ad account either', () => {
+    const memberOnly = {
+      linkedin: { accounts: [{ id: 'member-1', type: 'linkedin_member' }] },
+    } as unknown as BrandIntegrationSummary;
+    expect(countPlatformAccounts(memberOnly, 'linkedin')).toBe(0);
+  });
+
   it('the checklist then asks to connect Meta Ads instead of ticking it', () => {
     const steps = derivePaidSetupSteps({
       platform: 'meta',
