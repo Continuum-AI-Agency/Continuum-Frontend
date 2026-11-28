@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { adoptBrandRecord, canPersistBrandRecord } from './brandRecordGuard';
+import {
+  adoptBrandRecord,
+  adoptRowCompletion,
+  adoptRowLogo,
+  canPersistBrandRecord,
+  completedAtToPersist,
+} from './brandRecordGuard';
 import { createDefaultOnboardingState } from './state';
 
 describe('canPersistBrandRecord', () => {
@@ -61,5 +67,59 @@ describe('adoptBrandRecord', () => {
       email_report_opt_in: true,
     });
     expect(adopted.brand.name).toBe("duane's Brand");
+  });
+});
+
+describe('adoptRowLogo', () => {
+  const state = createDefaultOnboardingState();
+  const withLogo = { ...state, brand: { ...state.brand, logoPath: 'b/branding/logo.png' } };
+
+  it('takes a logo set elsewhere (Library, Settings by another admin) into the state', () => {
+    expect(adoptRowLogo(withLogo, 'b/branding/logo.jpg').brand.logoPath).toBe(
+      'b/branding/logo.jpg',
+    );
+  });
+
+  it('takes a cleared logo too, so the stale one is not written back', () => {
+    expect(adoptRowLogo(withLogo, null).brand.logoPath).toBeNull();
+  });
+
+  it('returns the same state when the row already agrees', () => {
+    expect(adoptRowLogo(withLogo, 'b/branding/logo.png')).toBe(withLogo);
+  });
+});
+
+describe('adoptRowCompletion', () => {
+  const state = createDefaultOnboardingState();
+  const COMPLETED = '2026-11-20T22:48:17.841Z';
+
+  it("takes the brand's completion into a teammate's state that never finished", () => {
+    expect(adoptRowCompletion(state, COMPLETED).completedAt).toBe(COMPLETED);
+  });
+
+  it('keeps the state as it is while the brand is not complete', () => {
+    expect(adoptRowCompletion(state, null)).toBe(state);
+  });
+
+  it("keeps the member's own completion when both have one", () => {
+    const own = { ...state, completedAt: '2026-11-21T10:00:00.000Z' };
+    expect(adoptRowCompletion(own, COMPLETED)).toBe(own);
+  });
+});
+
+describe('completedAtToPersist', () => {
+  const COMPLETED = '2026-11-20T22:48:17.841Z';
+
+  it('never clears a completed brand from a state that has not completed', () => {
+    expect(completedAtToPersist(null, COMPLETED)).toBe(COMPLETED);
+    expect(completedAtToPersist(undefined, COMPLETED)).toBe(COMPLETED);
+  });
+
+  it("writes the state's completion onto a brand that has none", () => {
+    expect(completedAtToPersist(COMPLETED, null)).toBe(COMPLETED);
+  });
+
+  it('leaves an incomplete brand incomplete', () => {
+    expect(completedAtToPersist(null, null)).toBeNull();
   });
 });

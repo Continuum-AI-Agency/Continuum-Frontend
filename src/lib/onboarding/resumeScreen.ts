@@ -1,3 +1,4 @@
+import type { BrandAccess } from '@/lib/billing/productAccess';
 import { intakeDocumentsProcessing, readyIntakeDocuments } from './intake';
 import { LAST_ONBOARDING_STEP, type OnboardingState } from './state';
 
@@ -8,6 +9,24 @@ export type ScreenIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 /** "Choose your plan": after the last screen, and only once billing is live. */
 export const PLAN_SCREEN = LAST_ONBOARDING_STEP;
+
+/**
+ * A member who reached "Choose your plan" on a brand that now holds a product completes on load
+ * instead of reopening that screen. The grant usually lands after they left it (an admin or
+ * Contract grant, a Payment Link), and nothing else finishes the brand. A brand that has not
+ * reached the plan screen never completes this way.
+ */
+export function completesOnLoad(
+  state: OnboardingState,
+  access: Pick<BrandAccess, 'billingLive' | 'products'>,
+): boolean {
+  return (
+    !state.completedAt &&
+    access.billingLive &&
+    access.products.length > 0 &&
+    (state.step ?? 0) >= PLAN_SCREEN
+  );
+}
 
 export function resumeScreenFor(state: OnboardingState, planRequired: boolean): ScreenIndex {
   if (

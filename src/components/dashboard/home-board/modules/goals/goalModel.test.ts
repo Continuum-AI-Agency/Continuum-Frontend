@@ -126,6 +126,10 @@ describe('goalFigure', () => {
 
   it('draws the series day by day, in date order', () => {
     expect(goalFigure(objective('spend'), [mxn]).amounts[0]?.series).toEqual([1500.25, 1620.25]);
+    expect(goalFigure(objective('spend'), [mxn]).amounts[0]?.seriesDates).toEqual([
+      '2026-11-01',
+      '2026-11-02',
+    ]);
   });
 });
 

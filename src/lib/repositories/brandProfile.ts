@@ -15,7 +15,6 @@ import {
   removeMemberFromBrand,
   renameBrandProfile,
   revokeInvite,
-  updateBrandLogo,
 } from '@/lib/onboarding/storage';
 
 export type BrandSummary = {
@@ -38,7 +37,6 @@ export type BrandSettingsData = {
 export interface BrandProfileRepository {
   switchActiveBrand(brandId: string): Promise<void>;
   renameBrand(brandId: string, name: string): Promise<void>;
-  updateLogo(brandId: string, logoPath: string | null): Promise<void>;
   createBrand(name?: string): Promise<{ brandId: string }>;
   removeMember(brandId: string, member: { userId?: string; email?: string }): Promise<void>;
   createMagicLink(
@@ -61,9 +59,6 @@ export function createSupabaseBrandProfileRepository(): BrandProfileRepository {
     },
     async renameBrand(brandId: string, name: string) {
       await renameBrandProfile(brandId, name);
-    },
-    async updateLogo(brandId: string, logoPath: string | null) {
-      await updateBrandLogo(brandId, logoPath);
     },
     async createBrand(name?: string) {
       const { brandId } = await createBrandProfile(name);
@@ -103,9 +98,6 @@ export function createGatewayBrandProfileRepository(): BrandProfileRepository {
     },
     async renameBrand(brandId: string, name: string): Promise<void> {
       await httpServer.request({ path: `/brands/${brandId}`, method: 'PATCH', body: { name } });
-    },
-    async updateLogo(brandId: string, logoPath: string | null): Promise<void> {
-      await httpServer.request({ path: `/brands/${brandId}`, method: 'PATCH', body: { logoPath } });
     },
     async createBrand(name?: string): Promise<{ brandId: string }> {
       const schema = z.object({ brandId: z.string() });

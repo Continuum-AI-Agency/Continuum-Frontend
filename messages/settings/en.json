@@ -915,6 +915,8 @@
   "billingNeedListening": "brand listening",
   "billingIncludedCredits": "{count, number} Canvas credits included every month",
   "billingNeedsPlanReason": "Choose a plan first — auto-billing charges overage to the card on your subscription.",
+  "billingPlanGrantedReason": "Continuum activated your plan, so there is no card subscription to bill overage to. Buy credit packs to keep generating.",
+  "billingPlanGrantedNote": "Activated by Continuum. Contact your Continuum team to change it.",
   "billingContractReason": "Contract brands are billed through their agreement and never metered.",
   "autoBillingOn": "On. When credits run out, {usage} is billed to your card at {rate} per credit{cap}.",
   "autoBillingOff": "Off. When credits run out, {paused} until you buy a pack. Turn on to {keepGoing} at {rate} per credit{cap}.",

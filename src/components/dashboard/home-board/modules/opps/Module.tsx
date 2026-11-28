@@ -19,8 +19,10 @@ import {
 } from '@/components/paid-media/optimizer/useOptimizerData';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { cn } from '@/lib/utils';
+import { useHomeDraft } from '../../HomePresentationContext';
 import { OppStack } from './OppStack';
 import { OPTIMIZER_LINKS, portfolioDecisionsHref, type WaitingPortfolio } from './oppsModel';
+import { ReadOnlyQueue } from './ReadOnlyQueue';
 import { ROW_LINK, useWaitingLine } from './tileParts';
 
 const NO_CARDS: AccountCandidate[] = [];
@@ -32,6 +34,7 @@ function cardsFor(state: PlatformCardsState, portfolioId: string): AccountCandid
 }
 
 function OpenQueue({ brandId, waiting }: { brandId: string; waiting: WaitingPortfolio }) {
+  const draft = useHomeDraft();
   const { portfolio } = waiting;
   const on = (platform: PlatformId) => portfolio.platforms.includes(platform);
   // A platform the portfolio is not on is never read: an empty brand id disables the query.
@@ -41,7 +44,9 @@ function OpenQueue({ brandId, waiting }: { brandId: string; waiting: WaitingPort
     () => [...cardsFor(google, portfolio.id), ...cardsFor(tiktok, portfolio.id)],
     [google, tiktok, portfolio.id],
   );
-  return (
+  return draft ? (
+    <ReadOnlyQueue brandId={brandId} platformCards={platformCards} portfolio={portfolio} />
+  ) : (
     <OptimizerActionsPortfolioGroup
       adAccountId={portfolio.ad_account_id ? bareAccountId(portfolio.ad_account_id) : ''}
       brandId={brandId}
@@ -63,6 +68,7 @@ export default function OppsModule({
 }) {
   const uiText = useTranslations('dashboard');
   const waitingLine = useWaitingLine();
+  const draft = useHomeDraft();
   const [openId, setOpenId] = useState<string | null>(portfolios[0]?.id ?? null);
 
   const priced = stack && stack.opportunities.length > 0 ? stack : null;
@@ -72,9 +78,11 @@ export default function OppsModule({
       <div className="space-y-4 text-sm" data-testid="home-opps-module">
         {priced ? <OppStack stack={priced} /> : null}
         <p>{uiText('nothing_waits_for_a_decision_right_now_e5b7556')}</p>
-        <Link className={cn(ROW_LINK, 'text-xs')} href={OPTIMIZER_LINKS.actions}>
-          {uiText('open_the_optimizer_s_actions_10044b2')}
-        </Link>
+        {!draft ? (
+          <Link className={cn(ROW_LINK, 'text-xs')} href={OPTIMIZER_LINKS.actions}>
+            {uiText('open_the_optimizer_s_actions_10044b2')}
+          </Link>
+        ) : null}
       </div>
     );
   }
@@ -114,12 +122,14 @@ export default function OppsModule({
               {open ? (
                 <div className="space-y-2 border-t p-3">
                   <OpenQueue brandId={brandId} waiting={waiting} />
-                  <Link
-                    className={cn(ROW_LINK, 'text-xs')}
-                    href={portfolioDecisionsHref(waiting.id)}
-                  >
-                    {uiText('open_name_in_the_optimizer_706057e', { name: waiting.name })}
-                  </Link>
+                  {!draft ? (
+                    <Link
+                      className={cn(ROW_LINK, 'text-xs')}
+                      href={portfolioDecisionsHref(waiting.id)}
+                    >
+                      {uiText('open_name_in_the_optimizer_706057e', { name: waiting.name })}
+                    </Link>
+                  ) : null}
                 </div>
               ) : null}
             </li>

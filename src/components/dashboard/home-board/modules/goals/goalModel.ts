@@ -79,6 +79,7 @@ export type GoalAmount = {
   value: number;
   /** Day by day over the window, in date order; empty with a single day. */
   series: number[];
+  seriesDates?: string[];
   accountCount: number;
 };
 
@@ -119,6 +120,7 @@ export function goalFigure(objective: HomeObjective, reads: GoalAccountRead[]): 
                 currency: null,
                 value,
                 series: totals.series[metric] ?? [],
+                seriesDates: totals.seriesDates?.[metric],
                 accountCount: totals.accountCount,
               },
             ],
@@ -143,6 +145,7 @@ export function goalFigure(objective: HomeObjective, reads: GoalAccountRead[]): 
               currency: group.currency,
               value,
               series: group.totals.series[metric] ?? [],
+              seriesDates: group.totals.seriesDates?.[metric],
               accountCount: group.totals.accountCount,
             },
           ];

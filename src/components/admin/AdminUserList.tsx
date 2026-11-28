@@ -1250,7 +1250,7 @@ export function AdminUserList({
               </div>
             </div>
 
-            <Alert className="border-amber-200 bg-amber-50/60 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            <Alert className="px-3 border-amber-200 bg-amber-50/60 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
               <ShieldAlert className="size-4" />
               <AlertTitle>{uiText('immediate_audited_changes_32ff069')}</AlertTitle>
               <AlertDescription>
@@ -1267,7 +1267,7 @@ export function AdminUserList({
             >
               <div className="max-h-[64vh] overflow-auto xl:max-h-none xl:min-h-0 xl:flex-1">
                 <div className="min-w-[900px]">
-                  <Table>
+                  <Table className="[&_tr>*:first-child]:pl-3 [&_tr>*:last-child]:pr-3">
                     <TableHeader className="sticky top-0 z-10 bg-surface">
                       <TableRow>
                         <TableHead>{uiText('user_b512d97')}</TableHead>

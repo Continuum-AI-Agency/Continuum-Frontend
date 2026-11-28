@@ -12,7 +12,13 @@ import { type CaptionCue, findActiveCues } from './captionCues';
 import { drawActiveCaption } from './drawCaptions';
 import { drawFrameComposition } from './frameComposition';
 import { drawClipFrame, drawFadeOverlay } from './frameDraw';
-import { framesAtSourceTimes, RETIME_FALLBACK_FPS, sourceSecAt } from './sourceClock';
+import {
+  atDecodableTime,
+  framesAtSourceTimes,
+  missingFrameMessage,
+  RETIME_FALLBACK_FPS,
+  sourceSecAt,
+} from './sourceClock';
 
 // Shared per-range concat mechanics for the mediabunny splice engines. Both
 // spliceClips (multi-input) and spliceSingleSource (one input, N ranges) append
@@ -127,17 +133,20 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
   const cadenceRate = frameRate ?? (retime ? RETIME_FALLBACK_FPS : undefined);
 
   const canvasSink = new mb.CanvasSink(videoTrack);
+  const firstFrameSec = await videoTrack.getFirstTimestamp();
   const snapshotLocal =
     params.frameTimeSec === undefined ? undefined : params.frameTimeSec - cumulativeOffset;
   if (snapshotLocal !== undefined && (snapshotLocal < 0 || snapshotLocal >= outputDurationSec))
     return;
   const cadenceDuration = snapshotLocal === undefined && cadenceRate ? 1 / cadenceRate : undefined;
-  function* sourceTimestamps() {
-    if (snapshotLocal !== undefined) yield range.startSec + snapshotLocal * speed;
-    else if (cadenceDuration)
+  const sourceTimestamps = (): number[] => {
+    if (snapshotLocal !== undefined) return [range.startSec + snapshotLocal * speed];
+    const times: number[] = [];
+    if (cadenceDuration)
       for (let frame = 0; frame * cadenceDuration < outputDurationSec - 1e-9; frame++)
-        yield range.startSec + frame * cadenceDuration * speed;
-  }
+        times.push(range.startSec + frame * cadenceDuration * speed);
+    return times;
+  };
   const retimedTimestamps = (clock: EditorClipTiming, localStartSec: number): number[] => {
     const at = (localOut: number) => sourceSecAt(clock, localStartSec + localOut, range);
     if (snapshotLocal !== undefined) return [at(snapshotLocal)];
@@ -146,13 +155,23 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
       times.push(at(frame * (cadenceDuration ?? 1)));
     return times;
   };
+  const requested = (
+    retime ? retimedTimestamps(retime.clock, retime.localStartSec) : sourceTimestamps()
+  ).map((sec) => atDecodableTime(sec, firstFrameSec));
   const frames = retime
-    ? framesAtSourceTimes(canvasSink, retimedTimestamps(retime.clock, retime.localStartSec))
+    ? framesAtSourceTimes(canvasSink, requested)
     : snapshotLocal !== undefined || cadenceDuration
-      ? canvasSink.canvasesAtTimestamps(sourceTimestamps())
+      ? canvasSink.canvasesAtTimestamps(requested)
       : canvasSink.canvases(range.startSec, range.endSec);
   for await (const wrapped of frames) {
-    if (!wrapped) throw new Error('No decoded frame at the requested timeline time.');
+    if (!wrapped)
+      throw new Error(
+        missingFrameMessage(
+          requested[nextCadenceFrame],
+          cumulativeOffset + (snapshotLocal ?? nextCadenceFrame * (cadenceDuration ?? 0)),
+          firstFrameSec,
+        ),
+      );
     throwIfAborted(signal);
     const localOut =
       snapshotLocal ??

@@ -29,7 +29,7 @@ describe('SettingsNavItem', () => {
       <Tabs.Root value="general">
         <Tabs.List>
           <SettingsNavItem icon={IdCard} label="General" value="general" />
-          <SettingsNavItem icon={IdCard} label="Brand Book" value="brand-book" />
+          <SettingsNavItem icon={IdCard} label="Brand Intelligence" value="brand-intelligence" />
         </Tabs.List>
       </Tabs.Root>,
     );

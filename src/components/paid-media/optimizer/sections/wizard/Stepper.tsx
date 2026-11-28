@@ -23,7 +23,7 @@ export function Stepper({ current, completed, onSelect, values = {} }: StepperPr
   return (
     <ol
       aria-label={uiText('portfolio_setup_steps_f24de20')}
-      className="flex gap-1 overflow-x-auto @4xl:flex-col @4xl:overflow-visible"
+      className="-mx-2.5 flex gap-1 overflow-x-auto @4xl:flex-col @4xl:overflow-visible"
     >
       {wizardSteps(uiText).map((step, index) => {
         const done = completed.has(step.id);

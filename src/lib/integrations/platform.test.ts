@@ -13,6 +13,10 @@ describe('mapIntegrationTypeToPlatformKey', () => {
     expect(mapIntegrationTypeToPlatformKey('google_ads_customer')).toBe('googleAds');
   });
 
+  it('buckets a LinkedIn personal profile under linkedin, beside its Pages', () => {
+    expect(mapIntegrationTypeToPlatformKey('linkedin_member')).toBe('linkedin');
+  });
+
   it('is case/whitespace tolerant', () => {
     expect(mapIntegrationTypeToPlatformKey('  ADS_CUSTOMER ')).toBe('googleAds');
   });

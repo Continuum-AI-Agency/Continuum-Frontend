@@ -2,9 +2,10 @@
 // import arrives only after hydration, flashing the page skeleton over the rendered view.
 import type { DashboardSetupState } from '@/components/dashboard/first-run/setupState';
 import { HomeBoard } from '@/components/dashboard/home-board/HomeBoard';
+import type { HomePresentation } from '@/components/dashboard/home-board/homePresentation';
 import { loadHomeBoard } from '@/lib/home/brandReading.server';
-import { loadHomeProfileRows } from '@/lib/home/homeProfile.server';
 import type { HomeAdAccount } from '@/lib/home/homeAccounts';
+import { loadHomeProfileRows } from '@/lib/home/homeProfile.server';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import type { SnapshotAccountRef } from '@/lib/organic/brandOrganicSnapshot';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -38,6 +39,7 @@ async function loadAdAccountCurrencies(externalIds: string[]): Promise<Map<strin
 }
 
 type Props = {
+  presentation?: HomePresentation;
   brandId: string;
   brandName: string | null;
   userId: string | null;
@@ -46,6 +48,7 @@ type Props = {
 };
 
 export async function HomeBoardDataWrapper({
+  presentation = 'current',
   brandId,
   brandName,
   userId,
@@ -116,6 +119,7 @@ export async function HomeBoardDataWrapper({
 
   return (
     <HomeBoard
+      presentation={presentation}
       ctx={{
         brandId,
         brandName,

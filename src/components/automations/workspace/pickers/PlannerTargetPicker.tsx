@@ -108,7 +108,9 @@ export function PlannerTargetPicker({
             <SelectContent>
               {accountOptions.map((option) => (
                 <SelectItem key={option.id} value={option.id}>
-                  {option.label}
+                  {option.personalProfile
+                    ? uiText('linkedin_personal_profile', { name: option.label })
+                    : option.label}
                 </SelectItem>
               ))}
             </SelectContent>

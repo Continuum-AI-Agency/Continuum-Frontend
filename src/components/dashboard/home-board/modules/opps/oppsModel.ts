@@ -6,6 +6,7 @@
 // the tile's expanded module.
 
 import type { PortfolioListItem } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import { pendingWorkCount } from '@/components/paid-media/optimizer/reportModel';
 
 const SCALE = '/scale?tab=performance';
@@ -75,6 +76,27 @@ export function waitingLine(portfolio: Pick<WaitingPortfolio, 'recommendations' 
       ? plural(portfolio.recommendations, 'recommendation', 'recommendations')
       : null,
     portfolio.budgetMoves > 0 ? plural(portfolio.budgetMoves, 'budget move', 'budget moves') : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** waitingLine in the UI language, for callers outside a component (the Home dot adapters). */
+export function waitingLineIn(
+  portfolio: Pick<WaitingPortfolio, 'recommendations' | 'budgetMoves'>,
+  uiText: ReturnType<typeof useTranslations<'dashboard'>>,
+) {
+  return [
+    portfolio.recommendations > 0
+      ? uiText('count_plural_one_recommendation_other_recomme_510798b', {
+          count: portfolio.recommendations,
+        })
+      : null,
+    portfolio.budgetMoves > 0
+      ? uiText('count_plural_one_budget_move_other_budget_mov_6592963', {
+          count: portfolio.budgetMoves,
+        })
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');

@@ -35,12 +35,14 @@ import {
   GalleryHorizontalEnd,
   LayoutGrid,
   List,
+  Menu,
   ScanSearch,
   Trash2,
   Upload,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import dynamic from 'next/dynamic';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   useCallback,
@@ -52,7 +54,6 @@ import {
   useTransition,
   useMemo as useUiConfigMemo,
 } from 'react';
-import { CompetitorInspirationPanel } from '@/components/competitor-spy/CompetitorInspirationPanel';
 import {
   DesignTemplateImports,
   useDesignTemplateImports,
@@ -68,9 +69,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { toast } from '@/components/ui/toast-imperative';
 import { useRouter } from '@/i18n/navigation';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { intentProps } from '@/lib/intent';
 import {
   createLibraryCollectionOperation,
   mutateCollectionMembershipOperation,
@@ -107,7 +110,6 @@ import { FigmaImportDialog } from './FigmaImportDialog';
 import { FontUploadReviewDialog } from './FontUploadReviewDialog';
 import { useCustomFields } from './fields/useCustomFields';
 import { LibraryBulkToolbar } from './LibraryBulkToolbar';
-import { LibraryElementsGrid } from './LibraryElementsGrid';
 import { LibraryFilterBar } from './LibraryFilterBar';
 import { LibraryRenderQueue } from './LibraryRenderQueue';
 import { LibrarySidebar } from './LibrarySidebar';
@@ -116,12 +118,8 @@ import { partitionLibraryUploadFiles } from './libraryUploadRouting';
 import { McpUploadIntentPanel } from './McpUploadIntentPanel';
 import { MediaGrid } from './MediaGrid';
 import { MediaSearchBar } from './MediaSearchBar';
-import { PipelinePanel } from './PipelinePanel';
 import { PlacementBar } from './PlacementBar';
 import { RatioShelves } from './RatioShelves';
-import { TemplateGrid } from './TemplateGrid';
-import { TypographyPanel } from './TypographyPanel';
-import { TrashView } from './trash/TrashView';
 import { UploadStrip } from './UploadStrip';
 import { useMediaLibrary } from './useMediaLibrary';
 import { useMediaUpload } from './useMediaUpload';
@@ -134,6 +132,35 @@ import { ReelView } from './views/ReelView';
 import { stackDroppedAssets } from './views/stackDrop';
 import { useAssetFieldValues } from './views/useAssetFieldValues';
 import { useLibraryViewPreferences } from './views/useLibraryViewPreferences';
+
+// Views a URL section, filter or tab opens: none is on screen for the default media grid, yet
+// static imports put all of them (~380 KiB) into /library's first load. `loading` gives each its
+// own Suspense boundary, so a pending chunk blanks only that panel, never the whole route.
+// The in-page triggers (Inspiration tab, trash) warm the same import on intent.
+const loadInspiration = () => import('@/components/competitor-spy/CompetitorInspirationPanel');
+const CompetitorInspirationPanel = dynamic(
+  () => loadInspiration().then((m) => m.CompetitorInspirationPanel),
+  { loading: () => null },
+);
+const LibraryElementsGrid = dynamic(
+  () => import('./LibraryElementsGrid').then((m) => m.LibraryElementsGrid),
+  {
+    loading: () => null,
+  },
+);
+const PipelinePanel = dynamic(() => import('./PipelinePanel').then((m) => m.PipelinePanel), {
+  loading: () => null,
+});
+const TemplateGrid = dynamic(() => import('./TemplateGrid').then((m) => m.TemplateGrid), {
+  loading: () => null,
+});
+const TypographyPanel = dynamic(() => import('./TypographyPanel').then((m) => m.TypographyPanel), {
+  loading: () => null,
+});
+const loadTrash = () => import('./trash/TrashView');
+const TrashView = dynamic(() => loadTrash().then((m) => m.TrashView), {
+  loading: () => null,
+});
 
 // The detail stage (zoom, players, waveforms) loads when an asset is opened, not with the grid.
 
@@ -257,8 +284,11 @@ export function LibraryViewer({
   // custom-state setter and the filter push each build on it, so neither drops the other.
   const pendingPathRef = useRef<string | null>(null);
   const reviewStateIdsRef = useRef(reviewStateIds);
+  // Below md the browse rail lives in a sheet; any pick navigates, so a new query closes it.
+  const [browseOpen, setBrowseOpen] = useState(false);
   useEffect(() => {
     pendingPathRef.current = null;
+    setBrowseOpen(false);
   }, [initialBrowseQuery]);
   const { assets, hasMore, loadingMore, loadMore } = useMediaLibrary({
     query: initialBrowseQuery,
@@ -926,10 +956,29 @@ export function LibraryViewer({
     );
   };
 
+  const browseRail = (
+    <LibrarySidebar
+      brandId={brandId}
+      collections={initialCollections}
+      savedViews={initialSavedViews}
+      currentQuery={initialBrowseQuery}
+      onSelectSavedView={onSelectSavedView}
+      selectedCollectionId={selectedCollectionId}
+      onSelectCollection={onSelectCollection}
+      selectedMediaType={optimisticMediaType}
+      selectedSort={optimisticSort}
+      selectedReviewStatuses={optimisticReviewStatuses}
+      selectedTemplateOnly={showTemplates}
+      section={section}
+      onSelectDestination={onSelectDestination}
+    />
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div
-        className="flex shrink-0 items-center gap-1 border-b border-border px-4 pt-2"
+        // Tabs carry px-3 of their own, so tab text starts on the page gutter line, above the rail's rows.
+        className="flex shrink-0 items-center gap-1 border-b border-border px-[calc(var(--page-pad-inline)-0.75rem)] pt-2"
         role="tablist"
         aria-label={translateUi('library_sections_47f7820e')}
       >
@@ -939,6 +988,7 @@ export function LibraryViewer({
             type="button"
             role="tab"
             aria-selected={view === id}
+            {...(id === 'inspiration' ? intentProps(loadInspiration) : {})}
             onClick={() => setView(id)}
             className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium capitalize ${
               view === id
@@ -959,26 +1009,12 @@ export function LibraryViewer({
               accepts dragged assets (useCollectionAssetDrop finds the row). */}
           {/* biome-ignore lint/a11y/noStaticElementInteractions: drop delegation only; the sidebar rows stay the interactive controls */}
           <div
-            className="flex min-h-0"
+            className="hidden min-h-0 md:flex"
             onDragOver={collectionDrop.onDragOver}
             onDragLeave={collectionDrop.onDragLeave}
             onDrop={collectionDrop.onDrop}
           >
-            <LibrarySidebar
-              brandId={brandId}
-              collections={initialCollections}
-              savedViews={initialSavedViews}
-              currentQuery={initialBrowseQuery}
-              onSelectSavedView={onSelectSavedView}
-              selectedCollectionId={selectedCollectionId}
-              onSelectCollection={onSelectCollection}
-              selectedMediaType={optimisticMediaType}
-              selectedSort={optimisticSort}
-              selectedReviewStatuses={optimisticReviewStatuses}
-              selectedTemplateOnly={showTemplates}
-              section={section}
-              onSelectDestination={onSelectDestination}
-            />
+            {browseRail}
           </div>
 
           {/* biome-ignore lint/a11y/noStaticElementInteractions: full-area drag-and-drop upload surface; the keyboard-accessible path is the Upload button above */}
@@ -995,6 +1031,20 @@ export function LibraryViewer({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
+            <Sheet open={browseOpen} onOpenChange={setBrowseOpen}>
+              <SheetTrigger
+                render={
+                  <Button variant="outline" size="sm" className="gap-2 self-start md:hidden">
+                    <Menu className="size-4" />
+                    {translateUi('browse_3227aa96')}
+                  </Button>
+                }
+              />
+              <SheetContent side="left" className="p-0 data-[side=left]:w-auto">
+                <SheetTitle className="sr-only">{translateUi('browse_3227aa96')}</SheetTitle>
+                {browseRail}
+              </SheetContent>
+            </Sheet>
             <PageHeader
               title={
                 showTypography
@@ -1041,6 +1091,7 @@ export function LibraryViewer({
                         size="sm"
                         data-testid="library-trash-open"
                         aria-pressed={trashOpen}
+                        {...intentProps(loadTrash)}
                         onClick={() => {
                           setTrashOpen(!trashOpen);
                           setTrashUrl(!trashOpen);

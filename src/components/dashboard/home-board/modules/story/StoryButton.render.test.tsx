@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { render } from '@/i18n/__tests__/render';
+import { englishMessages, render } from '@/i18n/__tests__/render';
+import { HOME_DRAFT_READ_ONLY, HomePresentationContext } from '../../HomePresentationContext';
 import { ctxFor } from '../ask/__fixtures__/readings';
 import {
   GOOGLE_ACCOUNT,
@@ -42,6 +43,24 @@ async function openStory(mode: Parameters<typeof ctxFor>[0], adAccounts = [GOOGL
 }
 
 describe('StoryButton', () => {
+  it('lets a draft read slides without mounting the report sender', async () => {
+    render(
+      <HomePresentationContext value="dots">
+        <StoryButton ctx={ctxFor('operate', { adAccounts: [GOOGLE_ACCOUNT] })} />
+      </HomePresentationContext>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Weekly story/ }));
+    const story = await screen.findByTestId('home-story');
+    expect(within(story).getByTestId('home-story-slide')).toBeTruthy();
+    const send = within(story).getByRole('button', { name: 'Send as Continuum Report' });
+    expect(send.hasAttribute('disabled')).toBe(true);
+    expect(send.getAttribute('title')).toBe(englishMessages.dashboard[HOME_DRAFT_READ_ONLY]);
+    expect(within(story).getByText(englishMessages.dashboard[HOME_DRAFT_READ_ONLY])).toBeTruthy();
+    fireEvent.click(send);
+    expect(reportDialogs).toHaveLength(0);
+    expect(screen.queryByTestId('report-dialog-stub')).toBeNull();
+  });
+
   it('opens the week as slides composed from the reading and the stored brief', async () => {
     reads = [{ account: GOOGLE_ACCOUNT, status: 'success', data: GOOGLE_READ_TODAY }];
     const story = await openStory('approve');

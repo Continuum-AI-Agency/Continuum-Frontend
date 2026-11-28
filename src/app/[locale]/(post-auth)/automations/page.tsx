@@ -29,7 +29,7 @@ export default async function AutomationsPage() {
   }
 
   return (
-    <main className="min-h-dvh bg-background px-6 py-8 md:px-10">
+    <main className="min-h-dvh bg-background px-[var(--page-pad-inline)] py-8 md:px-10">
       <div className="mx-auto max-w-6xl">
         <div className="flex items-end justify-between gap-4">
           <div>

@@ -329,6 +329,7 @@
     "billingNeedsPlanReason": "Escolha um plano primeiro; a cobrança automática debita o uso excedente no cartão da assinatura.",
     "billingOrganic": "Agente Orgânico, calendário e publicação",
     "billingPaidMedia": "Jaina, criação de anúncios no Forge, aprovações e otimizador",
+    "billingPlanGrantedReason": "O Continuum ativou seu plano, então não há assinatura no cartão para debitar o uso excedente. Compre pacotes de créditos para continuar gerando.",
     "billingStudio": "AI Canvas",
     "billingTrends": "Trends"
   }
