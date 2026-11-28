@@ -5,8 +5,8 @@
 // fires every day is a block people learn to scroll past. The words are googleDeliveryStatusOf's.
 
 import type { AccountCandidate } from '@continuum/contracts';
-import { AlertTriangleIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { TriangleAlert } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import * as typeScale from '../../typeScale';
@@ -24,7 +24,7 @@ export function GoogleDeliveryStatus({ cards }: { cards: readonly AccountCandida
       data-tone={status.tone}
       role="status"
     >
-      <AlertTriangleIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+      <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
       <div className="min-w-0 flex-1 space-y-1">
         <p className={cn(typeScale.bodyLg, 'font-semibold text-foreground')}>{status.title}</p>
         <p className="text-muted-foreground text-sm">{status.detail}</p>

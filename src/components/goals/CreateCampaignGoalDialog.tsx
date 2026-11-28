@@ -9,9 +9,9 @@ import {
   getGoalTemplate,
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { Plus, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -257,7 +257,7 @@ export function CreateCampaignGoalDialog({
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {uiText.rich('sentence_4b50e0819257', {
-                v0: () => (isSubmitting ? <Loader2 className="size-3.5 animate-spin" /> : null),
+                v0: () => (isSubmitting ? <Spinner className="size-3.5 animate-spin" /> : null),
               })}
             </Button>
           </DialogFooter>

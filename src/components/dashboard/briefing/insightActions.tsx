@@ -1,15 +1,15 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import {
   CalendarPlus,
-  ExternalLink,
   MessageSquare,
   MessageSquarePlus,
   MoreHorizontal,
   Rocket,
   Sparkles,
-} from 'lucide-react';
-import { useTranslations } from 'next-intl';
+  SquareArrowOutUpRight,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenuItem,
@@ -79,7 +79,7 @@ export function InsightContextActions({ permalink, agentSuggestion }: InsightAct
             className="gap-2 text-xs"
             onSelect={() => window.open(permalink, '_blank', 'noopener')}
           >
-            <ExternalLink className="size-3.5" />
+            <SquareArrowOutUpRight className="size-3.5" />
             {uiText('m_57a08f10df')}
           </ContextMenuItem>
         </>
@@ -136,7 +136,7 @@ export function InsightActionsDropdown({ permalink, agentSuggestion }: InsightAc
               className="gap-2 text-xs"
               onSelect={() => window.open(permalink, '_blank', 'noopener')}
             >
-              <ExternalLink className="size-3.5" />
+              <SquareArrowOutUpRight className="size-3.5" />
               {uiText('m_57a08f10df')}
             </DropdownMenuItem>
           </>

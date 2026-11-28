@@ -10,9 +10,9 @@ import {
   type VideoEditorOpOutput,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { Film, Sparkles, TriangleAlert } from 'lucide-react';
 import { useLocale, useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Film, Sparkles, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {

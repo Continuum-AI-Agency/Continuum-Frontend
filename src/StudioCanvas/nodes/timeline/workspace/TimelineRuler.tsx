@@ -1,8 +1,8 @@
 'use client';
 
 import type { EditorMarker } from '@continuum/contracts';
-import { Flag, Waves } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+import { Flag, Waves } from '@/components/icons';
 import {
   ContextMenu,
   ContextMenuContent,

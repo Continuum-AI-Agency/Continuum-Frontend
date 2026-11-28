@@ -1,8 +1,8 @@
 'use client';
 
 import type { InstagramPost } from '@continuum/contracts';
-import { ChevronLeft, ChevronRight, Images, Play } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+import { ChevronLeft, ChevronRight, Images, Play } from '@/components/icons';
 import { VideoStill } from '@/components/media/VideoStill';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

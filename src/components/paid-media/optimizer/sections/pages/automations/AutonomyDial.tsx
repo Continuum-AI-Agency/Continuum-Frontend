@@ -5,9 +5,9 @@
 // never before, so the dial cannot show a level the database does not hold. A level something
 // blocks carries a lock and its reason; the level being written spins until the answer comes back.
 
-import { Loader2Icon, LockIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
+import { Lock, Spinner } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { AUTONOMY_LEVELS, type AutonomyLevel } from './autonomyModel';
 
@@ -82,12 +82,12 @@ export function AutonomyDial({
               {/* On a phone the label needs the whole step: a locked step there reads by its fade,
                   and the reason is written under the dial either way. */}
               {lock ? (
-                <LockIcon aria-hidden="true" className="hidden size-3 shrink-0 sm:block" />
+                <Lock aria-hidden="true" className="hidden size-3 shrink-0 sm:block" />
               ) : null}
               <span className="truncate">{uiText('autonomyLevelLabel', { level })}</span>
             </span>
             {pending === level ? (
-              <Loader2Icon
+              <Spinner
                 aria-hidden="true"
                 className="absolute top-0.5 right-0.5 z-10 size-2.5 animate-spin"
                 data-testid="autonomy-dial-pending"

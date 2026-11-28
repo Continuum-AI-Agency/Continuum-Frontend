@@ -17,10 +17,10 @@ import {
   REFERENCE_TAG,
   VIDEO_CODEC_FAMILIES,
 } from '@continuum/contracts';
-import { Check, ChevronDown, Search, SlidersHorizontal, Tags, X } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useMemo, useState } from 'react';
+import { Check, ChevronDown, Search, SlidersHorizontal, Tags, X } from '@/components/icons';
 import { ProjectChip } from '@/components/projects/ProjectChip';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';

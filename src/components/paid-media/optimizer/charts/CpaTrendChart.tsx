@@ -16,9 +16,8 @@ import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTrans
 // up-is-good arrow/color would mislabel a falling CPA.
 
 import { type CpaSeriesPoint, getOptimizationMetricDefinition } from '@continuum/contracts';
-import { TrendingDownIcon, TrendingUpIcon } from 'lucide-react';
-
 import { Area, AreaChart } from '@/components/charts/area-chart';
+import { TrendingDown, TrendingUp } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { formatCpa } from '../format';
 import { ChartEmpty } from './ChartStates';
@@ -47,7 +46,7 @@ export function CpaTrendChart({ series, currency, objective }: CpaTrendChartProp
 
   const { last, deltaPct } = summary;
   const improving = deltaPct <= 0; // lower CPA is better
-  const TrendIcon = improving ? TrendingDownIcon : TrendingUpIcon;
+  const TrendIcon = improving ? TrendingDown : TrendingUp;
 
   return (
     <div className="space-y-1">

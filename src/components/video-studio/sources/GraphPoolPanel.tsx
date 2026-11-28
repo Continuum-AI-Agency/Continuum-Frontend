@@ -1,9 +1,9 @@
 'use client';
 
 import type { VideoEditorPoolAsset } from '@continuum/contracts';
-import { RefreshCw, Workflow } from 'lucide-react';
 import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState, useMemo as useUiConfigMemo } from 'react';
+import { RefreshCw, Workflow } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';

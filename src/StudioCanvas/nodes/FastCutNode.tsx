@@ -25,12 +25,12 @@ import {
   type Node as ReactFlowNode,
   useEdges,
 } from '@xyflow/react';
-import { Copy, Play, Scissors, Trash2 } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
+import { Copy, Play, Scissors, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,

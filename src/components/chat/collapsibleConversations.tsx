@@ -1,8 +1,8 @@
 'use client';
 
-import { PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
+import { PanelLeftClose, PanelLeftOpen, Plus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -64,7 +64,7 @@ export function CollapseConversationsButton({
               aria-label={tUi('m_ce0c472129')}
               className={cn('shrink-0 text-muted-foreground', className)}
             >
-              <PanelLeftCloseIcon className="size-4" />
+              <PanelLeftClose className="size-4" />
             </Button>
           }
         />
@@ -100,7 +100,7 @@ export function CollapsedConversationsRail({
                 aria-label={uiText('m_b1934d4dd7')}
                 className="text-muted-foreground"
               >
-                <PanelLeftOpenIcon className="size-4" />
+                <PanelLeftOpen className="size-4" />
               </Button>
             }
           />
@@ -117,7 +117,7 @@ export function CollapsedConversationsRail({
                 disabled={isInteractionDisabled}
                 aria-label={uiText('new_conversation_396c946')}
               >
-                <PlusIcon className="size-4" />
+                <Plus className="size-4" />
               </Button>
             }
           />

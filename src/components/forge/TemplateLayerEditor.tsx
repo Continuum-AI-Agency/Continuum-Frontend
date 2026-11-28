@@ -23,25 +23,6 @@ import type {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import {
-  ChevronDown,
-  Circle,
-  CircleHelp,
-  Copy,
-  GitFork,
-  Image as ImageIcon,
-  Layers,
-  Loader2,
-  Lock,
-  Plus,
-  RectangleHorizontal,
-  Redo2,
-  RotateCcw,
-  Sparkles,
-  Trash2,
-  Type,
-  Undo2,
-} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -106,6 +87,25 @@ import {
   useTemplateAuthoringDraft,
 } from '@/components/forge/useTemplateAuthoringDraft';
 import { useTemplateAuthoringLifecycle } from '@/components/forge/useTemplateAuthoringLifecycle';
+import {
+  ChevronDown,
+  Circle,
+  CircleQuestionMark,
+  Copy,
+  GitFork,
+  Image as ImageIcon,
+  Layers2,
+  Lock,
+  Plus,
+  RectangleHorizontal,
+  Redo2,
+  RotateCcw,
+  Sparkles,
+  Spinner,
+  Trash2,
+  Type,
+  Undo2,
+} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -2344,7 +2344,7 @@ export function TemplateLayerEditor({
                 role="status"
                 className="flex items-center gap-1 text-2xs text-muted-foreground"
               >
-                {previewing ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+                {previewing ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}
                 {previewLabel}
               </span>
             ) : null}
@@ -2465,7 +2465,7 @@ export function TemplateLayerEditor({
             >
               {seedImporting ? (
                 <>
-                  <Loader2 className="animate-spin" aria-hidden />{' '}
+                  <Spinner className="animate-spin" aria-hidden />{' '}
                   {translateUi('preparing_private_workspace_fced2b6e')}
                 </>
               ) : canBootstrapEmptyDraft ? (
@@ -3158,7 +3158,7 @@ export function TemplateLayerEditor({
                       disabled={busy || staleSource || !groupSelectionReady}
                       onClick={createGroup}
                     >
-                      <Layers aria-hidden /> {translateUi('group_34ca0e76')}
+                      <Layers2 aria-hidden /> {translateUi('group_34ca0e76')}
                     </Button>
                   </div>
                 ) : null}
@@ -3261,7 +3261,7 @@ export function TemplateLayerEditor({
                         />
                       }
                     >
-                      <CircleHelp aria-hidden />
+                      <CircleQuestionMark aria-hidden />
                     </PopoverTrigger>
                     <PopoverContent side="bottom" align="end" className="w-80">
                       <h3 className="text-sm font-semibold">
@@ -4145,7 +4145,7 @@ export function TemplateLayerEditor({
                 }
                 onClick={() => void save('this_variant')}
               >
-                {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}{' '}
+                {saving ? <Spinner className="animate-spin" data-icon="inline-start" /> : null}{' '}
                 {translateUi('review_and_publish_revision_05597d26')}
               </Button>
             ) : null}
@@ -4161,7 +4161,7 @@ export function TemplateLayerEditor({
               }
             >
               {saving && !onVariant ? (
-                <Loader2 className="animate-spin" data-icon="inline-start" />
+                <Spinner className="animate-spin" data-icon="inline-start" />
               ) : null}
               {onVariant
                 ? translateUi('review_and_publish_new_variant_88a645d3')
@@ -4201,7 +4201,7 @@ export function TemplateLayerEditor({
               />
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-wrap items-center gap-1 pt-1 text-2xs text-muted-foreground">
-              {variants.isPending ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+              {variants.isPending ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}
               {variants.isSuccess && !variantChoices.length
                 ? translateUi('none_yet_bd3ce633')
                 : null}

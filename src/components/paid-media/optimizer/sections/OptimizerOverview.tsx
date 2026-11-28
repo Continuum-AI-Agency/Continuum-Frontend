@@ -44,15 +44,8 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import type { CycleRunPacing, PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
-import {
-  ArrowDownIcon,
-  ArrowRightIcon,
-  ArrowUpIcon,
-  FileTextIcon,
-  PlusIcon,
-  SparklesIcon,
-} from 'lucide-react';
 import { type ComponentProps, type ReactNode, useMemo, useState } from 'react';
+import { ArrowDown, ArrowRight, ArrowUp, FileText, Plus, Sparkles } from '@/components/icons';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -764,7 +757,7 @@ export function OptimizerOverview({
             >
               {uiText.rich('sentence_21f8da9b3ff1', {
                 v0: pendingCount,
-                v1: () => <ArrowRightIcon aria-hidden="true" className="size-3.5" />,
+                v1: () => <ArrowRight aria-hidden="true" className="size-3.5" />,
               })}
             </Button>
           ) : null}
@@ -779,7 +772,7 @@ export function OptimizerOverview({
               data-testid="overview-weekly-report"
               href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
             >
-              <FileTextIcon aria-hidden="true" className="size-3.5" />
+              <FileText aria-hidden="true" className="size-3.5" />
               {uiText('weekly_report_53f750c')}
             </a>
           ) : null}
@@ -789,7 +782,7 @@ export function OptimizerOverview({
             size="sm"
             type="button"
           >
-            <PlusIcon aria-hidden="true" className="size-3.5" />
+            <Plus aria-hidden="true" className="size-3.5" />
             {uiText('new_portfolio_2ea4a33')}
           </Button>
         </div>
@@ -826,7 +819,7 @@ function Recommendations(props: ComponentProps<typeof AccountRead>) {
       <h2
         className={`${typeScale.label} flex items-center gap-1.5 px-1 font-semibold text-muted-foreground`}
       >
-        <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
+        <Sparkles aria-hidden="true" className="size-3.5 text-primary-ink" />
         {uiText('what_jaina_recommends_865694a')}
       </h2>
       <AccountRead {...props} />
@@ -859,7 +852,7 @@ function OverviewLinks({
         type="button"
       >
         {uiText('review_in_actions_74ef371')}
-        <ArrowRightIcon aria-hidden="true" className="size-3.5" />
+        <ArrowRight aria-hidden="true" className="size-3.5" />
       </button>
       <button
         className={link}
@@ -868,7 +861,7 @@ function OverviewLinks({
         type="button"
       >
         {uiText('activity_38da150')}
-        <ArrowRightIcon aria-hidden="true" className="size-3.5" />
+        <ArrowRight aria-hidden="true" className="size-3.5" />
       </button>
     </nav>
   );
@@ -944,9 +937,9 @@ function PortfolioRows({
               variant="ghost"
             >
               {sortDir === 'asc' ? (
-                <ArrowUpIcon aria-hidden="true" className="size-3.5" />
+                <ArrowUp aria-hidden="true" className="size-3.5" />
               ) : (
-                <ArrowDownIcon aria-hidden="true" className="size-3.5" />
+                <ArrowDown aria-hidden="true" className="size-3.5" />
               )}
             </Button>
           </div>

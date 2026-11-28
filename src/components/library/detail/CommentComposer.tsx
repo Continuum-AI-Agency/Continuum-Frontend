@@ -18,9 +18,9 @@ import {
   type CommentAttachment,
   MAX_COMMENT_ATTACHMENTS,
 } from '@continuum/contracts';
-import { Globe, Loader2, Lock, Paperclip, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
+import { Globe, Lock, Paperclip, Spinner, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
@@ -271,7 +271,7 @@ export function CommentComposer({
               )}
               <span className="truncate">{item.name}</span>
               {item.status === 'uploading' && (
-                <Loader2 className="absolute right-1.5 top-1.5 size-3 animate-spin" />
+                <Spinner className="absolute right-1.5 top-1.5 size-3 animate-spin" />
               )}
               <button
                 type="button"
@@ -354,7 +354,7 @@ export function CommentComposer({
             onClick={submit}
             disabled={!trimmed || busy || uploading || submitDisabled}
           >
-            {busy && <Loader2 className="size-3.5 animate-spin" />}
+            {busy && <Spinner className="size-3.5 animate-spin" />}
             {submitLabel ?? translateUi('post_a5554622')}
           </Button>
         </div>

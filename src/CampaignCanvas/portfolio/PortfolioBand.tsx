@@ -5,8 +5,8 @@
 // row; the chat draws a compact card with the first rows and "Open in canvas". Both read the one
 // `PortfolioViewModel` (lib/campaign-canvas/portfolio.ts).
 
-import { ChevronRight, PanelRightOpen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { ChevronRight, PanelRightOpen } from '@/components/icons';
 import { lecturaMoney } from '@/lib/campaign-canvas/lectura';
 import {
   type PortfolioRow,

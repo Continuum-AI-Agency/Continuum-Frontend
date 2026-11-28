@@ -1,8 +1,12 @@
 'use client';
 
-import { ClipboardCheckIcon, ClipboardIcon, RefreshCwIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
+import {
+  ClipboardCheck as ClipboardCheckIcon,
+  Clipboard as ClipboardIcon,
+  RefreshCw as RefreshCwIcon,
+} from '@/components/icons';
 
 type MessageActionBarProps = {
   content: string;

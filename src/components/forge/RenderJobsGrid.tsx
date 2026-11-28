@@ -16,7 +16,6 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { ArrowLeft, Download, Loader2, RefreshCw, Search, Video } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import { type CheckTick, checkSummary, TickBar } from '@/components/forge/CheckTable';
@@ -42,6 +41,7 @@ import {
 import { type JobCheck, renderJobChecks } from '@/components/forge/renderJobChecks';
 import { describeRenderJobFailure } from '@/components/forge/renderJobFailureCopy';
 import { imageFailed, thumbnailSrc } from '@/components/forge/renderOutputMedia';
+import { ArrowDownToLine, ArrowLeft, RefreshCw, Search, Spinner, Video } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -378,7 +378,7 @@ export function RenderJobsGrid({
         cell: ({ row: { original: job } }) => (
           <span className="flex items-center gap-1.5">
             <Badge variant={STATUS_TONE[job.status]}>
-              {isInFlight(job) ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+              {isInFlight(job) ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}
               {job.status}
               {job.status === 'rendering' && typeof job.progressPct === 'number'
                 ? ` ${job.progressPct}%`
@@ -594,7 +594,7 @@ export function RenderJobsGrid({
           return (
             <span className="flex items-center gap-1.5">
               <Badge variant={status.tone}>
-                {status.busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+                {status.busy ? <Spinner className="size-3 animate-spin" aria-hidden /> : null}
                 {status.label}
               </Badge>
               <RenderModePill test={batch.preview.test} />
@@ -779,7 +779,7 @@ export function RenderJobsGrid({
               }
             }}
           >
-            <Download className="size-3.5" aria-hidden /> {translateUi('download_d6eafe82')}{' '}
+            <ArrowDownToLine className="size-3.5" aria-hidden /> {translateUi('download_d6eafe82')}{' '}
             {downloadable.length || ''}
           </Button>
           <Button

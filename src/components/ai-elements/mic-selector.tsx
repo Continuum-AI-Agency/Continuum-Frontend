@@ -1,7 +1,5 @@
 'use client';
 
-import { ChevronsUpDownIcon } from 'lucide-react';
-
 import { useTranslations } from 'next-intl';
 import type { ComponentProps, ReactNode } from 'react';
 import {
@@ -13,6 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { ChevronsUpDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -136,7 +135,7 @@ export const MicSelectorTrigger = ({ children, ...props }: MicSelectorTriggerPro
       render={
         <Button variant="outline" {...props} ref={ref}>
           {children}
-          <ChevronsUpDownIcon className="shrink-0 text-muted-foreground" size={16} />
+          <ChevronsUpDown className="shrink-0 text-muted-foreground" size={16} />
         </Button>
       }
     />

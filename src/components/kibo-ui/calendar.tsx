@@ -2,7 +2,6 @@
 
 import { getDay, getDaysInMonth, isSameDay } from 'date-fns';
 import { atom, useAtom } from 'jotai';
-import { Check, ChevronLeftIcon, ChevronRightIcon, ChevronsUpDown } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   createContext,
@@ -13,6 +12,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { Check, ChevronLeft, ChevronRight, ChevronsUpDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -400,10 +400,10 @@ export const CalendarDatePagination = ({ className }: CalendarDatePaginationProp
   return (
     <div className={cn('flex items-center gap-2', className)}>
       <Button onClick={handlePreviousMonth} size="icon" variant="ghost">
-        <ChevronLeftIcon size={16} />
+        <ChevronLeft size={16} />
       </Button>
       <Button onClick={handleNextMonth} size="icon" variant="ghost">
-        <ChevronRightIcon size={16} />
+        <ChevronRight size={16} />
       </Button>
     </div>
   );

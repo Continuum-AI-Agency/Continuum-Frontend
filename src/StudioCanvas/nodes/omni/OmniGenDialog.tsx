@@ -15,7 +15,6 @@
  */
 
 import type { Skill } from '@continuum/contracts';
-import { Download, Loader2, Sparkles, Video, Wand2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   useCallback,
@@ -26,6 +25,7 @@ import {
   useMemo as useUiConfigMemo,
 } from 'react';
 import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from '@/components/chat/slash-menu';
+import { ArrowDownToLine, Sparkles, Spinner, Video, Wand2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -234,7 +234,7 @@ export function OmniGenDialog({
             </select>
 
             <Button variant="ghost" size="sm" onClick={onDownload} disabled={!previewSrc}>
-              <Download className="mr-1.5 h-4 w-4" /> {translateUi('download_d6eafe82')}
+              <ArrowDownToLine className="mr-1.5 h-4 w-4" /> {translateUi('download_d6eafe82')}
             </Button>
             <Button size="sm" onClick={() => onOpenChange(false)}>
               {' '}
@@ -268,7 +268,7 @@ export function OmniGenDialog({
                   >
                     {variation.status === 'pending' ? (
                       <span className="flex h-full w-full items-center justify-center">
-                        <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                        <Spinner className="h-4 w-4 animate-spin text-brand-primary" />
                       </span>
                     ) : variation.videoUrl ? (
                       // biome-ignore lint/a11y/useMediaCaption: silent thumbnail, no captions
@@ -309,7 +309,7 @@ export function OmniGenDialog({
             {isTurnPending ? (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/55 backdrop-blur-[1px]">
                 <span className="flex items-center gap-2 rounded-md bg-background/90 px-3 py-2 text-xs shadow-sm">
-                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                  <Spinner className="h-4 w-4 animate-spin text-brand-primary" />
                   {mode === 'turn'
                     ? translateUi('working_on_your_change_744fb0c4')
                     : translateUi('generating_d20a4476')}

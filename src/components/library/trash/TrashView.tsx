@@ -5,9 +5,9 @@ import {
   type LibraryTrashItem,
   libraryTrashPageSchema,
 } from '@continuum/contracts';
-import { ArrowLeft, Loader2, RotateCcw, Trash2 } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { ArrowLeft, RotateCcw, Spinner, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import type { UiLocale } from '@/i18n/config';
@@ -116,7 +116,7 @@ export function TrashView({
         </p>
       ) : items === null ? (
         <div className="flex h-40 items-center justify-center">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          <Spinner className="size-5 animate-spin text-muted-foreground" />
         </div>
       ) : items.length === 0 ? (
         <div className="flex h-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
@@ -157,7 +157,7 @@ export function TrashView({
                   onClick={() => void restore(item)}
                 >
                   {restoring.has(id) ? (
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <Spinner className="size-3.5 animate-spin" />
                   ) : (
                     <RotateCcw className="size-3.5" />
                   )}{' '}

@@ -1,8 +1,8 @@
 'use client';
 
-import { Building2, ChevronRight, CircleDashed, Coins } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { type ReactNode, useMemo } from 'react';
+import { Building2, ChevronRight, CircleDashed, Coins } from '@/components/icons';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar';
 import { Link } from '@/i18n/navigation';

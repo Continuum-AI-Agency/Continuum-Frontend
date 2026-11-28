@@ -1,7 +1,6 @@
 'use client';
 
 import Ansi from 'ansi-to-react';
-import { CheckIcon, CopyIcon, TerminalIcon, Trash2Icon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps, HTMLAttributes } from 'react';
 import {
@@ -13,6 +12,12 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  Check as CheckIcon,
+  Copy as CopyIcon,
+  Terminal as TerminalIcon,
+  Trash2 as Trash2Icon,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

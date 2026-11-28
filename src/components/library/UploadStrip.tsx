@@ -1,20 +1,20 @@
 'use client';
 
+import { motion } from 'motion/react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import {
-  AlertCircle,
   ArrowDown,
   ArrowUp,
   Check,
   ChevronsUp,
+  CircleAlert,
   Clock,
-  Loader2,
   Pause,
   Play,
   RotateCcw,
+  Spinner,
   X,
-} from 'lucide-react';
-import { motion } from 'motion/react';
-import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+} from '@/components/icons';
 import type { UiLocale } from '@/i18n/config';
 import { formatDecimal } from '@/lib/format/decimal';
 import { uploadRefusalPresentation } from '@/lib/library/uploadRefusalPresentation';
@@ -79,10 +79,10 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
         >
           <div className="flex min-w-0 items-center gap-2">
             {u.status === 'queued' && <Clock className="size-3.5 shrink-0" />}
-            {u.status === 'uploading' && <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+            {u.status === 'uploading' && <Spinner className="size-3.5 shrink-0 animate-spin" />}
             {u.status === 'paused' && <Pause className="size-3.5 shrink-0" />}
             {u.status === 'done' && <Check className="size-3.5 shrink-0" />}
-            {u.status === 'error' && <AlertCircle className="size-3.5 shrink-0" />}
+            {u.status === 'error' && <CircleAlert className="size-3.5 shrink-0" />}
             <span className="min-w-0 flex-1 truncate font-medium text-foreground">{u.name}</span>
             <span className="shrink-0 tabular-nums">{u.progress}%</span>
             {onMove && u.status !== 'done' && u.status !== 'uploading' ? (

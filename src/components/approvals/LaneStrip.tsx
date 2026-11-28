@@ -1,9 +1,9 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { ChevronLeft, ChevronRight } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { useApprovalsStore } from '@/lib/approvals/store';

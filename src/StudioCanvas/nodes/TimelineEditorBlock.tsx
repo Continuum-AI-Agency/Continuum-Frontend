@@ -16,22 +16,22 @@ import {
   useEdges,
   useNodeId,
 } from '@xyflow/react';
-import {
-  Copy,
-  Diamond,
-  Download,
-  ExternalLink,
-  Library,
-  Play,
-  SquarePen,
-  Trash2,
-  Video,
-} from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
+import {
+  ArrowDownToLine,
+  Copy,
+  Diamond,
+  Library,
+  Play,
+  SquareArrowOutUpRight,
+  SquarePen,
+  Trash2,
+  Video,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -580,7 +580,7 @@ export function TimelineEditorBlock({
                           title={translateUi('download_output_446be1d3')}
                           aria-label={translateUi('download_edited_video_dfbb7382')}
                         >
-                          <Download className="h-4 w-4" />
+                          <ArrowDownToLine className="h-4 w-4" />
                         </Button>
                       </>
                     ) : (
@@ -624,7 +624,7 @@ export function TimelineEditorBlock({
                       <span className="font-medium text-foreground">
                         {translateUi('saved_to_library_7ffd8133')}
                       </span>
-                      <ExternalLink className="ml-auto h-3 w-3" />
+                      <SquareArrowOutUpRight className="ml-auto h-3 w-3" />
                     </a>
                   ) : null}
 
@@ -732,7 +732,7 @@ export function TimelineEditorBlock({
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
+            <ArrowDownToLine className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem

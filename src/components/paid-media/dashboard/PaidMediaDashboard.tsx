@@ -1,12 +1,12 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { Bell, Calendar as CalendarIcon, Info, Plus, RotateCw } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { DateRange } from 'react-day-picker';
 import { PendingActivityTabs } from '@/components/approvals/PendingActivityTabs';
+import { Bell, Calendar as CalendarIcon, Info, Plus, RotateCw } from '@/components/icons';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 
 import { Button } from '@/components/ui/button';

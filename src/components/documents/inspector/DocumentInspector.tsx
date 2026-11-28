@@ -15,23 +15,23 @@ import {
   type DocumentRegionCategory,
   regionForPassage,
 } from '@continuum/contracts';
+import { motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertCircle,
+  CircleAlert as AlertCircle,
   Braces,
   Check,
   ChevronLeft,
   ChevronRight,
   CircleCheck,
   CircleDashed,
-  Download,
+  ArrowDownToLine as Download,
   FileText,
   Info,
-  Loader2,
+  Spinner as Loader2,
   RotateCw,
-} from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';

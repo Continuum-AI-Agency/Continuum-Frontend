@@ -5,8 +5,8 @@ import { useTranslations } from 'next-intl';
 // "Viewing as …" on an open link: a viewer may leave just a name, which tags
 // their activity for the owner. Optional — the page works without it.
 
-import { UserRound } from 'lucide-react';
 import { useActionState } from 'react';
+import { UserRound } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { setViewerName, type ViewerNameActionState } from './actions';

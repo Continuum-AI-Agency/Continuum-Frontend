@@ -6,21 +6,21 @@ import type {
   RenderApprovalDecidedVia,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  Loader2,
-  Package,
-  Play,
-  ShieldCheck,
-  XCircle,
-} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import { OpenInLibrary } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { thumbnailSrc } from '@/components/forge/renderOutputMedia';
+import {
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  Clock,
+  Package,
+  Play,
+  ShieldCheck,
+  Spinner,
+} from '@/components/icons';
 import { VideoStill } from '@/components/media/VideoStill';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -315,9 +315,9 @@ function ApprovalCard({
           <div className="flex flex-wrap gap-2 pt-1">
             <Button size="sm" disabled={busy} onClick={() => onDecide(approval.id, 'approve')}>
               {busy ? (
-                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                <Spinner className="mr-1 h-3 w-3 animate-spin" />
               ) : (
-                <CheckCircle2 className="mr-1 h-3 w-3" />
+                <CircleCheck className="mr-1 h-3 w-3" />
               )}{' '}
               {translateUi('approve_and_publish_paused_ad6bf111')}
             </Button>
@@ -327,7 +327,7 @@ function ApprovalCard({
               disabled={busy}
               onClick={() => onDecide(approval.id, 'reject')}
             >
-              <XCircle className="mr-1 h-3 w-3" /> {translateUi('reject_ab604a36')}
+              <CircleX className="mr-1 h-3 w-3" /> {translateUi('reject_ab604a36')}
             </Button>
           </div>
         ) : null}
@@ -395,9 +395,9 @@ function ApprovalPackage({
               onClick={() => onDecideAll(packageId, pendingIds, 'approve')}
             >
               {deciding ? (
-                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                <Spinner className="mr-1 h-3 w-3 animate-spin" />
               ) : (
-                <CheckCircle2 className="mr-1 h-3 w-3" />
+                <CircleCheck className="mr-1 h-3 w-3" />
               )}{' '}
               {translateUi('approve_all_ae067b68')} {waiting}
             </Button>
@@ -407,7 +407,7 @@ function ApprovalPackage({
               disabled={busyId !== null}
               onClick={() => onDecideAll(packageId, pendingIds, 'reject')}
             >
-              <XCircle className="mr-1 h-3 w-3" /> {translateUi('reject_all_adba2523')}
+              <CircleX className="mr-1 h-3 w-3" /> {translateUi('reject_all_adba2523')}
             </Button>
           </span>
         ) : null}

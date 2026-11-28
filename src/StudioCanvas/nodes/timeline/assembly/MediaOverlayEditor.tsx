@@ -8,9 +8,9 @@ import {
   MOTION_BEZIER_PRESETS,
   MOTION_SPRING_PRESETS,
 } from '@continuum/contracts';
-import { Diamond, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { Diamond, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { SliderField } from '@/components/ui/slider-field';

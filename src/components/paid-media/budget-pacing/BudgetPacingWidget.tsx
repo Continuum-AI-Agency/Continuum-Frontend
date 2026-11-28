@@ -1,9 +1,9 @@
 'use client';
 
-import { RotateCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { RotateCw } from '@/components/icons';
 import type { PaidPerformanceMetricKey } from '@/components/paid-media/PaidMediaReportingWidget';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';

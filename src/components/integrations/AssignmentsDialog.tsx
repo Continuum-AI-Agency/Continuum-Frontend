@@ -1,10 +1,10 @@
 'use client';
 
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
-import { Loader2, Plug, Search, TriangleAlert, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { applyBrandIntegrationAssignmentsAction } from '@/app/[locale]/(post-auth)/settings/integrations/actions';
+import { Plug, Search, Spinner, TriangleAlert, X } from '@/components/icons';
 import { AssignmentAccountList } from '@/components/integrations/internal/AssignmentAccountList';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -300,7 +300,7 @@ export function AssignmentsDialog({
 
             {isResyncing ? (
               <Alert className="py-2">
-                <Loader2 className="animate-spin" />
+                <Spinner className="animate-spin" />
                 <AlertDescription>{uiText('m_203e9def72')}</AlertDescription>
               </Alert>
             ) : resyncError ? (
@@ -387,7 +387,7 @@ export function AssignmentsDialog({
             <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
               {isSaving ? (
                 <>
-                  <Loader2 className="size-4 animate-spin" />
+                  <Spinner className="size-4 animate-spin" />
                   {uiText('m_369c534df3')}
                 </>
               ) : (

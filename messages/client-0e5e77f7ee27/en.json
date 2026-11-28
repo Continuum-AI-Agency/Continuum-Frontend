@@ -34,6 +34,7 @@
     "requestCancelled": "The request was cancelled.",
     "requestTimedOut": "This request took too long. Please try again.",
     "resourceNotFound": "This item is no longer available.",
+    "save": "Save",
     "search": "Search",
     "serviceUnavailable": "The service is temporarily unavailable. Please try again shortly.",
     "unexpectedError": "An unexpected error occurred. Please try again.",

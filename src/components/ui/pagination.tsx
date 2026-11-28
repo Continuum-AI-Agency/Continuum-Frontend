@@ -1,9 +1,9 @@
 import { mergeProps } from '@base-ui/react/merge-props';
 import { useRender } from '@base-ui/react/use-render';
-import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { isValidElement } from 'react';
+import { ChevronLeft, ChevronRight, MoreHorizontal } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

@@ -2,9 +2,9 @@
 
 import type { ForgeRenderSet, ForgeRenderSetRevision } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Spinner } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import {
@@ -61,7 +61,7 @@ export function SetHistoryDialog({
         </DialogHeader>
         {history.isLoading ? (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
+            <Spinner className="size-3.5 animate-spin" aria-hidden />{' '}
             {translateUi('loading_versions_9780e2c9')}
           </p>
         ) : history.isError ? (
@@ -109,7 +109,7 @@ export function SetHistoryDialog({
                   }}
                 >
                   {restoring === revision.revision ? (
-                    <Loader2 className="animate-spin" data-icon="inline-start" />
+                    <Spinner className="animate-spin" data-icon="inline-start" />
                   ) : null}{' '}
                   {translateUi('restore_as_new_set_63d4d167')}
                 </Button>

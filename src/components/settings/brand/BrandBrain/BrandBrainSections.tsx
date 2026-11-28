@@ -1,9 +1,9 @@
 'use client';
 
 import type { BrandColorToken, BrandFontToken } from '@continuum/contracts';
-import { Plus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from 'react';
+import { Plus, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';

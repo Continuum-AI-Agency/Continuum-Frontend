@@ -1,11 +1,11 @@
 'use client';
 
 import type { Skill } from '@continuum/contracts';
-import { Sparkles, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { SkillConfigPreview } from '@/components/brand/GenerationConfigPreview';
+import { Sparkles, Wand2 } from '@/components/icons';
 import {
   Command,
   CommandEmpty,

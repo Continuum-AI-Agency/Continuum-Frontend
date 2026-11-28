@@ -10,12 +10,12 @@ import {
   type PipelinePortBinding,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Upload, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { elementCategoryLabel } from '@/components/ai-studio/elements/elementPresentation';
+import { ArrowUpFromLine, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -980,7 +980,7 @@ export function SaveWorkflowDialog({
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <Upload className="mr-2 h-4 w-4" /> {translateUi('save_1509f561')}
+            <ArrowUpFromLine className="mr-2 h-4 w-4" /> {translateUi('save_1509f561')}
           </Button>
         }
       />

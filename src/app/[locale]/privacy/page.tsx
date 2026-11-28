@@ -1,6 +1,6 @@
-import { ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { useFormatter, useTranslations } from 'next-intl';
+import { ArrowLeft } from '@/components/icons';
 import { Link } from '@/i18n/navigation';
 import { LOGIN_GLOW_GRADIENT } from '@/lib/ui/backgrounds';
 

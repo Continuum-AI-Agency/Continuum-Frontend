@@ -26,7 +26,6 @@
 
 import { Slider as SliderPrimitive } from '@base-ui/react/slider';
 import Color from 'color';
-import { PipetteIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   createContext,
@@ -39,6 +38,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Pipette } from '@/components/icons';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -331,7 +331,7 @@ function ColorPickerEyeDropper() {
       type="button"
       variant="outline"
     >
-      <PipetteIcon className="size-3.5" />
+      <Pipette className="size-3.5" />
     </Button>
   );
 }

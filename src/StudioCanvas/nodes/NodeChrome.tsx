@@ -6,8 +6,8 @@
 // chrome; everything below it is edge-to-edge, and controls float over the surface
 // (the ImageNode/VideoGenBlock pattern) rather than taking a row of their own.
 
-import type { LucideIcon } from 'lucide-react';
 import type React from 'react';
+import type { IconComponent } from '@/components/icons';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -37,7 +37,7 @@ export function NodeTitleBar({
   className,
   children,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   /** Hover text — descriptions belong here, not in a row that costs 20px forever. */
   title?: string;

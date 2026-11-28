@@ -10,7 +10,7 @@ import { useTranslations } from 'next-intl';
 // line, the Explain link — never in its box. Its evidence picture (./CardBand) opens under it.
 // The line's columns are decided in ./cardShape.
 
-import { ExternalLinkIcon, SparklesIcon } from 'lucide-react';
+import { Sparkles, SquareArrowOutUpRight } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { TEXT_DISCLOSURE } from '../../../components/disclosure';
@@ -146,7 +146,7 @@ export function NewsCard({
         ) : null}
         {/* `text-primary-ink` is this app's foreground utility; Jaina speaks in the brand colour. */}
         <p className="inline-flex flex-wrap items-center gap-x-1.5 text-(--primary) text-xs">
-          <SparklesIcon aria-hidden className="size-3" />
+          <Sparkles aria-hidden className="size-3" />
           <span>
             {uiText.rich('sentence_c3573f4da315', {
               v0: draft ? uiText('draft_read_7fab69a') : '',
@@ -160,7 +160,7 @@ export function NewsCard({
             href={explainHref}
           >
             {uiText('explain_with_jaina_396f116')}
-            <ExternalLinkIcon aria-hidden className="size-3" />
+            <SquareArrowOutUpRight aria-hidden className="size-3" />
           </a>
         </p>
         <FindingEvidence card={card} currency={currency} resultLabel={resultLabel} />

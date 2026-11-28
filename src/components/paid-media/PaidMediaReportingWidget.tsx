@@ -1,10 +1,10 @@
 'use client';
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
-import { PieChart, RotateCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import { ChartPie, RotateCw } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
 import { figureProps, formatCurrency } from '@/components/paid-media/optimizer/format';
@@ -567,7 +567,7 @@ export function PaidMediaReportingWidget({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Pill variant="teal">
-                <PieChart />
+                <ChartPie />
               </Pill>
               <div>
                 <span className="font-medium">{uiText('paid_media_performance_0874e5e')}</span>

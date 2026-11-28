@@ -11,9 +11,9 @@ import {
   storageQuotaLevel,
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { ArrowUpRight } from '@/components/icons';
 import {
   formatGb,
   StorageQuotaMeterView,

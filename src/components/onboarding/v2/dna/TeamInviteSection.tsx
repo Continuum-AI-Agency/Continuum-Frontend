@@ -1,6 +1,5 @@
 'use client';
 
-import { Check, CircleNotch, Envelope, Sparkle, Users, X } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
@@ -8,6 +7,7 @@ import {
   createMagicLinkAction,
   revokeInviteAction,
 } from '@/app/[locale]/(post-auth)/settings/actions';
+import { Check, Mail, Sparkles, Spinner, Users, X } from '@/components/icons';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -170,7 +170,7 @@ export function TeamInviteSection() {
               transition={{ duration: 0.22, ease: ENTER_EASE }}
               className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--cs-teal,#0daea2)_14%,transparent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-[var(--cs-teal,#0daea2)]"
             >
-              <Check className="h-2.5 w-2.5" weight="bold" />
+              <Check className="h-2.5 w-2.5" strokeWidth={3} />
               {sentInvites.length}
               {tUi('m_4641fb82c9')}
             </motion.span>
@@ -198,7 +198,7 @@ export function TeamInviteSection() {
                 'pointer-events-none absolute left-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 border-dashed text-2xs font-semibold',
               )}
             >
-              {emailValid ? previewInitials : <Envelope className="h-3.5 w-3.5" aria-hidden />}
+              {emailValid ? previewInitials : <Mail className="h-3.5 w-3.5" aria-hidden />}
             </motion.div>
             <Input
               id="onboarding-invite-email"
@@ -276,7 +276,7 @@ export function TeamInviteSection() {
                   exit={{ opacity: 0 }}
                   className="inline-flex items-center gap-2"
                 >
-                  <CircleNotch className="h-3.5 w-3.5 animate-spin" />
+                  <Spinner className="h-3.5 w-3.5 animate-spin" />
                   {tUi('m_6da2dfbf47')}
                 </motion.span>
               ) : justSent ? (
@@ -288,7 +288,7 @@ export function TeamInviteSection() {
                   transition={{ duration: 0.18, ease: ENTER_EASE }}
                   className="inline-flex items-center gap-2"
                 >
-                  <Check className="h-4 w-4" weight="bold" />
+                  <Check className="h-4 w-4" strokeWidth={3} />
                   {tUi('m_c484ac0615')}
                 </motion.span>
               ) : (
@@ -299,7 +299,7 @@ export function TeamInviteSection() {
                   exit={{ opacity: 0 }}
                   className="inline-flex items-center gap-2"
                 >
-                  <Sparkle className="h-3.5 w-3.5" />
+                  <Sparkles className="h-3.5 w-3.5" />
                   {tUi('m_11a4b1afe5')}
                 </motion.span>
               )}

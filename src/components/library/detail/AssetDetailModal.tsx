@@ -26,9 +26,9 @@ import {
   commentDeepLinkFromAnnotation,
   previewFrameSpec,
 } from '@continuum/contracts';
-import { ChevronLeft, ChevronRight, Columns2, Layers3 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Columns2, Layers2 } from '@/components/icons';
 import { ProvenancePanel } from '@/components/library/detail/ProvenancePanel';
 import { viewerFamily } from '@/components/library/viewers';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -696,7 +696,7 @@ function AssetDetailDialog({
                     <ChevronLeft className="size-4" />
                   </button>
                   <span className="flex min-w-16 items-center justify-center gap-1 text-xs tabular-nums text-muted-foreground">
-                    <Layers3 className="size-3.5" />
+                    <Layers2 className="size-3.5" />
                     {carouselSlideIndex + 1}/{asset.carousel.slides.length}
                   </span>
                   <button

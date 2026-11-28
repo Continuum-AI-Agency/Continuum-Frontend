@@ -4,13 +4,13 @@ import {
   CircleDollarSign,
   Hash,
   Heading,
-  ImageIcon,
-  type LucideIcon,
+  Image as ImageIcon,
+  type IconComponent as LucideIcon,
   PenLine,
   Square,
   Table2,
   UserRound,
-} from 'lucide-react';
+} from '@/components/icons';
 
 /** Each category's colour is a chart token, so it follows the theme in light and dark. */
 export const REGION_STYLE: Record<DocumentRegionCategory, { color: string; icon: LucideIcon }> = {

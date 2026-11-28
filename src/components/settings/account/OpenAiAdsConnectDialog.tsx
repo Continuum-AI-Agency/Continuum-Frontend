@@ -16,8 +16,8 @@ import { useUiErrorMessage } from '@/i18n/errors';
  * a broken product rather than a phone call.
  */
 
-import { CheckCircle2, Loader2 } from 'lucide-react';
 import React from 'react';
+import { CircleCheck, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -130,9 +130,9 @@ export function OpenAiAdsConnectDialog({
             </Button>
             <Button type="submit" disabled={connect.isPending || apiKey.trim().length < 8}>
               {connect.isPending ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                <CircleCheck className="mr-1.5 h-3.5 w-3.5" />
               )}
               {tUi('m_6394aacb69')}
             </Button>

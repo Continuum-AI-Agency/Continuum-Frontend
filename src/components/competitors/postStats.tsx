@@ -1,12 +1,13 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
+
 // The numbers an Inspiration post is judged by, shared by the tile face and the
 // Analyse panel: its outlier multiple against its own account, and its public
 // views / likes / comments (Instagram has views on reels only; YouTube on every video).
 
-import { Eye, Heart, MessageCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { Eye, Heart, MessageCircle } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { type CompetitorPostView, formatOutlier } from './competitorPostView';
 

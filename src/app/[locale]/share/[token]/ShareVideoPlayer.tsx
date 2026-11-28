@@ -16,8 +16,8 @@ import { useTranslations } from 'next-intl';
 // so a comment looks and behaves identically wherever a video is reviewed.
 
 import type { DrawingShape } from '@continuum/contracts';
-import { Pause, Play, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pause, Play, X } from '@/components/icons';
 import { StaticMarks } from '@/components/library/detail/annotation/StaticMarks';
 import { formatTimecode } from '@/components/library/detail/annotationGeometry';
 import {

@@ -1,9 +1,9 @@
 'use client';
 
 import type { HeadlessBatchQuote, MediaCostPlan } from '@continuum/contracts';
-import { Check, TriangleAlert, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useId } from 'react';
+import { Check, TriangleAlert, X } from '@/components/icons';
 import { AgentButton, AgentDecisionCard } from '@/components/shared/agent-cards/agentCardKit';
 import { MediaCostPlanList } from '@/components/shared/agent-cards/MediaCostPlanList';
 import { CardContent, CardFooter } from '@/components/ui/card';

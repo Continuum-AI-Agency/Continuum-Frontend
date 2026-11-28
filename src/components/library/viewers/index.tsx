@@ -16,10 +16,10 @@ import type {
   OrbitAnchor,
 } from '@continuum/contracts';
 import { viewerFamily } from '@continuum/contracts';
-import { Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
+import { Spinner } from '@/components/icons';
 import { persistAssetRendition } from '@/lib/library/assetPreview';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { OverlayPin, SpatialAnnotation } from '../detail/AnnotationOverlay';
@@ -64,7 +64,7 @@ function StageSpinner() {
       data-testid="family-viewer-loading"
       className="flex size-full items-center justify-center text-muted-foreground"
     >
-      <Loader2 className="size-6 animate-spin" />
+      <Spinner className="size-6 animate-spin" />
     </div>
   );
 }

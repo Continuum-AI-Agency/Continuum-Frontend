@@ -8,17 +8,17 @@
 // place into its ad set; then the daily total with its split; then one card per ad set (or a
 // table past LECTURA_TABLE_THRESHOLD ad sets). Read-only: approving stays on the chat card.
 
-import {
-  ChevronDown,
-  ChevronRight,
-  ImageIcon,
-  Images,
-  PanelRightOpen,
-  PlayCircle,
-} from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Image,
+  Images,
+  PanelRightOpen,
+  PlayCircle,
+} from '@/components/icons';
 import {
   type BudgetSlice,
   humanStatus,
@@ -136,13 +136,13 @@ function Rows({ rows }: { rows: LecturaRow[] }) {
   );
 }
 
-const KIND_ICON = { image: ImageIcon, video: PlayCircle, carousel: Images } as const;
+const KIND_ICON = { image: Image, video: PlayCircle, carousel: Images } as const;
 
 /** Meta says ACTIVE, Google ENABLED: delivering needs no word of its own. */
 const DELIVERING_STATUS = new Set(['ACTIVE', 'ENABLED']);
 
 function AdThumb({ ad }: { ad: LecturaAd }) {
-  const Icon = ad.creativeKind ? KIND_ICON[ad.creativeKind] : ImageIcon;
+  const Icon = ad.creativeKind ? KIND_ICON[ad.creativeKind] : Image;
   // A signed thumbnail URL expires; a broken image reads worse than the typed placeholder.
   const [failed, setFailed] = React.useState(false);
   return ad.thumbnailUrl && !failed ? (

@@ -6,6 +6,14 @@ import {
   type LiveChangePreviewPayload,
 } from '@continuum/contracts';
 import { ReactFlowProvider } from '@xyflow/react';
+import { AnimatePresence, motion } from 'motion/react';
+import dynamic from 'next/dynamic';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import * as React from 'react';
+import { CampaignCreativeActionsProvider } from '@/CampaignCanvas/components/CampaignCreativeActions';
+import { useDeployRequest } from '@/CampaignCanvas/hooks/useDeployRequest';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import {
   Bot,
   FileText,
@@ -17,15 +25,7 @@ import {
   PanelRightOpen,
   Sparkles,
   Target,
-} from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import dynamic from 'next/dynamic';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
-import * as React from 'react';
-import { CampaignCreativeActionsProvider } from '@/CampaignCanvas/components/CampaignCreativeActions';
-import { useDeployRequest } from '@/CampaignCanvas/hooks/useDeployRequest';
-import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
+} from '@/components/icons';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
 import { CampaignsTabSkeleton } from '@/components/paid-media/campaigns/CampaignsTabSkeleton';
 import { usePrefetchScaleCampaigns } from '@/components/paid-media/campaigns/usePrefetchScaleCampaigns';

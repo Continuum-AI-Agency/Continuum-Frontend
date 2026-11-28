@@ -7,11 +7,11 @@ import {
   templateDisplayName,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clapperboard, Redo2, RotateCcw, Undo2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useReducer, useState } from 'react';
 import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { ArrowLeft, Clapperboard, Redo2, RotateCcw, Undo2 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';

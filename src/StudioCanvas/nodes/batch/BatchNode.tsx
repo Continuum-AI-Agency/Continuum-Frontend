@@ -25,12 +25,11 @@ import {
   MAX_BATCH_ITEMS,
 } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
-import { Layers, Table, Upload, X } from 'lucide-react';
 import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { ArrowUpFromLine, Layers2, Table, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -430,7 +429,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        <NodeTitleBar icon={Layers} label={translateUi('batch_320b5d80')}>
+        <NodeTitleBar icon={Layers2} label={translateUi('batch_320b5d80')}>
           <NodeBadge data-testid="batch-node-kind">
             {itemType
               ? translateUi('batchKinds', { kind: itemType })
@@ -563,7 +562,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 fileInputRef.current?.click();
               }}
             >
-              <Upload className="size-3" /> {translateUi('upload_865e89de')}
+              <ArrowUpFromLine className="size-3" /> {translateUi('upload_865e89de')}
             </Button>
             <Button
               variant="outline"

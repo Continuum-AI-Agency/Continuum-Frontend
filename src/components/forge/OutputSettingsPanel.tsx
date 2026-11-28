@@ -19,9 +19,9 @@ import {
   unflattenEncodeSettings,
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, RotateCcw, X } from 'lucide-react';
 import { useFormatter, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
+import { RotateCcw, Spinner, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -591,7 +591,7 @@ export function OutputSettingsPanel({
           onClick={save}
           className="gap-1.5"
         >
-          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+          {saving ? <Spinner className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
           {translateUi('save_1509f561')}
         </Button>
       </div>

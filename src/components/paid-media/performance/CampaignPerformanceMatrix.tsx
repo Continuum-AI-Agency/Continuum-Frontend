@@ -1,8 +1,8 @@
 'use client';
 
-import { ArrowDownIcon, ArrowUpIcon, MinusIcon } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
+import { ArrowDown, ArrowUp, Minus } from '@/components/icons';
 
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -167,9 +167,9 @@ export function CampaignPerformanceMatrix({
                     {candidate.shortLabel}
                     {metric === candidate.key ? (
                       candidate.direction === 'lower' ? (
-                        <ArrowDownIcon className="h-3 w-3" />
+                        <ArrowDown className="h-3 w-3" />
                       ) : (
-                        <ArrowUpIcon className="h-3 w-3" />
+                        <ArrowUp className="h-3 w-3" />
                       )
                     ) : null}
                   </button>
@@ -311,7 +311,7 @@ function SignalChip({ status, deltaPct, tone }: SignalChipProps) {
   const uiLocale = useLocale();
   const uiText = useTranslations('scale');
   const label = formatDeltaPct(deltaPct, uiLocale);
-  const Glyph = tone === 'positive' ? ArrowUpIcon : tone === 'negative' ? ArrowDownIcon : MinusIcon;
+  const Glyph = tone === 'positive' ? ArrowUp : tone === 'negative' ? ArrowDown : Minus;
   const statusLabelText =
     status === 'strong'
       ? uiText('heatmapStrong')

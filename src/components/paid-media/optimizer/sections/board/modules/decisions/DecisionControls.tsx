@@ -6,17 +6,17 @@
 // recommendation as rejected. Copy reports what the clipboard did. A control with no wiring is
 // a disabled button that says why, on hover and on focus.
 
-import {
-  CheckIcon,
-  ClockIcon,
-  CopyIcon,
-  ExternalLinkIcon,
-  LockIcon,
-  PlusIcon,
-  WrenchIcon,
-} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  Check as CheckIcon,
+  Clock as ClockIcon,
+  Copy as CopyIcon,
+  SquareArrowOutUpRight as ExternalLinkIcon,
+  Lock as LockIcon,
+  Plus as PlusIcon,
+  Wrench as WrenchIcon,
+} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';

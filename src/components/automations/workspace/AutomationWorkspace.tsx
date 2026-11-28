@@ -21,33 +21,32 @@ import {
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
-import {
-  AlertCircle,
-  Beaker,
-  Cable,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  CirclePause,
-  CirclePlay,
-  Cloud,
-  Lock,
-  PanelLeftClose,
-  PanelRightClose,
-  Save,
-  Search,
-  ShieldCheck,
-  Unlock,
-  X,
-} from 'lucide-react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Connection as CanvasConnection } from '@/components/ai-elements/connection';
 import { Controls as CanvasControls } from '@/components/ai-elements/controls';
 import { Panel as CanvasPanel } from '@/components/ai-elements/panel';
+import {
+  Beaker,
+  Cable,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  CirclePause,
+  CirclePlay,
+  Cloud,
+  Lock,
+  LockOpen,
+  PanelLeftClose,
+  PanelRightClose,
+  Save,
+  Search,
+  ShieldCheck,
+  X,
+} from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -1030,7 +1029,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                   {activeOperation === 'unpublish' ? (
                     <Spinner data-icon="inline-start" />
                   ) : (
-                    <Unlock data-icon="inline-start" />
+                    <LockOpen data-icon="inline-start" />
                   )}
                   <span className="hidden xl:inline">{uiText('unpublish_to_edit_ef91531')}</span>
                   <span className="xl:hidden">{uiText('unpublish_2db04a5')}</span>
@@ -1076,7 +1075,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
               >
                 <Alert className="rounded-none border-0 px-4 py-2">
                   {testResult?.nodeExecutions.some((execution) => execution.status === 'failed') ? (
-                    <AlertCircle aria-hidden="true" />
+                    <CircleAlert aria-hidden="true" />
                   ) : (
                     <Check aria-hidden="true" />
                   )}
@@ -1374,7 +1373,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                       ) : validation.ok ? (
                         <ShieldCheck className="size-4 text-success" aria-hidden="true" />
                       ) : (
-                        <AlertCircle className="size-4 text-destructive" aria-hidden="true" />
+                        <CircleAlert className="size-4 text-destructive" aria-hidden="true" />
                       )}
                       <span className="text-xs font-medium">
                         {connectionFeedback ??

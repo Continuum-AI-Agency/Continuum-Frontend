@@ -6,9 +6,9 @@ import type {
   EditorProjectV2,
   MotionStyleId,
 } from '@continuum/contracts';
-import { ChevronDown, ChevronRight, Pause, Play } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState, useMemo as useUiConfigMemo } from 'react';
+import { ChevronDown, ChevronRight, Pause, Play } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';

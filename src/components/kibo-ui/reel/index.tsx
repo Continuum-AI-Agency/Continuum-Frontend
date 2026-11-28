@@ -1,6 +1,5 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import type {
@@ -11,6 +10,7 @@ import type {
   VideoHTMLAttributes,
 } from 'react';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeOff } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useControllableState } from '@/hooks/useControllableState';
@@ -571,7 +571,7 @@ export const ReelMuteButton = ({ className, children, ...props }: ReelMuteButton
       variant="ghost"
       {...props}
     >
-      {children || (isMuted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />)}
+      {children || (isMuted ? <VolumeOff className="size-4" /> : <Volume2 className="size-4" />)}
     </Button>
   );
 };

@@ -1,8 +1,7 @@
 'use client';
-import { Image, Video, Wand2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-
 import React from 'react';
+import { Image, Video, Wand2 } from '@/components/icons';
 import { ErrorRetryState } from '@/components/shared/state';
 import { cn } from '@/lib/utils';
 

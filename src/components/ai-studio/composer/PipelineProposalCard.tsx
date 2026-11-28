@@ -7,12 +7,12 @@
 import type { PipelinePublicationResponse } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Workflow } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { PipelineContract } from '@/components/ai-studio/PipelineContract';
+import { Workflow } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -9,7 +9,6 @@ import { useUiErrorMessage } from '@/i18n/errors';
 // component onboarding-agnostic: callers supply the brand id, optional header
 // chrome, an optional footer, and an optional telemetry sink.
 
-import { Loader2, Plug, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
   type ReactElement,
@@ -20,6 +19,7 @@ import {
   useTransition,
 } from 'react';
 import { applyBrandIntegrationAssignmentsAction } from '@/app/[locale]/(post-auth)/settings/integrations/actions';
+import { Plug, Plus, Spinner } from '@/components/icons';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
   isProviderComingSoon,
@@ -333,7 +333,7 @@ function ProviderConnectMenu({
                       disabled={syncing}
                     >
                       {syncing ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Spinner className="h-3 w-3 animate-spin" />
                       ) : (
                         <Plus className="h-3 w-3" />
                       )}
@@ -383,7 +383,7 @@ function ProviderConnectMenu({
                     disabled={syncing}
                   >
                     {syncing ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Spinner className="h-3 w-3 animate-spin" />
                     ) : (
                       <Plus className="h-3 w-3" />
                     )}

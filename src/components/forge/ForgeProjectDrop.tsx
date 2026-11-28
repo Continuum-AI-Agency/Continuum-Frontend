@@ -6,10 +6,10 @@ import {
   LIBRARY_PRESENTATION_MAX_BYTES,
   type TemplateSourceSummary,
 } from '@continuum/contracts';
-import { FileUp, FolderUp } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { NewPresentationButton } from '@/components/forge/presentations/NewPresentationButton';
+import { FileUp, FolderUp } from '@/components/icons';
 import { FigmaImportDialog } from '@/components/library/FigmaImportDialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';

@@ -1,16 +1,17 @@
 'use client';
 
-import {
-  BarChart3Icon,
-  MapPinIcon,
-  PaletteIcon,
-  RotateCw,
-  UsersIcon,
-  WalletIcon,
-} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useMemo } from 'react';
+import {
+  BarChart3,
+  type IconComponent,
+  MapPin,
+  Palette,
+  RotateCw,
+  Users,
+  Wallet,
+} from '@/components/icons';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -58,32 +59,32 @@ export function CampaignInsightsPanel({
   const CATEGORY_CONFIG: ReadonlyArray<{
     key: InsightCategory;
     title: string;
-    icon: typeof BarChart3Icon;
+    icon: IconComponent;
     accent: string;
   }> = useMemo(
     () => [
       {
         key: 'budget',
         title: uiText('budget_pace_d212d0e'),
-        icon: WalletIcon,
+        icon: Wallet,
         accent: 'bg-emerald-500/90',
       },
       {
         key: 'placements',
         title: uiText('placement_platform_b564342'),
-        icon: MapPinIcon,
+        icon: MapPin,
         accent: 'bg-blue-500/90',
       },
       {
         key: 'audiences',
         title: uiText('audiences_9e3922b'),
-        icon: UsersIcon,
+        icon: Users,
         accent: 'bg-amber-500/90',
       },
       {
         key: 'creative',
         title: uiText('creative_visual_bad9617'),
-        icon: PaletteIcon,
+        icon: Palette,
         accent: 'bg-rose-500/90',
       },
     ],
@@ -112,7 +113,7 @@ export function CampaignInsightsPanel({
       <SectionHeader
         title={
           <span className="flex items-center gap-2">
-            <BarChart3Icon className="size-4 text-muted-foreground" />
+            <BarChart3 className="size-4 text-muted-foreground" />
             {uiText('campaign_insights_af8b36b')}
           </span>
         }

@@ -7,9 +7,9 @@
 // draws each finding the account has, and closes with one sentence built from its figures.
 
 import type { BoardModuleSize } from '@continuum/contracts';
-import { LockIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
+import { Lock } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { type FigureWindow, figureProps, formatCurrency } from '../../../../format';
@@ -495,7 +495,7 @@ function FunnelSection({
               className="flex items-start gap-1.5 text-muted-foreground text-xs"
               data-testid="signal-blocked"
             >
-              <LockIcon aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
+              <Lock aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
               <span>{funnel.blocked}</span>
             </p>
           ) : null}

@@ -5,10 +5,10 @@
 // write: export the list as a CSV written in the browser, and send the brand's existing
 // Continuum Report email (SendContinuumReportDialog, used as is).
 
-import { DownloadIcon, SendIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
+import { ArrowDownToLine, Send } from '@/components/icons';
 import { parseReport } from '@/components/paid-media/optimizer/reportModel';
 import { useOptimizerPerformance } from '@/components/paid-media/optimizer/useOptimizerData';
 import { Button } from '@/components/ui/button';
@@ -158,7 +158,7 @@ export default function ChecklistModule({
           type="button"
           variant="outline"
         >
-          <DownloadIcon aria-hidden="true" />
+          <ArrowDownToLine aria-hidden="true" />
           {uiText('export_checklist_09e21c4')}
         </Button>
         <Button
@@ -171,7 +171,7 @@ export default function ChecklistModule({
           type="button"
           variant="ghost"
         >
-          <SendIcon aria-hidden="true" />
+          <Send aria-hidden="true" />
           {uiText('send_by_email_436a04a')}
         </Button>
       </div>

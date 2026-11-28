@@ -19,8 +19,14 @@ import {
   isDescribedCompetitorPostAnalysis,
 } from '@continuum/contracts';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowRight, ExternalLink, LibraryBig, RotateCw, Sparkles } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import {
+  ArrowRight,
+  SquareArrowOutUpRight as ExternalLink,
+  Library as LibraryBig,
+  RotateCw,
+  Sparkles,
+} from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Sheet,

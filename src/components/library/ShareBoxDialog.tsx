@@ -1,8 +1,8 @@
 'use client';
 
-import { Check, Copy } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Check, Copy } from '@/components/icons';
 import { ShareLinkPanel } from '@/components/library/share/ShareLinkPanel';
 import { shareTokenFromUrl } from '@/components/library/share/shareLinkClient';
 import { Button } from '@/components/ui/button';

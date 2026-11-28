@@ -1,6 +1,6 @@
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import type {
   DailyMetric,

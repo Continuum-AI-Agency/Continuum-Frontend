@@ -13,9 +13,9 @@ import {
   canvasLibrarySource,
   type MediaAsset,
 } from '@continuum/contracts';
-import { ExternalLink, Loader2, Workflow } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState, useMemo as useUiConfigMemo } from 'react';
+import { Spinner, SquareArrowOutUpRight, Workflow } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -168,7 +168,7 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
           render={
             <Button variant="outline" size="sm" disabled={busy}>
               {busy ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                <Spinner className="size-3.5 animate-spin" aria-hidden />
               ) : (
                 <Workflow className="size-3.5" aria-hidden />
               )}{' '}
@@ -238,7 +238,7 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
 
       {derived.length > 0 ? (
         <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-          <ExternalLink className="size-3" aria-hidden />
+          <SquareArrowOutUpRight className="size-3" aria-hidden />
           {derived.length} {translateUi('canvas_output_6ea6c6b3')}
           {derived.length === 1 ? '' : 's'}
         </span>

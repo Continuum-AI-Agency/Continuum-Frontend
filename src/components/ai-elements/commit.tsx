@@ -1,8 +1,8 @@
 'use client';
 
-import { CheckIcon, CopyIcon, FileIcon, GitCommitIcon, MinusIcon, PlusIcon } from 'lucide-react';
 import type { ComponentProps, HTMLAttributes } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, Copy, File, GitCommitHorizontal, Minus, Plus } from '@/components/icons';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -38,7 +38,7 @@ export type CommitHashProps = HTMLAttributes<HTMLSpanElement>;
 
 export const CommitHash = ({ className, children, ...props }: CommitHashProps) => (
   <span className={cn('font-mono text-xs', className)} {...props}>
-    <GitCommitIcon className="mr-1 inline-block size-3" />
+    <GitCommitHorizontal className="mr-1 inline-block size-3" />
     {children}
   </span>
 );
@@ -180,7 +180,7 @@ export const CommitCopyButton = ({
     [],
   );
 
-  const Icon = isCopied ? CheckIcon : CopyIcon;
+  const Icon = isCopied ? Check : Copy;
 
   return (
     <Button
@@ -265,10 +265,10 @@ export const CommitFileStatus = ({
   </span>
 );
 
-export type CommitFileIconProps = ComponentProps<typeof FileIcon>;
+export type CommitFileIconProps = ComponentProps<typeof File>;
 
 export const CommitFileIcon = ({ className, ...props }: CommitFileIconProps) => (
-  <FileIcon className={cn('size-3.5 shrink-0 text-muted-foreground', className)} {...props} />
+  <File className={cn('size-3.5 shrink-0 text-muted-foreground', className)} {...props} />
 );
 
 export type CommitFilePathProps = HTMLAttributes<HTMLSpanElement>;
@@ -305,7 +305,7 @@ export const CommitFileAdditions = ({
     <span className={cn('text-green-600 dark:text-green-400', className)} {...props}>
       {children ?? (
         <>
-          <PlusIcon className="inline-block size-3" />
+          <Plus className="inline-block size-3" />
           {count}
         </>
       )}
@@ -331,7 +331,7 @@ export const CommitFileDeletions = ({
     <span className={cn('text-red-600 dark:text-red-400', className)} {...props}>
       {children ?? (
         <>
-          <MinusIcon className="inline-block size-3" />
+          <Minus className="inline-block size-3" />
           {count}
         </>
       )}

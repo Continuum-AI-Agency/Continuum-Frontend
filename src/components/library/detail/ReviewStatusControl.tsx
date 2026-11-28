@@ -17,9 +17,9 @@ import type {
   ReviewStateLabel,
   VersionReviewState,
 } from '@continuum/contracts';
-import { ChevronDown, Download, History, Loader2, Palette } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowDownToLine, ChevronDown, History, Palette, Spinner } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import {
@@ -296,7 +296,7 @@ export function ReviewStatusControl({
             >
               <Pill variant="secondary" className="cursor-pointer select-none">
                 {saving ? (
-                  <Loader2 className="size-3 animate-spin" />
+                  <Spinner className="size-3 animate-spin" />
                 ) : (
                   <StatusDot label={display} />
                 )}
@@ -367,18 +367,16 @@ export function ReviewStatusControl({
               download
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
-              <Download className="size-3.5" /> {translateUi(
-                'approval_report_this_asset_6f70ebf8',
-              )}{' '}
+              <ArrowDownToLine className="size-3.5" />{' '}
+              {translateUi('approval_report_this_asset_6f70ebf8')}{' '}
             </a>
             <a
               href={approvalReportHref({ brandId })}
               download
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
-              <Download className="size-3.5" /> {translateUi(
-                'approval_report_all_assets_b908aee2',
-              )}{' '}
+              <ArrowDownToLine className="size-3.5" />{' '}
+              {translateUi('approval_report_all_assets_b908aee2')}{' '}
             </a>
           </div>
         </PopoverContent>

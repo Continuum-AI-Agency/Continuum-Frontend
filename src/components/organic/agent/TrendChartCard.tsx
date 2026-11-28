@@ -1,8 +1,8 @@
 'use client';
 
-import { ChevronDown, SearchCheck } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { ChevronDown, SearchCheck } from '@/components/icons';
 import { AgentReceipt } from '@/components/shared/agent-cards/agentCardKit';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { UiLocale } from '@/i18n/config';

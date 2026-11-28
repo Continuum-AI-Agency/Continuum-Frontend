@@ -7,9 +7,9 @@ import { useTranslations } from 'next-intl';
 // for realized slides). The actions are supplied by the parent, which owns the
 // generate/placement handlers — this component only presents and navigates.
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import type * as React from 'react';
+import { ChevronLeft, ChevronRight } from '@/components/icons';
 import {
   Dialog,
   DialogContent,

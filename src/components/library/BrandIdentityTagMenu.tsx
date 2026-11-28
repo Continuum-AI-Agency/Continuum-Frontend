@@ -11,9 +11,9 @@ import {
   type LogoVariantTag,
   REFERENCE_TAG,
 } from '@continuum/contracts';
-import { Tags } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Tags } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,

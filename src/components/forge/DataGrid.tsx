@@ -9,23 +9,6 @@ import {
   type Row,
   type Table as TanTable,
 } from '@tanstack/react-table';
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  ChevronDown,
-  ChevronRight,
-  Columns3,
-  Hash,
-  ImageIcon,
-  List,
-  Lock,
-  type LucideIcon,
-  Palette,
-  ToggleLeft,
-  Type,
-  Video,
-} from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   type ClipboardEventHandler,
@@ -38,6 +21,23 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
+  Columns3,
+  Hash,
+  type IconComponent,
+  Image,
+  List,
+  Lock,
+  Palette,
+  ToggleLeft,
+  Type,
+  Video,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -66,12 +66,12 @@ import { cn } from '@/lib/utils';
 // Deliberately in components/forge, not components/ui: two callers is not a design system.
 
 /** The icon a column header carries for a variable kind — the "typed column" of the reference grid. */
-export const KIND_ICONS: Record<ApiRenderVariableKind | 'reserved', LucideIcon> = {
+export const KIND_ICONS: Record<ApiRenderVariableKind | 'reserved', IconComponent> = {
   text: Type,
   number: Hash,
   boolean: ToggleLeft,
   enum: List,
-  image: ImageIcon,
+  image: Image,
   video: Video,
   color: Palette,
   reserved: Lock,

@@ -10,9 +10,9 @@
 //     Unsplash. Attribution is a requirement of the API licence, not a caption.
 
 import type { UnsplashOrientation, UnsplashPhoto } from '@continuum/contracts';
-import { Camera, Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useRef, useState, useMemo as useUiConfigMemo } from 'react';
+import { Camera, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -130,7 +130,7 @@ export function UnsplashBrowser({ brandProfileId, onPick, onClose }: UnsplashBro
         />
         <Button type="submit" disabled={status === 'loading' || !query.trim()}>
           {status === 'loading' ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Spinner className="h-4 w-4 animate-spin" />
           ) : (
             translateUi('search_49c266ba')
           )}

@@ -1,10 +1,10 @@
 'use client';
 
-import { Building2, Loader2, Moon, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import React from 'react';
 import { z } from 'zod';
+import { Building2, Moon, Spinner, Sun } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useTheme } from '@/components/theme-provider';
 import {
@@ -211,7 +211,7 @@ export function CommandPalette({
                       {brand.name}
                       {isPending && (
                         <CommandShortcut>
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Spinner className="h-3 w-3 animate-spin" />
                         </CommandShortcut>
                       )}
                     </CommandItem>

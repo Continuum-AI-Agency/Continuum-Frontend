@@ -9,9 +9,9 @@ import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 // stream survives tab switches; this view only presents it.
 
 import type { CompetitiveGapReport, CompetitorAngleMap } from '@continuum/contracts';
-import { Loader2, RefreshCw } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
+import { RefreshCw, Spinner } from '@/components/icons';
 import { MetricStrip } from '@/components/shared/MetricStrip';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -99,7 +99,7 @@ export function CompetitiveReportView({
   if (data?.status === 'assembling' && !hasReport) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
-        <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+        <Spinner aria-hidden="true" className="size-4 animate-spin" />
         {uiText('a_scan_is_already_assembling_your_report_it_w_966abfa')}
       </div>
     );

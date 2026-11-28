@@ -1,10 +1,10 @@
 'use client';
 
 import { TRENDS_REUSE_DAYS } from '@continuum/contracts';
-import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { TrendGenerationProgress } from '@/components/brand-insights/TrendGenerationProgress';
+import { RefreshCw, Sparkles, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSmoothTrendProgress } from '@/hooks/useSmoothTrendProgress';
@@ -280,7 +280,7 @@ export function BrandInsightsGenerateButton({
           )}
         >
           {isWorking ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Spinner className="size-3.5 animate-spin" />
           ) : (
             <Icon className="size-3.5" />
           )}

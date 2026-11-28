@@ -1,9 +1,9 @@
 'use client';
 
-import { Pause, Play, Video } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useEffect } from 'react';
+import { Pause, Play, Video } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { captionAnchorSec, captionWordTransform } from '@/lib/clips/captionAnimation';
 import { ensureCaptionFonts } from '@/lib/clips/captionFonts';

@@ -6,21 +6,21 @@ import {
   CreditCard,
   FolderKanban,
   HardDrive,
+  type IconComponent,
   IdCard,
   Library,
   Link2,
-  type LucideIcon,
   Plug,
   Rocket,
   ScrollText,
   Sparkles,
   User,
-} from 'lucide-react';
+} from '@/components/icons';
 
 export type SectionDef = {
   key: SectionKey;
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   scope: 'brand' | 'account';
 };
 

@@ -5,9 +5,9 @@ import {
   VIDEO_EDITOR_OPS,
   type VideoEditorOpInput,
 } from '@continuum/contracts';
-import { Blend } from 'lucide-react';
 import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Blend } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SliderField } from '@/components/ui/slider-field';

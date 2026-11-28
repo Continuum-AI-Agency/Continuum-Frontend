@@ -11,17 +11,9 @@ import type { UiLocale } from '@/i18n/config';
 // Type floor: content is `text-sm` and up, labels/meta `text-xs`. The dense `text-xs` row this
 // replaced is still what `ActionRow` renders for the portfolio group; these cards do not share it.
 
-import {
-  ArrowRightIcon,
-  CheckIcon,
-  CoinsIcon,
-  GavelIcon,
-  SlidersHorizontalIcon,
-  Undo2Icon,
-  XIcon,
-} from 'lucide-react';
 import type * as React from 'react';
 import { useState } from 'react';
+import { ArrowRight, Check, Coins, Gavel, SlidersHorizontal, Undo2, X } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { HeroFigure } from '../components/HeroFigure';
 import { formatCurrency, formatPercent } from '../format';
@@ -50,14 +42,14 @@ const FAMILY_LABEL: Record<string, string> = {
 };
 
 const FAMILY_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
-  money: CoinsIcon,
-  settings: SlidersHorizontalIcon,
-  decision: GavelIcon,
+  money: Coins,
+  settings: SlidersHorizontal,
+  decision: Gavel,
 };
 
 export function ActionFamilyBadge({ family }: { family: string }) {
   const uiText = useTranslations('scale');
-  const Icon = FAMILY_ICON[family] ?? SlidersHorizontalIcon;
+  const Icon = FAMILY_ICON[family] ?? SlidersHorizontal;
   return (
     <span
       className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
@@ -74,7 +66,7 @@ export function ActionRevertedBadge() {
     <span
       className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
     >
-      <Undo2Icon aria-hidden="true" className="size-3.5" />
+      <Undo2 aria-hidden="true" className="size-3.5" />
       {uiText('reverted_0f0be2b')}
     </span>
   );
@@ -254,9 +246,9 @@ export function ActionAppliedState({
           data-testid="action-applied-state"
         >
           {stopped ? (
-            <XIcon aria-hidden="true" className="size-3.5" />
+            <X aria-hidden="true" className="size-3.5" />
           ) : (
-            <CheckIcon aria-hidden="true" className="size-3.5" />
+            <Check aria-hidden="true" className="size-3.5" />
           )}
           {stopped ? uiText('not_applied_3de0546') : uiText('applied_0c79a9c')}
         </span>
@@ -324,7 +316,7 @@ export function ActionDetailBody({
         <HeroFigure className="font-normal text-muted-foreground" kind="tile">
           {printChangeValue(change, change.before, currency, uiLocale)}
         </HeroFigure>
-        <ArrowRightIcon
+        <ArrowRight
           aria-hidden="true"
           className="size-4 shrink-0 self-center text-muted-foreground"
         />

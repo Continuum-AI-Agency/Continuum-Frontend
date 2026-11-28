@@ -1,6 +1,6 @@
-import { InboxIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
+import { Inbox } from '@/components/icons';
 
 import { ErrorRetryState } from '@/components/shared/state/ErrorRetryState';
 import { LoadingState } from '@/components/shared/state/LoadingState';
@@ -39,7 +39,7 @@ export function ChartEmpty({
       )}
     >
       <span className="flex max-w-[42ch] flex-col items-center gap-1.5 text-xs text-muted-foreground">
-        {icon ?? <InboxIcon aria-hidden="true" className="size-4 opacity-60" />}
+        {icon ?? <Inbox aria-hidden="true" className="size-4 opacity-60" />}
         {message}
       </span>
     </div>

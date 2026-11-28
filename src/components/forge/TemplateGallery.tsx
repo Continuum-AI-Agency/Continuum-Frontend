@@ -9,17 +9,6 @@ import type {
 } from '@continuum/contracts';
 import { TEMPLATE_SOURCE_KIND_LABELS, templateDisplayName } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  ChevronDown,
-  ChevronRight,
-  CornerDownRight,
-  Pencil,
-  Search,
-  Settings2,
-} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import { ForgeProjectDrop } from '@/components/forge/ForgeProjectDrop';
@@ -31,6 +20,17 @@ import {
   variantDefaultsQuery,
 } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
+  CornerDownRight,
+  Pencil,
+  Search,
+  Settings2,
+} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';

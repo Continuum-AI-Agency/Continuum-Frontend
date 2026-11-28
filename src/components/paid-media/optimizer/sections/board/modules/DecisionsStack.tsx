@@ -11,9 +11,9 @@
 // link; a verb with no wiring shows disabled and says why.
 
 import type { AccountCandidate } from '@continuum/contracts';
-import { ArrowRightIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
+import { ArrowRight } from '@/components/icons';
 import {
   useAccountApprovals,
   useOptimizerAccountRead,
@@ -100,7 +100,7 @@ function ReviewAll({ onOpenActions }: { onOpenActions: () => void }) {
       type="button"
     >
       {uiText('review_all_d05163f')}
-      <ArrowRightIcon aria-hidden="true" className="size-3.5" />
+      <ArrowRight aria-hidden="true" className="size-3.5" />
     </button>
   );
 }

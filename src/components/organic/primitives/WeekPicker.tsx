@@ -1,8 +1,8 @@
 'use client';
 
-import { CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { Calendar, ChevronLeft, ChevronRight } from '@/components/icons';
 
 import type { CalendarState } from '@/components/kibo-ui/calendar';
 import {
@@ -64,7 +64,7 @@ export function WeekPicker({
               variant="outline"
               className="gap-2 border-slate-400/80 bg-white/90 text-slate-900 hover:bg-slate-100"
             >
-              <CalendarIcon className="h-4 w-4 text-slate-900" />
+              <Calendar className="h-4 w-4 text-slate-900" />
               <span className="text-sm font-semibold text-slate-900">{rangeLabel}</span>
             </Button>
           }

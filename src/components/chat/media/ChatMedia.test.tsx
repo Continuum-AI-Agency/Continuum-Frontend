@@ -189,7 +189,7 @@ describe('ChatMediaThumb hover-play', () => {
     expect(video.getAttribute('preload')).toBe('none');
     expect(video.getAttribute('src')).toBeNull();
     expect(video.getAttribute('poster')).toBeNull();
-    expect(container.querySelector('svg.lucide-play')).not.toBeNull();
+    expect(container.querySelector('svg.icon-play')).not.toBeNull();
   });
 
   it('never seeks for a first frame, with or without hover', () => {

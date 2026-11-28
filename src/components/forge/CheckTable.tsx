@@ -1,8 +1,14 @@
 'use client';
 
-import { AlertCircle, AlertTriangle, CheckCircle2, CircleDashed, CircleMinus } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useRef, useState, useMemo as useUiConfigMemo } from 'react';
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleMinus,
+  TriangleAlert,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Spinner } from '@/components/ui/spinner';
@@ -62,16 +68,16 @@ function useLocalStateMarkMessages() {
   return useUiConfigMemo(() => {
     const value: Record<
       Exclude<CheckState, 'running'>,
-      { Icon: typeof CheckCircle2; tone: string; label: string }
+      { Icon: typeof CircleCheck; tone: string; label: string }
     > = {
-      pass: { Icon: CheckCircle2, tone: 'text-success', label: translateConfig('passed_436fe71b') },
+      pass: { Icon: CircleCheck, tone: 'text-success', label: translateConfig('passed_436fe71b') },
       warn: {
-        Icon: AlertTriangle,
+        Icon: TriangleAlert,
         tone: 'text-warning',
         label: translateConfig('warning_e981ddae'),
       },
       fail: {
-        Icon: AlertCircle,
+        Icon: CircleAlert,
         tone: 'text-destructive',
         label: translateConfig('failed_031a8f0f'),
       },

@@ -21,9 +21,9 @@ import {
   resolveAutomationPaidOptimizerConfig,
   resolveAutomationPlannerUpsertConfig,
 } from '@continuum/contracts';
-import { Copy, Expand, Lightbulb, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
+import { Copy, Expand, Lightbulb, Plus, Sparkles, Trash2, X } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';

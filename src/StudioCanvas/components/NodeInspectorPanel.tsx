@@ -16,17 +16,17 @@
 // them is a separate change against files this shell does not own.
 
 import { actionDef, STUDIO_NODE_REGISTRY, type StudioNodeType } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useMemo, useState } from 'react';
 import {
   Blocks,
   Combine,
+  type IconComponent,
   ListChecks,
-  type LucideIcon,
   Play,
   ShieldCheck,
   SlidersHorizontal,
-} from 'lucide-react';
-import { useTranslations as useUiTranslations } from 'next-intl';
-import { useMemo, useState } from 'react';
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useNodeConfigPatch } from '../hooks/useNodeConfigPatch';
 import { useStudioMetadata } from '../hooks/useStudioMetadata';
@@ -131,7 +131,7 @@ function BulkAction({
   label,
   onClick,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   onClick: () => void;
 }) {

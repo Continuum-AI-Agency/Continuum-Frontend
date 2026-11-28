@@ -1,9 +1,9 @@
 'use client';
 
 import type { Prompt } from '@continuum/contracts';
-import { Archive, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Archive, Pencil, Plus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 type Props = {

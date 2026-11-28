@@ -6,18 +6,18 @@ import type {
   BrandIntelligenceScore,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   Activity,
   BookOpen,
-  CheckCircle2,
+  CircleCheck,
   CircleDashed,
   Eye,
   Radar,
   RefreshCw,
   ShieldCheck,
   Users,
-} from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,7 +80,7 @@ function Lifecycle({ overview }: { overview: BrandIntelligenceOverview }) {
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2"
         >
           {status === 'ready' ? (
-            <CheckCircle2 className="size-3.5 text-emerald-400" />
+            <CircleCheck className="size-3.5 text-emerald-400" />
           ) : (
             <CircleDashed
               className={cn('size-3.5 text-muted-foreground', active && 'animate-spin')}

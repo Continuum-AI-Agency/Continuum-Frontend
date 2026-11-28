@@ -1,7 +1,7 @@
 'use client';
 
-import { Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Send } from '@/components/icons';
 
 // Opens the Continuum Report recipient picker. On-demand emails are "Continuum
 // Report" (not the scheduled Continuum Pulse digest). Same edge builder, product

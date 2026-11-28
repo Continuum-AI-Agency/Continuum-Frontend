@@ -1,6 +1,8 @@
 'use client';
 
 import type { AutomationWorkflowNode } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
+import type { ReactElement, ReactNode } from 'react';
 import {
   ArrowDownToLine,
   ArrowRight,
@@ -18,9 +20,7 @@ import {
   Search,
   Trash2,
   Unplug,
-} from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import type { ReactElement, ReactNode } from 'react';
+} from '@/components/icons';
 import {
   ContextMenu,
   ContextMenuContent,

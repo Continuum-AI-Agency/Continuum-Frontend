@@ -1,9 +1,9 @@
 'use client';
 
-import { ExternalLink, File, Play } from 'lucide-react';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { File, Play, SquareArrowOutUpRight } from '@/components/icons';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import {
   Carousel,
@@ -385,7 +385,7 @@ export function ChatMediaGrid({
                 aria-label={tUi('m_5eaf58bc5a')}
                 className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
               >
-                <ExternalLink className="size-3" aria-hidden="true" />
+                <SquareArrowOutUpRight className="size-3" aria-hidden="true" />
               </a>
             ) : null}
           </figure>

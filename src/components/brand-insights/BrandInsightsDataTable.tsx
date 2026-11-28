@@ -1,8 +1,8 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Search } from '@/components/icons';
 
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';

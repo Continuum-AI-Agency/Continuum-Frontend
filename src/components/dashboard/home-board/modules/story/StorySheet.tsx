@@ -5,10 +5,10 @@
 // React Query key the brief tile and the Optimizer use). "Send as Continuum Report" opens the
 // existing report email as is; there is no public share link, so none is offered.
 
-import { ChevronLeftIcon, ChevronRightIcon, SendIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
+import { ChevronLeft, ChevronRight, Send } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { HOME_DRAFT_READ_ONLY, useHomeDraft } from '../../HomePresentationContext';
@@ -92,7 +92,7 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
           type="button"
           variant="outline"
         >
-          <ChevronLeftIcon className="size-4" />
+          <ChevronLeft className="size-4" />
         </Button>
         <span className="text-muted-foreground text-xs">
           {uiText('current_of_total_35d9001', { current: current + 1, total: slides.length })}
@@ -105,7 +105,7 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
           type="button"
           variant="outline"
         >
-          <ChevronRightIcon className="size-4" />
+          <ChevronRight className="size-4" />
         </Button>
       </div>
       <ol aria-label={uiText('slides_a0ffe38')} className="flex flex-col gap-0.5">
@@ -141,7 +141,7 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
           size="sm"
           type="button"
         >
-          <SendIcon aria-hidden className="size-3.5" /> {uiText('send_as_continuum_report_fc89617')}
+          <Send aria-hidden className="size-3.5" /> {uiText('send_as_continuum_report_fc89617')}
         </Button>
         <p className="text-muted-foreground text-xs">
           {draft

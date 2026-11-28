@@ -5,7 +5,7 @@ import { type useTranslations, useTranslations as useUiTranslations } from 'next
 type ForgeText = ReturnType<typeof useTranslations<'forge'>>;
 
 import { type ApiRenderJob, isBucketOnlyRenderFile } from '@continuum/contracts';
-import { Check } from 'lucide-react';
+import { Check } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 

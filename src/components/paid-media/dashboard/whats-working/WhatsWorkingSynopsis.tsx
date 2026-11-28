@@ -4,7 +4,7 @@ import { useLocale, useTranslations } from 'next-intl';
 // few days; renders nothing until the first one exists.
 
 import type { PaidCreativeSynopsis } from '@continuum/contracts';
-import { Sparkles } from 'lucide-react';
+import { Sparkles } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 export function WhatsWorkingSynopsis({

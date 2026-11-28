@@ -1,6 +1,6 @@
-import { Loader2 } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
+import { Spinner } from '@/components/icons';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { NewVideoProject } from './NewVideoProject';
 
@@ -18,7 +18,7 @@ export default function NewVideoStudioPage() {
     <Suspense
       fallback={
         <div className="flex h-[var(--app-content-h)] items-center justify-center text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
+          <Spinner className="size-4 animate-spin" />
         </div>
       }
     >

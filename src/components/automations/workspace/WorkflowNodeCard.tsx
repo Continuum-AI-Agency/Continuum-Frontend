@@ -3,20 +3,6 @@
 import type { AutomationValidationIssue, AutomationWorkflowNode } from '@continuum/contracts';
 import { getAutomationNodePortSpec } from '@continuum/contracts';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
-import {
-  CircleCheck,
-  CircleDashed,
-  CircleSlash2,
-  CircleX,
-  Clock3,
-  Copy,
-  LoaderCircle,
-  Lock,
-  Power,
-  Settings2,
-  Trash2,
-  TriangleAlert,
-} from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -29,6 +15,20 @@ import {
   NodeTitle,
 } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleSlash2,
+  CircleX,
+  Clock,
+  Copy,
+  Lock,
+  Power,
+  Settings2,
+  Spinner,
+  Trash2,
+  TriangleAlert,
+} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -154,10 +154,10 @@ const executionPresentation = (execution?: WorkflowNodeExecutionView) => {
     return { icon: CircleDashed, label: 'Not run', variant: 'muted' as const };
   }
   if (execution.status === 'pending') {
-    return { icon: Clock3, label: 'Pending', variant: 'warning' as const };
+    return { icon: Clock, label: 'Pending', variant: 'warning' as const };
   }
   if (execution.status === 'running') {
-    return { icon: LoaderCircle, label: 'Running', variant: 'violet' as const };
+    return { icon: Spinner, label: 'Running', variant: 'violet' as const };
   }
   if (execution.status === 'completed') {
     return { icon: CircleCheck, label: 'Passed', variant: 'success' as const };

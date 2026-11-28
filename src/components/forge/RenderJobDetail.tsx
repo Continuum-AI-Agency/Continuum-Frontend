@@ -8,20 +8,6 @@ import {
   WEB_COMPONENT_BINDING_ID,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowLeft,
-  CalendarClock,
-  CircleDot,
-  Cpu,
-  Download,
-  ExternalLink,
-  FileDigit,
-  Layers,
-  Loader2,
-  RectangleHorizontal,
-  RefreshCw,
-  Timer,
-} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import React, { useEffect, useRef, useState } from 'react';
 import { type CheckRow, CheckTable } from '@/components/forge/CheckTable';
@@ -39,6 +25,20 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { RenderFileSpecs } from '@/components/forge/RenderFileSpecs';
 import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
+import {
+  ArrowDownToLine,
+  ArrowLeft,
+  CalendarClock,
+  CircleDot,
+  Cpu,
+  FileDigit,
+  Layers2,
+  RectangleHorizontal,
+  RefreshCw,
+  Spinner,
+  SquareArrowOutUpRight,
+  Timer,
+} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl } from '@/lib/api/config';
@@ -494,7 +494,7 @@ export function RenderJobDetail({
                   aria-label={translateUi('download_value0_0f5a93c3', { value0: String(type) })}
                   className="inline-flex items-center gap-1 text-primary hover:underline"
                 >
-                  <Download className="size-3" aria-hidden /> {type}
+                  <ArrowDownToLine className="size-3" aria-hidden /> {type}
                 </a>
               );
             })}
@@ -508,9 +508,9 @@ export function RenderJobDetail({
                 onClick={() => void prepareDownload('mxf', true)}
               >
                 {preparing === 'mxf' ? (
-                  <Loader2 className="size-3 animate-spin" aria-hidden />
+                  <Spinner className="size-3 animate-spin" aria-hidden />
                 ) : (
-                  <Download className="size-3" aria-hidden />
+                  <ArrowDownToLine className="size-3" aria-hidden />
                 )}{' '}
                 {translateUi('remake_broadcast_mxf_427b5e40')}
               </Button>
@@ -529,9 +529,9 @@ export function RenderJobDetail({
                   className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
                 >
                   {preparing === format ? (
-                    <Loader2 className="size-3 animate-spin" aria-hidden />
+                    <Spinner className="size-3 animate-spin" aria-hidden />
                   ) : (
-                    <Download className="size-3" aria-hidden />
+                    <ArrowDownToLine className="size-3" aria-hidden />
                   )}
                   {preparing === format
                     ? translateUi('preparing_value0_17b89445', {
@@ -549,9 +549,8 @@ export function RenderJobDetail({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-primary hover:underline"
               >
-                <ExternalLink className="size-3" aria-hidden /> {translateUi(
-                  'slack_post_c116aec0',
-                )}{' '}
+                <SquareArrowOutUpRight className="size-3" aria-hidden />{' '}
+                {translateUi('slack_post_c116aec0')}{' '}
               </a>
             ) : null}
           </div>
@@ -657,7 +656,7 @@ export function RenderJobDetail({
                   ? formatDuration(Date.parse(job.finishedAt) - Date.parse(job.createdAt))
                   : '—',
               },
-              { icon: Layers, label: translateUi('set_b6f6f3ad'), value: setName },
+              { icon: Layers2, label: translateUi('set_b6f6f3ad'), value: setName },
               {
                 icon: FileDigit,
                 label: translateUi('variant_revision_a5050560'),

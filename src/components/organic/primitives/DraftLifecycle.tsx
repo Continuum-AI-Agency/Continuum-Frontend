@@ -3,19 +3,19 @@ import {
   type OrganicMediaStage,
   resolvePublishFormat,
 } from '@continuum/contracts';
+import Image from 'next/image';
+import { useTranslations } from 'next-intl';
+import * as React from 'react';
 import {
-  AlertCircle,
   ArrowRight,
-  CheckCircle2,
   Circle,
+  CircleAlert,
+  CircleCheck,
   Info,
   Library,
   RotateCcw,
   Wand2,
-} from 'lucide-react';
-import Image from 'next/image';
-import { useTranslations } from 'next-intl';
-import * as React from 'react';
+} from '@/components/icons';
 import type {
   DraftLadder,
   LadderStep,
@@ -147,11 +147,11 @@ function LadderStepNode({ step }: { step: LadderStep }) {
       )}
     >
       {step.state === 'done' ? (
-        <CheckCircle2 className="size-2.5" aria-hidden />
+        <CircleCheck className="size-2.5" aria-hidden />
       ) : step.state === 'running' ? (
         <span className="h-1 w-1 animate-pulse rounded-full bg-current" aria-hidden />
       ) : step.state === 'failed' ? (
-        <AlertCircle className="size-2.5" aria-hidden />
+        <CircleAlert className="size-2.5" aria-hidden />
       ) : (
         <Circle className="size-2.5" aria-hidden />
       )}

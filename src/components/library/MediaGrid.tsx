@@ -1,10 +1,10 @@
 'use client';
 
 import type { CustomField, LibraryPreviewFrame, MediaAsset } from '@continuum/contracts';
-import { ImagePlus, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type DragEvent, useEffect, useRef } from 'react';
+import { ImagePlus, Spinner } from '@/components/icons';
 import { stagger } from '@/components/ui/Motion';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { formatCustomFieldValue } from '@/lib/library/customFieldValue';
@@ -232,7 +232,7 @@ export function MediaGrid({
 
       {onLoadMore && hasMore && (
         <div ref={sentinelRef} className="flex h-12 items-center justify-center">
-          {loadingMore && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
+          {loadingMore && <Spinner className="size-5 animate-spin text-muted-foreground" />}
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 'use client';
 
-import { Rocket } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Rocket } from '@/components/icons';
 
 // Jaina Setup Concierge (FEAT-004) — GUIDED UI ONLY. When Jaina has no ad
 // account it can't run (the chat contract hard-requires adAccountId), so instead

@@ -1,7 +1,7 @@
 'use client';
 
-import { Diamond } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
+import { Diamond } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

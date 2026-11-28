@@ -1,8 +1,8 @@
 'use client';
 
-import { Pause, Play } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pause, Play } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import type { LayerEditorLayer } from '../../types';
 import { formatMotionTime } from '../timeline/motion/motionChrome';

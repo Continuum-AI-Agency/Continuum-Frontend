@@ -1,7 +1,7 @@
 'use client';
 
 import { Tabs } from '@base-ui/react/tabs';
-import type { LucideIcon } from 'lucide-react';
+import type { IconComponent as LucideIcon } from '@/components/icons';
 import { warmSection } from '@/components/settings/lazySections';
 import { intentProps } from '@/lib/intent';
 import { cn } from '@/lib/utils';

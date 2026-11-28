@@ -1,9 +1,16 @@
 'use client';
 
 import type { EditorProjectV2, VideoEditorPoolAsset } from '@continuum/contracts';
-import { AudioLines, Film, Image as ImageIcon, Loader2, Plus, Upload } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useRef } from 'react';
+import {
+  ArrowUpFromLine,
+  AudioLines,
+  Film,
+  Image as ImageIcon,
+  Plus,
+  Spinner,
+} from '@/components/icons';
 import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import { Button } from '@/components/ui/button';
 import {
@@ -115,7 +122,7 @@ export function MediaPanel({
           className="gap-1.5"
           onClick={() => fileInput.current?.click()}
         >
-          <Upload className="size-3.5" /> {translateUi('import_2cff9baa')}
+          <ArrowUpFromLine className="size-3.5" /> {translateUi('import_2cff9baa')}
         </Button>
         <input
           ref={fileInput}
@@ -146,7 +153,7 @@ export function MediaPanel({
           key={file.id}
           className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1.5 text-2xs text-muted-foreground"
         >
-          <Loader2 className="size-3 animate-spin" /> {translateUi('uploading_8b898ca3')}{' '}
+          <Spinner className="size-3 animate-spin" /> {translateUi('uploading_8b898ca3')}{' '}
           {file.name}…
         </div>
       ))}

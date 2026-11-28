@@ -11,11 +11,10 @@ import {
   type StudioEmittedModality,
 } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
-import { Share2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
-
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Share2 } from '@/components/icons';
 import type { RouterNodeData } from '../types';
 import { EDGE_COLOR_BY_MODALITY, ModalityPreview } from './modalityPreview';
 import { NodeBadge, NodeTitleBar } from './NodeChrome';

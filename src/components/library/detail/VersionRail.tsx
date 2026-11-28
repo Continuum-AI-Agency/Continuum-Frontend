@@ -14,21 +14,21 @@
 
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
 import { LIBRARY_ACCEPT_ATTRIBUTE } from '@continuum/contracts';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
   Columns2,
-  FileIcon,
-  Loader2,
+  File as FileIcon,
+  Spinner as Loader2,
   MessageSquare,
   Pause,
   Play,
   Plus,
   RotateCcw,
   Ungroup,
-} from 'lucide-react';
-import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
-import { useEffect, useRef, useState } from 'react';
+} from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { VideoStill } from '@/components/media/VideoStill';
 import {

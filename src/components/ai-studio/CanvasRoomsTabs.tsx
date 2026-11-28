@@ -1,8 +1,7 @@
 'use client';
-import { Check, Plus, SquarePen, Trash2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
-
 import React, { useState } from 'react';
+import { Check, Plus, SquarePen, Trash2 } from '@/components/icons';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { type CanvasRoom, useCanvasRooms } from './hooks/useCanvasRooms';

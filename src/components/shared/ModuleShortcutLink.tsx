@@ -1,4 +1,4 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight } from '@/components/icons';
 import { Link } from '@/i18n/navigation';
 
 // The "go to the full workspace" affordance used across every module/panel: a

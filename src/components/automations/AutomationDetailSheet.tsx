@@ -12,8 +12,8 @@ import { formatAutomationRunTime } from './workspace/runs/runPresentation';
 // the surface's agent.
 
 import type { AgentTarget, AutomationRun } from '@continuum/contracts';
-import { PlayIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Play, SquarePen, Trash2 } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import {
   AlertDialog,
@@ -220,7 +220,7 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
                   onClick={handleRunNow}
                   disabled={runNowMutation.isPending}
                 >
-                  <PlayIcon className="size-3.5" />
+                  <Play className="size-3.5" />
                   {runNowMutation.isPending
                     ? uiText('starting_bbe5fc3')
                     : uiText('run_now_0991397')}
@@ -237,7 +237,7 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
                     variant="outline"
                     onClick={() => openEditor(automation.id)}
                   >
-                    <SquarePenIcon className="size-3.5" />
+                    <SquarePen className="size-3.5" />
                     {uiText('edit_464c4ff')}
                   </Button>
                 )}
@@ -245,7 +245,7 @@ export function AutomationDetailSheet({ agent, brandId }: AutomationDetailSheetP
                   <AlertDialogTrigger
                     render={
                       <Button type="button" size="sm" variant="ghost" className="text-destructive">
-                        <Trash2Icon className="size-3.5" />
+                        <Trash2 className="size-3.5" />
                         {uiText('delete_e2d0a54')}
                       </Button>
                     }

@@ -1,9 +1,9 @@
 'use client';
 
 import type { SlackClaimPreviewResponse, SlackConnectErrorCode } from '@continuum/contracts';
-import { Loader2, MessageSquareText } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { MessageSquareText, Spinner } from '@/components/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Link, useRouter } from '@/i18n/navigation';
 import { ApiError } from '@/lib/api/errors';
@@ -133,7 +133,7 @@ export function SlackConnectClaim({
 
         {state.kind === 'checking' ? (
           <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden />
+            <Spinner className="size-4 animate-spin" aria-hidden />
             {uiText('m_51a7fce29c')}
           </p>
         ) : null}
@@ -196,7 +196,7 @@ export function SlackConnectClaim({
               </p>
               {redeemError ? <p className="text-sm text-destructive">{redeemError}</p> : null}
               <Button type="submit" className="w-full" disabled={redeeming || !brandId}>
-                {redeeming ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                {redeeming ? <Spinner className="size-4 animate-spin" aria-hidden /> : null}
                 {uiText('m_59db6e6cc0')}
               </Button>
             </form>

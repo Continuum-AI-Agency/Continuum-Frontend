@@ -7,10 +7,10 @@ import {
   type DocumentCategory,
   type DocumentScope,
 } from '@continuum/contracts';
-import { FileText, Loader2, Plus, Upload } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FileText, Spinner as Loader2, Plus, ArrowUpFromLine as Upload } from '@/components/icons';
 import { FontUploadReviewDialog } from '@/components/library/FontUploadReviewDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';

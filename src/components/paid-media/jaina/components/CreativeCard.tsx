@@ -1,12 +1,12 @@
 'use client';
 
-import { ImageIcon, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import { type ChatMedia, mediaListFromCreative } from '@/components/chat/media/media';
+import { Image, Sparkles } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Badge } from '@/components/ui/badge';
@@ -144,7 +144,7 @@ export function CreativeCard({ creative, index, onRequestCreative, disabled }: C
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-muted/40">
-                  <ImageIcon className="size-5 text-muted-foreground/30" />
+                  <Image className="size-5 text-muted-foreground/30" />
                 </div>
               )}
             </AspectRatio>

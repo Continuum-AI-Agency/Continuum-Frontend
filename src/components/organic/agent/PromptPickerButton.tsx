@@ -1,10 +1,10 @@
 'use client';
 
 import type { Prompt } from '@continuum/contracts';
-import { BookText, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
+import { BookText, Wand2 } from '@/components/icons';
 import {
   Command,
   CommandEmpty,

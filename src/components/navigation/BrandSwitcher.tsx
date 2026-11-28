@@ -1,9 +1,15 @@
 'use client';
 
-import { AlertTriangle, ChevronsUpDown, Layers, Loader2, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { createBrandProfileAction } from '@/app/[locale]/(post-auth)/settings/actions';
+import {
+  TriangleAlert as AlertTriangle,
+  ChevronsUpDown,
+  Layers2 as Layers,
+  Spinner as Loader2,
+  Plus,
+} from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {

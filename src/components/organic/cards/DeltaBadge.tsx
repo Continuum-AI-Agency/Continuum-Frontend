@@ -4,8 +4,8 @@
 // direction arrow plus the magnitude. Renders nothing when no comparison is
 // available so cards stay clean.
 
-import { Minus, TrendingDown, TrendingUp } from 'lucide-react';
 import { useLocale } from 'next-intl';
+import { Minus, TrendingDown, TrendingUp } from '@/components/icons';
 import { formatDecimal } from '@/lib/format/decimal';
 
 import type { MetricComparison } from '@/lib/schemas/organicMetrics';

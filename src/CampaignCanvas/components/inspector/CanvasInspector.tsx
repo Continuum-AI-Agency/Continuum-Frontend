@@ -13,16 +13,16 @@ import { canvasValidationMessage } from '../../validation/presentation';
  * one product.
  */
 
-import {
-  Image as ImageIcon,
-  Layers,
-  Layout,
-  type LucideIcon,
-  Megaphone,
-  Users,
-} from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { useMemo } from 'react';
+import {
+  type IconComponent,
+  Image as ImageIcon,
+  Layers2,
+  Layout,
+  Megaphone,
+  Users,
+} from '@/components/icons';
 import { CanvasFloatingPanel } from '@/StudioCanvas/components/CanvasFloatingPanel';
 import { useCampaignStore } from '../../stores/useCampaignStore';
 import type { CampaignCanvasNode, CampaignCanvasNodeMap, MetaCampaignNodeType } from '../../types';
@@ -32,10 +32,10 @@ import { AdSection, AdSetSection, CampaignSection } from './NodeSections';
 
 const PRESENTATION: Record<
   MetaCampaignNodeType,
-  { title: string; icon: LucideIcon; tone: string }
+  { title: string; icon: IconComponent; tone: string }
 > = {
   campaign: { title: 'Campaign', icon: Layout, tone: 'bg-blue-500/10 text-blue-500' },
-  'ad-set': { title: 'Ad set', icon: Layers, tone: 'bg-primary/10 text-primary' },
+  'ad-set': { title: 'Ad set', icon: Layers2, tone: 'bg-primary/10 text-primary' },
   ad: { title: 'Ad', icon: Megaphone, tone: 'bg-emerald-500/10 text-emerald-500' },
   audience: { title: 'Audience', icon: Users, tone: 'bg-orange-500/10 text-orange-500' },
   creative: { title: 'Creative', icon: ImageIcon, tone: 'bg-pink-500/10 text-pink-500' },

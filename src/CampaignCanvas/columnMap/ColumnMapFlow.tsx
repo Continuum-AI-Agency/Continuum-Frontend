@@ -22,11 +22,11 @@ import {
   Position,
   useReactFlow,
 } from '@xyflow/react';
-import { ChevronLeft, ChevronRight, MoveHorizontal } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Controls } from '@/components/ai-elements/controls';
+import { ArrowLeftRight, ChevronLeft, ChevronRight } from '@/components/icons';
 import {
   busEdgePath,
   type CollapsedGroup,
@@ -593,7 +593,7 @@ export function ColumnMapFlow({
               aria-label={uiText('fit_to_width_953eba6')}
               data-testid="map-fit-width"
             >
-              <MoveHorizontal aria-hidden />
+              <ArrowLeftRight aria-hidden />
             </ControlButton>
           </Controls>
           {showsMinimap(pane) ? (

@@ -1,9 +1,9 @@
 'use client';
 
-import { AlertTriangle, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React from 'react';
 import { BrandAvatar } from '@/components/brand/BrandAvatar';
+import { ChevronsUpDown, Spinner, TriangleAlert } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import {
   DropdownMenu,
@@ -46,7 +46,7 @@ export function OnboardingBrandSwitcher({ currentBrandName }: { currentBrandName
             className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--sidebar-foreground)] shadow-sm transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_8%,transparent)] disabled:opacity-60 dark:bg-card"
           >
             {isSwitching ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
             ) : activeBrand ? (
               <BrandAvatar
                 name={activeBrandLabel}
@@ -104,13 +104,13 @@ export function OnboardingBrandSwitcher({ currentBrandName }: { currentBrandName
                 </div>
                 <div className="flex items-center gap-1.5">
                   {!brand.completed && (
-                    <AlertTriangle
+                    <TriangleAlert
                       className="h-3.5 w-3.5 shrink-0 text-warning"
                       aria-label={tUi('m_c1c74b0f83')}
                     />
                   )}
                   {isRowSwitching ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
                   ) : isActiveRow ? (
                     <span className="inline-flex h-2 w-2 rounded-full bg-primary" aria-hidden />
                   ) : null}

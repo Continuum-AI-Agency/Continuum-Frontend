@@ -2,7 +2,6 @@
 
 import type { ApiRenderDeliveryDestination, RenderApprovalDestination } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Hash, Plus, RefreshCw, TriangleAlert, Unplug } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { AddSlackRoom } from '@/components/forge/AddSlackRoom';
@@ -16,6 +15,7 @@ import {
   ROLE_LABEL,
   type SlackRoomRole,
 } from '@/components/forge/slackRoomCopy';
+import { Hash, Plus, RefreshCw, TriangleAlert, Unplug } from '@/components/icons';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import {
   AlertDialog,

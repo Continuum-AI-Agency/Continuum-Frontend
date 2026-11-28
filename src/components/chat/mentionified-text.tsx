@@ -1,20 +1,20 @@
 'use client';
 
 import { type ChatMediaRef, chatMediaRefKey, chatMediaRefSchema } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
+import React from 'react';
 import {
   BookOpen,
+  ChartLine,
   FileText,
-  ImageIcon,
+  Image,
   Lightbulb,
-  LineChart,
   Sparkles,
   Target,
   TrendingUp,
   Video,
   Workflow,
-} from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import React from 'react';
+} from '@/components/icons';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import type { AgentMentionReference } from '@/lib/agent-references';
 import {
@@ -101,7 +101,7 @@ function TypeIcon({
   const cls = cn('size-3.5 shrink-0', className);
   switch (type) {
     case 'media_asset':
-      return <ImageIcon className={cls} />;
+      return <Image className={cls} />;
     case 'canvas_node':
     case 'pipeline':
       return <Workflow className={cls} />;
@@ -122,7 +122,7 @@ function TypeIcon({
     case 'creative_insight':
     case 'organic_insight':
     case 'kpi':
-      return <LineChart className={cls} />;
+      return <ChartLine className={cls} />;
     default:
       return <FileText className={cls} />;
   }

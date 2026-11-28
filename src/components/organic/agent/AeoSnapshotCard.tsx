@@ -1,8 +1,8 @@
 'use client';
 
 import type { AeoSnapshotCard as AeoSnapshotCardData } from '@continuum/contracts';
-import { Bot, ExternalLink, Lightbulb, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Bot, Lightbulb, Search, SquareArrowOutUpRight } from '@/components/icons';
 import {
   AgentArtifactCard,
   AgentCardBody,
@@ -146,7 +146,7 @@ export function AeoSnapshotCard({ snapshot }: { snapshot: AeoSnapshotCardData })
                   <span className="min-w-0 truncate">{citation.title || citation.domain}</span>
                   <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
                     {citation.domain}
-                    <ExternalLink className="size-3" />
+                    <SquareArrowOutUpRight className="size-3" />
                   </span>
                 </a>
               ))}

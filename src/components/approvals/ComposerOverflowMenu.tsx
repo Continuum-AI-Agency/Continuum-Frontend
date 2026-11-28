@@ -1,8 +1,8 @@
 'use client';
 
-import { Ban, Copy, FileJson, MoreHorizontal, SkipForward } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { Ban, Copy, FileJson, MoreHorizontal, SkipForward } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,

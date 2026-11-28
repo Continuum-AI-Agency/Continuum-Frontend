@@ -1,9 +1,9 @@
 'use client';
 
 import type { Skill, SkillSurface } from '@continuum/contracts';
-import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { createBrandSkill, updateBrandSkill } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
@@ -149,7 +149,7 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
           aria-busy={saving || undefined}
           onClick={save}
         >
-          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {saving && <Spinner className="h-3.5 w-3.5 animate-spin" />}
           {initial ? uiText('save_changes_dd0ae7a') : uiText('m_f7fc4f0889')}
         </Button>
       </div>

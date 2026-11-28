@@ -22,6 +22,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   ArrowDown,
   ArrowUp,
@@ -29,11 +30,10 @@ import {
   EyeOff,
   GripVertical,
   Image as ImageIcon,
-  Layers,
+  Layers2,
   Shapes,
   Type,
-} from 'lucide-react';
-import { useTranslations as useUiTranslations } from 'next-intl';
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -142,7 +142,7 @@ function LayerRow({
       : row.kind === 'shape'
         ? Shapes
         : row.kind === 'composition' || row.kind === 'group'
-          ? Layers
+          ? Layers2
           : ImageIcon;
   const name = (
     <>

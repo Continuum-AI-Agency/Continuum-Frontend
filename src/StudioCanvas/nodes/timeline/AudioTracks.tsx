@@ -1,8 +1,8 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import { Music2, Trash2 } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { Music2, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { NumberScrubField } from '@/components/ui/number-field';
 import { formatDecimal } from '@/lib/format/decimal';

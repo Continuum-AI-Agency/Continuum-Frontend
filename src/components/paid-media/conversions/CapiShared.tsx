@@ -1,8 +1,8 @@
 'use client';
 
-import { Copy, ShieldCheck } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type ReactNode, useId, useState } from 'react';
+import { Copy, ShieldCheck } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';

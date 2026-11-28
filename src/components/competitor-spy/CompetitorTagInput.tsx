@@ -2,10 +2,10 @@
 
 import type { CompetitorSpyStreamFrame } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, RefreshCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { competitorApiCode } from '@/components/competitors/competitorErrorCopy';
+import { Plus, RefreshCw } from '@/components/icons';
 import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 import { useUiErrorMessage } from '@/i18n/errors';
 import { useCompetitorSearch, useCompetitors, useCreateCompetitor } from '@/lib/api/competitorSpy';

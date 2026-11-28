@@ -1,14 +1,14 @@
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
+  ArrowUpFromLine,
   AtSign,
   FolderOpen,
   ScanLine,
   ShieldCheck,
   Trash2,
-  Upload,
   ZoomIn,
   ZoomOut,
-} from 'lucide-react';
-import { useTranslations as useUiTranslations } from 'next-intl';
+} from '@/components/icons';
 import {
   ContextMenuCheckboxItem,
   ContextMenuContent,
@@ -94,7 +94,7 @@ export function CanvasContextMenuContent({
       {/* Never disabled: with nothing selected this saves the whole canvas, which is the
           same act the header's Save button performs. */}
       <ContextMenuItem inset onSelect={openSave}>
-        <Upload className="mr-2 h-4 w-4" />
+        <ArrowUpFromLine className="mr-2 h-4 w-4" />
         {hasSelection ? translateUi('save_selection_dd183ea6') : translateUi('save_1509f561')}
       </ContextMenuItem>
 

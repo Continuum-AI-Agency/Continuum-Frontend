@@ -27,7 +27,10 @@
 // apply hook itself, which is what keeps it renderable in a test with no canvas around it.
 
 import type { ActionId, ActionModality, VideoGeneratorModel } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { type KeyboardEvent, useMemo, useState } from 'react';
 import {
+  ArrowDownToLine,
   Blocks,
   Braces,
   CalendarPlus,
@@ -35,7 +38,6 @@ import {
   Clapperboard,
   Clock,
   Combine,
-  Download,
   FastForward,
   FileImage,
   FileText,
@@ -44,7 +46,6 @@ import {
   Flame,
   Gem,
   Image,
-  Layers,
   Layers2,
   ListVideo,
   Maximize2,
@@ -64,9 +65,7 @@ import {
   Wand2,
   Wrench,
   Zap,
-} from 'lucide-react';
-import { useTranslations as useUiTranslations } from 'next-intl';
-import { type KeyboardEvent, useMemo, useState } from 'react';
+} from '@/components/icons';
 import { GoogleIcon, type IconComponent } from '@/components/shared/icons';
 import {
   Command,
@@ -107,8 +106,8 @@ import {
 // Presentation only — the catalog stays pure data. Node glyphs reuse the icon each block
 // component already renders for itself (Film on HyperframesAgentBlock, Camera on
 // FrameExtractBlock, Share2 on RouterNode, …); the rest are new picks here. Brand marks
-// come from @/components/shared/icons (lucide ships none); Fal and Continuum have no
-// house glyph, so lucide stand-ins carry them.
+// come from @/components/shared/icons (the glyph set has none); Fal and Continuum have no
+// brand mark, so glyph stand-ins carry them.
 const NODE_TYPE_ICONS: Record<StudioCanvasNodeType, IconComponent> = {
   nanoGen: Image,
   videoGen: Video,
@@ -134,9 +133,9 @@ const NODE_TYPE_ICONS: Record<StudioCanvasNodeType, IconComponent> = {
   frameExtract: Camera,
   action: Wand2,
   router: Share2,
-  export: Download,
+  export: ArrowDownToLine,
   batch: Table,
-  element: Layers,
+  element: Layers2,
   designRef: Gem,
 };
 
@@ -171,7 +170,7 @@ const OP_GROUP_ICONS: Record<string, IconComponent> = {
   Transform: Maximize2,
   Time: Clock,
   Assembly: Combine,
-  Overlay: Layers,
+  Overlay: Layers2,
   Frames: Film,
   Text: Type,
 };

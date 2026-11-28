@@ -2,19 +2,19 @@
 'use client';
 
 import type { MediaAsset } from '@continuum/contracts';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
+import React from 'react';
 import {
-  AlertTriangle,
   AudioLines,
   ImageOff,
-  Loader2,
   Play,
   RefreshCw,
   Scaling,
   Search,
   Sparkles,
-} from 'lucide-react';
-import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
-import React from 'react';
+  Spinner,
+  TriangleAlert,
+} from '@/components/icons';
 import { LibraryElementsGrid } from '@/components/library/LibraryElementsGrid';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { QuickReformatMenu } from '@/components/library/reformat/QuickReformatMenu';
@@ -127,11 +127,11 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
           <LibraryElementsGrid brandId={brandProfileId} />
         ) : assets.length === 0 && loading ? (
           <div className="flex h-32 items-center justify-center text-sm text-gray-400">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {translateUi('loading_ba3bbbe1')}
+            <Spinner className="mr-2 h-4 w-4 animate-spin" /> {translateUi('loading_ba3bbbe1')}
           </div>
         ) : assets.length === 0 && error ? (
           <div className="flex flex-col items-center gap-2 p-6 text-center text-sm text-gray-400">
-            <AlertTriangle className="h-6 w-6 text-amber-400" />
+            <TriangleAlert className="h-6 w-6 text-amber-400" />
             <span>{error}</span>
           </div>
         ) : assets.length === 0 && isInspiration && !query.trim() ? (
@@ -153,7 +153,7 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
         <div ref={sentinelRef} className="h-px w-full" />
         {loading && assets.length > 0 && (
           <div className="flex items-center justify-center py-3 text-xs text-gray-500">
-            <Loader2 className="mr-2 h-3 w-3 animate-spin" /> {translateUi(
+            <Spinner className="mr-2 h-3 w-3 animate-spin" /> {translateUi(
               'loading_more_964e5f88',
             )}{' '}
           </div>
@@ -248,7 +248,7 @@ function InspirationPullButton({ label, pull }: { label: string; pull: Inspirati
       >
         {pull.running ? (
           <>
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Spinner className="h-3.5 w-3.5 animate-spin" />
             {pull.found > 0
               ? translateUi('finding_inspiration_value0_found_d25aadcf', {
                   count: Number(pull.found),

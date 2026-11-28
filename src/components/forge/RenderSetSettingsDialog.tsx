@@ -7,7 +7,6 @@ import {
   forgeRenderSetSettingsSchema,
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Check, Loader2, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useState } from 'react';
 import {
@@ -26,6 +25,7 @@ import {
   SlackDestinationPicker,
   type SlackPickerState,
 } from '@/components/forge/SlackDestinationPicker';
+import { Check, Spinner, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -327,7 +327,7 @@ export function RenderSetSettingsDialog({
             {translateUi('cancel_19766ed6')}
           </Button>
           <Button type="button" disabled={saving} onClick={() => void save()}>
-            {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}{' '}
+            {saving ? <Spinner className="animate-spin" data-icon="inline-start" /> : null}{' '}
             {translateUi('save_1509f561')}
           </Button>
         </DialogFooter>

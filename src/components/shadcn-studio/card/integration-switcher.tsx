@@ -1,22 +1,22 @@
 'use client';
 
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
+import * as React from 'react';
 import {
   BookOpen,
   Check,
   Copy,
   GitBranch,
   GitMerge,
-  Loader2,
   MessageSquare,
   Pencil,
   PenLine,
   Plus,
   Shuffle,
+  Spinner,
   Users,
-} from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useTranslations } from 'next-intl';
-import * as React from 'react';
+} from '@/components/icons';
 import { FigmaIcon, GitHubIcon } from '@/components/shared/icons';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -303,7 +303,7 @@ function ToggleAction({
       )}
     >
       {pending ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Spinner className="h-4 w-4 animate-spin" />
       ) : checked ? (
         <Check className="h-4 w-4" />
       ) : (
@@ -427,7 +427,7 @@ function SyncBar({
         )}
       >
         {syncing ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Spinner className="h-3.5 w-3.5 animate-spin" />
         ) : (
           <Plus className="h-3.5 w-3.5" />
         )}

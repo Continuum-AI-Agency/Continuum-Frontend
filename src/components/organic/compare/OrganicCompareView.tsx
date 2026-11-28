@@ -16,9 +16,9 @@ import {
   type OrganicMetricPlatform,
   organicMetricPlatformSchema,
 } from '@continuum/contracts';
-import { Columns2 } from 'lucide-react';
 import * as React from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import { Columns2 } from '@/components/icons';
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
 import {
   formatNumber,

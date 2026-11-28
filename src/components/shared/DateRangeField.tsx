@@ -10,9 +10,9 @@ import { useLocale, useTranslations } from 'next-intl';
 // strings, and round-tripping them through a local-timezone Date is exactly how a flight
 // that starts on the 21st gets saved as the 20th.
 
-import { CalendarIcon, XIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
+import { Calendar as CalendarIcon, X as XIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';

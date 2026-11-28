@@ -1,8 +1,8 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ChevronDown, RotateCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
+import { ArrowDown, ArrowUp, ChevronDown, RotateCw } from '@/components/icons';
 import { CardOverlayDemo } from '@/components/shadcn-studio/card/card-07';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';

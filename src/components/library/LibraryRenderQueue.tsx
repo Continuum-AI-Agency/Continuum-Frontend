@@ -1,9 +1,18 @@
 'use client';
 
 import type { ClientRenderJob } from '@continuum/contracts';
-import { ChevronDown, Cpu, ExternalLink, Film, Loader2, RotateCcw, Square, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  Cpu,
+  Film,
+  RotateCcw,
+  Spinner,
+  Square,
+  SquareArrowOutUpRight,
+  X,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -102,7 +111,7 @@ export function LibraryRenderQueue() {
               <article key={job.id} className="overflow-hidden rounded-xl border bg-card">
                 <div className="relative flex aspect-video items-center justify-center bg-muted/60">
                   {active ? (
-                    <Loader2 className="size-7 animate-spin text-primary" />
+                    <Spinner className="size-7 animate-spin text-primary" />
                   ) : (
                     <Film className="size-8 text-muted-foreground/45" />
                   )}
@@ -145,7 +154,7 @@ export function LibraryRenderQueue() {
                       aria-label={translateUi('view_render_source_4948f59f')}
                       onClick={() => window.location.assign(job.executionSpec.origin.viewHref)}
                     >
-                      <ExternalLink />
+                      <SquareArrowOutUpRight />
                     </Button>
                     {job.state === 'ready' ? (
                       <Button
@@ -218,7 +227,7 @@ export function LibraryRenderQueue() {
               {translateUi('cancel_19766ed6')}
             </Button>
             <Button type="button" disabled={starting} onClick={() => void confirm()}>
-              {starting ? <Loader2 className="animate-spin" /> : <Cpu />}{' '}
+              {starting ? <Spinner className="animate-spin" /> : <Cpu />}{' '}
               {translateUi('claim_and_render_c8654218')}
             </Button>
           </DialogFooter>

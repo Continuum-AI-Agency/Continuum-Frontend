@@ -13,25 +13,25 @@ import {
   templateRefOf,
 } from '@continuum/contracts';
 import { defaultFilter } from 'cmdk';
-import {
-  Check,
-  ChevronDown,
-  ClipboardPaste,
-  Download,
-  Eye,
-  FolderOpen,
-  GitCommitHorizontal,
-  Loader2,
-  Play,
-  Plus,
-  Settings2,
-  Sparkles,
-  Upload,
-} from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { Fragment, type ReactNode, type Ref, useId, useMemo, useState } from 'react';
 import { draftDropTarget, type SelectedFile } from '@/components/forge/AiVariationsDialog';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Check,
+  ChevronDown,
+  ClipboardPaste,
+  Eye,
+  FolderOpen,
+  GitCommitHorizontal,
+  Play,
+  Plus,
+  Settings2,
+  Sparkles,
+  Spinner,
+} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -502,19 +502,19 @@ export function RenderToolbar({
               <DropdownMenuTrigger
                 render={
                   <Button type="button" size="sm" variant="outline" className="gap-1.5">
-                    <Upload className="size-3.5" aria-hidden /> {translateUi('import_2cff9baa')}{' '}
+                    <ArrowUpFromLine className="size-3.5" aria-hidden />{' '}
+                    {translateUi('import_2cff9baa')}{' '}
                     <ChevronDown className="size-3.5" aria-hidden />
                   </Button>
                 }
               />
               <DropdownMenuContent align="start" className="w-72">
                 <DropdownMenuItem onClick={onUpload}>
-                  <Upload aria-hidden /> {translateUi('upload_csv_or_xlsx_f1301fab')}
+                  <ArrowUpFromLine aria-hidden /> {translateUi('upload_csv_or_xlsx_f1301fab')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onDownloadTemplate}>
-                  <Download aria-hidden /> {translateUi(
-                    'download_spreadsheet_template_be1dfcc7',
-                  )}{' '}
+                  <ArrowDownToLine aria-hidden />{' '}
+                  {translateUi('download_spreadsheet_template_be1dfcc7')}{' '}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
@@ -707,7 +707,7 @@ function RenderButton({
       onClick={onRender}
     >
       {firing ? (
-        <Loader2 className="size-3.5 animate-spin" aria-hidden />
+        <Spinner className="size-3.5 animate-spin" aria-hidden />
       ) : (
         <Play className="size-3.5" aria-hidden />
       )}

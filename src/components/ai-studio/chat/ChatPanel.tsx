@@ -10,11 +10,11 @@ import {
   MODEL_CATALOG,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Send, SlidersVertical, Square, TriangleAlert, Wand2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { Send, SlidersVertical, Square, TriangleAlert, Wand2 } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';

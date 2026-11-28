@@ -13,9 +13,9 @@
 // The transcript follows the same playhead through onTimeChange and seeks it
 // through registerSeek, exactly as it does for video.
 
-import { AudioLines, MessageSquarePlus, SquareDashedBottom, X } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { AudioLines, MessageSquarePlus, SquareDashedBottom, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { formatTimecode, formatTimecodeRange, seekFraction } from '../annotationGeometry';
 import { TimelineMarkerStrip, type TimeMarker } from '../TimelineMarkerStrip';

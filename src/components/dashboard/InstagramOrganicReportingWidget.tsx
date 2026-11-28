@@ -1,10 +1,10 @@
 'use client';
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
-import { Flag } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import React from 'react';
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts';
+import { Flag } from '@/components/icons';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
 import { OrganicMetricsWidgetSkeleton } from '@/components/organic/MetricsSkeleton';

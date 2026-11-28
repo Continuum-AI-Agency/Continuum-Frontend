@@ -11,9 +11,9 @@ import type {
   ShareLinkActivityResponse,
   ShareVersionMode,
 } from '@continuum/contracts';
-import { Check, Copy, Link2, Loader2, SlidersHorizontal } from 'lucide-react';
 import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useState, useMemo as useUiConfigMemo } from 'react';
+import { Check, Copy, Link2, SlidersHorizontal, Spinner } from '@/components/icons';
 import { ShareLinkActivity } from '@/components/library/share/ShareLinkActivity';
 import { ShareLinkPanel } from '@/components/library/share/ShareLinkPanel';
 import { fetchAssetShareActivity } from '@/components/library/share/shareLinkClient';
@@ -296,7 +296,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
                 creating || ((versionMode === 'pinned' || allowApproval) && !asset.headVersionId)
               }
             >
-              {creating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+              {creating ? <Spinner className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
               {translateUi('create_link_e6b850cf')}
             </Button>
           </div>

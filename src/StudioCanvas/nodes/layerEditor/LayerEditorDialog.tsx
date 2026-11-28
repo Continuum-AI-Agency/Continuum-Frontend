@@ -1,9 +1,9 @@
 'use client';
 
 import type { MediaAsset } from '@continuum/contracts';
-import { ImageIcon, Layers, Loader2, Plus, Redo2, Undo2, Upload } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { ArrowUpFromLine, Image, Layers2, Plus, Redo2, Spinner, Undo2 } from '@/components/icons';
 import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import { Button } from '@/components/ui/button';
 import {
@@ -664,7 +664,7 @@ export function LayerEditorDialog({
           <DialogHeader className="flex flex-row items-center justify-between space-y-0 border-b border-border/60 px-4 py-3 text-left">
             <div>
               <DialogTitle className="flex items-center gap-2 text-base">
-                <Layers className="h-4 w-4" /> {translateUi('layer_editor_328aef07')}
+                <Layers2 className="h-4 w-4" /> {translateUi('layer_editor_328aef07')}
               </DialogTitle>
               <DialogDescription className="text-xs">
                 {translateUi('stack_place_and_blend_stills_into_o_6a8c9c4a')}
@@ -707,7 +707,7 @@ export function LayerEditorDialog({
                   render={
                     <Button type="button" size="sm" variant="outline" disabled={placing}>
                       {placing ? (
-                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                        <Spinner className="mr-1 h-3.5 w-3.5 animate-spin" />
                       ) : (
                         <Plus className="mr-1 h-3.5 w-3.5" />
                       )}{' '}
@@ -720,14 +720,12 @@ export function LayerEditorDialog({
                     className="text-2xs"
                     onSelect={() => fileInputRef.current?.click()}
                   >
-                    <Upload className="mr-2 h-3 w-3" /> {translateUi(
-                      'upload_an_image_2054d015',
-                    )}{' '}
+                    <ArrowUpFromLine className="mr-2 h-3 w-3" />{' '}
+                    {translateUi('upload_an_image_2054d015')}{' '}
                   </DropdownMenuItem>
                   {brandId ? (
                     <DropdownMenuItem className="text-2xs" onSelect={() => setLibraryOpen(true)}>
-                      <ImageIcon className="mr-2 h-3 w-3" />{' '}
-                      {translateUi('from_the_library_7520b8c5')}
+                      <Image className="mr-2 h-3 w-3" /> {translateUi('from_the_library_7520b8c5')}
                     </DropdownMenuItem>
                   ) : null}
                   {unplaced.length > 0 ? <DropdownMenuSeparator /> : null}
@@ -773,7 +771,7 @@ export function LayerEditorDialog({
                 />
               ) : null}
               <Button type="button" size="sm" onClick={() => void compose()} disabled={composing}>
-                {composing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}{' '}
+                {composing ? <Spinner className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}{' '}
                 {translateUi('compose_98652afe')}
               </Button>
             </div>

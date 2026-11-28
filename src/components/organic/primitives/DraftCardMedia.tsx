@@ -1,8 +1,8 @@
 'use client';
 
 import { resolveOrganicImageUrl } from '@continuum/contracts';
-import { Play } from 'lucide-react';
 import Image from 'next/image';
+import { Play } from '@/components/icons';
 import { VideoStill } from '@/components/media/VideoStill';
 import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
 import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';

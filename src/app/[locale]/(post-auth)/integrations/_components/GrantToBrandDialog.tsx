@@ -1,9 +1,9 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { grantIntegrationToBrandAction } from '@/app/[locale]/(post-auth)/settings/integrations/actions';
+import { Spinner } from '@/components/icons';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -170,7 +170,7 @@ export function GrantToBrandDialog({
             onClick={handleSubmit}
             disabled={isSubmitting || selected.size === 0 || eligibleBrands.length === 0}
           >
-            {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : tUi('m_6c7847a0cd')}
+            {isSubmitting ? <Spinner className="size-4 animate-spin" /> : tUi('m_6c7847a0cd')}
           </Button>
         </DialogFooter>
       </DialogContent>

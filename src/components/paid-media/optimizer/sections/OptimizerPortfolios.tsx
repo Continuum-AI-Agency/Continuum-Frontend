@@ -28,8 +28,8 @@ import {
 
 import type { AccountCandidate, CycleRunPacing, PortfolioListItem } from '@continuum/contracts';
 import { ACCOUNT_DETECTOR_META, clipLine } from '@continuum/contracts';
-import { ChevronRight, Plus, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { ChevronRight, Plus, RotateCcw } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';

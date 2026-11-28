@@ -1,10 +1,9 @@
 'use client';
 
-import { Upload, X } from 'lucide-react';
-
 import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { ArrowUpFromLine, X } from '@/components/icons';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -114,7 +113,7 @@ export function LogoUploader() {
       </Avatar>
 
       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-full cursor-pointer pointer-events-none">
-        <Upload className="w-8 h-8 text-white" />
+        <ArrowUpFromLine className="w-8 h-8 text-white" />
       </div>
 
       {logoPath && (

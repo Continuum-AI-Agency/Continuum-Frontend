@@ -1,7 +1,7 @@
 'use client';
 
-import { CircleCheck, ExternalLink } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { CircleCheck, SquareArrowOutUpRight } from '@/components/icons';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { OrganicAccountProfile } from '@/lib/schemas/organicMetrics';
@@ -74,7 +74,7 @@ export function OrganicAccountProfileHeader({
           className="flex shrink-0 items-center gap-1 self-center rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
         >
           {uiText('viewOnPlatform', { platform: platformLabel })}
-          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+          <SquareArrowOutUpRight className="h-3 w-3" aria-hidden="true" />
         </a>
       ) : null}
     </section>

@@ -7,7 +7,7 @@ import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
 // EmptyState, and the shared freshness adapter — it does not own generation, it
 // links into the existing Brand Book flow.
 
-import { BookOpenText, Loader2 } from 'lucide-react';
+import { BookOpenText, Spinner } from '@/components/icons';
 import { ScoreBadge } from '@/components/onboarding/v2/readiness/ScoreBadge';
 import { EmptyState } from '@/components/shared/state';
 import { Badge } from '@/components/ui/badge';
@@ -75,7 +75,7 @@ export function BrandBookMilestoneCard({
         data-testid="brand-book-milestone"
         className="flex items-center gap-3 p-[var(--card-pad)]"
       >
-        <Loader2
+        <Spinner
           aria-hidden="true"
           className="size-4 shrink-0 animate-spin text-muted-foreground"
         />

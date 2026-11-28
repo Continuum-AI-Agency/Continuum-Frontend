@@ -1,9 +1,9 @@
 'use client';
 
-import { CheckIcon, CopyIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Check, Copy } from '@/components/icons';
 import {
   InputGroup,
   InputGroupAddon,
@@ -102,7 +102,7 @@ export const SnippetCopyButton = ({
     [],
   );
 
-  const Icon = isCopied ? CheckIcon : CopyIcon;
+  const Icon = isCopied ? Check : Copy;
 
   return (
     <InputGroupButton

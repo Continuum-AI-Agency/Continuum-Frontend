@@ -7,8 +7,8 @@ import { useTranslations } from 'next-intl';
 // (composer picker / @-mention) and deep-links here to manage them.
 
 import type { Skill } from '@continuum/contracts';
-import { ChevronLeft, Lock } from 'lucide-react';
 import { useState } from 'react';
+import { ChevronLeft, Lock } from '@/components/icons';
 import { SkillForm } from '@/components/skills/SkillForm';
 import { SkillList } from '@/components/skills/SkillList';
 import { archiveBrandSkill, useBrandSkills } from '@/lib/organic/skills';

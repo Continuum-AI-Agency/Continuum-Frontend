@@ -1,10 +1,11 @@
 import { useTranslations } from 'next-intl';
+
 // Outcome-first empty state (IMP-008). Leads with the payoff a user unlocks
 // after setup, not the missing requirement. Composes the shadcn Empty
 // primitives in ui/empty.tsx — it does not fork them.
 
-import { CheckIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { Check } from '@/components/icons';
 
 import {
   Empty,
@@ -55,10 +56,7 @@ export function EmptyState({
         >
           {unlocks.map((outcome) => (
             <li key={outcome} className="flex items-start gap-2 text-xs text-muted-foreground">
-              <CheckIcon
-                aria-hidden="true"
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500"
-              />
+              <Check aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
               <span>{outcome}</span>
             </li>
           ))}

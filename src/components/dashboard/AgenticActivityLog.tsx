@@ -1,7 +1,7 @@
 'use client';
 
-import { ArrowUpToLine, ScrollText, SquareArrowOutUpRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { ArrowUpToLine, ScrollText, SquareArrowOutUpRight } from '@/components/icons';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

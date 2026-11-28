@@ -1,5 +1,5 @@
-import { Plus, X } from '@phosphor-icons/react';
 import { useTranslations } from 'next-intl';
+import { Plus, X } from '@/components/icons';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { BRAND_VOICE_TAGS, type BrandVoiceTag } from '@/lib/onboarding/state';
 import { EditablePopover } from './EditablePopover';

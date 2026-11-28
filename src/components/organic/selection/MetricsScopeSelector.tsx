@@ -7,8 +7,8 @@ import { useTranslations } from 'next-intl';
 // multi: Compare — one multi-select combobox (checkbox rows grouped by platform, color-coded).
 
 import { type OrganicMetricPlatform, organicMetricPlatformSchema } from '@continuum/contracts';
-import { Check, ChevronsUpDown } from 'lucide-react';
 import * as React from 'react';
+import { Check, ChevronsUpDown } from '@/components/icons';
 import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
 import { Button } from '@/components/ui/button';
 import {

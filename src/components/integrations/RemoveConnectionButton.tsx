@@ -1,9 +1,8 @@
 'use client';
 
-import { Loader2, Trash2 } from 'lucide-react';
-
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { Spinner, Trash2 } from '@/components/icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -102,7 +101,7 @@ export function RemoveConnectionButton({
             className="text-muted-foreground hover:text-destructive"
           >
             {isRemoving ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <Spinner className="size-3.5 animate-spin" />
             ) : (
               <Trash2 className="size-3.5" />
             )}

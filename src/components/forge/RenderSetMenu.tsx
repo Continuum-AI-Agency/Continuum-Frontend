@@ -1,8 +1,8 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useState } from 'react';
+import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -81,7 +81,7 @@ export function NameDialog({
               {translateUi('cancel_19766ed6')}
             </Button>
             <Button type="submit" disabled={busy || !name.trim()}>
-              {busy ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+              {busy ? <Spinner className="animate-spin" data-icon="inline-start" /> : null}
               {confirmLabel}
             </Button>
           </DialogFooter>

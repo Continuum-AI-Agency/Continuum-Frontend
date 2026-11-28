@@ -1,10 +1,10 @@
 'use client';
 
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
-import { Archive, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
+import { Archive, X } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetClose, SheetTitle } from '@/components/ui/sheet';
 import { intentProps } from '@/lib/intent';

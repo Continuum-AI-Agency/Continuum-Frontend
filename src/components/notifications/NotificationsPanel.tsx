@@ -7,16 +7,16 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import type { AppNotification } from '@continuum/contracts';
 import {
-  AlarmClockIcon,
-  AtSignIcon,
-  BadgeCheckIcon,
-  CheckCheckIcon,
-  CircleCheckBigIcon,
-  EyeIcon,
-  MessageSquareReplyIcon,
-  SirenIcon,
-  UserCheckIcon,
-} from 'lucide-react';
+  AlarmClock,
+  AtSign,
+  BadgeCheck,
+  CheckCheck,
+  CircleCheck,
+  Eye,
+  MessageSquareReply,
+  Siren,
+  UserCheck,
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useRouter } from '@/i18n/navigation';
 import { describeNotification } from '@/lib/notifications/notifications';
@@ -26,15 +26,15 @@ import { InFlightSection } from './InFlightSection';
 import type { UseInFlightJobsResult } from './useInFlightJobs';
 
 const KIND_ICONS = {
-  review_request: EyeIcon,
-  review_status_change: CircleCheckBigIcon,
-  comment_reply: MessageSquareReplyIcon,
-  comment_mention: AtSignIcon,
-  asset_assigned: UserCheckIcon,
-  review_reminder: AlarmClockIcon,
-  review_escalation: SirenIcon,
-  prepayment_claimed: BadgeCheckIcon,
-} satisfies Record<AppNotification['kind'], typeof EyeIcon>;
+  review_request: Eye,
+  review_status_change: CircleCheck,
+  comment_reply: MessageSquareReply,
+  comment_mention: AtSign,
+  asset_assigned: UserCheck,
+  review_reminder: AlarmClock,
+  review_escalation: Siren,
+  prepayment_claimed: BadgeCheck,
+} satisfies Record<AppNotification['kind'], typeof Eye>;
 
 export type NotificationsPanelProps = {
   notifications: AppNotification[];
@@ -89,7 +89,7 @@ export function NotificationsPanel({
             className="h-6 gap-1 px-2 text-xs"
             onClick={onMarkAllRead}
           >
-            <CheckCheckIcon className="size-3" />
+            <CheckCheck className="size-3" />
             {t('notificationsMarkAll')}
           </Button>
         )}

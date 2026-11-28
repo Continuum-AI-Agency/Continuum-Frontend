@@ -1,5 +1,5 @@
-import { ArrowLeft } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { ArrowLeft } from '@/components/icons';
 import { ContinuumWordmark } from '@/components/shared/ContinuumWordmark';
 import { Link } from '@/i18n/navigation';
 import styles from '@/lib/ui/nightSky.module.css';

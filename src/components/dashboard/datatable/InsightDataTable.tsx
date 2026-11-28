@@ -1,8 +1,8 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ChevronDown, ChevronsUpDown, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronsUpDown, Search } from '@/components/icons';
 import { Panel } from '@/components/shared/Panel';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Input } from '@/components/ui/input';

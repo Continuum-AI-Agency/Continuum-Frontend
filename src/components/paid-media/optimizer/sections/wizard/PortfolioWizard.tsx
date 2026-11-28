@@ -25,8 +25,8 @@ import type {
   PlatformId,
   PortfolioSuggestion,
 } from '@continuum/contracts';
-import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, Loader2Icon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import { ArrowLeft, ArrowRight, Check, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useSetupAdvice } from '../../advisor/SetupAdvisor';
 import { humanize } from '../../format';
@@ -423,7 +423,7 @@ export function PortfolioWizard({
             <footer className="space-y-2 border-border/60 border-t pt-4">
               <div className="flex items-center gap-2">
                 <Button className="gap-1.5" onClick={back} size="sm" type="button" variant="ghost">
-                  <ArrowLeftIcon aria-hidden className="size-3.5" />
+                  <ArrowLeft aria-hidden className="size-3.5" />
                   {uiText('back_76900f1')}
                 </Button>
                 {isLast ? (
@@ -435,9 +435,9 @@ export function PortfolioWizard({
                     type="button"
                   >
                     {busy ? (
-                      <Loader2Icon aria-hidden className="size-3.5 animate-spin" />
+                      <Spinner aria-hidden className="size-3.5 animate-spin" />
                     ) : (
-                      <CheckIcon aria-hidden className="size-3.5" />
+                      <Check aria-hidden className="size-3.5" />
                     )}
                     {busy ? uiText('creating_c79ed94') : enrollLabel(draft, uiText)}
                   </Button>
@@ -450,7 +450,7 @@ export function PortfolioWizard({
                     type="button"
                   >
                     {uiText('next_1ff57a2')}
-                    <ArrowRightIcon aria-hidden className="size-3.5" />
+                    <ArrowRight aria-hidden className="size-3.5" />
                   </Button>
                 )}
               </div>
